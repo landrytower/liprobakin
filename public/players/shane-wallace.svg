@@ -1,0 +1,12 @@
+<svg width="240" height="240" viewBox="0 0 240 240" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="shaneGradient" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0b1120" />
+      <stop offset="100%" stop-color="#2563eb" />
+    </linearGradient>
+  </defs>
+  <rect width="240" height="240" rx="120" fill="url(#shaneGradient)" />
+  <circle cx="120" cy="90" r="54" fill="#1e1b4b" stroke="#60a5fa" stroke-width="6" />
+  <path d="M70 175 C90 150 110 155 120 180 C130 205 150 200 170 175" fill="#60a5fa" opacity="0.6" />
+  <text x="120" y="112" fill="#e2e8f0" font-family="'Inter', 'Segoe UI', sans-serif" font-size="48" font-weight="600" text-anchor="middle">SW</text>
+</svg>

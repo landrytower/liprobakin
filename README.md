@@ -1,3 +1,7 @@
+npm run build
+npx firebase deploy --only hosting --project ppop-35930
+
+
 # Febaco League
 
 Febaco is a custom React/Next.js experience inspired by the NBA G League website. It highlights the essentials of a developmental basketball league—Players, Games, Schedule, News, Stats, Standings, and Teams—using bold typography, glassmorphism cards, and responsive Tailwind CSS layouts.

@@ -22,7 +22,7 @@ import type { FeaturedMatchup, Franchise, RosterPlayer, SpotlightPlayer } from "
 
 type SectionHeaderProps = {
   id: string;
-  eyebrow: string;
+  eyebrow?: string;
   title: string;
   description?: string;
   actions?: ReactNode;
@@ -32,7 +32,9 @@ const SectionHeader = ({ id, eyebrow, title, description, actions }: SectionHead
   <div aria-labelledby={`${id}-title`} className="space-y-4">
     <div className="flex flex-wrap items-end justify-between gap-4">
       <div>
-        <p className="text-xs uppercase tracking-[0.4em] text-slate-400">{eyebrow}</p>
+        {eyebrow ? (
+          <p className="text-xs uppercase tracking-[0.4em] text-slate-400">{eyebrow}</p>
+        ) : null}
         <h2 id={`${id}-title`} className="text-3xl font-semibold text-white">
           {title}
         </h2>
@@ -96,7 +98,6 @@ const translations = {
         description: "Daily briefs from arenas across the Liprobakin map.",
       },
       stats: {
-        eyebrow: "Stats",
         title: "Upcoming Spotlight Games",
         description: "Marquee Liprobakin matchups set to headline the weekly slate.",
       },
@@ -121,7 +122,7 @@ const translations = {
       Deflections: "Deflections",
       "Bench Net": "Bench Net",
     },
-    footerTagline: "Liprobakin League · Built with Next.js & Tailwind",
+    footerTagline: "Liprobakin League",
     languageLabel: "Language",
   },
   fr: {
@@ -168,7 +169,6 @@ const translations = {
         description: "Briefings quotidiens depuis les arènes du circuit Liprobakin.",
       },
       stats: {
-        eyebrow: "Stats",
         title: "Matchs à suivre",
         description: "Les affiches Liprobakin qui dynamisent la semaine à venir.",
       },
@@ -193,7 +193,7 @@ const translations = {
       Deflections: "Déviations",
       "Bench Net": "Impact du banc",
     },
-    footerTagline: "Ligue Liprobakin · Construit avec Next.js & Tailwind",
+    footerTagline: "Ligue Liprobakin",
     languageLabel: "Langue",
   },
 } as const;
@@ -241,6 +241,7 @@ const LeaderRow = ({ leader }: { leader: FeaturedMatchup["leaders"][number] }) =
     .join("")
     .slice(0, 2)
     .toUpperCase();
+  const displayName = leader.player.trim().split(" ").pop() ?? leader.player;
 
   return (
     <div className="flex items-center justify-between gap-4">
@@ -268,7 +269,7 @@ const LeaderRow = ({ leader }: { leader: FeaturedMatchup["leaders"][number] }) =
         )}
         <div>
           <p className="text-xs uppercase tracking-[0.4em] text-slate-400">{leader.team}</p>
-          <p className="text-lg font-semibold text-white">{leader.player}</p>
+          <p className="text-lg font-semibold text-white">{displayName}</p>
           <p className="text-xs text-slate-400">{leader.stats}</p>
         </div>
       </div>
@@ -280,7 +281,8 @@ const MatchupTeam = ({ team, record }: { team: string; record: string }) => {
   const franchise = findFranchiseByName(team);
   const displayName = franchise ? formatFranchiseName(franchise) : team;
   const colors = franchise?.colors ?? ["#1e293b", "#0f172a"];
-  const label = franchise?.city || team;
+  const label = franchise?.city?.trim();
+  const showLabel = Boolean(label && label.toLowerCase() !== displayName.toLowerCase());
   const initials = team
     .split(" ")
     .map((word) => word[0])
@@ -304,7 +306,9 @@ const MatchupTeam = ({ team, record }: { team: string; record: string }) => {
         </span>
       )}
       <div>
-        <p className="text-xs uppercase tracking-[0.4em] text-slate-400">{label}</p>
+        {showLabel ? (
+          <p className="text-xs uppercase tracking-[0.4em] text-slate-400">{label}</p>
+        ) : null}
         <p className="text-xl font-semibold text-white">{displayName}</p>
         <p className="text-xs text-slate-400">{record}</p>
       </div>
@@ -398,24 +402,34 @@ const ScheduleTeam = ({ team, label }: { team: string; label: string }) => {
 };
 
 const GenderToggle = ({ value, onChange }: { value: Gender; onChange: (value: Gender) => void }) => (
-  <div className="flex gap-2">
+  <div className="inline-flex overflow-hidden rounded-full border border-white/20 bg-white/5 text-[10px] font-semibold uppercase tracking-[0.3em]" role="group" aria-label="Gender filter">
     {(
       [
-        { key: "men" as Gender, label: "Gentlemen" },
-        { key: "women" as Gender, label: "Ladies" },
+        { key: "men" as Gender, label: "Gentlemen", short: "G" },
+        { key: "women" as Gender, label: "Ladies", short: "L" },
       ]
-    ).map((option) => (
-      <button
-        key={option.key}
-        type="button"
-        onClick={() => onChange(option.key)}
-        className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] transition ${
-          value === option.key ? "border-white text-white" : "border-white/30 text-slate-400 hover:border-white/60 hover:text-white"
-        }`}
-      >
-        {option.label}
-      </button>
-    ))}
+    ).map((option) => {
+      const isActive = value === option.key;
+      return (
+        <button
+          key={option.key}
+          type="button"
+          onClick={() => onChange(option.key)}
+          className={`relative px-2 py-1 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300 sm:px-4 ${
+            isActive ? "bg-white text-slate-900" : "text-slate-300 hover:text-white"
+          }`}
+          aria-pressed={isActive}
+          aria-label={option.label}
+        >
+          <span className="sm:hidden" aria-hidden>
+            {option.short}
+          </span>
+          <span className="hidden sm:inline" aria-hidden>
+            {option.label}
+          </span>
+        </button>
+      );
+    })}
   </div>
 );
 
@@ -552,14 +566,21 @@ const PlayerStatsModal = ({ player, onClose }: { player: SpotlightPlayer; onClos
 };
 
 export default function Home() {
-  const [language, setLanguage] = useState<Locale>("en");
+  const [language, setLanguage] = useState<Locale>("fr");
   const [selectedTeam, setSelectedTeam] = useState<SelectedTeamState>(null);
   const [selectedPlayer, setSelectedPlayer] = useState<SpotlightPlayer | null>(null);
   const [playerMetric, setPlayerMetric] = useState<PlayerMetric>("pts");
   const [gender, setGender] = useState<Gender>("men");
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const copy = translations[language];
   const sectionCopy = copy.sections;
   const languageOptions: Locale[] = ["en", "fr"];
+  const mobileNavSections: Array<(typeof navSections)[number]> = [
+    "Schedule",
+    "Players",
+    "Standings",
+    "Teams",
+  ];
   const selectedRoster = selectedTeam
     ? selectedTeam.gender === "men"
       ? teamRosters[selectedTeam.label]
@@ -574,6 +595,19 @@ export default function Home() {
   const spotlightGames = [...featuredMatchups]
     .sort((a, b) => parseTipoffToDate(a.tipoff) - parseTipoffToDate(b.tipoff))
     .slice(0, 3);
+
+  useEffect(() => {
+    if (!mobileNavOpen) {
+      return;
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMobileNavOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [mobileNavOpen]);
 
   return (
     <div className="relative isolate min-h-screen bg-gradient-to-b from-[#050816] via-[#050816] to-[#020407] text-white">
@@ -595,7 +629,22 @@ export default function Home() {
             />
             <span>{copy.brand}</span>
           </Link>
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              className="flex rounded-full border border-white/20 p-2 text-white transition hover:border-white/50 lg:hidden"
+              onClick={() => setMobileNavOpen((prev) => !prev)}
+              aria-expanded={mobileNavOpen}
+              aria-controls="mobile-nav-panel"
+            >
+              <span className="sr-only">Toggle navigation</span>
+              <span
+                className={`block h-0.5 w-6 bg-current transition ${mobileNavOpen ? "translate-y-1 rotate-45" : ""}`}
+              />
+              <span
+                className={`block h-0.5 w-6 bg-current transition ${mobileNavOpen ? "-translate-y-1 -rotate-45" : "mt-1"}`}
+              />
+            </button>
             <div className="hidden gap-6 text-xs font-medium uppercase tracking-[0.3em] text-slate-300 lg:flex">
               {navSections
                 .filter((section) => section !== "News")
@@ -614,11 +663,30 @@ export default function Home() {
         </div>
       </nav>
 
+      {mobileNavOpen ? (
+        <div
+          id="mobile-nav-panel"
+          className="lg:hidden border-b border-white/10 bg-black/90 backdrop-blur"
+        >
+          <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-4 md:px-8">
+            {mobileNavSections.map((section) => (
+              <Link
+                key={section}
+                href={`#${slug(section)}`}
+                className="text-base font-semibold uppercase tracking-[0.3em] text-white"
+                onClick={() => setMobileNavOpen(false)}
+              >
+                {copy.nav[slug(section) as keyof typeof copy.nav] ?? section}
+              </Link>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       <main className="mx-auto flex max-w-6xl flex-col gap-24 px-4 pb-24 pt-8 md:px-8">
         <section id="stats" className="space-y-8">
           <SectionHeader
             id="stats"
-            eyebrow={sectionCopy.stats.eyebrow}
             title={sectionCopy.stats.title}
             description={sectionCopy.stats.description}
           />
@@ -642,7 +710,7 @@ export default function Home() {
                   <MatchupTeam team={matchup.home.team} record={matchup.home.record} />
                 </div>
                 <div className="space-y-4 rounded-2xl border border-white/5 bg-black/30 p-4">
-                  <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Team Leaders</p>
+                  <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Leaders</p>
                   <div className="space-y-4">
                     {matchup.leaders.map((leader) => (
                       <LeaderRow key={`${matchup.id}-${leader.player}`} leader={leader} />
@@ -886,7 +954,7 @@ export default function Home() {
       <footer className="border-t border-white/10 bg-black/50 py-8 text-slate-400">
         <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 text-center text-xs uppercase tracking-[0.3em] sm:flex-row sm:items-center sm:justify-between">
           <p>
-            {copy.footerTagline} · {new Date().getFullYear()}
+            {copy.footerTagline}
           </p>
           <div className="flex items-center justify-center gap-3">
             <span className="text-[10px] uppercase tracking-[0.4em] text-slate-500">{copy.languageLabel}</span>

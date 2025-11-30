@@ -1,0 +1,9 @@
+{
+  "hosting": [
+    {
+      "site": "ppop-35930",
+      "source": ".",
+      "frameworksBackend": {}
+    }
+  ]
+}

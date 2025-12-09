@@ -1,0 +1,36 @@
+[
+  {
+    "id": "LsyV9JNcHy9TXkZUgysf",
+    "teamName": "Heritage",
+    "teamId": "v0LpCzG5pheZ2gYSBPKb",
+    "gender": "men",
+    "losses": 1,
+    "createdAt": {
+      "_seconds": 1764856068,
+      "_nanoseconds": 212000000
+    },
+    "wins": 1,
+    "totalPoints": 164,
+    "updatedAt": {
+      "_seconds": 1764856299,
+      "_nanoseconds": 18000000
+    }
+  },
+  {
+    "id": "mYhlwVC0tYU4SckH7TPU",
+    "teamName": "Ballers",
+    "teamId": "6VbPyzEcawttb4W0pnjZ",
+    "gender": "men",
+    "wins": 1,
+    "createdAt": {
+      "_seconds": 1764856068,
+      "_nanoseconds": 82000000
+    },
+    "totalPoints": 198,
+    "losses": 1,
+    "updatedAt": {
+      "_seconds": 1764856299,
+      "_nanoseconds": 133000000
+    }
+  }
+]

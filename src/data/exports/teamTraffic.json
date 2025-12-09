@@ -1,0 +1,62 @@
+[
+  {
+    "id": "P81wVK4tT2aEFAvt5jp9",
+    "action": "player_added",
+    "teamId": "HNI96RID2BP4ueqH52nM",
+    "teamName": "Bana Lingwala",
+    "teamGender": "men",
+    "playerId": "KjwionGmHwAcJ1FiMXLX",
+    "playerName": "Mateka Josue",
+    "jerseyNumber": 2,
+    "performedBy": "bobiyatch@gmail.com",
+    "createdAt": {
+      "_seconds": 1764881766,
+      "_nanoseconds": 628000000
+    }
+  },
+  {
+    "id": "RaGC2fJoWJL02i5vV4eG",
+    "action": "player_added",
+    "teamId": "6VbPyzEcawttb4W0pnjZ",
+    "teamName": "Ballers",
+    "teamGender": "men",
+    "playerId": "6NYzHRRZWYktTaFFEGdD",
+    "playerName": "Mwanza Mukendi",
+    "jerseyNumber": 6,
+    "performedBy": "bobiyatch@gmail.com",
+    "createdAt": {
+      "_seconds": 1764879112,
+      "_nanoseconds": 849000000
+    }
+  },
+  {
+    "id": "mW1mLkJpdanoSVwEjZPh",
+    "action": "player_added",
+    "teamId": "6VbPyzEcawttb4W0pnjZ",
+    "teamName": "Ballers",
+    "teamGender": "men",
+    "playerId": "bYOIs6AhRfycjyuYPMdf",
+    "playerName": "Bulatu Jacob",
+    "jerseyNumber": 2,
+    "performedBy": "bobiyatch@gmail.com",
+    "createdAt": {
+      "_seconds": 1764948571,
+      "_nanoseconds": 626000000
+    }
+  },
+  {
+    "id": "sFKofee96lTtSkNPu05W",
+    "action": "player_added",
+    "teamId": "akzcvqKFB7KOtpQJP7eg",
+    "teamName": "Figuier",
+    "teamGender": "men",
+    "playerId": "kF5uTdPAtbNbkLv3FK1R",
+    "playerName": "Mwana Katumbi",
+    "jerseyNumber": 3,
+    "performedBy": "bobiyatch@gmail.com",
+    "createdAt": {
+      "_seconds": 1764863921,
+      "_nanoseconds": 281000000
+    }
+  }
+]

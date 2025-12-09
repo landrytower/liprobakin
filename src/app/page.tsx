@@ -4,21 +4,39 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { collection, query, orderBy, limit, getDocs } from "firebase/firestore";
+import { firebaseDB } from "@/lib/firebase";
 
 import {
   conferenceStandings,
   conferenceStandingsWomen,
-  featuredMatchups,
-  franchises,
-  franchisesWomen,
-  latestGames,
   navSections,
   spotlightPlayers,
   spotlightPlayersWomen,
-  upcomingSchedule,
   teamRosters,
+  leaguePartners,
+  leagueCommittee,
 } from "@/data/febaco";
 import type { FeaturedMatchup, Franchise, RosterPlayer, SpotlightPlayer } from "@/data/febaco";
+
+type EnhancedMatchup = FeaturedMatchup & {
+  homeTeamLogo?: string;
+  awayTeamLogo?: string;
+  gender?: "men" | "women";
+  refereeHomeTeam1?: string;
+  refereeHomeTeam2?: string;
+  refereeAwayTeam?: string;
+};
+
+type NewsArticle = {
+  id: string;
+  title: string;
+  summary: string;
+  category: string;
+  headline: string;
+  imageUrl?: string;
+  createdAt: Date | null;
+};
 
 type SectionHeaderProps = {
   id: string;
@@ -99,7 +117,7 @@ const translations = {
       },
       stats: {
         title: "Upcoming Spotlight Games",
-        description: "Marquee Liprobakin matchups set to headline the weekly slate.",
+        description: "",
       },
       standings: {
         eyebrow: "Standings",
@@ -110,6 +128,16 @@ const translations = {
         eyebrow: "Teams",
         title: "Franchises",
         description: "Nine clubs setting the pace for the Liprobakin climb.",
+      },
+      partners: {
+        eyebrow: "Partners",
+        title: "League Partners",
+        description: "Organizations supporting the growth of Liprobakin.",
+      },
+      committee: {
+        eyebrow: "Committee",
+        title: "League Committee",
+        description: "Leadership guiding the future of Liprobakin.",
       },
     },
     metricLabels: {
@@ -156,12 +184,12 @@ const translations = {
       schedule: {
         eyebrow: "Calendrier",
         title: "Programme hebdomadaire",
-        description: "Déplacements, rivalités et showcases au programme.",
+        description: "",
       },
       players: {
         eyebrow: "Joueurs",
         title: "Projecteur",
-        description: "La température des prospects selon les rapports Liprobakin.",
+        description: "",
       },
       news: {
         eyebrow: "Actualités",
@@ -175,12 +203,22 @@ const translations = {
       standings: {
         eyebrow: "Classement",
         title: "Image des séries",
-        description: "Neuf équipes en route vers le showcase Liprobakin.",
+        description: "",
       },
       teams: {
         eyebrow: "Équipes",
         title: "Franchises",
-        description: "Neuf clubs qui donnent le ton à la montée Liprobakin.",
+        description: "",
+      },
+      partners: {
+        eyebrow: "Partenaires",
+        title: "Partenaires de la Ligue",
+        description: "Organisations soutenant la croissance de Liprobakin.",
+      },
+      committee: {
+        eyebrow: "Comité",
+        title: "Comité de la Ligue",
+        description: "Leadership guidant l'avenir de Liprobakin.",
       },
     },
     metricLabels: {
@@ -215,11 +253,10 @@ const playerHeadshots: Record<string, string> = {
 type Locale = keyof typeof translations;
 type Gender = "men" | "women";
 type SelectedTeamState = { label: string; gender: Gender } | null;
-const allFranchises = [...franchises, ...franchisesWomen];
 
-const findFranchiseByName = (teamName: string) => {
+const findFranchiseByName = (teamName: string, allTeams: Franchise[]) => {
   const normalized = teamName.toLowerCase();
-  return allFranchises.find((team) => {
+  return allTeams.find((team) => {
     const display = formatFranchiseName(team).toLowerCase();
     return display === normalized || team.name.toLowerCase() === normalized;
   });
@@ -232,8 +269,8 @@ const parseTipoffToDate = (tipoff: string) => {
   return Number.isNaN(timestamp) ? Number.MAX_SAFE_INTEGER : timestamp;
 };
 
-const LeaderRow = ({ leader }: { leader: FeaturedMatchup["leaders"][number] }) => {
-  const franchise = findFranchiseByName(leader.team);
+const LeaderRow = ({ leader, allFranchises }: { leader: FeaturedMatchup["leaders"][number]; allFranchises: Franchise[] }) => {
+  const franchise = findFranchiseByName(leader.team, allFranchises);
   const headshot = playerHeadshots[leader.player];
   const initials = leader.player
     .split(" ")
@@ -244,45 +281,46 @@ const LeaderRow = ({ leader }: { leader: FeaturedMatchup["leaders"][number] }) =
   const displayName = leader.player.trim().split(" ").pop() ?? leader.player;
 
   return (
-    <div className="flex items-center justify-between gap-4">
-      <div className="flex items-center gap-3">
+    <div className="flex items-center justify-between gap-2 min-w-0">
+      <div className="flex items-center gap-2 min-w-0 overflow-hidden">
         {headshot ? (
           <Image
             src={headshot}
             alt={`${leader.player} portrait`}
-            width={64}
-            height={64}
-            className="h-16 w-16 rounded-full border border-white/20 object-cover"
+            width={40}
+            height={40}
+            className="h-10 w-10 rounded-full border border-white/20 object-cover flex-shrink-0"
           />
         ) : franchise?.logo ? (
           <Image
             src={franchise.logo}
             alt={`${formatFranchiseName(franchise)} logo`}
-            width={64}
-            height={64}
-            className="h-16 w-16 rounded-full border border-white/20 bg-white/5 object-cover"
+            width={40}
+            height={40}
+            className="h-10 w-10 rounded-full border border-white/20 bg-white/5 object-cover flex-shrink-0"
           />
         ) : (
-          <span className="flex h-16 w-16 items-center justify-center rounded-full bg-white/10 text-lg font-semibold">
+          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-xs font-semibold flex-shrink-0">
             {initials}
           </span>
         )}
-        <div>
-          <p className="text-xs uppercase tracking-[0.4em] text-slate-400">{leader.team}</p>
-          <p className="text-lg font-semibold text-white">{displayName}</p>
-          <p className="text-xs text-slate-400">{leader.stats}</p>
+        <div className="min-w-0 overflow-hidden">
+          <p className="text-[9px] uppercase tracking-[0.3em] text-slate-400 truncate">{leader.team}</p>
+          <p className="text-xs font-semibold text-white truncate">{displayName}</p>
+          <p className="text-[9px] text-slate-400 truncate">{leader.stats}</p>
         </div>
       </div>
     </div>
   );
 };
 
-const MatchupTeam = ({ team, record }: { team: string; record: string }) => {
-  const franchise = findFranchiseByName(team);
+const MatchupTeam = ({ team, record, logo, allFranchises }: { team: string; record: string; logo?: string; allFranchises: Franchise[] }) => {
+  const franchise = findFranchiseByName(team, allFranchises);
   const displayName = franchise ? formatFranchiseName(franchise) : team;
   const colors = franchise?.colors ?? ["#1e293b", "#0f172a"];
   const label = franchise?.city?.trim();
   const showLabel = Boolean(label && label.toLowerCase() !== displayName.toLowerCase());
+  const teamLogo = logo || franchise?.logo;
   const initials = team
     .split(" ")
     .map((word) => word[0])
@@ -291,30 +329,27 @@ const MatchupTeam = ({ team, record }: { team: string; record: string }) => {
     .toUpperCase();
 
   return (
-    <div className="flex flex-col items-center gap-3 text-center">
-      {franchise?.logo ? (
+    <div className="flex flex-col items-center gap-1.5 md:gap-2 text-center min-w-0">
+      {teamLogo ? (
         <Image
-          src={franchise.logo}
+          src={teamLogo}
           alt={`${displayName} logo`}
-          width={72}
-          height={72}
-          className="h-20 w-20 rounded-full border border-white/10 bg-white/5 object-cover"
+          width={48}
+          height={48}
+          className="h-10 w-10 md:h-12 md:w-12 rounded-full border border-white/10 bg-white/5 object-cover flex-shrink-0"
         />
       ) : (
-        <span className="flex h-20 w-20 items-center justify-center rounded-full bg-white/10 text-xl font-semibold">
+        <span className="flex h-10 w-10 md:h-12 md:w-12 items-center justify-center rounded-full bg-white/10 text-xs md:text-sm font-semibold flex-shrink-0">
           {initials}
         </span>
       )}
-      <div>
-        {showLabel ? (
-          <p className="text-xs uppercase tracking-[0.4em] text-slate-400">{label}</p>
-        ) : null}
-        <p className="text-xl font-semibold text-white">{displayName}</p>
-        <p className="text-xs text-slate-400">{record}</p>
+      <div className="min-w-0 w-full">
+        <p className="text-xs md:text-sm font-semibold text-white truncate">{displayName}</p>
+        <p className="text-[9px] md:text-[10px] text-slate-400">{record}</p>
       </div>
-      <div className="flex w-24 gap-1">
+      <div className="flex w-12 md:w-16 gap-1 flex-shrink-0">
         {colors.map((color) => (
-          <span key={`${team}-${color}`} className="h-1 flex-1 rounded-full" style={{ backgroundColor: color }} />
+          <span key={`${team}-${color}`} className="h-0.5 flex-1 rounded-full" style={{ backgroundColor: color }} />
         ))}
       </div>
     </div>
@@ -326,13 +361,15 @@ const ScoreTeamRow = ({
   score,
   highlight = false,
   showRecord = false,
+  allFranchises,
 }: {
   team: string;
   score: number;
   highlight?: boolean;
   showRecord?: boolean;
+  allFranchises: Franchise[];
 }) => {
-  const franchise = findFranchiseByName(team);
+  const franchise = findFranchiseByName(team, allFranchises);
   const displayName = franchise ? formatFranchiseName(franchise) : team;
   const initials = team
     .split(" ")
@@ -368,8 +405,8 @@ const ScoreTeamRow = ({
   );
 };
 
-const ScheduleTeam = ({ team, label }: { team: string; label: string }) => {
-  const franchise = findFranchiseByName(team);
+const ScheduleTeam = ({ team, label, allFranchises }: { team: string; label: string; allFranchises: Franchise[] }) => {
+  const franchise = findFranchiseByName(team, allFranchises);
   const displayName = franchise ? formatFranchiseName(franchise) : team;
   const initials = team
     .split(" ")
@@ -442,10 +479,10 @@ const playerMetricFilters: { key: PlayerMetric; label: string }[] = [
   { key: "blk", label: "BLK" },
 ];
 
-const RosterModal = ({ teamName, roster, onClose }: { teamName: string; roster: RosterPlayer[]; onClose: () => void }) => {
-  const franchise = findFranchiseByName(teamName);
-
-  useEffect(() => {
+  const RosterModal = ({ teamName, roster, onClose, allFranchises }: { teamName: string; roster: RosterPlayer[]; onClose: () => void; allFranchises: Franchise[] }) => {
+    const franchise = findFranchiseByName(teamName, allFranchises);
+    
+    useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         onClose();
@@ -572,6 +609,20 @@ export default function Home() {
   const [playerMetric, setPlayerMetric] = useState<PlayerMetric>("pts");
   const [gender, setGender] = useState<Gender>("men");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [dynamicSpotlightGames, setDynamicSpotlightGames] = useState<EnhancedMatchup[]>([]);
+  const [weeklyScheduleGames, setWeeklyScheduleGames] = useState<EnhancedMatchup[]>([]);
+  const [completedGames, setCompletedGames] = useState<any[]>([]);
+  const [menTeams, setMenTeams] = useState<Franchise[]>([]);
+  const [womenTeams, setWomenTeams] = useState<Franchise[]>([]);
+  const [leagueTopPlayers, setLeagueTopPlayers] = useState<any[]>([]);
+  const [newsArticles, setNewsArticles] = useState<NewsArticle[]>([]);
+  const [featuredArticleId, setFeaturedArticleId] = useState<string | null>(null);
+  const [expandedArticleId, setExpandedArticleId] = useState<string | null>(null);
+  const [dynamicStandings, setDynamicStandings] = useState<any[]>([]);
+  const [currentPartnerIndex, setCurrentPartnerIndex] = useState(0);
+  const [currentCommitteeIndex, setCurrentCommitteeIndex] = useState(0);
+  const [dynamicPartners, setDynamicPartners] = useState<any[]>([]);
+  const [dynamicCommittee, setDynamicCommittee] = useState<any[]>([]);
   const copy = translations[language];
   const sectionCopy = copy.sections;
   const languageOptions: Locale[] = ["en", "fr"];
@@ -587,14 +638,581 @@ export default function Home() {
       : teamRosters[`women:${selectedTeam.label}`]
     : undefined;
   const genderPlayers = gender === "men" ? spotlightPlayers : spotlightPlayersWomen;
-  const genderStandings = gender === "men" ? conferenceStandings : conferenceStandingsWomen;
-  const genderFranchises = gender === "men" ? franchises : franchisesWomen;
+  // Always use dynamic standings calculated from games - no fallback to static data
+  const genderStandings = dynamicStandings.filter(s => s.gender === gender);
+  const genderFranchises = gender === "men" ? menTeams : womenTeams;
+  const allFranchises = [...menTeams, ...womenTeams];
   const playerLeaders = [...genderPlayers].sort(
     (a, b) => b.leaderboard[playerMetric] - a.leaderboard[playerMetric]
   );
-  const spotlightGames = [...featuredMatchups]
-    .sort((a, b) => parseTipoffToDate(a.tipoff) - parseTipoffToDate(b.tipoff))
-    .slice(0, 3);
+  const spotlightGames = dynamicSpotlightGames;
+
+  useEffect(() => {
+    const fetchTeams = async () => {
+      try {
+        const teamsRef = collection(firebaseDB, "teams");
+        const teamsSnapshot = await getDocs(teamsRef);
+        
+        const men: Franchise[] = [];
+        const women: Franchise[] = [];
+        
+        teamsSnapshot.docs.forEach((doc) => {
+          const data = doc.data();
+          const colors: [string, string] = Array.isArray(data.colors) && data.colors.length >= 2
+            ? [data.colors[0], data.colors[1]]
+            : ["#1e293b", "#0f172a"];
+          
+          const franchise: Franchise = {
+            city: data.city ?? "",
+            name: data.name ?? doc.id,
+            colors,
+            logo: data.logo ?? "/logos/liprobakin.png",
+          };
+          
+          if (data.gender === "women") {
+            women.push(franchise);
+          } else {
+            men.push(franchise);
+          }
+        });
+        
+        men.sort((a, b) => a.name.localeCompare(b.name));
+        women.sort((a, b) => a.name.localeCompare(b.name));
+        
+        setMenTeams(men);
+        setWomenTeams(women);
+      } catch (error) {
+        console.error("Error fetching teams:", error);
+      }
+    };
+    
+    fetchTeams();
+  }, []);
+
+  useEffect(() => {
+    const fetchNews = async () => {
+      try {
+        const newsRef = collection(firebaseDB, "news");
+        const newsQuery = query(newsRef, orderBy("createdAt", "desc"));
+        const newsSnapshot = await getDocs(newsQuery);
+        
+        const articles: NewsArticle[] = newsSnapshot.docs.map((doc) => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            title: data.title || "",
+            summary: data.summary || "",
+            category: data.category || "News",
+            headline: data.headline || "",
+            imageUrl: data.imageUrl,
+            createdAt: data.createdAt?.toDate() || null,
+          };
+        });
+        
+        setNewsArticles(articles);
+        if (articles.length > 0) {
+          setFeaturedArticleId(articles[0].id);
+        }
+      } catch (error) {
+        console.error("Error fetching news:", error);
+      }
+    };
+    
+    fetchNews();
+  }, []);
+
+  useEffect(() => {
+    const fetchPartners = async () => {
+      try {
+        const partnersRef = collection(firebaseDB, "partners");
+        const partnersSnapshot = await getDocs(partnersRef);
+        
+        const partners = partnersSnapshot.docs.map((doc) => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            name: data.name || "",
+            logo: data.logo || "",
+          };
+        });
+        
+        setDynamicPartners(partners);
+      } catch (error) {
+        console.error("Error fetching partners:", error);
+      }
+    };
+    
+    fetchPartners();
+  }, []);
+
+  useEffect(() => {
+    const fetchCommittee = async () => {
+      try {
+        const committeeRef = collection(firebaseDB, "committee");
+        const committeeSnapshot = await getDocs(committeeRef);
+        
+        const members = committeeSnapshot.docs.map((doc) => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            name: `${data.firstName || ""} ${data.lastName || ""}`.trim(),
+            role: data.role || "",
+            photo: data.photo || "",
+          };
+        }).sort((a, b) => a.name.localeCompare(b.name));
+        
+        setDynamicCommittee(members);
+      } catch (error) {
+        console.error("Error fetching committee:", error);
+      }
+    };
+    
+    fetchCommittee();
+  }, []);
+
+  useEffect(() => {
+    const calculateStandings = async () => {
+      try {
+        const gamesRef = collection(firebaseDB, "games");
+        const gamesSnapshot = await getDocs(gamesRef);
+        
+        console.log("Total games found:", gamesSnapshot.size);
+        
+        const teamStats: Record<string, {
+          wins: number;
+          losses: number;
+          totalPoints: number;
+          teamName: string;
+          gender: string;
+        }> = {};
+        
+        gamesSnapshot.docs.forEach((doc) => {
+          const game = doc.data();
+          console.log("Processing game:", game);
+          
+          if (game.winnerTeamId && game.loserTeamId) {
+            const homeTeam = game.homeTeamId;
+            const awayTeam = game.awayTeamId;
+            const winnerTeam = game.winnerTeamId;
+            const loserTeam = game.loserTeamId;
+            const winnerScore = game.winnerScore || 0;
+            const loserScore = game.loserScore || 0;
+            const homeTeamName = game.homeTeamName || "";
+            const awayTeamName = game.awayTeamName || "";
+            const gameGender = game.gender || "men";
+            
+            // Determine scores for home and away teams
+            const homeScore = winnerTeam === homeTeam ? winnerScore : loserScore;
+            const awayScore = winnerTeam === awayTeam ? winnerScore : loserScore;
+            
+            console.log(`Game: ${homeTeamName} (${homeScore}) vs ${awayTeamName} (${awayScore}), Winner: ${winnerTeam === homeTeam ? homeTeamName : awayTeamName}`);
+            
+            // Initialize home team
+            if (!teamStats[homeTeam]) {
+              teamStats[homeTeam] = {
+                wins: 0,
+                losses: 0,
+                totalPoints: 0,
+                teamName: homeTeamName,
+                gender: gameGender
+              };
+            }
+            
+            // Initialize away team
+            if (!teamStats[awayTeam]) {
+              teamStats[awayTeam] = {
+                wins: 0,
+                losses: 0,
+                totalPoints: 0,
+                teamName: awayTeamName,
+                gender: gameGender
+              };
+            }
+            
+            // Update stats
+            teamStats[homeTeam].totalPoints += homeScore;
+            teamStats[awayTeam].totalPoints += awayScore;
+            
+            if (winnerTeam === homeTeam) {
+              teamStats[homeTeam].wins += 1;
+              teamStats[awayTeam].losses += 1;
+            } else {
+              teamStats[awayTeam].wins += 1;
+              teamStats[homeTeam].losses += 1;
+            }
+            
+            console.log(`${homeTeamName} stats:`, teamStats[homeTeam]);
+            console.log(`${awayTeamName} stats:`, teamStats[awayTeam]);
+          }
+        });
+        
+        console.log("Final team stats:", teamStats);
+        
+        // Convert to array and sort
+        const standingsArray = Object.entries(teamStats).map(([teamId, stats], index) => ({
+          seed: index + 1,
+          team: stats.teamName,
+          wins: stats.wins,
+          losses: stats.losses,
+          totalPoints: stats.totalPoints,
+          gender: stats.gender
+        }));
+        
+        // Sort by wins (descending), then by total points (descending)
+        standingsArray.sort((a, b) => {
+          if (b.wins !== a.wins) return b.wins - a.wins;
+          return b.totalPoints - a.totalPoints;
+        });
+        
+        // Update seed numbers after sorting
+        const menStandings = standingsArray.filter(s => s.gender === "men");
+        const womenStandings = standingsArray.filter(s => s.gender === "women");
+        
+        menStandings.forEach((s, i) => s.seed = i + 1);
+        womenStandings.forEach((s, i) => s.seed = i + 1);
+        
+        console.log("Final standings:", [...menStandings, ...womenStandings]);
+        
+        setDynamicStandings([...menStandings, ...womenStandings]);
+      } catch (error) {
+        console.error("Error calculating standings:", error);
+      }
+    };
+    
+    calculateStandings();
+  }, []);
+
+  // Auto-rotate news articles every 10 seconds
+  useEffect(() => {
+    if (newsArticles.length <= 1 || expandedArticleId) return; // Don't rotate if expanded
+    
+    const interval = setInterval(() => {
+      setNewsArticles(prev => {
+        if (prev.length === 0) return prev;
+        
+        // Find current featured index
+        const currentIndex = prev.findIndex(article => article.id === featuredArticleId);
+        // Get next article (wrap around to start)
+        const nextIndex = (currentIndex + 1) % prev.length;
+        
+        // Set next article as featured
+        setFeaturedArticleId(prev[nextIndex].id);
+        
+        return prev;
+      });
+    }, 10000); // 10 seconds
+    
+    return () => clearInterval(interval);
+  }, [newsArticles, featuredArticleId, expandedArticleId]);
+
+  // Auto-rotate partners every 5 seconds
+  useEffect(() => {
+    if (dynamicPartners.length <= 1) return;
+    
+    const interval = setInterval(() => {
+      setCurrentPartnerIndex((prev) => (prev + 1) % dynamicPartners.length);
+    }, 5000);
+    
+    return () => clearInterval(interval);
+  }, [dynamicPartners]);
+
+  // Auto-rotate committee members every 5 seconds
+  useEffect(() => {
+    if (dynamicCommittee.length <= 1) return;
+    
+    const interval = setInterval(() => {
+      setCurrentCommitteeIndex((prev) => (prev + 1) % dynamicCommittee.length);
+    }, 5000);
+    
+    return () => clearInterval(interval);
+  }, [dynamicCommittee]);
+
+  useEffect(() => {
+    const fetchLeagueTopPlayers = async () => {
+      try {
+        const teamsRef = collection(firebaseDB, "teams");
+        const teamsSnapshot = await getDocs(teamsRef);
+        
+        // Fetch all team rosters in parallel instead of sequentially
+        const rosterPromises = teamsSnapshot.docs.map(async (teamDoc) => {
+          const teamData = teamDoc.data();
+          const rosterRef = collection(firebaseDB, "teams", teamDoc.id, "roster");
+          
+          try {
+            const rosterSnapshot = await getDocs(rosterRef);
+            
+            return rosterSnapshot.docs.map((playerDoc) => {
+              const playerData = playerDoc.data();
+              return {
+                id: playerDoc.id,
+                firstName: playerData.firstName || "",
+                lastName: playerData.lastName || "",
+                number: playerData.number || "00",
+                teamName: teamData.name || "Unknown",
+                teamLogo: teamData.logo || "/logos/liprobakin.png",
+                headshot: playerData.headshot,
+                stats: {
+                  pts: playerData.stats?.pts || 0,
+                  reb: playerData.stats?.reb || 0,
+                  ast: playerData.stats?.ast || 0,
+                  blk: playerData.stats?.blk || 0,
+                  stl: playerData.stats?.stl || 0,
+                },
+              };
+            });
+          } catch (error) {
+            console.error(`Error fetching roster for team ${teamDoc.id}:`, error);
+            return [];
+          }
+        });
+        
+        // Wait for all rosters to be fetched in parallel
+        const allRosters = await Promise.all(rosterPromises);
+        const allPlayers = allRosters.flat();
+        
+        // Sort by points and set top players
+        const sortedByPts = [...allPlayers].sort((a, b) => b.stats.pts - a.stats.pts);
+        setLeagueTopPlayers(sortedByPts);
+      } catch (error) {
+        console.error("Error fetching league top players:", error);
+      }
+    };
+    
+    fetchLeagueTopPlayers();
+  }, []);
+
+  useEffect(() => {
+    const fetchGames = async () => {
+      try {
+        const gamesRef = collection(firebaseDB, "games");
+        const gamesQuery = query(
+          gamesRef,
+          orderBy("date", "asc"),
+          limit(50)
+        );
+        
+        const snapshot = await getDocs(gamesQuery);
+        
+        // Fetch teams to get records
+        const teamsRef = collection(firebaseDB, "teams");
+        const teamsSnapshot = await getDocs(teamsRef);
+        const teamsMap = new Map();
+        teamsSnapshot.docs.forEach((doc) => {
+          const data = doc.data();
+          teamsMap.set(doc.id, {
+            wins: data.wins || 0,
+            losses: data.losses || 0,
+          });
+        });
+        
+        // Fetch referees to get their names
+        const refereesRef = collection(firebaseDB, "referees");
+        const refereesSnapshot = await getDocs(refereesRef);
+        const refereesMap = new Map();
+        refereesSnapshot.docs.forEach((doc) => {
+          const data = doc.data();
+          refereesMap.set(doc.id, {
+            firstName: data.firstName || "",
+            lastName: data.lastName || "",
+          });
+        });
+        
+        const allGames = snapshot.docs
+          .map((doc) => {
+            const data = doc.data();
+            const dateStr = data.date || "";
+            const timeStr = data.time || "00:00";
+            const dateObj = new Date(`${dateStr}T${timeStr}`);
+            
+            return {
+              id: doc.id,
+              data,
+              dateObj,
+              completed: data.completed === true,
+            };
+          })
+          .filter((game) => {
+            if (game.completed) return false;
+            
+            const now = new Date();
+            
+            // Get the start of current week (Monday)
+            const currentDay = now.getDay();
+            const diffToMonday = currentDay === 0 ? -6 : 1 - currentDay; // If Sunday, go back 6 days, else go to Monday
+            const startOfWeek = new Date(now);
+            startOfWeek.setDate(now.getDate() + diffToMonday);
+            startOfWeek.setHours(0, 0, 0, 0);
+            
+            // Get the end of current week (Sunday)
+            const endOfWeek = new Date(startOfWeek);
+            endOfWeek.setDate(startOfWeek.getDate() + 6);
+            endOfWeek.setHours(23, 59, 59, 999);
+            
+            // Check if game is within current week
+            const gameInCurrentWeek = game.dateObj >= startOfWeek && game.dateObj <= endOfWeek;
+            
+            // Hide game 1 minute after start time
+            const oneMinuteAfterStart = new Date(game.dateObj.getTime() + 60000);
+            const gameNotStarted = now < oneMinuteAfterStart;
+            
+            return gameInCurrentWeek && gameNotStarted;
+          })
+          .sort((a, b) => a.dateObj.getTime() - b.dateObj.getTime());
+
+        // Get top 3 for spotlight (earliest upcoming games)
+        const spotlightGamesData = allGames.slice(0, 3);
+        
+        // Fetch roster data for all teams involved in games
+        const getTopPlayerForTeam = async (teamId: string, teamName: string) => {
+          try {
+            const rosterRef = collection(firebaseDB, "teams", teamId, "roster");
+            const rosterSnapshot = await getDocs(rosterRef);
+            
+            if (rosterSnapshot.empty) return null;
+            
+            const players = rosterSnapshot.docs.map((doc) => doc.data());
+            
+            // Check if any player has stats
+            const hasStats = players.some((p) => (p.stats?.pts || 0) > 0);
+            
+            if (hasStats) {
+              // Find player with highest points
+              let topPlayer: any = null;
+              let topPts = 0;
+              
+              players.forEach((player) => {
+                const pts = player.stats?.pts || 0;
+                if (pts > topPts) {
+                  topPts = pts;
+                  topPlayer = player;
+                }
+              });
+              
+              if (topPlayer) {
+                return {
+                  player: `${topPlayer.firstName || ""} ${topPlayer.lastName || ""}`.trim() || "Unknown",
+                  team: teamName,
+                  stats: `${topPlayer.stats?.pts || 0} PTS · ${topPlayer.stats?.reb || 0} REB · ${topPlayer.stats?.stl || 0} STL`,
+                };
+              }
+            } else {
+              // No stats, get first player alphabetically
+              const sortedPlayers = players.sort((a, b) => {
+                const nameA = `${a.lastName || ""} ${a.firstName || ""}`.trim().toLowerCase();
+                const nameB = `${b.lastName || ""} ${b.firstName || ""}`.trim().toLowerCase();
+                return nameA.localeCompare(nameB);
+              });
+              
+              if (sortedPlayers.length > 0) {
+                const firstPlayer = sortedPlayers[0];
+                return {
+                  player: `${firstPlayer.firstName || ""} ${firstPlayer.lastName || ""}`.trim() || "Unknown",
+                  team: teamName,
+                  stats: `${firstPlayer.stats?.pts || 0} PTS · ${firstPlayer.stats?.reb || 0} REB · ${firstPlayer.stats?.stl || 0} STL`,
+                };
+              }
+            }
+          } catch (error) {
+            console.error(`Error fetching roster for team ${teamId}:`, error);
+          }
+          return null;
+        };
+        
+        const formatGameData = async (game: typeof allGames[0]): Promise<EnhancedMatchup> => {
+          const formatTipoff = (dateObj: Date) => {
+            return new Intl.DateTimeFormat("en-US", {
+              month: "short",
+              day: "numeric",
+              hour: "numeric",
+              minute: "2-digit",
+            }).format(dateObj);
+          };
+          
+          const homeTeam = teamsMap.get(game.data.homeTeamId) || { wins: 0, losses: 0 };
+          const awayTeam = teamsMap.get(game.data.awayTeamId) || { wins: 0, losses: 0 };
+          
+          // Get referee last names from IDs
+          const getRefereeLastName = (refId: string | undefined) => {
+            if (!refId) return undefined;
+            const referee = refereesMap.get(refId);
+            return referee?.lastName || undefined;
+          };
+          
+          // Get top player from each team's roster
+          const leaders: FeaturedMatchup["leaders"] = [];
+          
+          if (game.data.homeTeamId) {
+            const homeLeader = await getTopPlayerForTeam(game.data.homeTeamId, game.data.homeTeamName || "Home");
+            if (homeLeader) leaders.push(homeLeader);
+          }
+          
+          if (game.data.awayTeamId) {
+            const awayLeader = await getTopPlayerForTeam(game.data.awayTeamId, game.data.awayTeamName || "Away");
+            if (awayLeader) leaders.push(awayLeader);
+          }
+          
+          return {
+            id: game.id,
+            status: "Upcoming",
+            tipoff: formatTipoff(game.dateObj),
+            venue: game.data.venue || "TBD",
+            network: "Liprobakin+",
+            home: {
+              team: game.data.homeTeamName || "Home",
+              record: `${homeTeam.wins}-${homeTeam.losses}`,
+            },
+            away: {
+              team: game.data.awayTeamName || "Away",
+              record: `${awayTeam.wins}-${awayTeam.losses}`,
+            },
+            homeTeamLogo: game.data.homeTeamLogo,
+            awayTeamLogo: game.data.awayTeamLogo,
+            gender: game.data.gender,
+            refereeHomeTeam1: getRefereeLastName(game.data.refereeHomeTeam1),
+            refereeHomeTeam2: getRefereeLastName(game.data.refereeHomeTeam2),
+            refereeAwayTeam: getRefereeLastName(game.data.refereeAwayTeam),
+            leaders,
+          };
+        };
+
+        const spotlightGames = await Promise.all(spotlightGamesData.map(formatGameData));
+        const allWeeklyGames = await Promise.all(allGames.map(formatGameData));
+        
+        setDynamicSpotlightGames(spotlightGames);
+        setWeeklyScheduleGames(allWeeklyGames);
+        
+        // Fetch completed games for Final Buzzer section
+        const completedGamesQuery = query(
+          gamesRef,
+          orderBy("date", "desc"),
+          limit(10)
+        );
+        const completedSnapshot = await getDocs(completedGamesQuery);
+        const completedGamesData = completedSnapshot.docs
+          .map((doc) => {
+            const data = doc.data();
+            return {
+              id: doc.id,
+              ...data,
+              dateObj: data.date ? new Date(data.date) : null,
+            };
+          })
+          .filter((game) => game.completed === true)
+          .sort((a, b) => (b.dateObj?.getTime() || 0) - (a.dateObj?.getTime() || 0))
+          .slice(0, 7);
+        
+        setCompletedGames(completedGamesData);
+        
+        console.log("Spotlight games:", spotlightGames.length);
+        console.log("Weekly schedule games:", allWeeklyGames.length);
+        console.log("Completed games:", completedGamesData.length);
+      } catch (error) {
+        console.error("Error fetching games:", error);
+      }
+    };
+
+    fetchGames();
+  }, []);
 
   useEffect(() => {
     if (!mobileNavOpen) {
@@ -608,6 +1226,61 @@ export default function Home() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [mobileNavOpen]);
+
+  // Auto-scroll for teams section
+  useEffect(() => {
+    const container = document.querySelector('#teams .overflow-x-auto') as HTMLElement;
+    if (!container) return;
+
+    let scrollInterval: NodeJS.Timeout;
+    let isHovered = false;
+    let isPaused = false;
+
+    const startAutoScroll = () => {
+      scrollInterval = setInterval(() => {
+        if (!isHovered && !isPaused) {
+          const maxScroll = container.scrollWidth - container.clientWidth;
+          
+          if (container.scrollLeft >= maxScroll) {
+            // Reset to beginning
+            container.scrollLeft = 0;
+          } else {
+            // Scroll right by 1 pixel for smooth movement
+            container.scrollLeft += 1;
+          }
+        }
+      }, 30); // 30ms interval for smooth animation
+    };
+
+    const handleMouseEnter = () => {
+      isHovered = true;
+    };
+
+    const handleMouseLeave = () => {
+      isHovered = false;
+    };
+
+    const handleUserScroll = () => {
+      isPaused = true;
+      // Resume auto-scroll after 3 seconds of no user interaction
+      setTimeout(() => {
+        isPaused = false;
+      }, 3000);
+    };
+
+    container.addEventListener('mouseenter', handleMouseEnter);
+    container.addEventListener('mouseleave', handleMouseLeave);
+    container.addEventListener('scroll', handleUserScroll);
+
+    startAutoScroll();
+
+    return () => {
+      clearInterval(scrollInterval);
+      container.removeEventListener('mouseenter', handleMouseEnter);
+      container.removeEventListener('mouseleave', handleMouseLeave);
+      container.removeEventListener('scroll', handleUserScroll);
+    };
+  }, [genderFranchises]); // Re-run when teams change
 
   return (
     <div className="relative isolate min-h-screen bg-gradient-to-b from-[#050816] via-[#050816] to-[#020407] text-white">
@@ -646,9 +1319,7 @@ export default function Home() {
               />
             </button>
             <div className="hidden gap-6 text-xs font-medium uppercase tracking-[0.3em] text-slate-300 lg:flex">
-              {navSections
-                .filter((section) => section !== "News")
-                .map((section) => (
+              {navSections.map((section) => (
                 <Link
                   key={section}
                   href={`#${slug(section)}`}
@@ -666,15 +1337,15 @@ export default function Home() {
       {mobileNavOpen ? (
         <div
           id="mobile-nav-panel"
-          className="lg:hidden border-b border-white/10 bg-black/90 backdrop-blur"
+          className="border-b border-white/10 bg-black/90 backdrop-blur lg:hidden"
         >
           <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-4 md:px-8">
             {mobileNavSections.map((section) => (
               <Link
                 key={section}
                 href={`#${slug(section)}`}
-                className="text-base font-semibold uppercase tracking-[0.3em] text-white"
                 onClick={() => setMobileNavOpen(false)}
+                className="rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-sm font-semibold uppercase tracking-[0.3em] text-slate-200 transition hover:border-white/40 hover:text-white"
               >
                 {copy.nav[slug(section) as keyof typeof copy.nav] ?? section}
               </Link>
@@ -683,94 +1354,366 @@ export default function Home() {
         </div>
       ) : null}
 
-      <main className="mx-auto flex max-w-6xl flex-col gap-24 px-4 pb-24 pt-8 md:px-8">
+      {/* News Section */}
+      {newsArticles.length > 0 && featuredArticleId && (
+        <section className="mx-auto max-w-7xl px-4 md:px-8">
+          {(() => {
+            const featured = newsArticles.find((article) => article.id === featuredArticleId);
+            if (!featured) return null;
+            
+            const isExpanded = expandedArticleId === featured.id;
+            
+            return (
+              <div className="space-y-8">
+                {/* Featured Article */}
+                <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900/80 to-slate-950/90">
+                  {featured.imageUrl && (
+                    <div className={`relative overflow-hidden transition-all duration-500 ${isExpanded ? 'min-h-[600px]' : 'h-[600px]'}`}>
+                      <Image
+                        src={featured.imageUrl}
+                        alt={featured.title}
+                        fill
+                        className="object-cover"
+                        priority
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-b from-slate-950/80 via-slate-950/40 to-slate-950" />
+                      
+                      {/* Title and Headline on top of image */}
+                      <div className={`absolute inset-0 flex flex-col p-8 md:p-16 ${isExpanded ? 'relative' : 'justify-between'}`}>
+                        <div>
+                          <span className="mb-2 inline-block w-fit rounded-full bg-orange-600 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-white">
+                            {featured.category}
+                          </span>
+                          
+                          <h1 className="mb-2 text-2xl font-bold leading-tight text-white md:text-3xl lg:text-4xl max-w-4xl">
+                            {featured.title}
+                          </h1>
+                          
+                          <p className="mb-2 text-sm md:text-base text-slate-200 max-w-3xl">
+                            {featured.headline}
+                          </p>
+                          
+                          {featured.createdAt && (
+                            <p className="mb-4 text-xs text-slate-300">
+                              il y a {Math.floor((Date.now() - featured.createdAt.getTime()) / (1000 * 60))} min
+                            </p>
+                          )}
+                          
+                          <button
+                            onClick={() => setExpandedArticleId(isExpanded ? null : featured.id)}
+                            className="flex items-center gap-2 rounded-xl border border-white/20 bg-white/5 px-6 py-3 text-sm font-semibold uppercase tracking-wider text-white transition hover:border-orange-500 hover:bg-orange-600 w-fit"
+                          >
+                            {isExpanded ? "Fermer" : "Voir l'article »"}
+                          </button>
+                          
+                          {/* Expandable Article Content - Below button with slide up animation */}
+                          <div
+                            className={`transition-all duration-500 ease-in-out -mx-8 md:-mx-16 overflow-visible ${
+                              isExpanded ? "max-h-[3000px] opacity-100 mt-6" : "max-h-0 opacity-0 mt-0"
+                            }`}
+                          >
+                            <div className="bg-slate-950/95 backdrop-blur-sm p-6 md:p-8 border-y border-white/10 w-full">
+                              <p className="text-base leading-relaxed text-slate-200 whitespace-pre-line">
+                                {featured.summary}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Article Grid - Below button, hidden when expanded */}
+                        {newsArticles.length > 0 && !isExpanded && (
+                          <div className="grid gap-4 grid-cols-1 md:grid-cols-3 pb-16 mt-6 max-w-4xl mx-auto">
+                            {(() => {
+                              // Show all articles including the featured one, up to 3 total
+                              const gridArticles = newsArticles.slice(0, 3);
+                              
+                              return gridArticles.map((article, index) => (
+                                <button
+                                  key={`${article.id}-${index}`}
+                                  onClick={() => {
+                                    setFeaturedArticleId(article.id);
+                                    setExpandedArticleId(null);
+                                    window.scrollTo({ top: 0, behavior: "smooth" });
+                                  }}
+                                  className={`group relative overflow-hidden rounded-xl border text-left transition hover:border-orange-500 hover:bg-slate-900/80 ${
+                                    article.id === featured.id 
+                                      ? 'border-orange-500 bg-slate-900/80' 
+                                      : 'border-white/10 bg-slate-900/60'
+                                  }`}
+                              >
+                                {article.imageUrl && (
+                                  <div className="relative h-28 overflow-hidden">
+                                    <Image
+                                      src={article.imageUrl}
+                                      alt={article.title}
+                                      fill
+                                      className="object-cover transition duration-300 group-hover:scale-105"
+                                    />
+                                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent" />
+                                  </div>
+                                )}
+                                
+                                <div className="p-3">
+                                  <span className="mb-1 inline-block text-[10px] font-semibold uppercase tracking-wider text-orange-500">
+                                    {article.category}
+                                  </span>
+                                  
+                                  <h3 className="mb-1.5 text-xs font-bold leading-tight text-white group-hover:text-orange-500 transition-colors line-clamp-2">
+                                    {article.title}
+                                  </h3>
+                                  
+                                  <p className="text-[11px] text-slate-400 line-clamp-2">
+                                    {article.headline}
+                                  </p>
+                                  
+                                  {article.createdAt && (
+                                    <p className="mt-1.5 text-[10px] text-slate-500">
+                                      {new Intl.DateTimeFormat("fr-FR", {
+                                        month: "short",
+                                        day: "numeric",
+                                      }).format(article.createdAt)}
+                                    </p>
+                                  )}
+                                </div>
+                              </button>
+                              ));
+                            })()}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+        </section>
+      )}
+
+      <main className="mx-auto max-w-6xl space-y-20 px-4 pb-20 pt-12 md:px-8">
         <section id="stats" className="space-y-8">
           <SectionHeader
             id="stats"
             title={sectionCopy.stats.title}
-            description={sectionCopy.stats.description}
           />
-          <div className="space-y-6">
-            {spotlightGames.map((matchup) => (
-              <article
-                key={matchup.id}
-                className="grid gap-6 rounded-3xl border border-white/5 bg-slate-900/70 p-6 shadow-lg shadow-black/30 lg:grid-cols-[2fr_1fr]"
-              >
-                <div className="grid gap-6 lg:grid-cols-[1fr_auto_1fr]">
-                  <MatchupTeam team={matchup.away.team} record={matchup.away.record} />
-                  <div className="flex flex-col items-center justify-center gap-4 text-center">
-                    <span className="rounded-full border border-white/15 px-4 py-1 text-xs font-semibold uppercase tracking-[0.4em] text-slate-300">
-                      {matchup.status}
-                    </span>
-                    <div>
-                      <p className="text-xl font-semibold text-white">{matchup.tipoff}</p>
-                      <p className="text-sm text-slate-300">{matchup.venue}</p>
+          <div className="space-y-4">
+            {spotlightGames.length === 0 ? (
+              <div className="rounded-3xl border border-white/5 bg-slate-900/70 p-12 text-center">
+                <p className="text-lg text-slate-400">No upcoming games scheduled yet.</p>
+                <p className="mt-2 text-sm text-slate-500">Check back soon for the latest matchups!</p>
+              </div>
+            ) : (
+              spotlightGames.map((matchup) => (
+                <article
+                  key={matchup.id}
+                  className="grid gap-4 rounded-2xl border border-white/5 bg-slate-900/70 p-3 md:p-4 shadow-lg shadow-black/30 lg:grid-cols-[2fr_1fr] overflow-hidden"
+                >
+                  <div className="grid grid-cols-[1fr_auto_1fr] gap-2 md:gap-4 min-w-0">
+                    <MatchupTeam 
+                      team={matchup.away.team} 
+                      record={matchup.away.record}
+                      logo={"awayTeamLogo" in matchup ? matchup.awayTeamLogo : undefined}
+                      allFranchises={allFranchises}
+                    />
+                    <div className="flex flex-col items-center justify-center gap-1.5 md:gap-2 text-center min-w-0 px-1">
+                      <span className="rounded-full border border-white/15 px-2 md:px-3 py-0.5 text-[9px] md:text-[10px] font-semibold uppercase tracking-[0.2em] md:tracking-[0.3em] text-slate-300 whitespace-nowrap">
+                        {matchup.gender === "men" ? "Men" : matchup.gender === "women" ? "Women" : matchup.status}
+                      </span>
+                      <div className="min-w-0 w-full">
+                        <p className="text-xs md:text-sm font-semibold text-white truncate">{matchup.tipoff}</p>
+                        <p className="text-[10px] md:text-xs text-slate-300 truncate">{matchup.venue}</p>
+                        {(matchup.refereeHomeTeam1 || matchup.refereeHomeTeam2 || matchup.refereeAwayTeam) && (
+                          <p className="mt-0.5 md:mt-1 text-[9px] md:text-[10px] text-slate-400 truncate">
+                            Refs: {[matchup.refereeHomeTeam1, matchup.refereeHomeTeam2, matchup.refereeAwayTeam].filter(Boolean).join(", ")}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <MatchupTeam 
+                      team={matchup.home.team} 
+                      record={matchup.home.record}
+                      logo={"homeTeamLogo" in matchup ? matchup.homeTeamLogo : undefined}
+                      allFranchises={allFranchises}
+                    />
+                  </div>
+                  <div className="space-y-2 rounded-xl border border-white/5 bg-black/30 p-3 overflow-hidden">
+                    <p className="text-[10px] uppercase tracking-[0.3em] text-slate-400">Leaders</p>
+                    <div className="grid grid-cols-2 gap-3 min-w-0">
+                      {matchup.leaders.map((leader) => (
+                        <LeaderRow key={`${matchup.id}-${leader.player}`} leader={leader} allFranchises={allFranchises} />
+                      ))}
                     </div>
                   </div>
-                  <MatchupTeam team={matchup.home.team} record={matchup.home.record} />
-                </div>
-                <div className="space-y-4 rounded-2xl border border-white/5 bg-black/30 p-4">
-                  <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Leaders</p>
-                  <div className="space-y-4">
-                    {matchup.leaders.map((leader) => (
-                      <LeaderRow key={`${matchup.id}-${leader.player}`} leader={leader} />
-                    ))}
-                  </div>
-                </div>
-              </article>
-            ))}
+                </article>
+              ))
+            )}
           </div>
         </section>
 
-        <section id="games" className="space-y-8">
-          <SectionHeader
-            id="games"
-            eyebrow={sectionCopy.games.eyebrow}
-            title={sectionCopy.games.title}
-            description={sectionCopy.games.description}
-          />
-          <div className="grid gap-6 md:grid-cols-2">
-            {latestGames.map((game) => (
-              <article
-                key={game.id}
-                className="rounded-2xl border border-white/5 bg-gradient-to-br from-slate-900 to-slate-800 p-6 shadow-lg shadow-black/40"
-              >
-                <p className="text-xs uppercase tracking-[0.4em] text-slate-400">{game.status}</p>
-                <div className="mt-4 space-y-3">
-                  <ScoreTeamRow team={game.home} score={game.homeScore} highlight />
-                  <ScoreTeamRow team={game.away} score={game.awayScore} />
-                </div>
-                <div className="mt-6 flex flex-wrap items-center gap-3 text-xs text-slate-400">
-                  <span>{game.venue}</span>
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
         <section id="schedule" className="space-y-8">
           <SectionHeader
             id="schedule"
             eyebrow={sectionCopy.schedule.eyebrow}
             title={sectionCopy.schedule.title}
-            description={sectionCopy.schedule.description}
           />
-          <div className="divide-y divide-white/5 rounded-3xl border border-white/5 bg-slate-950/70">
-            {upcomingSchedule.map((game) => (
-              <div key={game.id} className="flex flex-col gap-4 px-6 py-5 sm:flex-row sm:items-center sm:gap-6">
-                <div className="flex items-center justify-between sm:block">
-                  <p className="text-sm font-semibold text-white">{game.date}</p>
-                  <p className="text-xs text-slate-400">{game.time}</p>
+          <div className="rounded-3xl border border-white/10 bg-slate-950/70 p-6">
+            <div className="space-y-4">
+              {weeklyScheduleGames.length === 0 ? (
+                <div className="py-8 text-center">
+                  <p className="text-slate-400">No games scheduled yet.</p>
                 </div>
-                <div className="flex flex-1 flex-col gap-4 sm:flex-row sm:items-center sm:justify-center">
-                  <ScheduleTeam team={game.away} label="Away" />
-                  <span className="text-xs uppercase tracking-[0.4em] text-slate-500">at</span>
-                  <ScheduleTeam team={game.home} label="Home" />
-                </div>
-                <div className="text-sm text-slate-300 sm:min-w-[150px] sm:text-right">
-                  <p>{game.venue}</p>
-                </div>
+              ) : (
+                weeklyScheduleGames.slice(0, 5).map((game) => (
+                  <div
+                    key={game.id}
+                    className="grid gap-4 rounded-2xl border border-white/5 bg-black/30 p-4 sm:grid-cols-[1fr_2fr_auto]"
+                  >
+                    <div className="flex items-center justify-between sm:block">
+                      <p className="text-sm font-semibold text-white">{game.tipoff.split(" · ")[0]}</p>
+                      <p className="text-xs text-slate-400">{game.tipoff.split(" · ")[1] || "TBD"}</p>
+                    </div>
+                    <div className="flex flex-1 flex-col gap-4 sm:flex-row sm:items-center sm:justify-center">
+                      <div className="flex items-center gap-2">
+                        {game.awayTeamLogo && (
+                          <Image
+                            src={game.awayTeamLogo}
+                            alt={game.away.team}
+                            width={24}
+                            height={24}
+                            className="h-6 w-6 rounded-full border border-white/10 object-cover"
+                          />
+                        )}
+                        <span className="text-sm font-medium text-white">{game.away.team}</span>
+                        <span className="text-xs text-slate-400">({game.away.record})</span>
+                      </div>
+                      <span className="text-xs uppercase tracking-[0.4em] text-slate-500">at</span>
+                      <div className="flex items-center gap-2">
+                        {game.homeTeamLogo && (
+                          <Image
+                            src={game.homeTeamLogo}
+                            alt={game.home.team}
+                            width={24}
+                            height={24}
+                            className="h-6 w-6 rounded-full border border-white/10 object-cover"
+                          />
+                        )}
+                        <span className="text-sm font-medium text-white">{game.home.team}</span>
+                        <span className="text-xs text-slate-400">({game.home.record})</span>
+                      </div>
+                    </div>
+                    <div className="text-sm text-slate-300 sm:min-w-[150px] sm:text-right">
+                      <p>{game.venue}</p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* Final Buzzer Section */}
+        <section id="final-buzzer" className="space-y-8">
+          <SectionHeader
+            id="final-buzzer"
+            eyebrow="GAMES"
+            title="Final Buzzer"
+          />
+          <div className="space-y-4">
+            {completedGames.length === 0 ? (
+              <div className="rounded-3xl border border-white/5 bg-slate-900/70 p-12 text-center">
+                <p className="text-lg text-slate-400">No completed games yet.</p>
+                <p className="mt-2 text-sm text-slate-500">Check back after games are finished!</p>
               </div>
-            ))}
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2">
+                {completedGames.map((game) => {
+                  const homeWon = game.winnerTeamId === game.homeTeamId;
+                  const awayWon = game.winnerTeamId === game.awayTeamId;
+                  const homeScore = homeWon ? game.winnerScore : game.loserScore;
+                  const awayScore = awayWon ? game.winnerScore : game.loserScore;
+                  
+                  return (
+                    <Link
+                      key={game.id}
+                      href={`/game/${game.id}`}
+                      className="block rounded-2xl border border-white/5 bg-slate-900/70 p-4 overflow-hidden transition-all hover:border-orange-500 hover:bg-slate-900/80 cursor-pointer"
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="rounded-full border border-white/15 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.2em] text-slate-300">
+                          FINAL
+                        </span>
+                        <div className="text-right">
+                          <p className="text-xs text-slate-400">
+                            {game.dateObj ? new Intl.DateTimeFormat("en-US", {
+                              month: "short",
+                              day: "numeric",
+                            }).format(game.dateObj) : ""}
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        {/* Away Team */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            {game.awayTeamLogo && (
+                              <Image
+                                src={game.awayTeamLogo}
+                                alt={game.awayTeamName || "Away team"}
+                                width={32}
+                                height={32}
+                                className="h-8 w-8 rounded-full border border-white/10 bg-white/5 object-cover flex-shrink-0"
+                              />
+                            )}
+                            <span className={`text-sm font-medium truncate ${
+                              awayWon ? "text-white" : "text-slate-400"
+                            }`}>
+                              {game.awayTeamName || "Away"}
+                            </span>
+                          </div>
+                          <span className={`text-xl font-bold ${
+                            awayWon ? "text-white" : "text-slate-500"
+                          }`}>
+                            {awayScore ?? 0}
+                          </span>
+                        </div>
+                        
+                        {/* Home Team */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            {game.homeTeamLogo && (
+                              <Image
+                                src={game.homeTeamLogo}
+                                alt={game.homeTeamName || "Home team"}
+                                width={32}
+                                height={32}
+                                className="h-8 w-8 rounded-full border border-white/10 bg-white/5 object-cover flex-shrink-0"
+                              />
+                            )}
+                            <span className={`text-sm font-medium truncate ${
+                              homeWon ? "text-white" : "text-slate-400"
+                            }`}>
+                              {game.homeTeamName || "Home"}
+                            </span>
+                          </div>
+                          <span className={`text-xl font-bold ${
+                            homeWon ? "text-white" : "text-slate-500"
+                          }`}>
+                            {homeScore ?? 0}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      {/* Venue and Gender */}
+                      <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between text-xs">
+                        <span className="text-slate-400 truncate">{game.venue || ""}</span>
+                        <span className="text-slate-500 uppercase tracking-wider ml-2">{game.gender === "men" ? "MEN'S" : game.gender === "women" ? "WOMEN'S" : ""}</span>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </section>
 
@@ -779,10 +1722,9 @@ export default function Home() {
             id="players"
             eyebrow={sectionCopy.players.eyebrow}
             title={sectionCopy.players.title}
-            description={sectionCopy.players.description}
           />
           <div className="rounded-3xl border border-white/10 bg-slate-950/80 p-6">
-            <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
               <p className="text-xs uppercase tracking-[0.4em] text-slate-400">League Leaderboard</p>
               <div className="flex flex-wrap gap-2">
                 {playerMetricFilters.map((filter) => (
@@ -802,50 +1744,85 @@ export default function Home() {
               </div>
             </div>
             <div className="mt-6 space-y-3">
-              {playerLeaders.map((player, index) => {
+              {[...leagueTopPlayers]
+                .sort((a, b) => {
+                  const statA = playerMetric === "pts" ? a.stats.pts
+                    : playerMetric === "reb" ? a.stats.reb
+                    : playerMetric === "ast" ? a.stats.ast
+                    : playerMetric === "blk" ? a.stats.blk
+                    : a.stats.stl;
+                  const statB = playerMetric === "pts" ? b.stats.pts
+                    : playerMetric === "reb" ? b.stats.reb
+                    : playerMetric === "ast" ? b.stats.ast
+                    : playerMetric === "blk" ? b.stats.blk
+                    : b.stats.stl;
+                  return statB - statA;
+                })
+                .slice(0, 5)
+                .map((player, index) => {
                 const isLeader = index === 0;
-                const playerFranchise = findFranchiseByName(player.team);
-                const playerImage = player.photo || playerFranchise?.logo || "/logos/liprobakin.png";
+                const playerName = `${player.firstName} ${player.lastName}`.trim();
+                const playerImage = player.headshot || player.teamLogo || "/logos/liprobakin.png";
+                const statValue = playerMetric === "pts" ? player.stats.pts
+                  : playerMetric === "reb" ? player.stats.reb
+                  : playerMetric === "ast" ? player.stats.ast
+                  : playerMetric === "blk" ? player.stats.blk
+                  : player.stats.stl;
                 return (
                   <button
-                    key={`${player.name}-${playerMetric}`}
+                    key={`${player.id}-${playerMetric}`}
                     type="button"
-                    onClick={() => setSelectedPlayer(player)}
-                    className={`flex w-full flex-col gap-4 rounded-3xl border text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 sm:flex-row sm:items-center sm:justify-between ${
+                    onClick={() => {}}
+                    className={`flex w-full flex-col gap-3 rounded-3xl border text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 sm:flex-row sm:items-center sm:justify-between ${
                       isLeader
-                        ? "border-white/40 bg-gradient-to-r from-sky-500/20 to-indigo-500/10 px-8 py-6 shadow-lg shadow-sky-500/20"
-                        : "border-white/10 bg-slate-900/60 px-6 py-4 hover:border-white/50"
+                        ? "border-white/40 bg-gradient-to-r from-sky-500/20 to-indigo-500/10 px-7 py-5 shadow-lg shadow-sky-500/20"
+                        : "border-white/10 bg-slate-900/60 px-5 py-3 hover:border-white/50"
                     }`}
                   >
-                    <div className="flex items-center gap-4">
-                      <span className={`font-semibold ${isLeader ? "text-lg text-white" : "text-sm text-slate-400"}`}>
+                    <div className="flex items-center gap-3">
+                      <span className={`font-semibold ${isLeader ? "text-base text-white" : "text-sm text-slate-400"}`}>
                         {String(index + 1).padStart(2, "0")}
                       </span>
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2.5">
                         <Image
                           src={playerImage}
                           alt={`${player.name} portrait`}
-                          width={isLeader ? 72 : 56}
-                          height={isLeader ? 72 : 56}
+                          width={isLeader ? 61 : 48}
+                          height={isLeader ? 61 : 48}
                           className="rounded-full border border-white/10 object-cover"
                           style={{
-                            width: isLeader ? 72 : 56,
-                            height: isLeader ? 72 : 56,
+                            width: isLeader ? 61 : 48,
+                            height: isLeader ? 61 : 48,
                           }}
                         />
                         <div>
                           <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
-                            #{player.number} · {player.team}
+                            #{player.number} · {player.teamName}
                           </p>
-                          <p className={`${isLeader ? "text-2xl" : "text-lg"} font-semibold text-white`}>
-                            {player.name}
+                          <p className={`${isLeader ? "text-xl" : "text-base"} font-semibold text-white`}>
+                            {playerName}
                           </p>
                         </div>
                       </div>
                     </div>
-                    <span className={`${isLeader ? "text-4xl" : "text-2xl"} font-bold text-white sm:self-auto sm:text-right`}>
-                      {player.leaderboard[playerMetric].toFixed(1)}
-                    </span>
+                    <div className="flex gap-3">
+                      <div className="text-center">
+                        <p className="text-xs text-slate-400">PTS</p>
+                        <p className={`${isLeader ? "text-xl" : "text-base"} font-bold text-white`}>{player.stats.pts}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-xs text-slate-400">REB</p>
+                        <p className={`${isLeader ? "text-xl" : "text-base"} font-bold text-white`}>{player.stats.reb}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-xs text-slate-400">AST</p>
+                        <p className={`${isLeader ? "text-xl" : "text-base"} font-bold text-white`}>{player.stats.ast}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-xs text-slate-400">BLK</p>
+                        <p className={`${isLeader ? "text-xl" : "text-base"} font-bold text-white`}>{player.stats.blk}</p>
+                      </div>
+                    </div>
                   </button>
                 );
               })}
@@ -858,32 +1835,62 @@ export default function Home() {
             id="standings"
             eyebrow={sectionCopy.standings.eyebrow}
             title={sectionCopy.standings.title}
-            description={sectionCopy.standings.description}
           />
           <div className="overflow-hidden rounded-2xl border border-white/5">
-            <div className="max-sm:overflow-x-auto">
-            <table className="w-full border-collapse text-left text-sm">
-              <thead className="bg-white/5 text-xs uppercase tracking-[0.3em] text-slate-300">
+            <div className="max-sm:overflow-x-auto max-h-[320px] overflow-y-auto">
+            <table className="w-full border-collapse text-left text-xs">
+              <thead className="sticky top-0 bg-slate-950 text-xs uppercase tracking-[0.3em] text-slate-300 border-b border-white/5">
                 <tr>
-                  <th className="px-4 py-3">Seed</th>
-                  <th className="px-4 py-3">Team</th>
-                  <th className="px-4 py-3">W</th>
-                  <th className="px-4 py-3">L</th>
-                  <th className="px-4 py-3">Streak</th>
-                  <th className="px-4 py-3">Last 10</th>
-                  <th className="px-4 py-3">Tot Points</th>
+                  <th className="px-3 py-2">Seed</th>
+                  <th className="px-3 py-2">Team</th>
+                  <th className="px-3 py-2">W</th>
+                  <th className="px-3 py-2">L</th>
+                  <th className="px-3 py-2">Tot Points</th>
                 </tr>
               </thead>
               <tbody>
-                {genderStandings.map((row) => (
-                  <tr key={row.team} className="odd:bg-white/5">
-                    <td className="px-4 py-3 text-slate-300">{row.seed}</td>
-                    <td className="px-4 py-3 font-semibold text-white">{row.team}</td>
-                    <td className="px-4 py-3">{row.wins}</td>
-                    <td className="px-4 py-3">{row.losses}</td>
-                    <td className="px-4 py-3 text-slate-300">{row.streak}</td>
-                    <td className="px-4 py-3 text-slate-300">{row.lastTen}</td>
-                    <td className="px-4 py-3 font-semibold text-white">{getTotalPoints(row.wins, row.losses)}</td>
+                {genderStandings.map((row, index) => (
+                  <tr key={row.team} className="odd:bg-white/5 hover:bg-orange-500/10 cursor-pointer transition-colors">
+                    <td className="px-3 py-2 text-slate-300">
+                      <Link 
+                        href={`/team/${encodeURIComponent(row.team)}`}
+                        className="block"
+                      >
+                        {row.seed}
+                      </Link>
+                    </td>
+                    <td className="px-3 py-2 font-semibold">
+                      <Link 
+                        href={`/team/${encodeURIComponent(row.team)}`}
+                        className="block text-white group-hover:text-orange-500 transition-colors"
+                      >
+                        {row.team}
+                      </Link>
+                    </td>
+                    <td className="px-3 py-2">
+                      <Link 
+                        href={`/team/${encodeURIComponent(row.team)}`}
+                        className="block"
+                      >
+                        {row.wins}
+                      </Link>
+                    </td>
+                    <td className="px-3 py-2">
+                      <Link 
+                        href={`/team/${encodeURIComponent(row.team)}`}
+                        className="block"
+                      >
+                        {row.losses}
+                      </Link>
+                    </td>
+                    <td className="px-3 py-2 font-semibold text-white">
+                      <Link 
+                        href={`/team/${encodeURIComponent(row.team)}`}
+                        className="block"
+                      >
+                        {row.totalPoints || getTotalPoints(row.wins, row.losses)}
+                      </Link>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -897,58 +1904,192 @@ export default function Home() {
             id="teams"
             eyebrow={sectionCopy.teams.eyebrow}
             title={sectionCopy.teams.title}
-            description={sectionCopy.teams.description}
           />
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {genderFranchises.map((team) => {
-              const fullName = [team.city, team.name].filter(Boolean).join(" ").trim();
-              const rosterKey = gender === "men" ? fullName : `women:${fullName}`;
-              const canOpenRoster = Boolean(teamRosters[rosterKey]);
-              return (
-                <button
-                  type="button"
-                  key={fullName}
-                  onClick={() => {
-                    if (canOpenRoster) {
-                      setSelectedTeam({ label: fullName, gender });
-                    }
-                  }}
-                  aria-disabled={!canOpenRoster}
-                  className={`rounded-2xl border border-white/5 bg-slate-900/70 p-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 ${
-                    canOpenRoster ? "hover:border-white/30" : "opacity-80"
-                  }`}
-                  style={{
-                    backgroundImage: `linear-gradient(120deg, ${team.colors[0]}22, ${team.colors[1]}11)`
-                  }}
-                >
-                  {team.logo ? (
-                    <div className="mb-4 flex items-center gap-3">
-                      <Image
-                        src={team.logo}
-                        alt={`${fullName} logo`}
-                        width={48}
-                        height={48}
-                        className="h-12 w-12 rounded-full border border-white/20 object-cover"
-                      />
-                      <p className="text-2xl font-semibold text-white">{fullName}</p>
-                    </div>
-                  ) : (
-                    <p className="text-2xl font-semibold text-white">{fullName}</p>
-                  )}
-                  <div className="mt-4 flex gap-2">
-                    {team.colors.map((color) => (
-                      <span
-                        key={`${fullName}-${color}`}
-                        className="h-1.5 flex-1 rounded-full"
-                        style={{ backgroundColor: color }}
-                      />
-                    ))}
-                  </div>
-                </button>
-              );
-            })}
+          <div className="relative">
+            <div 
+              className="overflow-x-auto overflow-y-hidden pb-4" 
+              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            >
+              <div className="grid grid-flow-col grid-rows-2 auto-cols-[minmax(202px,1fr)] gap-3 pb-2 sm:auto-cols-[minmax(230px,1fr)] lg:auto-cols-[minmax(274px,1fr)]">
+                {genderFranchises.map((team) => {
+                  const fullName = [team.city, team.name].filter(Boolean).join(" ").trim();
+                  return (
+                    <Link
+                      key={fullName}
+                      href={`/team/${encodeURIComponent(fullName)}`}
+                      className="rounded-2xl border border-white/5 bg-slate-900/70 p-5 text-left transition hover:border-white/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+                      style={{
+                        backgroundImage: `linear-gradient(120deg, ${team.colors[0]}22, ${team.colors[1]}11)`
+                      }}
+                    >
+                      {team.logo ? (
+                        <div className="mb-3 flex items-center gap-2.5">
+                          <Image
+                            src={team.logo}
+                            alt={`${fullName} logo`}
+                            width={45}
+                            height={45}
+                            className="h-11 w-11 rounded-full border-2 border-white/20 object-cover"
+                          />
+                          <p className="text-lg font-semibold text-white">{fullName}</p>
+                        </div>
+                      ) : (
+                        <p className="text-lg font-semibold text-white">{fullName}</p>
+                      )}
+                      <div className="mt-4 flex gap-2">
+                        {team.colors.map((color) => (
+                          <span
+                            key={`${fullName}-${color}`}
+                            className="h-2 flex-1 rounded-full"
+                            style={{ backgroundColor: color }}
+                          />
+                        ))}
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={(e) => {
+                const container = e.currentTarget.parentElement?.querySelector('.overflow-x-auto');
+                if (container) container.scrollBy({ left: -400, behavior: 'smooth' });
+              }}
+              className="absolute left-0 top-1/2 z-10 -translate-y-1/2 flex h-12 w-12 items-center justify-center rounded-full bg-orange-600 text-white shadow-lg transition hover:bg-orange-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400"
+              aria-label="Scroll left"
+            >
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                const container = e.currentTarget.parentElement?.querySelector('.overflow-x-auto');
+                if (container) container.scrollBy({ left: 400, behavior: 'smooth' });
+              }}
+              className="absolute right-0 top-1/2 z-10 -translate-y-1/2 flex h-12 w-12 items-center justify-center rounded-full bg-orange-600 text-white shadow-lg transition hover:bg-orange-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400"
+              aria-label="Scroll right"
+            >
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
           </div>
         </section>
+
+        {/* Partners and Committee Sections */}
+        <div className="grid gap-8 lg:grid-cols-2">
+          {/* Partners Section */}
+          <section className="space-y-6">
+            <SectionHeader
+              id="partners"
+              eyebrow={sectionCopy.partners.eyebrow}
+              title={sectionCopy.partners.title}
+              description={sectionCopy.partners.description}
+            />
+            <div className="relative aspect-[4/3] overflow-hidden rounded-2xl border border-white/10 bg-slate-900/70 p-8">
+              {dynamicPartners.length > 0 ? (
+                <div className="flex h-full items-center justify-center">
+                  {dynamicPartners[currentPartnerIndex].logo ? (
+                    <Image
+                      src={dynamicPartners[currentPartnerIndex].logo}
+                      alt={dynamicPartners[currentPartnerIndex].name}
+                      width={400}
+                      height={300}
+                      className="h-auto max-h-full w-auto max-w-full object-contain"
+                    />
+                  ) : (
+                    <div className="text-center">
+                      <p className="text-2xl font-semibold text-white">
+                        {dynamicPartners[currentPartnerIndex].name}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="flex h-full items-center justify-center text-slate-400">
+                  <p>No partners yet</p>
+                </div>
+              )}
+              {dynamicPartners.length > 1 && (
+                <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 gap-2">
+                  {dynamicPartners.map((_, index) => (
+                    <button
+                      key={index}
+                      onClick={() => setCurrentPartnerIndex(index)}
+                      className={`h-2 w-2 rounded-full transition ${
+                        index === currentPartnerIndex
+                          ? "bg-orange-500"
+                          : "bg-white/30 hover:bg-white/50"
+                      }`}
+                      aria-label={`Go to partner ${index + 1}`}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* Committee Section */}
+          <section className="space-y-6">
+            <SectionHeader
+              id="committee"
+              eyebrow={sectionCopy.committee.eyebrow}
+              title={sectionCopy.committee.title}
+              description={sectionCopy.committee.description}
+            />
+            <div className="relative aspect-[4/3] overflow-hidden rounded-2xl border border-white/10 bg-slate-900/70">
+              {dynamicCommittee.length > 0 ? (
+                <div className="relative h-full">
+                  {dynamicCommittee[currentCommitteeIndex].photo ? (
+                    <Image
+                      src={dynamicCommittee[currentCommitteeIndex].photo}
+                      alt={dynamicCommittee[currentCommitteeIndex].name}
+                      fill
+                      className="object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full items-center justify-center bg-gradient-to-br from-orange-900/20 to-slate-900">
+                      <div className="flex h-32 w-32 items-center justify-center rounded-full bg-orange-600 text-5xl font-bold text-white">
+                        {dynamicCommittee[currentCommitteeIndex].name.charAt(0)}
+                      </div>
+                    </div>
+                  )}
+                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-6">
+                    <p className="text-xl font-semibold text-white">
+                      {dynamicCommittee[currentCommitteeIndex].name}
+                    </p>
+                    <p className="text-sm text-orange-400">
+                      {dynamicCommittee[currentCommitteeIndex].role}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex h-full items-center justify-center text-slate-400">
+                  <p>No committee members yet</p>
+                </div>
+              )}
+              {dynamicCommittee.length > 1 && (
+                <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 gap-2">
+                  {dynamicCommittee.map((_, index) => (
+                    <button
+                      key={index}
+                      onClick={() => setCurrentCommitteeIndex(index)}
+                      className={`h-2 w-2 rounded-full transition ${
+                        index === currentCommitteeIndex
+                          ? "bg-orange-500"
+                          : "bg-white/30 hover:bg-white/50"
+                      }`}
+                      aria-label={`Go to committee member ${index + 1}`}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
       </main>
 
       <footer className="border-t border-white/10 bg-black/50 py-8 text-slate-400">
@@ -956,27 +2097,38 @@ export default function Home() {
           <p>
             {copy.footerTagline}
           </p>
-          <div className="flex items-center justify-center gap-3">
-            <span className="text-[10px] uppercase tracking-[0.4em] text-slate-500">{copy.languageLabel}</span>
-            <div className="flex gap-2">
-              {languageOptions.map((locale) => (
-                <button
-                  key={locale}
-                  type="button"
-                  onClick={() => setLanguage(locale)}
-                  className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.4em] ${
-                    language === locale ? "border-white text-white" : "border-white/30 text-slate-400"
-                  }`}
-                >
-                  {locale.toUpperCase()}
-                </button>
-              ))}
+          <div className="flex items-center justify-center gap-6">
+            <div className="flex items-center gap-3">
+              <span className="text-[10px] uppercase tracking-[0.4em] text-slate-500">{copy.languageLabel}</span>
+              <div className="flex gap-2">
+                {languageOptions.map((locale) => (
+                  <button
+                    key={locale}
+                    type="button"
+                    onClick={() => setLanguage(locale)}
+                    className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.4em] ${
+                      language === locale ? "border-white text-white" : "border-white/30 text-slate-400"
+                    }`}
+                  >
+                    {locale.toUpperCase()}
+                  </button>
+                ))}
+              </div>
             </div>
+            <Link
+              href="/admin"
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-white/5 transition hover:border-white hover:bg-white/10"
+              aria-label="Admin Login"
+            >
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+            </Link>
           </div>
         </div>
       </footer>
       {selectedTeam && selectedRoster ? (
-        <RosterModal teamName={selectedTeam.label} roster={selectedRoster} onClose={() => setSelectedTeam(null)} />
+        <RosterModal teamName={selectedTeam.label} roster={selectedRoster} onClose={() => setSelectedTeam(null)} allFranchises={allFranchises} />
       ) : null}
       {selectedPlayer ? (
         <PlayerStatsModal player={selectedPlayer} onClose={() => setSelectedPlayer(null)} />

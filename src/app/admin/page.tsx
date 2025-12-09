@@ -1,0 +1,6142 @@
+"use client";
+
+import type { FormEvent, ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
+import { firebaseAuth, firebaseDB, firebaseStorage } from "@/lib/firebase";
+import { franchises as menFranchises, franchisesWomen, type GenderKey } from "@/data/febaco";
+import { countries, flagFromCode } from "@/data/countries";
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  limit,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+  writeBatch,
+} from "firebase/firestore";
+import type { DocumentData, DocumentSnapshot } from "firebase/firestore";
+import { deleteObject, getDownloadURL, ref as storageRef, uploadBytes } from "firebase/storage";
+import { onAuthStateChanged, signInWithEmailAndPassword, signOut, type User } from "firebase/auth";
+
+type AdminNewsArticle = {
+  id: string;
+  title: string;
+  summary: string;
+  category: string;
+  headline: string;
+  imageUrl?: string;
+  createdAt: Date | null;
+};
+
+type NewsFormState = {
+  id?: string;
+  title: string;
+  summary: string;
+  category: string;
+  headline: string;
+  imageUrl?: string;
+};
+
+type StatusKind = "success" | "error" | "info";
+
+type StatusCallout = {
+  type: StatusKind;
+  message: string;
+};
+
+type AdminTeam = {
+  id: string;
+  name: string;
+  city: string;
+  gender: "men" | "women";
+  colors: string[];
+  logo: string;
+  wins: number;
+  losses: number;
+  totalPoints: number;
+  createdAt: Date | null;
+  updatedAt: Date | null;
+  nationality?: string;
+  nationality2?: string;
+};
+
+type DirectoryTeam = AdminTeam & {
+  source: "firestore" | "static";
+};
+
+type TeamFormState = {
+  id?: string;
+  name: string;
+  city: string;
+  gender: "men" | "women";
+  colorsInput: string;
+  logo: string;
+  nationality: string;
+  nationality2: string;
+};
+
+type AdminRosterPlayer = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  number: number | null;
+  playerLicense: string;
+  height: string;
+  dateOfBirth?: string;
+  position?: string;
+  nationality?: string;
+  nationality2?: string;
+  headshot?: string;
+  stats: {
+    pts: string;
+    reb: string;
+    stl: string;
+  };
+};
+
+type RosterFormState = {
+  id?: string;
+  firstName: string;
+  lastName: string;
+  number: string;
+  playerLicense: string;
+  height: string;
+  dateOfBirth: string;
+  position: string;
+  nationality: string;
+  nationality2: string;
+  nationality2Enabled?: boolean;
+  headshot: string;
+  pts: string;
+  reb: string;
+  stl: string;
+};
+
+type CoachStaffRole = "head_coach" | "assistant_coach" | "staff";
+
+type CoachStaff = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  role: CoachStaffRole;
+  headshot?: string;
+};
+
+type CoachStaffFormState = {
+  id?: string;
+  firstName: string;
+  lastName: string;
+  role: CoachStaffRole;
+  headshot: string;
+};
+
+type AdminGame = {
+  id: string;
+  gender: "men" | "women";
+  homeTeamId: string;
+  homeTeamName: string;
+  homeTeamLogo: string;
+  awayTeamId: string;
+  awayTeamName: string;
+  awayTeamLogo: string;
+  date: string;
+  time: string;
+  venue: string;
+  refereeHomeTeam1?: string;
+  refereeHomeTeam2?: string;
+  refereeAwayTeam?: string;
+  createdAt: Date | null;
+  updatedAt: Date | null;
+};
+
+type GameFormState = {
+  id?: string;
+  gender: "men" | "women";
+  homeTeamId: string;
+  awayTeamId: string;
+  date: string;
+  time: string;
+  venue: string;
+  refereeHomeTeam1: string;
+  refereeHomeTeam2: string;
+  refereeAwayTeam: string;
+};
+
+type CompletedGame = AdminGame & {
+  winnerTeamId?: string;
+  winnerScore?: number;
+  loserTeamId?: string;
+  loserScore?: number;
+  playerStats?: {
+    playerId: string;
+    playerName: string;
+    two_pm?: number;
+    two_pa?: number;
+    three_pm?: number;
+    three_pa?: number;
+    ft_m?: number;
+    ft_a?: number;
+    pts: number;
+    ast: number;
+    oreb?: number;
+    dreb?: number;
+    reb: number;
+    stl: number;
+    blk: number;
+    min?: number;
+    pf?: number;
+    to?: number;
+  }[];
+  completed: boolean;
+};
+
+type GameStatsFormState = {
+  gameId: string;
+  winnerTeamId: string;
+  loserTeamId: string;
+  winnerScore: string;
+  loserScore: string;
+};
+
+type TrafficAction = "player_added" | "player_deleted" | "player_transferred";
+
+type TeamTrafficEntry = {
+  id: string;
+  action: TrafficAction;
+  teamId: string;
+  teamName: string;
+  teamGender: GenderKey;
+  playerId: string;
+  playerName: string;
+  jerseyNumber: number | null;
+  performedBy: string | null;
+  createdAt: Date | null;
+  // For transfers only:
+  targetTeamId?: string;
+  targetTeamName?: string;
+};
+
+type Referee = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email?: string;
+  phone?: string;
+  certificationLevel?: string;
+  createdAt: Date | null;
+};
+
+type RefereeFormState = {
+  id?: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  certificationLevel: string;
+};
+
+type CommitteeMember = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  role: string;
+  email?: string;
+  phone?: string;
+  photo?: string;
+  createdAt: Date | null;
+};
+
+type CommitteeFormState = {
+  id?: string;
+  firstName: string;
+  lastName: string;
+  role: string;
+  email: string;
+  phone: string;
+  photo?: string;
+};
+
+type Venue = {
+  id: string;
+  name: string;
+  address: string;
+  city: string;
+  capacity?: string;
+  courts?: number;
+  createdAt: Date | null;
+};
+
+type VenueFormState = {
+  id?: string;
+  name: string;
+  address: string;
+  city: string;
+  capacity: string;
+  courts: string;
+};
+
+type Partner = {
+  id: string;
+  name: string;
+  logo: string;
+  createdAt: Date | null;
+};
+
+type PartnerFormState = {
+  id?: string;
+  name: string;
+  logo: string;
+};
+
+const statusClassMap: Record<StatusKind, string> = {
+  success: "border-emerald-400/40 bg-emerald-500/10 text-emerald-100",
+  error: "border-rose-400/40 bg-rose-500/10 text-rose-100",
+  info: "border-sky-400/40 bg-sky-500/10 text-sky-100",
+};
+
+const mapFranchiseToAdminTeam = (
+  franchise: { city: string; name: string; colors: string[] | [string, string]; logo?: string },
+  gender: GenderKey,
+  index: number,
+): AdminTeam => ({
+  id: `${gender}-${index}`,
+  name: franchise.name,
+  city: franchise.city,
+  gender,
+  colors: (Array.isArray(franchise.colors) ? franchise.colors : []).filter((tone): tone is string => typeof tone === "string" && tone.length > 0),
+  logo: franchise.logo ?? "",
+  wins: 0,
+  losses: 0,
+  totalPoints: 0,
+  createdAt: null,
+  updatedAt: null,
+});
+
+const staticTeamCatalog: AdminTeam[] = [
+  ...menFranchises.map((team, index) => mapFranchiseToAdminTeam(team, "men", index)),
+  ...franchisesWomen.map((team, index) => mapFranchiseToAdminTeam(team, "women", index)),
+].sort((a, b) => a.name.localeCompare(b.name));
+
+const getTeamKey = (team: Pick<AdminTeam, "gender" | "name">) => `${team.gender}-${team.name.trim().toLowerCase()}`;
+
+const initialFormState: NewsFormState = {
+  title: "",
+  summary: "",
+  category: "",
+  headline: "",
+  imageUrl: "",
+};
+
+const initialTeamFormState: TeamFormState = {
+  name: "",
+  city: "",
+  gender: "men",
+  colorsInput: "",
+  logo: "",
+  nationality: "DRC",
+  nationality2: "",
+};
+
+const initialRosterFormState: RosterFormState = {
+  firstName: "",
+  lastName: "",
+  number: "",
+  playerLicense: "",
+  height: "",
+  dateOfBirth: "",
+  position: "",
+  nationality: "DRC",
+  nationality2: "",
+  nationality2Enabled: false,
+  headshot: "",
+  pts: "",
+  reb: "",
+  stl: "",
+};
+
+const initialCoachStaffFormState: CoachStaffFormState = {
+  firstName: "",
+  lastName: "",
+  role: "staff",
+  headshot: "",
+};
+
+const initialGameFormState: GameFormState = {
+  gender: "men",
+  homeTeamId: "",
+  awayTeamId: "",
+  date: "",
+  time: "",
+  venue: "",
+  refereeHomeTeam1: "",
+  refereeHomeTeam2: "",
+  refereeAwayTeam: "",
+};
+
+const sanitizeFilename = (filename: string) => filename.toLowerCase().replace(/[^a-z0-9.]+/g, "-");
+
+const buildImagePath = (filename: string) => `news-images/${Date.now()}-${sanitizeFilename(filename)}`;
+const buildTeamLogoPath = (filename: string) => `team-logos/${Date.now()}-${sanitizeFilename(filename)}`;
+const buildPlayerHeadshotPath = (filename: string) => `player-headshots/${Date.now()}-${sanitizeFilename(filename)}`;
+const buildCoachHeadshotPath = (filename: string) => `coach-headshots/${Date.now()}-${sanitizeFilename(filename)}`;
+
+const getDateField = (value: unknown): Date | null => {
+  if (value && typeof value === "object" && "toDate" in value && typeof (value as { toDate: () => Date }).toDate === "function") {
+    return (value as { toDate: () => Date }).toDate();
+  }
+  return null;
+};
+
+const mapSnapshotToArticle = (snapshot: DocumentSnapshot<DocumentData>): AdminNewsArticle => {
+  const data = snapshot.data();
+  return {
+    id: snapshot.id,
+    title: data?.title ?? "",
+    summary: data?.summary ?? "",
+    category: data?.category ?? "News",
+    headline: data?.headline ?? "",
+    imageUrl: data?.imageUrl ?? "",
+    createdAt: getDateField(data?.createdAt),
+  };
+};
+
+const mapSnapshotToTeam = (snapshot: DocumentSnapshot<DocumentData>): AdminTeam => {
+  const data = snapshot.data();
+  const sourceColors = Array.isArray(data?.colors) ? (data?.colors as unknown[]) : [];
+  const colors = sourceColors.filter((tone: unknown): tone is string => typeof tone === "string" && tone.length > 0);
+  return {
+    id: snapshot.id,
+    name: data?.name ?? "",
+    city: data?.city ?? "",
+    gender: data?.gender === "women" ? "women" : "men",
+    colors,
+    logo: data?.logo ?? "",
+    wins: typeof data?.wins === "number" ? data.wins : 0,
+    losses: typeof data?.losses === "number" ? data.losses : 0,
+    totalPoints: typeof data?.totalPoints === "number" ? data.totalPoints : 0,
+    createdAt: getDateField(data?.createdAt),
+    updatedAt: getDateField(data?.updatedAt),
+  };
+};
+
+const mapSnapshotToRosterPlayer = (snapshot: DocumentSnapshot<DocumentData>): AdminRosterPlayer => {
+  const data = snapshot.data();
+  const stats = (data?.stats ?? {}) as Record<string, string>;
+  return {
+    id: snapshot.id,
+    firstName: data?.firstName ?? "",
+    lastName: data?.lastName ?? "",
+    number: typeof data?.number === "number" ? data.number : null,
+    playerLicense: data?.playerLicense ?? "",
+    height: data?.height ?? "",
+    dateOfBirth: data?.dateOfBirth ?? "",
+    nationality: data?.nationality ?? undefined,
+    nationality2: data?.nationality2 ?? undefined,
+    headshot: data?.headshot ?? "",
+    stats: {
+      pts: stats?.pts ?? "",
+      reb: stats?.reb ?? "",
+      stl: stats?.stl ?? "",
+    },
+  };
+};
+
+const mapSnapshotToGame = (snapshot: DocumentSnapshot<DocumentData>): AdminGame => {
+  const data = snapshot.data();
+  return {
+    id: snapshot.id,
+    gender: data?.gender === "women" ? "women" : "men",
+    homeTeamId: data?.homeTeamId ?? "",
+    homeTeamName: data?.homeTeamName ?? "",
+    homeTeamLogo: data?.homeTeamLogo ?? "",
+    awayTeamId: data?.awayTeamId ?? "",
+    awayTeamName: data?.awayTeamName ?? "",
+    awayTeamLogo: data?.awayTeamLogo ?? "",
+    date: data?.date ?? "",
+    time: data?.time ?? "",
+    venue: data?.venue ?? "",
+    refereeHomeTeam1: data?.refereeHomeTeam1 ?? "",
+    refereeHomeTeam2: data?.refereeHomeTeam2 ?? "",
+    refereeAwayTeam: data?.refereeAwayTeam ?? "",
+    createdAt: getDateField(data?.createdAt),
+    updatedAt: getDateField(data?.updatedAt),
+  };
+};
+
+const mapSnapshotToTrafficEntry = (snapshot: DocumentSnapshot<DocumentData>): TeamTrafficEntry => {
+  const data = snapshot.data();
+  return {
+    id: snapshot.id,
+    action: data?.action === "player_deleted" ? "player_deleted" : "player_added",
+    teamId: data?.teamId ?? "",
+    teamName: data?.teamName ?? "Unknown team",
+    teamGender: data?.teamGender === "women" ? "women" : "men",
+    playerId: data?.playerId ?? "",
+    playerName: data?.playerName ?? "Unknown player",
+    jerseyNumber: typeof data?.jerseyNumber === "number" ? data.jerseyNumber : null,
+    performedBy: data?.performedBy ?? null,
+    createdAt: getDateField(data?.createdAt),
+  };
+};
+
+const formatAdminPublishedLabel = (date: Date | null) => {
+  if (!date) {
+    return "Draft";
+  }
+  return new Intl.DateTimeFormat("fr-CA", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+};
+ 
+export default function AdminPage() {
+  const [user, setUser] = useState<User | null>(null);
+  const [authForm, setAuthForm] = useState({ email: "", password: "" });
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [authSubmitting, setAuthSubmitting] = useState(false);
+  const [news, setNews] = useState<AdminNewsArticle[]>([]);
+  const [form, setForm] = useState<NewsFormState>(initialFormState);
+  const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string>("");
+  const [submitting, setSubmitting] = useState(false);
+  const [status, setStatus] = useState<StatusCallout | null>(null);
+  const [teams, setTeams] = useState<AdminTeam[]>([]);
+  const [teamForm, setTeamForm] = useState<TeamFormState>(initialTeamFormState);
+  const [teamLogoFile, setTeamLogoFile] = useState<File | null>(null);
+  const [teamLogoPreview, setTeamLogoPreview] = useState<string>("");
+  const [teamFormExpanded, setTeamFormExpanded] = useState(false);
+  const [teamSubmitting, setTeamSubmitting] = useState(false);
+  const [bulkImportingTemplates, setBulkImportingTemplates] = useState(false);
+  const [teamStatus, setTeamStatus] = useState<StatusCallout | null>(null);
+  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
+  const [roster, setRoster] = useState<AdminRosterPlayer[]>([]);
+  const [rosterForm, setRosterForm] = useState<RosterFormState>(initialRosterFormState);
+  const [rosterSubmitting, setRosterSubmitting] = useState(false);
+  const [rosterStatus, setRosterStatus] = useState<StatusCallout | null>(null);
+  const [teamGenderFilter, setTeamGenderFilter] = useState<GenderKey>("men");
+  const [teamSearchQuery, setTeamSearchQuery] = useState("");
+  const [teamCurrentPage, setTeamCurrentPage] = useState(1);
+  const teamsPerPage = 6;
+  const [rosterFormVisible, setRosterFormVisible] = useState(false);
+  const [transferModalVisible, setTransferModalVisible] = useState(false);
+  const [transferPlayerId, setTransferPlayerId] = useState<string | null>(null);
+  const [transferPlayerName, setTransferPlayerName] = useState<string>("");
+  const [transferSourceTeamId, setTransferSourceTeamId] = useState<string>("");
+  const [transferSourceTeamName, setTransferSourceTeamName] = useState<string>("");
+  const [transferTargetTeamId, setTransferTargetTeamId] = useState<string>("");
+  const [transferSubmitting, setTransferSubmitting] = useState(false);
+  const [coachStaffList, setCoachStaffList] = useState<CoachStaff[]>([]);
+  const [coachStaffForm, setCoachStaffForm] = useState<CoachStaffFormState | null>(null);
+  const [coachStaffFormVisible, setCoachStaffFormVisible] = useState(false);
+  const [coachHeadshotFile, setCoachHeadshotFile] = useState<File | null>(null);
+  const [coachHeadshotPreview, setCoachHeadshotPreview] = useState<string>("");
+  const [coachStaffSubmitting, setCoachStaffSubmitting] = useState(false);
+  const coachHeadshotPreviewBlobRef = useRef<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'stories' | 'teams' | 'traffic' | 'games' | 'stats' | 'league'>('stories');
+  const [storyEditorOpen, setStoryEditorOpen] = useState(false);
+  const [teamAssistantOpen, setTeamAssistantOpen] = useState(false);
+  const [trafficModuleOpen, setTrafficModuleOpen] = useState(false);
+  const [gamePlannerOpen, setGamePlannerOpen] = useState(false);
+  const [gameStatsAssistantOpen, setGameStatsAssistantOpen] = useState(false);
+  const [leagueGestionOpen, setLeagueGestionOpen] = useState(false);
+  const [playerHeadshotFile, setPlayerHeadshotFile] = useState<File | null>(null);
+  const [playerHeadshotPreview, setPlayerHeadshotPreview] = useState<string>("");
+  const [games, setGames] = useState<AdminGame[]>([]);
+  const [gameForm, setGameForm] = useState<GameFormState>(initialGameFormState);
+  const [gameFormVisible, setGameFormVisible] = useState(false);
+  const [gameSubmitting, setGameSubmitting] = useState(false);
+  const [gameStatus, setGameStatus] = useState<StatusCallout | null>(null);
+  const [gameTeamSearch, setGameTeamSearch] = useState("");
+  const [completedGames, setCompletedGames] = useState<CompletedGame[]>([]);
+  const [selectedCompletedGame, setSelectedCompletedGame] = useState<CompletedGame | null>(null);
+  const [gameStatsForm, setGameStatsForm] = useState<GameStatsFormState | null>(null);
+  const [winnerRoster, setWinnerRoster] = useState<AdminRosterPlayer[]>([]);
+  const [loserRoster, setLoserRoster] = useState<AdminRosterPlayer[]>([]);
+  const [playerStatsMap, setPlayerStatsMap] = useState<Record<string, { two_pm: string; two_pa: string; three_pm: string; three_pa: string; ft_m: string; ft_a: string; ast: string; oreb: string; dreb: string; reb: string; stl: string; blk: string; min: string; pf: string; to: string; fls: string }>>({});
+  const [loserStatsMap, setLoserStatsMap] = useState<Record<string, { two_pm: string; two_pa: string; three_pm: string; three_pa: string; ft_m: string; ft_a: string; ast: string; oreb: string; dreb: string; reb: string; stl: string; blk: string; min: string; pf: string; to: string; fls: string }>>({});
+  const [statsSubmitting, setStatsSubmitting] = useState(false);
+  const [statsStatus, setStatsStatus] = useState<StatusCallout | null>(null);
+  const [trafficEvents, setTrafficEvents] = useState<TeamTrafficEntry[]>([]);
+  const [referees, setReferees] = useState<Referee[]>([]);
+  const [refereeForm, setRefereeForm] = useState<RefereeFormState>({ firstName: "", lastName: "", phone: "", certificationLevel: "" });
+  const [refereeFormVisible, setRefereeFormVisible] = useState(false);
+  const [refereeSubmitting, setRefereeSubmitting] = useState(false);
+  const [committeeMembers, setCommitteeMembers] = useState<CommitteeMember[]>([]);
+  const [committeeForm, setCommitteeForm] = useState<CommitteeFormState>({ firstName: "", lastName: "", role: "", email: "", phone: "" });
+  const [committeeFormVisible, setCommitteeFormVisible] = useState(false);
+  const [committeePhotoFile, setCommitteePhotoFile] = useState<File | null>(null);
+  const [committeePhotoPreview, setCommitteePhotoPreview] = useState<string>("");
+  const [committeeSubmitting, setCommitteeSubmitting] = useState(false);
+  const [venues, setVenues] = useState<Venue[]>([]);
+  const [venueForm, setVenueForm] = useState<VenueFormState>({ name: "", address: "", city: "", capacity: "", courts: "" });
+  const [venueFormVisible, setVenueFormVisible] = useState(false);
+  const [venueSubmitting, setVenueSubmitting] = useState(false);
+  const [partners, setPartners] = useState<Partner[]>([]);
+  const [partnerForm, setPartnerForm] = useState<PartnerFormState>({ name: "", logo: "" });
+  const [partnerFormVisible, setPartnerFormVisible] = useState(false);
+  const [partnerLogoFile, setPartnerLogoFile] = useState<File | null>(null);
+  const [partnerLogoPreview, setPartnerLogoPreview] = useState<string>("");
+  const [partnerSubmitting, setPartnerSubmitting] = useState(false);
+  const [leagueGestionStatus, setLeagueGestionStatus] = useState<StatusCallout | null>(null);
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
+  const [resetSubmitting, setResetSubmitting] = useState(false);
+  const [resetStatus, setResetStatus] = useState<StatusCallout | null>(null);
+  const newsPreviewBlobRef = useRef<string | null>(null);
+  const teamLogoPreviewBlobRef = useRef<string | null>(null);
+  const playerHeadshotPreviewBlobRef = useRef<string | null>(null);
+  // Sync Firestore teams with franchise list for display
+  const franchiseTeams = useMemo(() => {
+    // Only show Firestore teams (editable teams with roster management)
+    return teams.sort((a, b) => a.name.localeCompare(b.name));
+  }, [teams]);
+  // Gender filter for team editor
+  const filteredFranchiseTeams = useMemo(() => {
+    const filtered = franchiseTeams.filter((team) => {
+      const matchesGender = team.gender === teamGenderFilter;
+      const matchesSearch = teamSearchQuery.trim() === "" || 
+        team.name.toLowerCase().includes(teamSearchQuery.toLowerCase()) ||
+        (team.city && team.city.toLowerCase().includes(teamSearchQuery.toLowerCase()));
+      return matchesGender && matchesSearch;
+    });
+    return filtered;
+  }, [franchiseTeams, teamGenderFilter, teamSearchQuery]);
+
+  // Paginated teams
+  const paginatedTeams = useMemo(() => {
+    const startIndex = (teamCurrentPage - 1) * teamsPerPage;
+    const endIndex = startIndex + teamsPerPage;
+    return filteredFranchiseTeams.slice(startIndex, endIndex);
+  }, [filteredFranchiseTeams, teamCurrentPage, teamsPerPage]);
+
+  const selectedTeam = useMemo(() => teams.find((team) => team.id === selectedTeamId) ?? null, [teams, selectedTeamId]);
+
+  const totalTeamPages = Math.ceil(filteredFranchiseTeams.length / teamsPerPage);
+
+  // Reset to page 1 when filter or search changes
+  useEffect(() => {
+    setTeamCurrentPage(1);
+  }, [teamGenderFilter, teamSearchQuery]);
+
+  // Directory teams with template/firestore source distinction
+  const directoryTeams = useMemo(() => {
+    const firestoreTeams: DirectoryTeam[] = teams.map((team) => ({ ...team, source: "firestore" }));
+    const firestoreKeys = new Set(firestoreTeams.map((team) => getTeamKey(team)));
+    const missingStaticTeams = staticTeamCatalog.filter((team) => !firestoreKeys.has(getTeamKey(team)));
+    const templateTeams: DirectoryTeam[] = missingStaticTeams.map((team) => ({ ...team, source: "static" }));
+    return [...firestoreTeams, ...templateTeams].sort((a, b) => a.name.localeCompare(b.name));
+  }, [teams]);
+
+  const missingStaticTeams = useMemo(() => {
+    const firestoreKeys = new Set(teams.map((team) => getTeamKey(team)));
+    return staticTeamCatalog.filter((team) => !firestoreKeys.has(getTeamKey(team)));
+  }, [teams]);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(firebaseAuth, (next) => {
+      setUser(next);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const newsQuery = query(collection(firebaseDB, "news"), orderBy("createdAt", "desc"));
+    const unsubscribe = onSnapshot(newsQuery, (snapshot) => {
+      setNews(snapshot.docs.map(mapSnapshotToArticle));
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const teamsQuery = query(collection(firebaseDB, "teams"), orderBy("name", "asc"));
+    const unsubscribe = onSnapshot(teamsQuery, (snapshot) => {
+      setTeams(snapshot.docs.map(mapSnapshotToTeam));
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!selectedTeamId) {
+      setRoster([]);
+      return;
+    }
+    const rosterQuery = query(collection(firebaseDB, "teams", selectedTeamId, "roster"), orderBy("number", "asc"));
+    const unsubscribe = onSnapshot(rosterQuery, (snapshot) => {
+      setRoster(snapshot.docs.map(mapSnapshotToRosterPlayer));
+    });
+    return () => unsubscribe();
+  }, [selectedTeamId]);
+
+  useEffect(() => {
+    const gamesQuery = query(collection(firebaseDB, "games"), orderBy("date", "desc"));
+    const unsubscribe = onSnapshot(gamesQuery, (snapshot) => {
+      setGames(snapshot.docs.map(mapSnapshotToGame));
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const trafficQuery = query(collection(firebaseDB, "teamTraffic"), orderBy("createdAt", "desc"), limit(100));
+    const unsubscribe = onSnapshot(trafficQuery, (snapshot) => {
+      setTrafficEvents(snapshot.docs.map(mapSnapshotToTrafficEntry));
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const refereesQuery = query(collection(firebaseDB, "referees"), orderBy("lastName", "asc"));
+    const unsubscribe = onSnapshot(refereesQuery, (snapshot) => {
+      setReferees(snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate() ?? null,
+      } as Referee)));
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const committeeQuery = query(collection(firebaseDB, "committee"), orderBy("firstName", "asc"));
+    const unsubscribe = onSnapshot(committeeQuery, (snapshot) => {
+      setCommitteeMembers(snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate() ?? null,
+      } as CommitteeMember)));
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const venuesQuery = query(collection(firebaseDB, "venues"), orderBy("name", "asc"));
+    const unsubscribe = onSnapshot(venuesQuery, (snapshot) => {
+      setVenues(snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate() ?? null,
+      } as Venue)));
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const partnersQuery = query(collection(firebaseDB, "partners"), orderBy("name", "asc"));
+    const unsubscribe = onSnapshot(partnersQuery, (snapshot) => {
+      setPartners(snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate() ?? null,
+      } as Partner)));
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Sync completed games (started more than 45 minutes ago, within last week)
+  useEffect(() => {
+    const gamesQuery = query(collection(firebaseDB, "games"), orderBy("date", "desc"));
+    const unsubscribe = onSnapshot(gamesQuery, (snapshot) => {
+      const now = new Date();
+      const fortyFiveMinutesAgo = new Date(now.getTime() - 45 * 60 * 1000);
+      const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      
+      const completed = snapshot.docs
+        .map((doc) => {
+          const data = doc.data();
+          const gameDateTime = new Date(`${data.date}T${data.time}`);
+          return {
+            ...mapSnapshotToGame(doc),
+            gameDateTime,
+            winnerTeamId: data.winnerTeamId,
+            winnerScore: data.winnerScore,
+            loserTeamId: data.loserTeamId,
+            loserScore: data.loserScore,
+            playerStats: data.playerStats ?? [],
+            completed: !!data.winnerTeamId && !!data.winnerScore,
+          };
+        })
+        .filter((game) => 
+          game.gameDateTime <= fortyFiveMinutesAgo && 
+          game.gameDateTime >= oneWeekAgo
+        );
+      
+      setCompletedGames(completed);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (selectedTeamId && !teams.some((team) => team.id === selectedTeamId)) {
+      setSelectedTeamId(null);
+      setRoster([]);
+      setCoachStaffList([]);
+    }
+  }, [teams, selectedTeamId]);
+
+  // Load roster and coach/staff when team is selected
+  useEffect(() => {
+    if (!selectedTeamId) {
+      setRoster([]);
+      setCoachStaffList([]);
+      return;
+    }
+    
+    const rosterRef = collection(firebaseDB, `teams/${selectedTeamId}/roster`);
+    const unsubscribeRoster = onSnapshot(rosterRef, (snapshot) => {
+      setRoster(snapshot.docs.map(mapSnapshotToRosterPlayer));
+    });
+
+    const coachStaffRef = collection(firebaseDB, `teams/${selectedTeamId}/coachStaff`);
+    const unsubscribeCoachStaff = onSnapshot(coachStaffRef, (snapshot) => {
+      setCoachStaffList(snapshot.docs.map((doc) => ({
+        id: doc.id,
+        firstName: doc.data()?.firstName ?? "",
+        lastName: doc.data()?.lastName ?? "",
+        role: doc.data()?.role ?? "staff",
+        headshot: doc.data()?.headshot ?? "",
+      })));
+    });
+
+    return () => {
+      unsubscribeRoster();
+      unsubscribeCoachStaff();
+    };
+  }, [selectedTeamId]);
+
+  useEffect(() => {
+    return () => {
+      if (newsPreviewBlobRef.current) {
+        URL.revokeObjectURL(newsPreviewBlobRef.current);
+      }
+      if (teamLogoPreviewBlobRef.current) {
+        URL.revokeObjectURL(teamLogoPreviewBlobRef.current);
+      }
+    };
+  }, []);
+
+  const updateNewsPreview = (url: string) => {
+    if (newsPreviewBlobRef.current && newsPreviewBlobRef.current.startsWith("blob:") && newsPreviewBlobRef.current !== url) {
+      URL.revokeObjectURL(newsPreviewBlobRef.current);
+    }
+    if (url.startsWith("blob:")) {
+      newsPreviewBlobRef.current = url;
+    } else {
+      newsPreviewBlobRef.current = null;
+    }
+    setImagePreview(url);
+  };
+
+  const updateTeamLogoPreview = (url: string) => {
+    if (
+      teamLogoPreviewBlobRef.current &&
+      teamLogoPreviewBlobRef.current.startsWith("blob:") &&
+      teamLogoPreviewBlobRef.current !== url
+    ) {
+      URL.revokeObjectURL(teamLogoPreviewBlobRef.current);
+    }
+    if (url.startsWith("blob:")) {
+      teamLogoPreviewBlobRef.current = url;
+    } else {
+      teamLogoPreviewBlobRef.current = null;
+    }
+    setTeamLogoPreview(url);
+  };
+
+  const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!authForm.email || !authForm.password) {
+      setAuthError("Both email and password are required.");
+      return;
+    }
+    setAuthSubmitting(true);
+    setAuthError(null);
+    try {
+      await signInWithEmailAndPassword(firebaseAuth, authForm.email, authForm.password);
+    } catch (error) {
+      console.error(error);
+      setAuthError("Unable to sign in. Double-check the credentials.");
+    } finally {
+      setAuthSubmitting(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut(firebaseAuth);
+      setStatus({ type: "info", message: "Signed out. Come back soon." });
+    } catch (error) {
+      console.error(error);
+      setStatus({ type: "error", message: "Unable to sign out. Try again." });
+    }
+  };
+
+  const resetForm = () => {
+    setForm(initialFormState);
+    setSelectedImageFile(null);
+    updateNewsPreview("");
+  };
+
+  const handleEdit = (article: AdminNewsArticle) => {
+    setForm({
+      id: article.id,
+      title: article.title,
+      summary: article.summary,
+      category: article.category,
+      headline: article.headline,
+      imageUrl: article.imageUrl ?? "",
+    });
+    setSelectedImageFile(null);
+    updateNewsPreview(article.imageUrl ?? "");
+    setStatus({ type: "info", message: "Loaded the story for editing." });
+  };
+
+  const handleDelete = async (article: AdminNewsArticle) => {
+    if (!user) {
+      setStatus({ type: "error", message: "Sign in to delete a story." });
+      return;
+    }
+    if (!window.confirm("Are you sure you want to delete this news item?")) {
+      return;
+    }
+    setStatus({ type: "info", message: "Removing the story from Firestore..." });
+    try {
+      // Delete the article document from Firestore
+      await deleteDoc(doc(firebaseDB, "news", article.id));
+      
+      // Delete the article image from Storage if it exists
+      if (article.imageUrl) {
+        try {
+          const imageRef = storageRef(firebaseStorage, article.imageUrl);
+          await deleteObject(imageRef);
+        } catch (storageError) {
+          console.warn("Failed to delete article image from storage:", storageError);
+          // Continue even if storage deletion fails
+        }
+      }
+      
+      setStatus({ type: "success", message: "Story removed." });
+    } catch (error) {
+      console.error(error);
+      setStatus({ type: "error", message: "We could not delete that story." });
+    }
+  };
+
+  const handleImageChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    setSelectedImageFile(file);
+    if (file) {
+      const previewUrl = URL.createObjectURL(file);
+      updateNewsPreview(previewUrl);
+    } else {
+      updateNewsPreview(form.imageUrl ?? "");
+    }
+  };
+
+  const handleSubmitNews = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!form.title.trim() || !form.headline.trim() || !form.summary.trim()) {
+      setStatus({ type: "error", message: "Title, headline, and summary are required." });
+      return;
+    }
+    setSubmitting(true);
+    setStatus({ type: "info", message: form.id ? "Updating story..." : "Publishing story..." });
+
+    try {
+      let finalImage = form.imageUrl ?? "";
+      if (selectedImageFile) {
+        const path = buildImagePath(selectedImageFile.name);
+        const storageRefInstance = storageRef(firebaseStorage, path);
+        const uploadSnapshot = await uploadBytes(storageRefInstance, selectedImageFile);
+        finalImage = await getDownloadURL(uploadSnapshot.ref);
+      }
+
+      const payload = {
+        title: form.title.trim(),
+        headline: form.headline.trim(),
+        summary: form.summary.trim(),
+        category: form.category.trim() || "News",
+        imageUrl: finalImage,
+      };
+
+      if (form.id) {
+        await updateDoc(doc(firebaseDB, "news", form.id), {
+          ...payload,
+          updatedAt: serverTimestamp(),
+        });
+        setStatus({ type: "success", message: "Story updated successfully." });
+      } else {
+        await addDoc(collection(firebaseDB, "news"), {
+          ...payload,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+        setStatus({ type: "success", message: "Story published to Firestore." });
+      }
+      resetForm();
+    } catch (error) {
+      console.error(error);
+      setStatus({ type: "error", message: "Something went wrong while saving the story." });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const updateFormField = (field: keyof NewsFormState, value: string) => {
+    setForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const updateTeamFormField = (field: keyof TeamFormState, value: string) => {
+    setTeamForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+    if (field === "logo" && !teamLogoFile) {
+      updateTeamLogoPreview(value);
+    }
+  };
+
+  const resetTeamForm = () => {
+    setTeamForm(initialTeamFormState);
+    setTeamLogoFile(null);
+    updateTeamLogoPreview("");
+  };
+
+  const closeTeamForm = () => {
+    resetTeamForm();
+    setTeamFormExpanded(false);
+  };
+
+  const handleEditTeam = (team: AdminTeam) => {
+    setTeamFormExpanded(true);
+    setTeamForm({
+      id: team.id,
+      name: team.name,
+      city: team.city,
+      gender: team.gender,
+      colorsInput: team.colors.join(", "),
+      logo: team.logo,
+      nationality: team.nationality || "DRC",
+      nationality2: team.nationality2 || "",
+    });
+    setTeamLogoFile(null);
+    updateTeamLogoPreview(team.logo ?? "");
+    setTeamStatus({ type: "info", message: `Editing ${team.name}.` });
+  };
+
+  const handleSelectTeam = (teamId: string) => {
+    setSelectedTeamId(teamId);
+    setRosterForm(initialRosterFormState);
+    setRosterFormVisible(false);
+    setPlayerHeadshotFile(null);
+    if (playerHeadshotPreviewBlobRef.current) {
+      URL.revokeObjectURL(playerHeadshotPreviewBlobRef.current);
+      playerHeadshotPreviewBlobRef.current = null;
+    }
+    setPlayerHeadshotPreview("");
+    setRosterStatus(null);
+  };
+
+  const handleTeamLogoChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    setTeamLogoFile(file);
+    if (file) {
+      const previewUrl = URL.createObjectURL(file);
+      updateTeamLogoPreview(previewUrl);
+    } else {
+      updateTeamLogoPreview(teamForm.logo ?? "");
+    }
+  };
+
+  const clearTeamLogoSelection = () => {
+    setTeamLogoFile(null);
+    const fallback = teamForm.logo.trim();
+    updateTeamLogoPreview(fallback);
+  };
+
+  const handlePlayerHeadshotChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    setPlayerHeadshotFile(file);
+    if (file) {
+      if (playerHeadshotPreviewBlobRef.current) {
+        URL.revokeObjectURL(playerHeadshotPreviewBlobRef.current);
+      }
+      const previewUrl = URL.createObjectURL(file);
+      playerHeadshotPreviewBlobRef.current = previewUrl;
+      setPlayerHeadshotPreview(previewUrl);
+    } else {
+      if (playerHeadshotPreviewBlobRef.current) {
+        URL.revokeObjectURL(playerHeadshotPreviewBlobRef.current);
+        playerHeadshotPreviewBlobRef.current = null;
+      }
+      setPlayerHeadshotPreview(rosterForm.headshot ?? "");
+    }
+  };
+
+  const clearPlayerHeadshotSelection = () => {
+    setPlayerHeadshotFile(null);
+    if (playerHeadshotPreviewBlobRef.current) {
+      URL.revokeObjectURL(playerHeadshotPreviewBlobRef.current);
+      playerHeadshotPreviewBlobRef.current = null;
+    }
+    const fallback = rosterForm.headshot?.trim() ?? "";
+    setPlayerHeadshotPreview(fallback);
+  };
+
+  const handleUseStaticTeam = (team: AdminTeam) => {
+    setTeamFormExpanded(true);
+    setTeamForm({
+      id: undefined,
+      name: team.name,
+      city: team.city,
+      gender: team.gender,
+      colorsInput: team.colors.join(", "),
+      logo: team.logo,
+    });
+    setTeamLogoFile(null);
+    updateTeamLogoPreview(team.logo ?? "");
+    setTeamStatus({
+      type: "info",
+      message: `Loaded ${team.name}. Review the fields and click Add team to store it in Firestore.`,
+    });
+  };
+
+  const handleBulkImportStaticTeams = async () => {
+    if (!user) {
+      setTeamStatus({ type: "error", message: "Sign in to import teams." });
+      return;
+    }
+    if (!missingStaticTeams.length) {
+      setTeamStatus({ type: "info", message: "All Febaco templates already live in Firestore." });
+      return;
+    }
+
+    setBulkImportingTemplates(true);
+    setTeamStatus({ type: "info", message: "Syncing Febaco templates to Firestore..." });
+
+    try {
+      await Promise.all(
+        missingStaticTeams.map((team) =>
+          addDoc(collection(firebaseDB, "teams"), {
+            name: team.name,
+            city: team.city,
+            gender: team.gender,
+            colors: team.colors,
+            logo: team.logo,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          }),
+        ),
+      );
+      setTeamStatus({ type: "success", message: `Imported ${missingStaticTeams.length} templates.` });
+    } catch (error) {
+      console.error(error);
+      setTeamStatus({ type: "error", message: "Unable to import template teams." });
+    } finally {
+      setBulkImportingTemplates(false);
+    }
+  };
+
+  const handleResetAllStats = async () => {
+    if (!user) {
+      setResetStatus({ type: "error", message: "Sign in to reset stats." });
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "⚠️ WARNING: This will permanently delete ALL games and reset ALL team stats to 0-0.\n\n" +
+      "This includes:\n" +
+      "• All game records\n" +
+      "• All team wins/losses\n" +
+      "• All team total points\n" +
+      "• All player stats and averages\n\n" +
+      "This action CANNOT be undone!\n\n" +
+      "Are you absolutely sure you want to continue?"
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setResetSubmitting(true);
+    setResetStatus({ type: "info", message: "Resetting all stats..." });
+
+    try {
+      // 1. Delete all games
+      const gamesSnapshot = await getDocs(collection(firebaseDB, "games"));
+      const gameDeletePromises = gamesSnapshot.docs.map(doc => deleteDoc(doc.ref));
+      await Promise.all(gameDeletePromises);
+
+      // 2. Delete all standings
+      const standingsSnapshot = await getDocs(collection(firebaseDB, "standings"));
+      const standingsDeletePromises = standingsSnapshot.docs.map(doc => deleteDoc(doc.ref));
+      await Promise.all(standingsDeletePromises);
+
+      // 3. Reset all team stats
+      const teamsSnapshot = await getDocs(collection(firebaseDB, "teams"));
+      const teamResetPromises = teamsSnapshot.docs.map(async (teamDoc) => {
+        // Reset team stats
+        await updateDoc(teamDoc.ref, {
+          wins: 0,
+          losses: 0,
+          totalPoints: 0,
+          updatedAt: serverTimestamp(),
+        });
+
+        // Reset all player stats in roster
+        const rosterSnapshot = await getDocs(collection(firebaseDB, `teams/${teamDoc.id}/roster`));
+        const playerResetPromises = rosterSnapshot.docs.map(playerDoc => 
+          updateDoc(playerDoc.ref, {
+            stats: {
+              pts: "0.0",
+              reb: "0.0",
+              ast: "0.0",
+              stl: "0.0",
+              blk: "0.0",
+            },
+            gamesPlayed: 0,
+            updatedAt: serverTimestamp(),
+          })
+        );
+        await Promise.all(playerResetPromises);
+      });
+      await Promise.all(teamResetPromises);
+
+      setResetStatus({ 
+        type: "success", 
+        message: `✓ Reset complete! Deleted ${gamesSnapshot.docs.length} games and reset ${teamsSnapshot.docs.length} teams to 0-0.` 
+      });
+      setResetConfirmOpen(false);
+    } catch (error) {
+      console.error("Reset error:", error);
+      setResetStatus({ type: "error", message: "Failed to reset stats. Check console for details." });
+    } finally {
+      setResetSubmitting(false);
+    }
+  };
+
+
+  const handleSubmitTeam = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!user) {
+      setTeamStatus({ type: "error", message: "Sign in to manage teams." });
+      return;
+    }
+
+    const name = teamForm.name.trim();
+    const city = teamForm.city.trim();
+    let logo = teamForm.logo.trim();
+    const colors = teamForm.colorsInput
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
+
+    if (!name) {
+      setTeamStatus({ type: "error", message: "A team name is required." });
+      return;
+    }
+
+    setTeamSubmitting(true);
+    setTeamStatus({ type: "info", message: teamForm.id ? "Updating team..." : "Creating team..." });
+
+    const payload = {
+      name,
+      city,
+      gender: teamForm.gender,
+      colors,
+      logo,
+      nationality: teamForm.nationality || "DRC",
+      nationality2: teamForm.nationality2 && teamForm.nationality2.trim() !== "" ? teamForm.nationality2 : undefined,
+    };
+
+    try {
+      if (teamLogoFile) {
+        const path = buildTeamLogoPath(teamLogoFile.name);
+        const storageRefInstance = storageRef(firebaseStorage, path);
+        const uploadSnapshot = await uploadBytes(storageRefInstance, teamLogoFile);
+        logo = await getDownloadURL(uploadSnapshot.ref);
+        payload.logo = logo;
+      }
+      if (teamForm.id) {
+        await updateDoc(doc(firebaseDB, "teams", teamForm.id), {
+          ...payload,
+          updatedAt: serverTimestamp(),
+        });
+        setTeamStatus({ type: "success", message: "Team updated." });
+      } else {
+        const newTeamRef = await addDoc(collection(firebaseDB, "teams"), {
+          ...payload,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+        setTeamStatus({ type: "success", message: "Team created." });
+        setSelectedTeamId(newTeamRef.id);
+      }
+      resetTeamForm();
+    } catch (error) {
+      console.error(error);
+      setTeamStatus({ type: "error", message: "Unable to save team changes." });
+    } finally {
+      setTeamSubmitting(false);
+    }
+  };
+
+  const handleDeleteTeam = async (team: AdminTeam) => {
+    if (!user) {
+      setTeamStatus({ type: "error", message: "Sign in to delete teams." });
+      return;
+    }
+    if (!window.confirm(`Delete ${team.name}? This removes the roster too.`)) {
+      return;
+    }
+
+    setTeamStatus({ type: "info", message: "Deleting team..." });
+
+    try {
+      const batch = writeBatch(firebaseDB);
+      const teamDocRef = doc(firebaseDB, "teams", team.id);
+      const rosterCollectionRef = collection(firebaseDB, "teams", team.id, "roster");
+      const rosterSnapshot = await getDocs(rosterCollectionRef);
+      
+      // Delete all player headshots from Storage
+      const deletePromises: Promise<void>[] = [];
+      rosterSnapshot.forEach((playerDoc) => {
+        const playerData = playerDoc.data();
+        if (playerData.headshot) {
+          const headshotRef = storageRef(firebaseStorage, playerData.headshot);
+          deletePromises.push(
+            deleteObject(headshotRef).catch((err) => {
+              console.warn(`Failed to delete headshot for player ${playerDoc.id}:`, err);
+            })
+          );
+        }
+        batch.delete(playerDoc.ref);
+      });
+      
+      // Delete team logo from Storage if it exists
+      if (team.logo) {
+        const logoRef = storageRef(firebaseStorage, team.logo);
+        deletePromises.push(
+          deleteObject(logoRef).catch((err) => {
+            console.warn(`Failed to delete team logo:`, err);
+          })
+        );
+      }
+      
+      // Wait for all storage deletions to complete
+      await Promise.all(deletePromises);
+      
+      batch.delete(teamDocRef);
+      await batch.commit();
+      setTeamStatus({ type: "success", message: "Team removed." });
+      if (teamForm.id === team.id) {
+        resetTeamForm();
+      }
+      if (selectedTeamId === team.id) {
+        setSelectedTeamId(null);
+        setRoster([]);
+        resetRosterForm();
+      }
+    } catch (error) {
+      console.error(error);
+      setTeamStatus({ type: "error", message: "Unable to delete the team." });
+    }
+  };
+
+  const resetRosterForm = () => {
+    // Don't clear team selection or hide form - just reset the form fields
+    setRosterForm(initialRosterFormState);
+    setPlayerHeadshotFile(null);
+    if (playerHeadshotPreviewBlobRef.current) {
+      URL.revokeObjectURL(playerHeadshotPreviewBlobRef.current);
+      playerHeadshotPreviewBlobRef.current = null;
+    }
+    setPlayerHeadshotPreview("");
+  };
+
+  const handleEditRosterPlayer = (player: AdminRosterPlayer) => {
+    setRosterForm({
+      id: player.id,
+      firstName: player.firstName,
+      lastName: player.lastName,
+      number: player.number !== null ? String(player.number) : "",
+      playerLicense: player.playerLicense,
+      height: player.height,
+      dateOfBirth: player.dateOfBirth ?? "",
+      position: player.position ?? "",
+        nationality: player.nationality ?? "DRC",
+        nationality2: player.nationality2 ?? "",
+        nationality2Enabled: !!player.nationality2,
+      headshot: player.headshot ?? "",
+      pts: player.stats.pts,
+      reb: player.stats.reb,
+      stl: player.stats.stl,
+    });
+    setPlayerHeadshotFile(null);
+    setPlayerHeadshotPreview(player.headshot ?? "");
+    setRosterFormVisible(true);
+    setRosterStatus({ type: "info", message: `Editing ${player.firstName} ${player.lastName}.` });
+  };
+
+  const recordTrafficEvent = async (
+    action: TrafficAction,
+    details: {
+      teamId: string;
+      teamName: string;
+      teamGender: GenderKey;
+      playerId: string;
+      playerName: string;
+      jerseyNumber: number | null;
+      targetTeamId?: string;
+      targetTeamName?: string;
+    },
+  ) => {
+    if (!details.teamId) {
+      return;
+    }
+
+    try {
+      await addDoc(collection(firebaseDB, "teamTraffic"), {
+        action,
+        ...details,
+        performedBy: user?.email ?? null,
+        createdAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.error("Failed to record traffic event", error);
+    }
+  };
+
+  const handleSubmitRosterPlayer = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!user) {
+      setRosterStatus({ type: "error", message: "Sign in to manage roster entries." });
+      return;
+    }
+    if (!selectedTeamId) {
+      setRosterStatus({ type: "error", message: "Select a team before editing its roster." });
+      return;
+    }
+
+    const firstName = rosterForm.firstName.trim();
+    const lastName = rosterForm.lastName.trim();
+    const playerLicense = rosterForm.playerLicense.trim();
+    const height = rosterForm.height.trim();
+    const dateOfBirth = rosterForm.dateOfBirth.trim();
+    const position = rosterForm.position.trim();
+    const pts = rosterForm.pts.trim();
+    const reb = rosterForm.reb.trim();
+    const stl = rosterForm.stl.trim();
+    let headshot = rosterForm.headshot.trim();
+    const jerseyNumber = Number.parseInt(rosterForm.number, 10);
+
+    if (!firstName) {
+      setRosterStatus({ type: "error", message: "First name is required." });
+      return;
+    }
+    if (!lastName) {
+      setRosterStatus({ type: "error", message: "Last name is required." });
+      return;
+    }
+    if (!playerLicense && !rosterForm.id) {
+      setRosterStatus({ type: "error", message: "Player license is required for new players." });
+      return;
+    }
+    if (!Number.isFinite(jerseyNumber)) {
+      setRosterStatus({ type: "error", message: "Enter a valid jersey number." });
+      return;
+    }
+    if (!position) {
+      setRosterStatus({ type: "error", message: "Position is required." });
+      return;
+    }
+
+    setRosterSubmitting(true);
+    setRosterStatus({ type: "info", message: rosterForm.id ? "Updating player..." : "Adding player..." });
+
+    const payload: any = {
+      firstName,
+      lastName,
+      number: jerseyNumber,
+      playerLicense: playerLicense || rosterForm.playerLicense,
+      height,
+      dateOfBirth,
+      position,
+      nationality: rosterForm.nationality || "DRC",
+      headshot,
+      stats: {
+        pts,
+        reb,
+        stl,
+      },
+      updatedAt: serverTimestamp(),
+    };
+    
+    // Only add nationality2 if it has a value
+    if (rosterForm.nationality2 && rosterForm.nationality2.trim() !== "") {
+      payload.nationality2 = rosterForm.nationality2;
+    }
+
+    try {
+      if (playerHeadshotFile) {
+        const path = buildPlayerHeadshotPath(playerHeadshotFile.name);
+        const storageRefInstance = storageRef(firebaseStorage, path);
+        const uploadSnapshot = await uploadBytes(storageRefInstance, playerHeadshotFile);
+        headshot = await getDownloadURL(uploadSnapshot.ref);
+        payload.headshot = headshot;
+      }
+      const rosterCollectionRef = collection(firebaseDB, "teams", selectedTeamId, "roster");
+      if (rosterForm.id) {
+        await updateDoc(doc(firebaseDB, "teams", selectedTeamId, "roster", rosterForm.id), payload);
+        setRosterStatus({ type: "success", message: "Player updated." });
+      } else {
+        const newPlayerRef = await addDoc(rosterCollectionRef, {
+          ...payload,
+          createdAt: serverTimestamp(),
+        });
+        setRosterStatus({ type: "success", message: "Player added." });
+        if (selectedTeamId) {
+          await recordTrafficEvent("player_added", {
+            teamId: selectedTeamId,
+            teamName: selectedTeam?.name ?? "Unknown team",
+            teamGender: selectedTeam?.gender ?? "men",
+            playerId: newPlayerRef.id,
+            playerName: `${firstName} ${lastName}`,
+            jerseyNumber,
+          });
+        }
+      }
+      resetRosterForm();
+    } catch (error) {
+      console.error(error);
+      setRosterStatus({ type: "error", message: "Unable to save the player." });
+    } finally {
+      setRosterSubmitting(false);
+    }
+  };
+
+  const handleDeleteRosterPlayer = async (player: AdminRosterPlayer) => {
+    if (!user) {
+      setRosterStatus({ type: "error", message: "Sign in to delete players." });
+      return;
+    }
+    if (!selectedTeamId) {
+      setRosterStatus({ type: "error", message: "Select a team first." });
+      return;
+    }
+    if (!window.confirm(`Remove ${player.firstName} ${player.lastName} from the roster?`)) {
+      return;
+    }
+
+    setRosterStatus({ type: "info", message: "Deleting player..." });
+
+    try {
+      // Delete the player document from Firestore
+      await deleteDoc(doc(firebaseDB, "teams", selectedTeamId, "roster", player.id));
+      
+      // Delete the headshot image from Storage if it exists
+      if (player.headshot) {
+        try {
+          const headshotRef = storageRef(firebaseStorage, player.headshot);
+          await deleteObject(headshotRef);
+        } catch (storageError) {
+          console.warn("Failed to delete headshot from storage:", storageError);
+          // Continue even if storage deletion fails
+        }
+      }
+      
+      if (selectedTeamId) {
+        await recordTrafficEvent("player_deleted", {
+          teamId: selectedTeamId,
+          teamName: selectedTeam?.name ?? "Unknown team",
+          teamGender: selectedTeam?.gender ?? "men",
+          playerId: player.id,
+          playerName: `${player.firstName} ${player.lastName}`,
+          jerseyNumber: player.number ?? null,
+        });
+      }
+
+      setRosterStatus({ type: "success", message: "Player removed." });
+      if (rosterForm.id === player.id) {
+        resetRosterForm();
+      }
+    } catch (error) {
+      console.error(error);
+      setRosterStatus({ type: "error", message: "Unable to delete the player." });
+    }
+  };
+
+  const handleInitiateTransfer = (player: AdminRosterPlayer) => {
+    if (!selectedTeamId || !selectedTeam) {
+      setRosterStatus({ type: "error", message: "Select a team first." });
+      return;
+    }
+    setTransferPlayerId(player.id);
+    setTransferPlayerName(`${player.firstName} ${player.lastName}`);
+    setTransferSourceTeamId(selectedTeamId);
+    setTransferSourceTeamName(selectedTeam.name);
+    setTransferTargetTeamId("");
+    setTransferModalVisible(true);
+  };
+
+  const handleConfirmTransfer = async () => {
+    if (!user) {
+      setRosterStatus({ type: "error", message: "Sign in to transfer players." });
+      return;
+    }
+    if (!transferPlayerId || !transferSourceTeamId || !transferTargetTeamId) {
+      setRosterStatus({ type: "error", message: "Missing transfer details." });
+      return;
+    }
+    if (transferSourceTeamId === transferTargetTeamId) {
+      setRosterStatus({ type: "error", message: "Cannot transfer to the same team." });
+      return;
+    }
+
+    setTransferSubmitting(true);
+    setRosterStatus({ type: "info", message: "Transferring player..." });
+
+    try {
+      // Get the player document from source team
+      const sourcePlayerRef = doc(firebaseDB, "teams", transferSourceTeamId, "roster", transferPlayerId);
+      const sourcePlayerSnap = await getDoc(sourcePlayerRef);
+      
+      if (!sourcePlayerSnap.exists()) {
+        throw new Error("Player not found in source team.");
+      }
+
+      const playerData = sourcePlayerSnap.data();
+
+      // Add player to target team
+      const targetPlayerRef = doc(firebaseDB, "teams", transferTargetTeamId, "roster", transferPlayerId);
+      await setDoc(targetPlayerRef, playerData);
+
+      // Delete player from source team
+      await deleteDoc(sourcePlayerRef);
+
+      // Find target team name
+      const targetTeam = teams.find((t) => t.id === transferTargetTeamId);
+      const targetTeamName = targetTeam?.name ?? "Unknown team";
+
+      // Log transfer event
+      await recordTrafficEvent("player_transferred", {
+        teamId: transferSourceTeamId,
+        teamName: transferSourceTeamName,
+        teamGender: selectedTeam?.gender ?? "men",
+        playerId: transferPlayerId,
+        playerName: transferPlayerName,
+        jerseyNumber: playerData?.number ?? null,
+        targetTeamId: transferTargetTeamId,
+        targetTeamName,
+      });
+
+      setRosterStatus({ type: "success", message: `${transferPlayerName} transferred successfully.` });
+      setTransferModalVisible(false);
+      setTransferPlayerId(null);
+      setTransferPlayerName("");
+      setTransferSourceTeamId("");
+      setTransferSourceTeamName("");
+      setTransferTargetTeamId("");
+    } catch (error) {
+      console.error(error);
+      setRosterStatus({ type: "error", message: "Transfer failed." });
+    } finally {
+      setTransferSubmitting(false);
+    }
+  };
+
+  const handleCancelTransfer = () => {
+    setTransferModalVisible(false);
+    setTransferPlayerId(null);
+    setTransferPlayerName("");
+    setTransferSourceTeamId("");
+    setTransferSourceTeamName("");
+    setTransferTargetTeamId("");
+  };
+
+  // League Gestion handlers
+  const handleSubmitReferee = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!user) {
+      setLeagueGestionStatus({ type: "error", message: "Sign in to manage referees." });
+      return;
+    }
+
+    const firstName = refereeForm.firstName.trim();
+    const lastName = refereeForm.lastName.trim();
+    if (!firstName || !lastName) {
+      setLeagueGestionStatus({ type: "error", message: "First and last name required." });
+      return;
+    }
+
+    setRefereeSubmitting(true);
+    setLeagueGestionStatus({ type: "info", message: "Saving referee..." });
+
+    try {
+      const refereeData = {
+        firstName,
+        lastName,
+        phone: refereeForm.phone.trim() || null,
+        certificationLevel: refereeForm.certificationLevel.trim() || null,
+        createdAt: refereeForm.id ? undefined : serverTimestamp(),
+      };
+
+      if (refereeForm.id) {
+        await updateDoc(doc(firebaseDB, "referees", refereeForm.id), refereeData);
+        setLeagueGestionStatus({ type: "success", message: "Referee updated." });
+      } else {
+        await addDoc(collection(firebaseDB, "referees"), refereeData);
+        setLeagueGestionStatus({ type: "success", message: "Referee added." });
+      }
+
+      setRefereeForm({ firstName: "", lastName: "", phone: "", certificationLevel: "" });
+      setRefereeFormVisible(false);
+    } catch (error) {
+      console.error(error);
+      setLeagueGestionStatus({ type: "error", message: "Failed to save referee." });
+    } finally {
+      setRefereeSubmitting(false);
+    }
+  };
+
+  const handleEditReferee = (referee: Referee) => {
+    setRefereeForm({
+      id: referee.id,
+      firstName: referee.firstName,
+      lastName: referee.lastName,
+      phone: referee.phone ?? "",
+      certificationLevel: referee.certificationLevel ?? "",
+    });
+    setRefereeFormVisible(true);
+  };
+
+  const handleDeleteReferee = async (referee: Referee) => {
+    if (!user) {
+      setLeagueGestionStatus({ type: "error", message: "Sign in to delete referees." });
+      return;
+    }
+    if (!window.confirm(`Delete referee ${referee.firstName} ${referee.lastName}?`)) {
+      return;
+    }
+
+    setLeagueGestionStatus({ type: "info", message: "Deleting referee..." });
+    try {
+      await deleteDoc(doc(firebaseDB, "referees", referee.id));
+      setLeagueGestionStatus({ type: "success", message: "Referee deleted." });
+    } catch (error) {
+      console.error(error);
+      setLeagueGestionStatus({ type: "error", message: "Failed to delete referee." });
+    }
+  };
+
+  const handleSubmitCommittee = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!user) {
+      setLeagueGestionStatus({ type: "error", message: "Sign in to manage committee." });
+      return;
+    }
+
+    const firstName = committeeForm.firstName.trim();
+    const lastName = committeeForm.lastName.trim();
+    const role = committeeForm.role.trim();
+    if (!firstName || !lastName || !role) {
+      setLeagueGestionStatus({ type: "error", message: "First name, last name, and role required." });
+      return;
+    }
+
+    setCommitteeSubmitting(true);
+    setLeagueGestionStatus({ type: "info", message: "Saving committee member..." });
+
+    try {
+      let photoUrl = committeeForm.photo;
+
+      if (committeePhotoFile) {
+        const photoRef = storageRef(firebaseStorage, `committee/${Date.now()}_${committeePhotoFile.name}`);
+        await uploadBytes(photoRef, committeePhotoFile);
+        photoUrl = await getDownloadURL(photoRef);
+      }
+
+      const committeeData = {
+        firstName,
+        lastName,
+        role,
+        email: committeeForm.email.trim() || null,
+        phone: committeeForm.phone.trim() || null,
+        photo: photoUrl || null,
+        createdAt: committeeForm.id ? undefined : serverTimestamp(),
+      };
+
+      if (committeeForm.id) {
+        await updateDoc(doc(firebaseDB, "committee", committeeForm.id), committeeData);
+        setLeagueGestionStatus({ type: "success", message: "Committee member updated." });
+      } else {
+        await addDoc(collection(firebaseDB, "committee"), committeeData);
+        setLeagueGestionStatus({ type: "success", message: "Committee member added." });
+      }
+
+      setCommitteeForm({ firstName: "", lastName: "", role: "", email: "", phone: "" });
+      setCommitteePhotoFile(null);
+      setCommitteePhotoPreview("");
+      setCommitteeFormVisible(false);
+    } catch (error) {
+      console.error(error);
+      setLeagueGestionStatus({ type: "error", message: "Failed to save committee member." });
+    } finally {
+      setCommitteeSubmitting(false);
+    }
+  };
+
+  const handleEditCommittee = (member: CommitteeMember) => {
+    setCommitteeForm({
+      id: member.id,
+      firstName: member.firstName,
+      lastName: member.lastName,
+      role: member.role,
+      email: member.email ?? "",
+      phone: member.phone ?? "",
+      photo: member.photo,
+    });
+    if (member.photo) {
+      setCommitteePhotoPreview(member.photo);
+    }
+    setCommitteeFormVisible(true);
+  };
+
+  const handleDeleteCommittee = async (member: CommitteeMember) => {
+    if (!user) {
+      setLeagueGestionStatus({ type: "error", message: "Sign in to delete committee members." });
+      return;
+    }
+    if (!window.confirm(`Delete committee member ${member.firstName} ${member.lastName}?`)) {
+      return;
+    }
+
+    setLeagueGestionStatus({ type: "info", message: "Deleting committee member..." });
+    try {
+      if (member.photo) {
+        try {
+          const photoRef = storageRef(firebaseStorage, member.photo);
+          await deleteObject(photoRef);
+        } catch (err) {
+          console.warn("Failed to delete photo from storage:", err);
+        }
+      }
+      await deleteDoc(doc(firebaseDB, "committee", member.id));
+      setLeagueGestionStatus({ type: "success", message: "Committee member deleted." });
+    } catch (error) {
+      console.error(error);
+      setLeagueGestionStatus({ type: "error", message: "Failed to delete committee member." });
+    }
+  };
+
+  const handleCommitteePhotoChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    setCommitteePhotoFile(file);
+    if (file) {
+      const previewUrl = URL.createObjectURL(file);
+      setCommitteePhotoPreview(previewUrl);
+    } else {
+      setCommitteePhotoPreview("");
+    }
+  };
+
+  const handleSubmitVenue = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!user) {
+      setLeagueGestionStatus({ type: "error", message: "Sign in to manage venues." });
+      return;
+    }
+
+    const name = venueForm.name.trim();
+    const address = venueForm.address.trim();
+    const city = venueForm.city.trim();
+    if (!name || !address || !city) {
+      setLeagueGestionStatus({ type: "error", message: "Name, address, and city required." });
+      return;
+    }
+
+    setVenueSubmitting(true);
+    setLeagueGestionStatus({ type: "info", message: "Saving venue..." });
+
+    try {
+      const venueData = {
+        name,
+        address,
+        city,
+        capacity: venueForm.capacity.trim() || null,
+        courts: venueForm.courts ? parseInt(venueForm.courts, 10) : null,
+        createdAt: venueForm.id ? undefined : serverTimestamp(),
+      };
+
+      if (venueForm.id) {
+        await updateDoc(doc(firebaseDB, "venues", venueForm.id), venueData);
+        setLeagueGestionStatus({ type: "success", message: "Venue updated." });
+      } else {
+        await addDoc(collection(firebaseDB, "venues"), venueData);
+        setLeagueGestionStatus({ type: "success", message: "Venue added." });
+      }
+
+      setVenueForm({ name: "", address: "", city: "", capacity: "", courts: "" });
+      setVenueFormVisible(false);
+    } catch (error) {
+      console.error(error);
+      setLeagueGestionStatus({ type: "error", message: "Failed to save venue." });
+    } finally {
+      setVenueSubmitting(false);
+    }
+  };
+
+  const handleEditVenue = (venue: Venue) => {
+    setVenueForm({
+      id: venue.id,
+      name: venue.name,
+      address: venue.address,
+      city: venue.city,
+      capacity: venue.capacity ?? "",
+      courts: venue.courts ? String(venue.courts) : "",
+    });
+    setVenueFormVisible(true);
+  };
+
+  const handleDeleteVenue = async (venue: Venue) => {
+    if (!user) {
+      setLeagueGestionStatus({ type: "error", message: "Sign in to delete venues." });
+      return;
+    }
+    if (!window.confirm(`Delete venue ${venue.name}?`)) {
+      return;
+    }
+
+    setLeagueGestionStatus({ type: "info", message: "Deleting venue..." });
+    try {
+      await deleteDoc(doc(firebaseDB, "venues", venue.id));
+      setLeagueGestionStatus({ type: "success", message: "Venue deleted." });
+    } catch (error) {
+      console.error(error);
+      setLeagueGestionStatus({ type: "error", message: "Failed to delete venue." });
+    }
+  };
+
+  const handlePartnerLogoChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    setPartnerLogoFile(file);
+    if (file) {
+      const previewUrl = URL.createObjectURL(file);
+      setPartnerLogoPreview(previewUrl);
+    } else {
+      setPartnerLogoPreview(partnerForm.logo);
+    }
+  };
+
+  const handleSubmitPartner = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!user) {
+      setLeagueGestionStatus({ type: "error", message: "Sign in to manage partners." });
+      return;
+    }
+
+    const name = partnerForm.name.trim();
+    if (!name) {
+      setLeagueGestionStatus({ type: "error", message: "Partner name required." });
+      return;
+    }
+
+    if (!partnerForm.id && !partnerLogoFile) {
+      setLeagueGestionStatus({ type: "error", message: "Partner logo required." });
+      return;
+    }
+
+    setPartnerSubmitting(true);
+    setLeagueGestionStatus({ type: "info", message: "Saving partner..." });
+
+    try {
+      let logoUrl = partnerForm.logo;
+
+      if (partnerLogoFile) {
+        const logoRef = storageRef(firebaseStorage, `partners/${Date.now()}_${partnerLogoFile.name}`);
+        await uploadBytes(logoRef, partnerLogoFile);
+        logoUrl = await getDownloadURL(logoRef);
+      }
+
+      const partnerData = {
+        name,
+        logo: logoUrl,
+        createdAt: partnerForm.id ? undefined : serverTimestamp(),
+      };
+
+      if (partnerForm.id) {
+        await updateDoc(doc(firebaseDB, "partners", partnerForm.id), partnerData);
+        setLeagueGestionStatus({ type: "success", message: "Partner updated." });
+      } else {
+        await addDoc(collection(firebaseDB, "partners"), partnerData);
+        setLeagueGestionStatus({ type: "success", message: "Partner added." });
+      }
+
+      setPartnerForm({ name: "", logo: "" });
+      setPartnerLogoFile(null);
+      setPartnerLogoPreview("");
+      setPartnerFormVisible(false);
+    } catch (error) {
+      console.error(error);
+      setLeagueGestionStatus({ type: "error", message: "Failed to save partner." });
+    } finally {
+      setPartnerSubmitting(false);
+    }
+  };
+
+  const handleEditPartner = (partner: Partner) => {
+    setPartnerForm({
+      id: partner.id,
+      name: partner.name,
+      logo: partner.logo,
+    });
+    setPartnerLogoPreview(partner.logo);
+    setPartnerFormVisible(true);
+  };
+
+  const handleDeletePartner = async (partner: Partner) => {
+    if (!user) {
+      setLeagueGestionStatus({ type: "error", message: "Sign in to delete partners." });
+      return;
+    }
+    if (!window.confirm(`Delete partner ${partner.name}?`)) {
+      return;
+    }
+
+    setLeagueGestionStatus({ type: "info", message: "Deleting partner..." });
+    try {
+      if (partner.logo) {
+        try {
+          const logoRef = storageRef(firebaseStorage, partner.logo);
+          await deleteObject(logoRef);
+        } catch (err) {
+          console.warn("Failed to delete logo from storage:", err);
+        }
+      }
+      await deleteDoc(doc(firebaseDB, "partners", partner.id));
+      setLeagueGestionStatus({ type: "success", message: "Partner deleted." });
+    } catch (error) {
+      console.error(error);
+      setLeagueGestionStatus({ type: "error", message: "Failed to delete partner." });
+    }
+  };
+
+  // Coach/Staff management handlers
+  const handleCoachHeadshotChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    setCoachHeadshotFile(file);
+    if (file) {
+      if (coachHeadshotPreviewBlobRef.current) {
+        URL.revokeObjectURL(coachHeadshotPreviewBlobRef.current);
+      }
+      const previewUrl = URL.createObjectURL(file);
+      coachHeadshotPreviewBlobRef.current = previewUrl;
+      setCoachHeadshotPreview(previewUrl);
+    } else {
+      if (coachHeadshotPreviewBlobRef.current) {
+        URL.revokeObjectURL(coachHeadshotPreviewBlobRef.current);
+        coachHeadshotPreviewBlobRef.current = null;
+      }
+      setCoachHeadshotPreview(coachStaffForm?.headshot ?? "");
+    }
+  };
+
+  const openCoachStaffForm = (role: CoachStaffRole) => {
+    // Check role limitations
+    const headCoachCount = coachStaffList.filter(c => c.role === "head_coach").length;
+    const assistantCoachCount = coachStaffList.filter(c => c.role === "assistant_coach").length;
+
+    if (role === "head_coach" && headCoachCount >= 1) {
+      setRosterStatus({ type: "error", message: "Team already has a head coach." });
+      return;
+    }
+    if (role === "assistant_coach" && assistantCoachCount >= 2) {
+      setRosterStatus({ type: "error", message: "Team already has 2 assistant coaches." });
+      return;
+    }
+
+    setCoachStaffForm({ ...initialCoachStaffFormState, role });
+    setCoachStaffFormVisible(true);
+    setRosterStatus(null);
+  };
+
+  const resetCoachStaffForm = () => {
+    setCoachStaffForm(null);
+    setCoachStaffFormVisible(false);
+    setCoachHeadshotFile(null);
+    if (coachHeadshotPreviewBlobRef.current) {
+      URL.revokeObjectURL(coachHeadshotPreviewBlobRef.current);
+      coachHeadshotPreviewBlobRef.current = null;
+    }
+    setCoachHeadshotPreview("");
+    setRosterStatus(null);
+  };
+
+  const handleSubmitCoachStaff = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!user) {
+      setRosterStatus({ type: "error", message: "Sign in to manage staff." });
+      return;
+    }
+    if (!selectedTeamId) {
+      setRosterStatus({ type: "error", message: "Select a team first." });
+      return;
+    }
+    if (!coachStaffForm) return;
+
+    const firstName = coachStaffForm.firstName.trim();
+    const lastName = coachStaffForm.lastName.trim();
+    let headshot = coachStaffForm.headshot.trim();
+
+    if (!firstName || !lastName) {
+      setRosterStatus({ type: "error", message: "First and last name are required." });
+      return;
+    }
+
+    setCoachStaffSubmitting(true);
+    setRosterStatus({ type: "info", message: coachStaffForm.id ? "Updating..." : "Adding..." });
+
+    const payload = {
+      firstName,
+      lastName,
+      role: coachStaffForm.role,
+      headshot,
+      updatedAt: serverTimestamp(),
+    };
+
+    try {
+      if (coachHeadshotFile) {
+        const path = buildCoachHeadshotPath(coachHeadshotFile.name);
+        const storageRefInstance = storageRef(firebaseStorage, path);
+        const uploadSnapshot = await uploadBytes(storageRefInstance, coachHeadshotFile);
+        headshot = await getDownloadURL(uploadSnapshot.ref);
+        payload.headshot = headshot;
+      }
+
+      const coachStaffCollectionRef = collection(firebaseDB, "teams", selectedTeamId, "coachStaff");
+      if (coachStaffForm.id) {
+        await updateDoc(doc(firebaseDB, "teams", selectedTeamId, "coachStaff", coachStaffForm.id), payload);
+        setRosterStatus({ type: "success", message: "Staff member updated." });
+      } else {
+        await addDoc(coachStaffCollectionRef, {
+          ...payload,
+          createdAt: serverTimestamp(),
+        });
+        setRosterStatus({ type: "success", message: "Staff member added." });
+      }
+      resetCoachStaffForm();
+    } catch (error) {
+      console.error(error);
+      setRosterStatus({ type: "error", message: "Unable to save staff member." });
+    } finally {
+      setCoachStaffSubmitting(false);
+    }
+  };
+
+  const handleEditCoachStaff = (member: CoachStaff) => {
+    setCoachStaffForm({
+      id: member.id,
+      firstName: member.firstName,
+      lastName: member.lastName,
+      role: member.role,
+      headshot: member.headshot ?? "",
+    });
+    setCoachHeadshotPreview(member.headshot ?? "");
+    setCoachStaffFormVisible(true);
+    setRosterStatus({ type: "info", message: "Editing staff member..." });
+  };
+
+  const handleDeleteCoachStaff = async (member: CoachStaff) => {
+    if (!user) {
+      setRosterStatus({ type: "error", message: "Sign in to delete staff." });
+      return;
+    }
+    if (!selectedTeamId) return;
+    if (!window.confirm(`Remove ${member.firstName} ${member.lastName}?`)) return;
+
+    setRosterStatus({ type: "info", message: "Deleting..." });
+
+    try {
+      await deleteDoc(doc(firebaseDB, "teams", selectedTeamId, "coachStaff", member.id));
+      if (member.headshot) {
+        try {
+          const headshotRef = storageRef(firebaseStorage, member.headshot);
+          await deleteObject(headshotRef);
+        } catch (storageError) {
+          console.warn("Failed to delete headshot from storage:", storageError);
+        }
+      }
+      setRosterStatus({ type: "success", message: "Staff member removed." });
+      if (coachStaffForm?.id === member.id) {
+        resetCoachStaffForm();
+      }
+    } catch (error) {
+      console.error(error);
+      setRosterStatus({ type: "error", message: "Unable to delete staff member." });
+    }
+  };
+
+  const resetGameForm = () => {
+    setGameForm(initialGameFormState);
+    setGameFormVisible(false);
+    setGameTeamSearch("");
+  };
+
+  const handleEditGame = (game: AdminGame) => {
+    setGameForm({
+      id: game.id,
+      gender: game.gender,
+      homeTeamId: game.homeTeamId,
+      awayTeamId: game.awayTeamId,
+      date: game.date,
+      time: game.time,
+      venue: game.venue,
+      refereeHomeTeam1: game.refereeHomeTeam1 ?? "",
+      refereeHomeTeam2: game.refereeHomeTeam2 ?? "",
+      refereeAwayTeam: game.refereeAwayTeam ?? "",
+    });
+    setGameFormVisible(true);
+    setGameStatus({ type: "info", message: `Editing game.` });
+  };
+
+  const handleSubmitGame = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!user) {
+      setGameStatus({ type: "error", message: "Sign in to schedule games." });
+      return;
+    }
+
+    if (!gameForm.homeTeamId || !gameForm.awayTeamId) {
+      setGameStatus({ type: "error", message: "Select both home and away teams." });
+      return;
+    }
+
+    if (gameForm.homeTeamId === gameForm.awayTeamId) {
+      setGameStatus({ type: "error", message: "Home and away teams must be different." });
+      return;
+    }
+
+    if (!gameForm.date || !gameForm.time || !gameForm.venue.trim()) {
+      setGameStatus({ type: "error", message: "Date, time, and venue are required." });
+      return;
+    }
+
+    setGameSubmitting(true);
+    setGameStatus({ type: "info", message: gameForm.id ? "Updating game..." : "Scheduling game..." });
+
+    try {
+      const homeTeam = teams.find((t) => t.id === gameForm.homeTeamId);
+      const awayTeam = teams.find((t) => t.id === gameForm.awayTeamId);
+
+      if (!homeTeam || !awayTeam) {
+        setGameStatus({ type: "error", message: "Selected teams not found." });
+        return;
+      }
+
+      const payload = {
+        gender: gameForm.gender,
+        homeTeamId: homeTeam.id,
+        homeTeamName: homeTeam.name,
+        homeTeamLogo: homeTeam.logo,
+        awayTeamId: awayTeam.id,
+        awayTeamName: awayTeam.name,
+        awayTeamLogo: awayTeam.logo,
+        date: gameForm.date,
+        time: gameForm.time,
+        venue: gameForm.venue.trim(),
+        refereeHomeTeam1: gameForm.refereeHomeTeam1 || null,
+        refereeHomeTeam2: gameForm.refereeHomeTeam2 || null,
+        refereeAwayTeam: gameForm.refereeAwayTeam || null,
+        updatedAt: serverTimestamp(),
+      };
+
+      if (gameForm.id) {
+        await updateDoc(doc(firebaseDB, "games", gameForm.id), payload);
+        setGameStatus({ type: "success", message: "Game updated." });
+      } else {
+        await addDoc(collection(firebaseDB, "games"), {
+          ...payload,
+          createdAt: serverTimestamp(),
+        });
+        setGameStatus({ type: "success", message: "Game scheduled." });
+      }
+      resetGameForm();
+    } catch (error) {
+      console.error(error);
+      setGameStatus({ type: "error", message: "Unable to save the game." });
+    } finally {
+      setGameSubmitting(false);
+    }
+  };
+
+  const handleDeleteGame = async (game: AdminGame) => {
+    if (!user) {
+      setGameStatus({ type: "error", message: "Sign in to delete games." });
+      return;
+    }
+    if (!window.confirm(`Delete ${game.awayTeamName} @ ${game.homeTeamName}?`)) {
+      return;
+    }
+
+    setGameStatus({ type: "info", message: "Deleting game..." });
+
+    try {
+      await deleteDoc(doc(firebaseDB, "games", game.id));
+      setGameStatus({ type: "success", message: "Game removed." });
+      if (gameForm.id === game.id) {
+        resetGameForm();
+      }
+    } catch (error) {
+      console.error(error);
+      setGameStatus({ type: "error", message: "Unable to delete the game." });
+    }
+  };
+
+  const handleSelectCompletedGame = async (game: CompletedGame) => {
+    setSelectedCompletedGame(game);
+    const loserTeamId = game.winnerTeamId 
+      ? (game.winnerTeamId === game.homeTeamId ? game.awayTeamId : game.homeTeamId)
+      : "";
+    setGameStatsForm({
+      gameId: game.id,
+      winnerTeamId: game.winnerTeamId || "",
+      loserTeamId,
+      winnerScore: game.winnerScore?.toString() || "",
+      loserScore: game.loserScore?.toString() || "",
+    });
+    
+    // Fetch roster for winner team if winner is selected
+    if (game.winnerTeamId) {
+      const winnerTeam = teams.find(t => t.id === game.winnerTeamId);
+      if (winnerTeam) {
+        const rosterQuery = query(
+          collection(firebaseDB, `teams/${game.winnerTeamId}/roster`),
+          orderBy("number", "asc")
+        );
+        const snapshot = await getDocs(rosterQuery);
+        const rosterPlayers = snapshot.docs.map(mapSnapshotToRosterPlayer);
+        setWinnerRoster(rosterPlayers);
+        
+        // Initialize player stats map if exists
+        if (game.playerStats) {
+          const statsMap: Record<string, { two_pm: string; two_pa: string; three_pm: string; three_pa: string; ft_m: string; ft_a: string; ast: string; oreb: string; dreb: string; reb: string; stl: string; blk: string; min: string; pf: string; to: string; fls: string }> = {};
+          game.playerStats.forEach((stat) => {
+            statsMap[stat.playerId] = {
+              two_pm: typeof stat.two_pm === "number" ? stat.two_pm.toString() : "",
+              two_pa: typeof stat.two_pa === "number" ? stat.two_pa.toString() : "",
+              three_pm: typeof stat.three_pm === "number" ? stat.three_pm.toString() : "",
+              three_pa: typeof stat.three_pa === "number" ? stat.three_pa.toString() : "",
+              ft_m: typeof stat.ft_m === "number" ? stat.ft_m.toString() : "",
+              ft_a: typeof stat.ft_a === "number" ? stat.ft_a.toString() : "",
+              ast: typeof stat.ast === "number" ? stat.ast.toString() : "",
+              oreb: typeof stat.oreb === "number" ? stat.oreb.toString() : "",
+              dreb: typeof stat.dreb === "number" ? stat.dreb.toString() : "",
+              reb: typeof stat.reb === "number" ? stat.reb.toString() : "",
+              stl: typeof stat.stl === "number" ? stat.stl.toString() : "",
+              blk: typeof stat.blk === "number" ? stat.blk.toString() : "",
+              min: typeof stat.min === "number" ? stat.min.toString() : "",
+              pf: typeof stat.pf === "number" ? stat.pf.toString() : "",
+              to: typeof stat.to === "number" ? stat.to.toString() : "",
+              fls: "",
+            };
+          });
+          setPlayerStatsMap(statsMap);
+        }
+      }
+    }
+
+    // Fetch loser team roster
+    if (loserTeamId) {
+      const loserRosterQuery = query(
+        collection(firebaseDB, `teams/${loserTeamId}/roster`),
+        orderBy("number", "asc")
+      );
+      const loserSnapshot = await getDocs(loserRosterQuery);
+      setLoserRoster(loserSnapshot.docs.map(mapSnapshotToRosterPlayer));
+    }
+  };
+
+  const handleWinnerChange = async (winnerTeamId: string) => {
+    if (!gameStatsForm || !selectedCompletedGame) return;
+    
+    // Auto-populate loser team
+    const loserTeamId = winnerTeamId 
+      ? (selectedCompletedGame.homeTeamId === winnerTeamId ? selectedCompletedGame.awayTeamId : selectedCompletedGame.homeTeamId)
+      : "";
+    
+    setGameStatsForm({ ...gameStatsForm, winnerTeamId, loserTeamId });
+    
+    // Fetch roster for new winner
+    if (winnerTeamId) {
+      const rosterQuery = query(
+        collection(firebaseDB, `teams/${winnerTeamId}/roster`),
+        orderBy("number", "asc")
+      );
+      const snapshot = await getDocs(rosterQuery);
+      setWinnerRoster(snapshot.docs.map(mapSnapshotToRosterPlayer));
+      setPlayerStatsMap({});
+
+      // Fetch loser roster
+      const loserRosterQuery = query(
+        collection(firebaseDB, `teams/${loserTeamId}/roster`),
+        orderBy("number", "asc")
+      );
+      const loserSnapshot = await getDocs(loserRosterQuery);
+      setLoserRoster(loserSnapshot.docs.map(mapSnapshotToRosterPlayer));
+      setLoserStatsMap({});
+    }
+  };
+
+  // Helper to check if game is locked (30+ minutes past start time)
+  const isGameLocked = (date: string, time: string) => {
+    try {
+      const gameDateTime = new Date(`${date}T${time}`);
+      const now = new Date();
+      const diffMinutes = (now.getTime() - gameDateTime.getTime()) / (1000 * 60);
+      return diffMinutes >= 30;
+    } catch {
+      return false;
+    }
+  };
+
+  const handleSubmitGameStats = async () => {
+    if (!user || !selectedCompletedGame || !gameStatsForm) {
+      setStatsStatus({ type: "error", message: "Missing required data." });
+      return;
+    }
+
+    if (!gameStatsForm.winnerTeamId || !gameStatsForm.winnerScore || !gameStatsForm.loserScore) {
+      setStatsStatus({ type: "error", message: "Please fill in all score fields." });
+      return;
+    }
+
+    // Validate that winner's score is higher than loser's score
+    const winnerScore = parseInt(gameStatsForm.winnerScore);
+    const loserScore = parseInt(gameStatsForm.loserScore);
+    if (winnerScore === loserScore) {
+      setStatsStatus({ type: "error", message: "Tie games are not allowed. Winner's score must be different from loser's score." });
+      return;
+    }
+    if (winnerScore <= loserScore) {
+      setStatsStatus({ type: "error", message: "Winner's score must be higher than loser's score." });
+      return;
+    }
+
+    setStatsSubmitting(true);
+    setStatsStatus({ type: "info", message: "Saving game stats..." });
+
+    try {
+      const loserTeamId = selectedCompletedGame.homeTeamId === gameStatsForm.winnerTeamId
+        ? selectedCompletedGame.awayTeamId
+        : selectedCompletedGame.homeTeamId;
+
+      const playerStats = Object.entries(playerStatsMap).map(([playerId, stats]) => {
+        const player = winnerRoster.find(p => p.id === playerId);
+        const two_pm = parseInt(stats.two_pm) || 0;
+        const two_pa = parseInt(stats.two_pa) || 0;
+        const three_pm = parseInt(stats.three_pm) || 0;
+        const three_pa = parseInt(stats.three_pa) || 0;
+        const ft_m = parseInt(stats.ft_m) || 0;
+        const ft_a = parseInt(stats.ft_a) || 0;
+        // Calculate PTS: (2PM × 2) + (3PM × 3) + (FTM × 1)
+        const pts = (two_pm * 2) + (three_pm * 3) + (ft_m * 1);
+        return {
+          playerId,
+          playerName: player ? `${player.firstName} ${player.lastName}` : "",
+          firstName: player?.firstName || "",
+          lastName: player?.lastName || "",
+          number: player?.number || 0,
+          headshot: player?.headshot || "",
+          teamId: gameStatsForm.winnerTeamId,
+          two_pm,
+          two_pa,
+          three_pm,
+          three_pa,
+          ft_m,
+          ft_a,
+          pts,
+          ast: parseInt(stats.ast) || 0,
+          oreb: parseInt(stats.oreb) || 0,
+          dreb: parseInt(stats.dreb) || 0,
+          reb: parseInt(stats.reb) || 0,
+          stl: parseInt(stats.stl) || 0,
+          blk: parseInt(stats.blk) || 0,
+          min: parseInt(stats.min) || 0,
+          pf: parseInt(stats.pf) || 0,
+          to: parseInt(stats.to) || 0,
+        };
+      }).filter(stat => stat.pts > 0 || stat.ast > 0 || stat.reb > 0 || stat.stl > 0 || stat.blk > 0 || stat.two_pm > 0 || stat.three_pm > 0 || stat.ft_m > 0 || stat.oreb > 0 || stat.dreb > 0 || stat.min > 0 || stat.pf > 0 || stat.to > 0);
+
+      // Add loser team stats
+      const loserPlayerStats = Object.entries(loserStatsMap).map(([playerId, stats]) => {
+        const player = loserRoster.find(p => p.id === playerId);
+        const two_pm = parseInt(stats.two_pm) || 0;
+        const two_pa = parseInt(stats.two_pa) || 0;
+        const three_pm = parseInt(stats.three_pm) || 0;
+        const three_pa = parseInt(stats.three_pa) || 0;
+        const ft_m = parseInt(stats.ft_m) || 0;
+        const ft_a = parseInt(stats.ft_a) || 0;
+        // Calculate PTS: (2PM × 2) + (3PM × 3) + (FTM × 1)
+        const pts = (two_pm * 2) + (three_pm * 3) + (ft_m * 1);
+        return {
+          playerId,
+          playerName: player ? `${player.firstName} ${player.lastName}` : "",
+          firstName: player?.firstName || "",
+          lastName: player?.lastName || "",
+          number: player?.number || 0,
+          headshot: player?.headshot || "",
+          teamId: loserTeamId,
+          two_pm,
+          two_pa,
+          three_pm,
+          three_pa,
+          ft_m,
+          ft_a,
+          pts,
+          ast: parseInt(stats.ast) || 0,
+          oreb: parseInt(stats.oreb) || 0,
+          dreb: parseInt(stats.dreb) || 0,
+          reb: parseInt(stats.reb) || 0,
+          stl: parseInt(stats.stl) || 0,
+          blk: parseInt(stats.blk) || 0,
+          min: parseInt(stats.min) || 0,
+          pf: parseInt(stats.pf) || 0,
+          to: parseInt(stats.to) || 0,
+        };
+      }).filter(stat => stat.pts > 0 || stat.ast > 0 || stat.reb > 0 || stat.stl > 0 || stat.blk > 0 || stat.two_pm > 0 || stat.three_pm > 0 || stat.ft_m > 0 || stat.oreb > 0 || stat.dreb > 0 || stat.min > 0 || stat.pf > 0 || stat.to > 0);
+
+      const allPlayerStats = [...playerStats, ...loserPlayerStats];
+
+      await updateDoc(doc(firebaseDB, "games", selectedCompletedGame.id), {
+        winnerTeamId: gameStatsForm.winnerTeamId,
+        winnerScore: parseInt(gameStatsForm.winnerScore),
+        loserTeamId,
+        loserScore: parseInt(gameStatsForm.loserScore),
+        playerStats: allPlayerStats,
+        completed: true,
+        updatedAt: serverTimestamp(),
+      });
+
+      // Update individual player stats in roster (for both winner and loser teams)
+      const batch = writeBatch(firebaseDB);
+      for (const stat of allPlayerStats) {
+        const isWinner = stat.teamId === gameStatsForm.winnerTeamId;
+        const roster = isWinner ? winnerRoster : loserRoster;
+        const player = roster.find(p => p.id === stat.playerId);
+        if (!player) continue;
+
+        // Get current player stats from roster
+        const currentPts = parseFloat(player.stats.pts) || 0;
+        const currentReb = parseFloat(player.stats.reb) || 0;
+        const currentStl = parseFloat(player.stats.stl) || 0;
+
+        // Get player's game history to calculate new averages
+        const playerGamesQuery = query(
+          collection(firebaseDB, "games"),
+          orderBy("date", "asc")
+        );
+        const gamesSnapshot = await getDocs(playerGamesQuery);
+        
+        let totalGames = 0;
+        let totalPts = 0;
+        let total2PM = 0;
+        let total2PA = 0;
+        let total3PM = 0;
+        let total3PA = 0;
+        let totalFTM = 0;
+        let totalFTA = 0;
+        let totalAst = 0;
+        let totalOreb = 0;
+        let totalDreb = 0;
+        let totalReb = 0;
+        let totalStl = 0;
+        let totalBlk = 0;
+        let totalMin = 0;
+        let totalPf = 0;
+        let totalTo = 0;
+
+        // Accumulate stats from all completed games for this player
+        gamesSnapshot.docs.forEach(gameDoc => {
+          const gameData = gameDoc.data();
+          if (gameData.completed && gameData.playerStats) {
+            const playerGameStats = gameData.playerStats.find((ps: any) => ps.playerId === stat.playerId);
+            if (playerGameStats) {
+              totalGames++;
+              totalPts += playerGameStats.pts || 0;
+              total2PM += playerGameStats.two_pm || 0;
+              total2PA += playerGameStats.two_pa || 0;
+              total3PM += playerGameStats.three_pm || 0;
+              total3PA += playerGameStats.three_pa || 0;
+              totalFTM += playerGameStats.ft_m || 0;
+              totalFTA += playerGameStats.ft_a || 0;
+              totalAst += playerGameStats.ast || 0;
+              totalOreb += playerGameStats.oreb || 0;
+              totalDreb += playerGameStats.dreb || 0;
+              totalReb += playerGameStats.reb || 0;
+              totalStl += playerGameStats.stl || 0;
+              totalBlk += playerGameStats.blk || 0;
+              totalMin += playerGameStats.min || 0;
+              totalPf += playerGameStats.pf || 0;
+              totalTo += playerGameStats.to || 0;
+            }
+          }
+        });
+
+        // Add current game stats
+        totalGames++;
+        totalPts += stat.pts;
+        total2PM += stat.two_pm;
+        total2PA += stat.two_pa;
+        total3PM += stat.three_pm;
+        total3PA += stat.three_pa;
+        totalFTM += stat.ft_m;
+        totalFTA += stat.ft_a;
+        totalAst += stat.ast;
+        totalOreb += stat.oreb;
+        totalDreb += stat.dreb;
+        totalReb += stat.reb;
+        totalStl += stat.stl;
+        totalBlk += stat.blk;
+        totalMin += stat.min;
+        totalPf += stat.pf;
+        totalTo += stat.to;
+
+        // Calculate new averages
+        const newAvgPts = (totalPts / totalGames).toFixed(1);
+        const newAvg2PM = (total2PM / totalGames).toFixed(1);
+        const newAvg2PA = (total2PA / totalGames).toFixed(1);
+        const newAvg3PM = (total3PM / totalGames).toFixed(1);
+        const newAvg3PA = (total3PA / totalGames).toFixed(1);
+        const newAvgFTM = (totalFTM / totalGames).toFixed(1);
+        const newAvgFTA = (totalFTA / totalGames).toFixed(1);
+        const newAvgAst = (totalAst / totalGames).toFixed(1);
+        const newAvgOreb = (totalOreb / totalGames).toFixed(1);
+        const newAvgDreb = (totalDreb / totalGames).toFixed(1);
+        const newAvgReb = (totalReb / totalGames).toFixed(1);
+        const newAvgStl = (totalStl / totalGames).toFixed(1);
+        const newAvgBlk = (totalBlk / totalGames).toFixed(1);
+        const newAvgMin = (totalMin / totalGames).toFixed(1);
+        const newAvgPf = (totalPf / totalGames).toFixed(1);
+        const newAvgTo = (totalTo / totalGames).toFixed(1);
+
+        // Update player roster document
+        const playerRef = doc(firebaseDB, "teams", stat.teamId, "roster", stat.playerId);
+        batch.update(playerRef, {
+          stats: {
+            pts: newAvgPts,
+            two_pm: newAvg2PM,
+            two_pa: newAvg2PA,
+            three_pm: newAvg3PM,
+            three_pa: newAvg3PA,
+            ft_m: newAvgFTM,
+            ft_a: newAvgFTA,
+            ast: newAvgAst,
+            oreb: newAvgOreb,
+            dreb: newAvgDreb,
+            reb: newAvgReb,
+            stl: newAvgStl,
+            blk: newAvgBlk,
+            min: newAvgMin,
+            pf: newAvgPf,
+            to: newAvgTo,
+          },
+          gamesPlayed: totalGames,
+          updatedAt: serverTimestamp(),
+        });
+      }
+
+      await batch.commit();
+
+      // Update team win/loss records
+      const winnerTeamRef = doc(firebaseDB, "teams", gameStatsForm.winnerTeamId);
+      const loserTeamRef = doc(firebaseDB, "teams", loserTeamId);
+
+      const winnerTeamDoc = await getDocs(query(collection(firebaseDB, "teams")));
+      const winnerTeamData = winnerTeamDoc.docs.find(d => d.id === gameStatsForm.winnerTeamId)?.data();
+      const loserTeamData = winnerTeamDoc.docs.find(d => d.id === loserTeamId)?.data();
+
+      const winnerWins = (typeof winnerTeamData?.wins === "number" ? winnerTeamData.wins : 0) + 1;
+      const winnerLosses = typeof winnerTeamData?.losses === "number" ? winnerTeamData.losses : 0;
+      const loserWins = typeof loserTeamData?.wins === "number" ? loserTeamData.wins : 0;
+      const loserLosses = (typeof loserTeamData?.losses === "number" ? loserTeamData.losses : 0) + 1;
+
+      // Calculate total points for winner team (accumulate winner's score)
+      const winnerGameScore = parseInt(gameStatsForm.winnerScore) || 0;
+      const winnerCurrentTotalPoints = typeof winnerTeamData?.totalPoints === "number" ? winnerTeamData.totalPoints : 0;
+      const winnerNewTotalPoints = winnerCurrentTotalPoints + winnerGameScore;
+
+      // Calculate total points for loser team (accumulate loser's score)
+      const loserGameScore = parseInt(gameStatsForm.loserScore) || 0;
+      const loserCurrentTotalPoints = typeof loserTeamData?.totalPoints === "number" ? loserTeamData.totalPoints : 0;
+      const loserNewTotalPoints = loserCurrentTotalPoints + loserGameScore;
+
+      await updateDoc(winnerTeamRef, {
+        wins: winnerWins,
+        losses: winnerLosses,
+        totalPoints: winnerNewTotalPoints,
+        updatedAt: serverTimestamp(),
+      });
+
+      await updateDoc(loserTeamRef, {
+        wins: loserWins,
+        losses: loserLosses,
+        totalPoints: loserNewTotalPoints,
+        updatedAt: serverTimestamp(),
+      });
+
+      // Save standings to separate collection
+      const winnerTeamName = winnerTeamData?.name ?? "";
+      const winnerTeamGender = winnerTeamData?.gender ?? "men";
+      const loserTeamName = loserTeamData?.name ?? "";
+      const loserTeamGender = loserTeamData?.gender ?? "men";
+
+      // Check if standing documents exist for both teams
+      const standingsRef = collection(firebaseDB, "standings");
+      const standingsSnapshot = await getDocs(standingsRef);
+
+      // Find or create winner standing
+      const winnerStandingDoc = standingsSnapshot.docs.find(
+        d => d.data().teamId === gameStatsForm.winnerTeamId
+      );
+      if (winnerStandingDoc) {
+        await updateDoc(doc(firebaseDB, "standings", winnerStandingDoc.id), {
+          teamName: winnerTeamName,
+          teamId: gameStatsForm.winnerTeamId,
+          gender: winnerTeamGender,
+          wins: winnerWins,
+          losses: winnerLosses,
+          totalPoints: winnerNewTotalPoints,
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        await addDoc(standingsRef, {
+          teamName: winnerTeamName,
+          teamId: gameStatsForm.winnerTeamId,
+          gender: winnerTeamGender,
+          wins: winnerWins,
+          losses: winnerLosses,
+          totalPoints: winnerNewTotalPoints,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+
+      // Find or create loser standing
+      const loserStandingDoc = standingsSnapshot.docs.find(
+        d => d.data().teamId === loserTeamId
+      );
+      if (loserStandingDoc) {
+        await updateDoc(doc(firebaseDB, "standings", loserStandingDoc.id), {
+          teamName: loserTeamName,
+          teamId: loserTeamId,
+          gender: loserTeamGender,
+          wins: loserWins,
+          losses: loserLosses,
+          totalPoints: loserNewTotalPoints,
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        await addDoc(standingsRef, {
+          teamName: loserTeamName,
+          teamId: loserTeamId,
+          gender: loserTeamGender,
+          wins: loserWins,
+          losses: loserLosses,
+          totalPoints: loserNewTotalPoints,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+
+      setStatsStatus({ type: "success", message: "Game stats saved, player averages and team records updated!" });
+      setSelectedCompletedGame(null);
+      setGameStatsForm(null);
+      setWinnerRoster([]);
+      setLoserRoster([]);
+      setPlayerStatsMap({});
+      setLoserStatsMap({});
+    } catch (error) {
+      console.error(error);
+      setStatsStatus({ type: "error", message: "Failed to save game stats." });
+    } finally {
+      setStatsSubmitting(false);
+    }
+  };
+
+  const filteredGameTeams = useMemo(() => {
+    if (!gameTeamSearch.trim()) return teams.filter((t) => t.gender === gameForm.gender);
+    const search = gameTeamSearch.toLowerCase();
+    return teams.filter(
+      (t) => t.gender === gameForm.gender && (t.name.toLowerCase().includes(search) || t.city.toLowerCase().includes(search))
+    );
+  }, [teams, gameForm.gender, gameTeamSearch]);
+
+  // Auto-calculate spotlight: top 3 upcoming games (future date/time only)
+  const gamesWithSpotlight = useMemo(() => {
+    const now = new Date();
+    
+    // Filter to future games and sort by date+time ascending
+    const upcomingGames = games
+      .map((game) => {
+        const gameDateTime = new Date(`${game.date}T${game.time}`);
+        return { ...game, gameDateTime };
+      })
+      .filter((game) => game.gameDateTime > now)
+      .sort((a, b) => a.gameDateTime.getTime() - b.gameDateTime.getTime());
+
+    // Top 3 get spotlight
+    const spotlightIds = new Set(upcomingGames.slice(0, 3).map((g) => g.id));
+
+    // Return all games with spotlight flag
+    return games.map((game) => ({
+      ...game,
+      spotlight: spotlightIds.has(game.id),
+    }));
+  }, [games]);
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4 py-10 text-white">
+      <div className="w-full max-w-md space-y-6">
+        <div className="space-y-2">
+          <p className="text-xs uppercase tracking-[0.4em] text-slate-500">Admin console</p>
+          <h1 className="text-3xl font-semibold">News desk</h1>
+          <p className="text-sm text-slate-300">
+            Authenticate with Firebase, then curate the league storytelling vault. Add a headline, attach a hero image,
+            and the home feed will update in real time.
+          </p>
+        </div>
+
+        {user ? (
+          <div className="space-y-4 rounded-2xl border border-white/10 bg-black/30 p-4 text-left">
+            <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Firebase auth</p>
+            <div className="space-y-2">
+              <p className="text-sm text-slate-400">Signed in as</p>
+              <p className="text-lg font-semibold text-white" title={user.email ?? undefined}>{user.email}</p>
+            </div>
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="w-full rounded-2xl border border-white/30 bg-white/10 px-4 py-3 text-sm font-semibold uppercase tracking-[0.4em] text-white transition hover:bg-white/20"
+            >
+              Sign out
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={handleLogin} className="space-y-4 rounded-2xl border border-white/10 bg-black/30 p-4 text-left">
+            <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Firebase auth</p>
+            <div className="space-y-2 text-sm">
+              <label className="block text-slate-400">
+                Email
+                <input
+                  type="email"
+                  value={authForm.email}
+                  onChange={(event) => setAuthForm((prev) => ({ ...prev, email: event.target.value }))}
+                  className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900/70 px-4 py-3 text-base text-white placeholder:text-slate-500 focus:border-white"
+                  placeholder="admin@example.com"
+                  required
+                />
+              </label>
+              <label className="block text-slate-400">
+                Password
+                <input
+                  type="password"
+                  value={authForm.password}
+                  onChange={(event) => setAuthForm((prev) => ({ ...prev, password: event.target.value }))}
+                  className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900/70 px-4 py-3 text-base text-white placeholder:text-slate-500 focus:border-white"
+                  placeholder="••••••••"
+                  required
+                />
+              </label>
+              {authError && <p className="text-xs text-rose-300">{authError}</p>}
+            </div>
+            <button
+              type="submit"
+              disabled={authSubmitting}
+              className="w-full rounded-2xl border border-white/30 bg-white/10 px-4 py-3 text-sm font-semibold uppercase tracking-[0.4em] text-white transition hover:bg-white/20 disabled:opacity-50"
+            >
+              {authSubmitting ? "Signing in…" : "Sign in"}
+            </button>
+          </form>
+        )}
+
+        <p className="text-sm text-slate-400">
+          {user
+            ? "You're authenticated. Share the latest transfer, recap, or showcase story below."
+            : "Use your Firebase admin credentials to unlock the news editor."
+          }
+        </p>
+      </div>
+
+      {status && (
+        <div className={`fixed bottom-6 right-6 max-w-md rounded-2xl border ${statusClassMap[status.type]} p-4 text-sm shadow-2xl`}>
+          {status.message}
+        </div>
+      )}
+
+      {user && (
+        <main className="fixed inset-0 overflow-auto bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+          <div className="mx-auto flex max-w-7xl flex-col">
+            {/* Header */}
+            <div className="sticky top-0 z-30 border-b border-white/10 bg-slate-950/95 backdrop-blur-xl">
+              <div className="px-6 py-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h1 className="text-xl font-bold text-white">Admin Dashboard</h1>
+                    <p className="text-xs text-slate-400">Content Management System</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSignOut}
+                    className="rounded-xl border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white transition hover:bg-white/10"
+                  >
+                    Sign out
+                  </button>
+                </div>
+              </div>
+              
+              {/* Tab Navigation */}
+              <div className="flex gap-1 overflow-x-auto px-6">
+                <button
+                  onClick={() => setActiveTab('stories')}
+                  className={`whitespace-nowrap border-b-2 px-4 py-3 text-xs font-semibold uppercase tracking-wider transition ${
+                    activeTab === 'stories'
+                      ? 'border-orange-500 text-orange-400'
+                      : 'border-transparent text-slate-400 hover:text-slate-300'
+                  }`}
+                >
+                  📰 Stories
+                </button>
+                <button
+                  onClick={() => setActiveTab('teams')}
+                  className={`whitespace-nowrap border-b-2 px-4 py-3 text-xs font-semibold uppercase tracking-wider transition ${
+                    activeTab === 'teams'
+                      ? 'border-orange-500 text-orange-400'
+                      : 'border-transparent text-slate-400 hover:text-slate-300'
+                  }`}
+                >
+                  🏀 Teams
+                </button>
+                <button
+                  onClick={() => setActiveTab('traffic')}
+                  className={`whitespace-nowrap border-b-2 px-4 py-3 text-xs font-semibold uppercase tracking-wider transition ${
+                    activeTab === 'traffic'
+                      ? 'border-orange-500 text-orange-400'
+                      : 'border-transparent text-slate-400 hover:text-slate-300'
+                  }`}
+                >
+                  🔄 Traffic
+                </button>
+                <button
+                  onClick={() => setActiveTab('games')}
+                  className={`whitespace-nowrap border-b-2 px-4 py-3 text-xs font-semibold uppercase tracking-wider transition ${
+                    activeTab === 'games'
+                      ? 'border-orange-500 text-orange-400'
+                      : 'border-transparent text-slate-400 hover:text-slate-300'
+                  }`}
+                >
+                  🗓️ Games
+                </button>
+                <button
+                  onClick={() => setActiveTab('stats')}
+                  className={`whitespace-nowrap border-b-2 px-4 py-3 text-xs font-semibold uppercase tracking-wider transition ${
+                    activeTab === 'stats'
+                      ? 'border-orange-500 text-orange-400'
+                      : 'border-transparent text-slate-400 hover:text-slate-300'
+                  }`}
+                >
+                  📊 Stats
+                </button>
+                <button
+                  onClick={() => setActiveTab('league')}
+                  className={`whitespace-nowrap border-b-2 px-4 py-3 text-xs font-semibold uppercase tracking-wider transition ${
+                    activeTab === 'league'
+                      ? 'border-orange-500 text-orange-400'
+                      : 'border-transparent text-slate-400 hover:text-slate-300'
+                  }`}
+                >
+                  ⚙️ League
+                </button>
+              </div>
+            </div>
+
+            {/* Main Content Area */}
+            <div className="px-6 py-8">
+              {/* Database Reset Section - Always visible at top */}
+              <section className="mb-8 rounded-2xl border border-rose-400/40 bg-rose-500/10 p-6">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h3 className="text-sm font-semibold uppercase tracking-wider text-rose-200">⚠️ Database Reset</h3>
+                    <p className="mt-1 text-xs text-rose-300/80">
+                      Delete all games, standings, and reset all team/player stats to 0.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleResetAllStats}
+                    disabled={resetSubmitting}
+                    className="w-full shrink-0 rounded-full border border-rose-400/60 bg-rose-500/20 px-4 py-3 text-xs font-semibold uppercase tracking-[0.4em] text-rose-100 transition hover:border-rose-400/80 hover:bg-rose-500/30 disabled:opacity-50 sm:w-auto sm:py-2"
+                  >
+                    {resetSubmitting ? "Resetting..." : "Reset All Stats"}
+                  </button>
+                </div>
+                {resetStatus && (
+                  <div className={`mt-3 rounded-xl border p-3 text-xs ${statusClassMap[resetStatus.type]}`}>
+                    {resetStatus.message}
+                  </div>
+                )}
+              </section>
+
+              {/* Tab Content Sections */}
+              <div className="space-y-4">
+              {/* Stories Tab Content */}
+              {activeTab === 'stories' && (
+              <>
+              <button
+                type="button"
+                onClick={() => setStoryEditorOpen(!storyEditorOpen)}
+                className="group relative w-full overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-blue-600/20 to-purple-600/20 p-8 text-left shadow-xl transition hover:border-white/30 hover:shadow-2xl"
+              >
+                <div className="relative z-10 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Module</p>
+                    <h2 className="mt-2 text-3xl font-bold text-white">Story Editor</h2>
+                    <p className="mt-3 text-sm text-slate-300">
+                      Publish news updates, attach hero images, and manage the league storytelling vault.
+                    </p>
+                  </div>
+                  <span className="text-2xl text-white">{storyEditorOpen ? '−' : '+'}</span>
+                </div>
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5 opacity-0 transition group-hover:opacity-100"></div>
+              </button>
+
+            {storyEditorOpen && (
+              <div className="space-y-6">
+            <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl">
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Story editor</p>
+                  <h2 className="text-2xl font-semibold">Publish a news update</h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  className="rounded-full border border-white/20 px-3 py-1 text-xs uppercase tracking-[0.4em] text-slate-300"
+                >
+                  New story
+                </button>
+              </div>
+              <form onSubmit={handleSubmitNews} className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-3">
+                  <label className="space-y-1 text-sm text-slate-300">
+                    Title
+                    <input
+                      className="w-full rounded-2xl border border-white/10 bg-black/30 px-3 py-2 text-white focus:border-white"
+                      value={form.title}
+                      onChange={(event) => updateFormField("title", event.target.value)}
+                      placeholder="Malik Kasongo rattles off 30 in overtime"
+                      required
+                    />
+                  </label>
+                  <label className="space-y-1 text-sm text-slate-300">
+                    Headline
+                    <input
+                      className="w-full rounded-2xl border border-white/10 bg-black/30 px-3 py-2 text-white focus:border-white"
+                      value={form.headline}
+                      onChange={(event) => updateFormField("headline", event.target.value)}
+                      placeholder="Star guard punches home a closing run"
+                      required
+                    />
+                  </label>
+                  <label className="space-y-1 text-sm text-slate-300">
+                    Category
+                    <input
+                      className="w-full rounded-2xl border border-white/10 bg-black/30 px-3 py-2 text-white focus:border-white"
+                      value={form.category}
+                      onChange={(event) => updateFormField("category", event.target.value)}
+                      placeholder="Feature / Spotlight"
+                    />
+                  </label>
+                </div>
+                <label className="space-y-1 text-sm text-slate-300">
+                  Summary
+                  <textarea
+                    className="w-full rounded-2xl border border-white/10 bg-black/30 px-3 py-2 text-white focus:border-white"
+                    rows={4}
+                    value={form.summary}
+                    onChange={(event) => updateFormField("summary", event.target.value)}
+                    placeholder="Summaries appear under the hero and inside the timeline. Keep them punchy."
+                    required
+                  />
+                </label>
+                <label className="space-y-1 text-sm text-slate-300">
+                  Cover photo
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageChange}
+                    className="w-full rounded-2xl border border-dashed border-white/20 bg-black/20 px-3 py-2 text-sm text-white file:mr-3 file:rounded-full file:border-0 file:bg-white/10 file:px-3 file:py-1 file:text-xs file:font-semibold file:text-slate-100"
+                  />
+                </label>
+                {imagePreview ? (
+                  <div className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-black/40 p-4">
+                    <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Preview</p>
+                    <div className="relative h-48 w-full overflow-hidden rounded-2xl">
+                      <Image
+                        src={imagePreview}
+                        alt="Cover preview"
+                        fill
+                        className="object-cover"
+                        sizes="(max-width: 768px) 100vw, 400px"
+                        unoptimized
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-500">Upload an image to set the hero background.</p>
+                )}
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="rounded-2xl border border-white/30 bg-gradient-to-r from-orange-500/80 to-amber-400/80 px-6 py-3 text-xs font-semibold uppercase tracking-[0.4em] text-black transition hover:opacity-90"
+                  >
+                    {submitting ? "Saving..." : form.id ? "Update story" : "Publish story"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={resetForm}
+                    className="rounded-2xl border border-white/20 px-5 py-3 text-xs font-semibold uppercase tracking-[0.4em] text-white"
+                  >
+                    Reset fields
+                  </button>
+                </div>
+              </form>
+            </section>
+
+            <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl">
+              <div className="mb-6 flex flex-col gap-1">
+                <h2 className="text-2xl font-semibold">Stories</h2>
+              </div>
+              {news.length === 0 ? (
+                <p className="text-sm text-slate-400">No stories yet.</p>
+              ) : (
+                <ul className="grid gap-4 md:grid-cols-2">
+                  {news.map((article) => (
+                    <li
+                      key={article.id}
+                      className="flex flex-col gap-3 rounded-3xl border border-white/5 bg-black/40 p-4"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-[10px] uppercase tracking-[0.4em] text-slate-400">{article.category}</p>
+                          <h3 className="text-base font-semibold text-white">{article.title}</h3>
+                        </div>
+                        <span className="text-xs text-slate-400" aria-label="Published label">
+                          {formatAdminPublishedLabel(article.createdAt)}
+                        </span>
+                      </div>
+                      <p className="text-sm text-slate-300 line-clamp-3">{article.summary}</p>
+                      {article.imageUrl ? (
+                        <div className="relative h-32 w-full overflow-hidden rounded-2xl">
+                          <Image
+                            src={article.imageUrl}
+                            alt={article.title}
+                            fill
+                            className="object-cover"
+                            sizes="(max-width: 768px) 100vw, 320px"
+                            unoptimized
+                          />
+                        </div>
+                      ) : (
+                        <div className="flex h-32 items-center justify-center rounded-2xl border border-dashed border-white/10 text-xs uppercase tracking-[0.3em] text-slate-500">
+                          No image
+                        </div>
+                      )}
+                      <div className="flex flex-wrap gap-3">
+                        <button
+                          type="button"
+                          onClick={() => handleEdit(article)}
+                          className="rounded-full border border-white/30 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.4em] text-slate-200"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(article)}
+                          className="rounded-full border border-rose-500/60 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.4em] text-rose-200"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+              </div>
+            )}
+              </>
+              )}
+
+              {/* Teams Tab Content */}
+              {activeTab === 'teams' && (
+              <>
+              <button
+                type="button"
+                onClick={() => setTeamAssistantOpen(!teamAssistantOpen)}
+                className="group relative w-full overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-emerald-600/20 to-cyan-600/20 p-8 text-left shadow-xl transition hover:border-white/30 hover:shadow-2xl"
+              >
+                <div className="relative z-10 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Module</p>
+                    <h2 className="mt-2 text-3xl font-bold text-white">Team Assistant</h2>
+                    <p className="mt-3 text-sm text-slate-300">
+                      Create teams, upload logos, manage rosters, and organize franchise directory.
+                    </p>
+                  </div>
+                  <span className="text-2xl text-white">{teamAssistantOpen ? '−' : '+'}</span>
+                </div>
+                <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-cyan-500/5 opacity-0 transition group-hover:opacity-100"></div>
+              </button>
+
+            {teamAssistantOpen && (
+              <div className="space-y-6">
+
+            {teamStatus ? (
+              <div className={`rounded-2xl border ${statusClassMap[teamStatus.type]} p-4 text-sm`}>
+                {teamStatus.message}
+              </div>
+            ) : null}
+
+            {rosterStatus ? (
+              <div className={`rounded-2xl border ${statusClassMap[rosterStatus.type]} p-4 text-sm`}>
+                {rosterStatus.message}
+              </div>
+            ) : null}
+
+            <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl">
+              <div className="mb-6">
+                <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Team assistant</p>
+                <h2 className="text-2xl font-semibold">Manage franchises & rosters</h2>
+                <p className="mt-2 text-sm text-slate-400">
+                  Create new clubs, update their branding, and curate roster cards. Changes sync live in Firestore so the site can
+                  pull updated data in real time.
+                </p>
+              </div>
+              <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
+                {/* Mobile Modal: Roster editor popup */}
+                {selectedTeamId ? (
+                  <div 
+                    className="lg:hidden fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-xl px-4"
+                    onClick={() => { setSelectedTeamId(null); resetRosterForm(); }}
+                  >
+                    <div 
+                      className="w-full max-w-md max-h-[85vh] overflow-y-auto rounded-2xl border border-white/20 bg-slate-900 shadow-2xl"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {/* Header */}
+                      <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-white/10 bg-slate-900 px-4 py-3">
+                        <div className="min-w-0 flex-1">
+                          <h3 className="text-sm font-semibold text-white truncate">Roster Editor</h3>
+                          <p className="text-[9px] uppercase tracking-[0.3em] text-slate-400">
+                            {teams.find((team) => team.id === selectedTeamId)?.name ?? "Selected team"}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => { setSelectedTeamId(null); resetRosterForm(); }}
+                          className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 transition"
+                        >
+                          ✕
+                        </button>
+                      </div>
+
+                      {/* Content */}
+                      <div className="p-4 space-y-3">
+                        {!rosterFormVisible ? (
+                          <button
+                            type="button"
+                            onClick={() => setRosterFormVisible(true)}
+                            className="w-full rounded-xl border border-white/20 bg-white/10 px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.3em] text-white transition hover:bg-white/20"
+                          >
+                            + Add Player
+                          </button>
+                        ) : (
+                          <form onSubmit={handleSubmitRosterPlayer} className="space-y-2.5 overflow-hidden">
+                            <div className="grid gap-2.5 grid-cols-1">
+                              <label className="space-y-1 text-[10px] text-slate-300 min-w-0">
+                                First name
+                                <input
+                                  className="w-full min-w-0 rounded-lg border border-white/10 bg-slate-900/60 px-2.5 py-2 text-sm text-white focus:border-white"
+                                  value={rosterForm.firstName}
+                                  onChange={(event) => setRosterForm((prev) => ({ ...prev, firstName: event.target.value }))}
+                                  required
+                                />
+                              </label>
+                              <label className="space-y-1 text-[10px] text-slate-300 min-w-0">
+                                Last name
+                                <input
+                                  className="w-full min-w-0 rounded-lg border border-white/10 bg-slate-900/60 px-2.5 py-2 text-sm text-white focus:border-white"
+                                  value={rosterForm.lastName}
+                                  onChange={(event) => setRosterForm((prev) => ({ ...prev, lastName: event.target.value }))}
+                                  required
+                                />
+                              </label>
+                              <label className="space-y-1 text-[10px] text-slate-300 min-w-0">
+                                Jersey #
+                                <input
+                                  className="w-full min-w-0 rounded-lg border border-white/10 bg-slate-900/60 px-2.5 py-2 text-sm text-white focus:border-white"
+                                  value={rosterForm.number}
+                                  onChange={(event) => setRosterForm((prev) => ({ ...prev, number: event.target.value }))}
+                                  inputMode="numeric"
+                                  required
+                                />
+                              </label>
+                              <label className="space-y-1 text-[10px] text-slate-300 min-w-0">
+                                Player License
+                                <input
+                                  className="w-full min-w-0 rounded-lg border border-white/10 bg-slate-900/60 px-2.5 py-2 text-sm text-white focus:border-white disabled:bg-slate-900/30 disabled:cursor-not-allowed"
+                                  value={rosterForm.playerLicense}
+                                  onChange={(event) => setRosterForm((prev) => ({ ...prev, playerLicense: event.target.value }))}
+                                  disabled={!!rosterForm.id}
+                                  required={!rosterForm.id}
+                                  placeholder="Unique ID (cannot be changed)"
+                                />
+                              </label>
+                              <label className="space-y-1 text-[10px] text-slate-300 min-w-0">
+                                Height
+                                <input
+                                  className="w-full min-w-0 rounded-lg border border-white/10 bg-slate-900/60 px-2.5 py-2 text-sm text-white focus:border-white"
+                                  value={rosterForm.height}
+                                  onChange={(event) => setRosterForm((prev) => ({ ...prev, height: event.target.value }))}
+                                />
+                              </label>
+                              <label className="space-y-1 text-[10px] text-slate-300 min-w-0">
+                                Date of birth
+                                <input
+                                  type="date"
+                                  className="w-full min-w-0 rounded-lg border border-white/10 bg-slate-900/60 px-2.5 py-2 text-sm text-white focus:border-white"
+                                  value={rosterForm.dateOfBirth}
+                                  onChange={(event) => setRosterForm((prev) => ({ ...prev, dateOfBirth: event.target.value }))}
+                                />
+                              </label>
+                              <label className="space-y-1 text-[10px] text-slate-300 min-w-0">
+                                Position
+                                <select
+                                  className="w-full min-w-0 rounded-lg border border-white/10 bg-slate-900/60 px-2.5 py-2 text-sm text-white focus:border-white"
+                                  value={rosterForm.position}
+                                  onChange={(event) => setRosterForm((prev) => ({ ...prev, position: event.target.value }))}
+                                  required
+                                >
+                                  <option value="">Select position</option>
+                                  <option value="Point Guard">Point Guard</option>
+                                  <option value="Shooting Guard">Shooting Guard</option>
+                                  <option value="Small Forward">Small Forward</option>
+                                  <option value="Power Forward">Power Forward</option>
+                                  <option value="Center">Center</option>
+                                </select>
+                              </label>
+                              <label className="space-y-1 text-[10px] text-slate-300 min-w-0">
+                                Nationality
+                                  <div>
+                                    <input
+                                      list="country-options"
+                                      placeholder="Search country..."
+                                      value={rosterForm.nationality}
+                                      onChange={(event) => setRosterForm((prev) => ({ ...prev, nationality: event.target.value }))}
+                                      className="w-full min-w-0 rounded-lg border border-white/10 bg-slate-900/60 px-2.5 py-2 text-sm text-white focus:border-white"
+                                    />
+                                    <datalist id="country-options">
+                                      {countries.map((c) => (
+                                        <option key={c.code} value={c.name}>{flagFromCode(c.code)} {c.name}</option>
+                                      ))}
+                                    </datalist>
+                                  </div>
+                              </label>
+                              <div className="flex items-center gap-2 text-[12px] text-slate-300">
+                                <input
+                                  id="double-nationality"
+                                  type="checkbox"
+                                  checked={!!rosterForm.nationality2Enabled}
+                                  onChange={(e) => setRosterForm((prev) => ({ ...prev, nationality2Enabled: e.target.checked }))}
+                                  className="h-4 w-4"
+                                />
+                                <label htmlFor="double-nationality" className="select-none text-[11px]">Add second nationality</label>
+                              </div>
+                              {rosterForm.nationality2Enabled ? (
+                                <label className="space-y-1 text-[10px] text-slate-300 min-w-0">
+                                  Second nationality
+                                  <div>
+                                    <input
+                                      list="country-options"
+                                      placeholder="Search second country..."
+                                      value={rosterForm.nationality2}
+                                      onChange={(event) => setRosterForm((prev) => ({ ...prev, nationality2: event.target.value }))}
+                                      className="w-full min-w-0 rounded-lg border border-white/10 bg-slate-900/60 px-2.5 py-2 text-sm text-white focus:border-white"
+                                    />
+                                  </div>
+                                </label>
+                              ) : null}
+                            </div>
+                            <div className="space-y-2">
+                              <label className="space-y-1 text-[10px] text-slate-300 min-w-0">
+                                Upload headshot
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={handlePlayerHeadshotChange}
+                                  className="w-full min-w-0 rounded-lg border border-dashed border-white/20 bg-slate-900/40 px-2.5 py-2 text-[10px] text-slate-300"
+                                />
+                                {playerHeadshotFile || playerHeadshotPreview ? (
+                                  <button
+                                    type="button"
+                                    onClick={clearPlayerHeadshotSelection}
+                                    className="self-start rounded-lg border border-white/20 px-2 py-1 text-[9px] uppercase tracking-[0.3em] text-slate-300 hover:bg-white/5"
+                                  >
+                                    Clear
+                                  </button>
+                                ) : null}
+                              </label>
+                              {playerHeadshotPreview ? (
+                                <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-slate-900/40 p-2">
+                                  <div className="relative h-10 w-10 flex-shrink-0 overflow-hidden rounded-lg border border-white/10 bg-black/40">
+                                    <Image src={playerHeadshotPreview} alt="Preview" fill className="object-cover" unoptimized />
+                                  </div>
+                                  <p className="text-[10px] text-slate-400">
+                                    {playerHeadshotFile ? "Ready to save" : "Current image"}
+                                  </p>
+                                </div>
+                              ) : null}
+                            </div>
+                            <div className="flex gap-2 pt-1">
+                              <button
+                                type="submit"
+                                disabled={rosterSubmitting}
+                                className="flex-1 rounded-lg border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {rosterSubmitting ? "Saving…" : rosterForm.id ? "Update" : "Add"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setRosterFormVisible(false)}
+                                className="rounded-lg border border-white/10 px-3 py-2 text-xs uppercase tracking-[0.3em] text-slate-300 hover:bg-white/5"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </form>
+                        )}
+
+                        {/* Current Roster List */}
+                        {roster.length > 0 ? (
+                          <div className="space-y-2 pt-1">
+                            <div className="flex items-center justify-between px-1">
+                              <p className="text-[10px] uppercase tracking-[0.3em] text-slate-400">Roster ({roster.length})</p>
+                            </div>
+                            <div className="space-y-2">
+                              {roster.map((player) => (
+                                <div
+                                  key={player.id}
+                                  className="flex items-center gap-2 rounded-lg border border-white/10 bg-slate-900/50 p-2.5 hover:bg-slate-900/70 transition"
+                                >
+                                  <div className="relative h-8 w-8 flex-shrink-0 overflow-hidden rounded-lg border border-white/10 bg-black/30">
+                                    {player.headshot ? (
+                                      <Image src={player.headshot} alt={player.firstName} fill className="object-cover" unoptimized />
+                                    ) : (
+                                      <div className="flex h-full w-full items-center justify-center text-[10px] font-semibold text-slate-500">
+                                        {player.firstName[0]}{player.lastName[0]}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-semibold text-white truncate">
+                                      #{player.number} {player.firstName} {player.lastName}
+                                    </p>
+                                    <p className="text-[10px] text-slate-400">
+                                      {player.position || "—"} · {player.height || "—"}
+                                      {player.nationality && (
+                                        ` · ${player.nationality}${player.nationality2 ? ` / ${player.nationality2}` : ""}`
+                                      )}
+                                    </p>
+                                    {player.playerLicense && (
+                                      <p className="text-[9px] text-slate-500">License: {player.playerLicense}</p>
+                                    )}
+                                  </div>
+                                  <div className="flex gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleEditRosterPlayer(player)}
+                                      className="rounded-lg border border-white/20 px-2 py-1 text-[9px] uppercase tracking-[0.3em] text-white hover:bg-white/10"
+                                    >
+                                      Edit
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleInitiateTransfer(player)}
+                                      className="rounded-lg border border-sky-500/40 px-2 py-1 text-[9px] uppercase tracking-[0.3em] text-sky-200 hover:bg-sky-500/10"
+                                    >
+                                      Transfer
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteRosterPlayer(player)}
+                                      className="rounded-lg border border-rose-500/40 px-2 py-1 text-[9px] uppercase tracking-[0.3em] text-rose-200 hover:bg-rose-500/10"
+                                    >
+                                      Del
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-center py-6 text-xs text-slate-500">
+                            No players yet
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+                
+                <div className="space-y-6">
+                  {teamFormExpanded ? (
+                    <form onSubmit={handleSubmitTeam} className="space-y-3 sm:space-y-4 overflow-hidden rounded-2xl border border-white/10 bg-black/30 p-4 sm:p-5">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-xs uppercase tracking-[0.4em] text-slate-400">
+                            {teamForm.id ? "Edit team" : "Add new team"}
+                          </p>
+                          <h3 className="text-lg font-semibold text-white truncate">
+                            {teamForm.name ? teamForm.name : "Start drafting"}
+                          </h3>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={closeTeamForm}
+                            className="rounded-full border border-white/15 px-3 sm:px-4 py-1 text-[10px] uppercase tracking-[0.4em] text-slate-200"
+                          >
+                            Hide form
+                          </button>
+                        </div>
+                      </div>
+                      <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2">
+                        <label className="space-y-1 text-xs sm:text-sm text-slate-300 min-w-0">
+                          Team name
+                          <input
+                            className="w-full min-w-0 rounded-2xl border border-white/10 bg-slate-900/60 px-2 sm:px-3 py-2 text-xs sm:text-sm text-white focus:border-white"
+                            value={teamForm.name}
+                            onChange={(event) => updateTeamFormField("name", event.target.value)}
+                            placeholder="New Gen"
+                            required
+                          />
+                        </label>
+                        <label className="space-y-1 text-xs sm:text-sm text-slate-300 min-w-0">
+                          City / prefix
+                          <input
+                            className="w-full min-w-0 rounded-2xl border border-white/10 bg-slate-900/60 px-2 sm:px-3 py-2 text-xs sm:text-sm text-white focus:border-white"
+                            value={teamForm.city}
+                            onChange={(event) => updateTeamFormField("city", event.target.value)}
+                            placeholder="Kinshasa"
+                          />
+                        </label>
+                        <label className="space-y-1 text-xs sm:text-sm text-slate-300 min-w-0">
+                          Gender
+                          <select
+                            className="w-full min-w-0 rounded-2xl border border-white/10 bg-slate-900/60 px-2 sm:px-3 py-2 text-xs sm:text-sm text-white focus:border-white"
+                            value={teamForm.gender}
+                            onChange={(event) => updateTeamFormField("gender", event.target.value)}
+                          >
+                            <option value="men">Men</option>
+                            <option value="women">Women</option>
+                          </select>
+                        </label>
+                        <label className="space-y-1 text-xs sm:text-sm text-slate-300 min-w-0">
+                          Nationality
+                          <input
+                            className="w-full min-w-0 rounded-2xl border border-white/10 bg-slate-900/60 px-2 sm:px-3 py-2 text-xs sm:text-sm text-white focus:border-white"
+                            value={teamForm.nationality}
+                            onChange={(event) => updateTeamFormField("nationality", event.target.value)}
+                            placeholder="DRC"
+                          />
+                        </label>
+                        <label className="space-y-1 text-xs sm:text-sm text-slate-300 min-w-0 sm:col-span-2">
+                          Nationality 2 (optional)
+                          <input
+                            className="w-full min-w-0 rounded-2xl border border-white/10 bg-slate-900/60 px-2 sm:px-3 py-2 text-xs sm:text-sm text-white focus:border-white"
+                            value={teamForm.nationality2}
+                            onChange={(event) => updateTeamFormField("nationality2", event.target.value)}
+                            placeholder="Optional second nationality"
+                          />
+                        </label>
+                      </div>
+                      <label className="space-y-1 text-xs sm:text-sm text-slate-300 min-w-0">
+                        Team colors
+                        <div className="flex gap-2 min-w-0">
+                          <input
+                            type="color"
+                            value={teamForm.colorsInput.split(',')[0]?.trim() || '#38bdf8'}
+                            onChange={(event) => {
+                              const colors = teamForm.colorsInput.split(',').map(c => c.trim()).filter(Boolean);
+                              colors[0] = event.target.value;
+                              updateTeamFormField('colorsInput', colors.join(', '));
+                            }}
+                            className="h-10 w-12 sm:w-16 cursor-pointer rounded-xl border border-white/10 bg-slate-900/60"
+                          />
+                          <input
+                            type="color"
+                            value={teamForm.colorsInput.split(',')[1]?.trim() || '#a855f7'}
+                            onChange={(event) => {
+                              const colors = teamForm.colorsInput.split(',').map(c => c.trim()).filter(Boolean);
+                              colors[1] = event.target.value;
+                              updateTeamFormField('colorsInput', colors.join(', '));
+                            }}
+                            className="h-10 w-12 sm:w-16 cursor-pointer rounded-xl border border-white/10 bg-slate-900/60"
+                          />
+                          <input
+                            className="flex-1 min-w-0 rounded-2xl border border-white/10 bg-slate-900/60 px-2 sm:px-3 py-2 text-xs sm:text-sm text-white focus:border-white"
+                            value={teamForm.colorsInput}
+                            onChange={(event) => updateTeamFormField('colorsInput', event.target.value)}
+                            placeholder="#38bdf8, #a855f7"
+                          />
+                        </div>
+                      </label>
+                      <div className="grid gap-3 sm:gap-4 grid-cols-1 md:grid-cols-[260px_1fr]">
+                        <label className="space-y-1 text-xs sm:text-sm text-slate-300 min-w-0">
+                          Upload logo (optional)
+                          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 min-w-0">
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleTeamLogoChange}
+                              className="w-full min-w-0 rounded-2xl border border-dashed border-white/20 bg-slate-900/40 px-2 sm:px-3 py-2 text-[10px] sm:text-xs text-slate-300"
+                            />
+                            {teamLogoFile || teamLogoPreview ? (
+                              <button
+                                type="button"
+                                onClick={clearTeamLogoSelection}
+                                className="rounded-full border border-white/20 px-2 sm:px-3 py-1 text-[10px] sm:text-xs uppercase tracking-[0.4em] text-slate-300 whitespace-nowrap"
+                              >
+                                Clear
+                              </button>
+                            ) : null}
+                          </div>
+                          <p className="text-[10px] sm:text-xs text-slate-500">Stored in Firebase Storage under team-logos/</p>
+                        </label>
+                        <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-900/40 p-3 sm:p-4 min-w-0">
+                          {teamLogoPreview ? (
+                            <div className="relative h-12 w-12 sm:h-16 sm:w-16 flex-shrink-0 overflow-hidden rounded-xl border border-white/10 bg-black/40">
+                              <Image src={teamLogoPreview} alt="Team logo preview" fill className="object-contain p-1" unoptimized />
+                            </div>
+                          ) : (
+                            <div className="flex h-12 w-12 sm:h-16 sm:w-16 flex-shrink-0 items-center justify-center rounded-xl border border-dashed border-white/10 text-[10px] uppercase tracking-[0.4em] text-slate-500">
+                              Logo
+                            </div>
+                          )}
+                          <div className="text-xs text-slate-400 min-w-0">
+                            <p className="truncate">{teamLogoFile ? "Using new upload" : teamLogoPreview ? "Using stored logo" : "No logo selected"}</p>
+                            <p className="text-[10px] sm:text-[11px] text-slate-500">Drop PNG/SVG/JPG under 1MB.</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <button
+                          type="submit"
+                          disabled={teamSubmitting}
+                          className="rounded-full border border-white/20 bg-white/10 px-4 sm:px-5 py-2 text-[10px] sm:text-xs font-semibold uppercase tracking-[0.4em] text-white transition hover:bg-white/20 disabled:cursor-not-allowed"
+                        >
+                          {teamSubmitting ? "Saving…" : teamForm.id ? "Update team" : "Add team"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={resetTeamForm}
+                          className="rounded-full border border-white/10 px-3 sm:px-4 py-2 text-[10px] sm:text-xs uppercase tracking-[0.4em] text-slate-300"
+                        >
+                          Clear form
+                        </button>
+                        {teamForm.id ? (
+                          <span className="text-[10px] sm:text-xs text-slate-400">Currently editing {teamForm.name || "this team"}.</span>
+                        ) : null}
+                      </div>
+                    </form>
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-white/10 bg-slate-900/40 p-6 text-center">
+                      <p className="text-sm text-slate-400">Team creation fields stay hidden until you choose to add a franchise.</p>
+                      <button
+                        type="button"
+                        onClick={() => setTeamFormExpanded(true)}
+                        className="mt-4 rounded-full border border-white/20 px-5 py-2 text-xs uppercase tracking-[0.4em] text-white"
+                      >
+                        Add team
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+                    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-sm font-semibold uppercase tracking-[0.3em] text-slate-300">
+                          Team Management {selectedTeamId ? <span className="text-orange-400">· Selected</span> : null}
+                        </h3>
+                        <p className="text-xs text-slate-500">
+                          {teams.length} saved · {selectedTeamId ? "Tap a different team to switch" : "Tap a team to edit roster"}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={handleResetAllStats}
+                          disabled={resetSubmitting}
+                          className="rounded-full border border-rose-400/40 bg-rose-500/10 px-3 py-1 text-[10px] uppercase tracking-[0.4em] text-rose-200 transition hover:border-rose-400/60 hover:bg-rose-500/20 disabled:opacity-50"
+                        >
+                          {resetSubmitting ? "Resetting..." : "⚠️ Reset All Stats"}
+                        </button>
+                        <button
+                          type="button"
+                          className={`rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.4em] transition ${teamGenderFilter === "men" ? "bg-white text-black" : "border border-white/30 text-white hover:border-white/60"}`}
+                          onClick={() => setTeamGenderFilter("men")}
+                        >
+                          Men
+                        </button>
+                        <button
+                          type="button"
+                          className={`rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.4em] transition ${teamGenderFilter === "women" ? "bg-white text-black" : "border border-white/30 text-white hover:border-white/60"}`}
+                          onClick={() => setTeamGenderFilter("women")}
+                        >
+                          Women
+                        </button>
+                      </div>
+                    </div>
+                    {resetStatus && (
+                      <div className={`mb-4 rounded-xl border p-3 ${statusClassMap[resetStatus.type]}`}>
+                        <p className="text-sm">{resetStatus.message}</p>
+                      </div>
+                    )}
+                    
+                    {/* Search Bar */}
+                    <div className="mb-4">
+                      <input
+                        type="text"
+                        placeholder="Search teams..."
+                        value={teamSearchQuery}
+                        onChange={(e) => setTeamSearchQuery(e.target.value)}
+                        className="w-full rounded-xl border border-white/10 bg-slate-900/60 px-4 py-2 text-sm text-white placeholder-slate-500 focus:border-white focus:outline-none"
+                      />
+                    </div>
+
+                    {paginatedTeams.length ? (
+                      <>
+                        <div className="grid gap-3 md:grid-cols-2">
+                          {paginatedTeams.map((team, teamIndex) => {
+                          const isFirestore = teams.some(t => t.id === team.id);
+                          const isActive = isFirestore && selectedTeamId === team.id;
+                          const isTemplate = !isFirestore;
+                          return (
+                            <article
+                              key={`${team.id}-${team.gender}-${teamIndex}`}
+                              onClick={() => isFirestore && handleSelectTeam(team.id)}
+                              className={`rounded-2xl border p-4 transition ${
+                                isActive
+                                  ? "border-orange-400/60 bg-orange-500/10"
+                                  : isTemplate
+                                    ? "border-dashed border-white/15 bg-slate-900/30"
+                                    : "border-white/10 bg-slate-900/50"
+                              } ${isFirestore ? "cursor-pointer hover:border-white/30" : ""}`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="relative h-12 w-12 overflow-hidden rounded-xl border border-white/10 bg-black/30">
+                                  {team.logo ? (
+                                    <Image
+                                      src={team.logo}
+                                      alt={`${team.name} logo`}
+                                      fill
+                                      className="object-contain p-1"
+                                      sizes="48px"
+                                      unoptimized
+                                    />
+                                  ) : (
+                                    <div className="flex h-full w-full items-center justify-center text-[10px] uppercase tracking-[0.4em] text-slate-500">
+                                      Logo
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="flex-1">
+                                  <p className="text-sm font-semibold text-white flex items-center gap-2">
+                                    {team.name}
+                                    {isTemplate ? (
+                                      <span className="rounded-full border border-white/20 px-2 py-[2px] text-[9px] uppercase tracking-[0.4em] text-slate-300">
+                                        Template
+                                      </span>
+                                    ) : null}
+                                  </p>
+                                  <p className="text-[11px] uppercase tracking-[0.4em] text-slate-400">
+                                    {team.city || "—"} · {team.gender === "men" ? "MEN" : "WOMEN"}
+                                  </p>
+                                </div>
+                              </div>
+                              {team.colors.length ? (
+                                <div className="mt-3 flex flex-wrap gap-1">
+                                  {team.colors.map((tone, index) => (
+                                    <span
+                                      key={`${team.id}-${tone}-${index}`}
+                                      className="h-4 w-8 rounded-full border border-white/10"
+                                      style={{ backgroundColor: tone }}
+                                      title={tone}
+                                    />
+                                  ))}
+                                </div>
+                              ) : null}
+                              <div className="mt-4 flex flex-wrap gap-2">
+                                {isTemplate ? (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleUseStaticTeam(team);
+                                    }}
+                                    className="rounded-full border border-white/20 px-3 py-1 text-[10px] uppercase tracking-[0.4em] text-white hover:border-white/40"
+                                  >
+                                    Load & add
+                                  </button>
+                                ) : (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleEditTeam(team);
+                                      }}
+                                      className="rounded-full border border-white/20 px-3 py-1 text-[10px] uppercase tracking-[0.4em] text-white hover:border-white/40"
+                                    >
+                                      Edit
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeleteTeam(team);
+                                      }}
+                                      className="rounded-full border border-rose-500/40 px-3 py-1 text-[10px] uppercase tracking-[0.4em] text-rose-200 hover:border-rose-400"
+                                    >
+                                      Delete
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </article>
+                          );
+                        })}
+                      </div>
+                      
+                      {/* Pagination Controls */}
+                      {totalTeamPages > 1 && (
+                        <div className="mt-6 flex items-center justify-between">
+                          <p className="text-xs text-slate-500">
+                            Page {teamCurrentPage} of {totalTeamPages} ({filteredFranchiseTeams.length} teams)
+                          </p>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setTeamCurrentPage(prev => Math.max(1, prev - 1))}
+                              disabled={teamCurrentPage === 1}
+                              className="rounded-full border border-white/20 px-4 py-2 text-xs uppercase tracking-wider text-white transition hover:border-white/40 disabled:opacity-30 disabled:cursor-not-allowed"
+                            >
+                              ← Prev
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setTeamCurrentPage(prev => Math.min(totalTeamPages, prev + 1))}
+                              disabled={teamCurrentPage === totalTeamPages}
+                              className="rounded-full border border-white/20 px-4 py-2 text-xs uppercase tracking-wider text-white transition hover:border-white/40 disabled:opacity-30 disabled:cursor-not-allowed"
+                            >
+                              Next →
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      </>
+                    ) : (
+                      <p className="text-sm text-slate-500">
+                        {teamSearchQuery ? `No teams found matching "${teamSearchQuery}"` : "No teams found for selected filter."}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Desktop roster editor (hidden on mobile when team selected) */}
+                <div className={`space-y-4 rounded-2xl border border-white/10 bg-black/30 p-5 ${selectedTeamId ? 'hidden lg:block' : ''}`}>
+                  <div className="flex items-baseline justify-between gap-3">
+                    <div>
+                      <h3 className="text-lg font-semibold text-white">Roster editor</h3>
+                      <p className="text-xs uppercase tracking-[0.4em] text-slate-500">
+                        {selectedTeamId ? teams.find((team) => team.id === selectedTeamId)?.name ?? "Selected team" : "Select a team"}
+                      </p>
+                    </div>
+                    {selectedTeamId ? (
+                      <button
+                        type="button"
+                        onClick={resetRosterForm}
+                        className="rounded-full border border-white/20 px-3 py-1 text-xs uppercase tracking-[0.4em] text-slate-300"
+                      >
+                        Reset
+                      </button>
+                    ) : null}
+                  </div>
+                  {selectedTeamId ? (
+                    <>
+                      {!rosterFormVisible ? (
+                        <button
+                          type="button"
+                          onClick={() => setRosterFormVisible(true)}
+                          className="w-full rounded-full border border-white/20 bg-white/10 px-5 py-2 text-xs font-semibold uppercase tracking-[0.4em] text-white transition hover:bg-white/20"
+                        >
+                          Add player
+                        </button>
+                      ) : null}
+                      {rosterFormVisible ? (
+                        <form onSubmit={handleSubmitRosterPlayer} className="space-y-3 sm:space-y-4 overflow-hidden">
+                        <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2">
+                          <label className="space-y-1 text-xs sm:text-sm text-slate-300 min-w-0">
+                            First name
+                            <input
+                              className="w-full min-w-0 rounded-xl sm:rounded-2xl border border-white/10 bg-slate-900/60 px-2 py-2 text-xs sm:text-sm text-white focus:border-white"
+                              value={rosterForm.firstName}
+                              onChange={(event) => setRosterForm((prev) => ({ ...prev, firstName: event.target.value }))}
+                              required
+                            />
+                          </label>
+                          <label className="space-y-1 text-xs sm:text-sm text-slate-300 min-w-0">
+                            Last name
+                            <input
+                              className="w-full min-w-0 rounded-xl sm:rounded-2xl border border-white/10 bg-slate-900/60 px-2 py-2 text-xs sm:text-sm text-white focus:border-white"
+                              value={rosterForm.lastName}
+                              onChange={(event) => setRosterForm((prev) => ({ ...prev, lastName: event.target.value }))}
+                              required
+                            />
+                          </label>
+                          <label className="space-y-1 text-xs sm:text-sm text-slate-300 min-w-0">
+                            Jersey #
+                            <input
+                              className="w-full min-w-0 rounded-xl sm:rounded-2xl border border-white/10 bg-slate-900/60 px-2 py-2 text-xs sm:text-sm text-white focus:border-white"
+                              value={rosterForm.number}
+                              onChange={(event) => setRosterForm((prev) => ({ ...prev, number: event.target.value }))}
+                              inputMode="numeric"
+                              required
+                            />
+                          </label>
+                          <label className="space-y-1 text-xs sm:text-sm text-slate-300 min-w-0">
+                            Player License
+                            <input
+                              className="w-full min-w-0 rounded-xl sm:rounded-2xl border border-white/10 bg-slate-900/60 px-2 py-2 text-xs sm:text-sm text-white focus:border-white disabled:bg-slate-900/30 disabled:cursor-not-allowed"
+                              value={rosterForm.playerLicense}
+                              onChange={(event) => setRosterForm((prev) => ({ ...prev, playerLicense: event.target.value }))}
+                              disabled={!!rosterForm.id}
+                              required={!rosterForm.id}
+                              placeholder="Unique ID (cannot be changed)"
+                            />
+                          </label>
+                          <label className="space-y-1 text-xs sm:text-sm text-slate-300 min-w-0">
+                            Height
+                            <input
+                              className="w-full min-w-0 rounded-xl sm:rounded-2xl border border-white/10 bg-slate-900/60 px-2 py-2 text-xs sm:text-sm text-white focus:border-white"
+                              value={rosterForm.height}
+                              onChange={(event) => setRosterForm((prev) => ({ ...prev, height: event.target.value }))}
+                            />
+                          </label>
+                          <label className="space-y-1 text-xs sm:text-sm text-slate-300 min-w-0">
+                            Date of birth
+                            <input
+                              type="date"
+                              className="w-full min-w-0 rounded-xl sm:rounded-2xl border border-white/10 bg-slate-900/60 px-2 py-2 text-xs sm:text-sm text-white focus:border-white"
+                              value={rosterForm.dateOfBirth}
+                              onChange={(event) => setRosterForm((prev) => ({ ...prev, dateOfBirth: event.target.value }))}
+                            />
+                          </label>
+                          <label className="space-y-1 text-xs sm:text-sm text-slate-300 min-w-0">
+                            Position
+                            <select
+                              className="w-full min-w-0 rounded-xl sm:rounded-2xl border border-white/10 bg-slate-900/60 px-2 py-2 text-xs sm:text-sm text-white focus:border-white"
+                              value={rosterForm.position}
+                              onChange={(event) => setRosterForm((prev) => ({ ...prev, position: event.target.value }))}
+                              required
+                            >
+                              <option value="">Select position</option>
+                              <option value="Point Guard">Point Guard</option>
+                              <option value="Shooting Guard">Shooting Guard</option>
+                              <option value="Small Forward">Small Forward</option>
+                              <option value="Power Forward">Power Forward</option>
+                              <option value="Center">Center</option>
+                            </select>
+                          </label>
+                          <label className="space-y-1 text-xs sm:text-sm text-slate-300 min-w-0">
+                            Nationality
+                            <div>
+                              <input
+                                list="country-options"
+                                placeholder="Search country..."
+                                value={rosterForm.nationality}
+                                onChange={(event) => setRosterForm((prev) => ({ ...prev, nationality: event.target.value }))}
+                                className="w-full min-w-0 rounded-xl sm:rounded-2xl border border-white/10 bg-slate-900/60 px-2 py-2 text-xs sm:text-sm text-white focus:border-white"
+                              />
+                              <datalist id="country-options">
+                                {countries.map((c) => (
+                                  <option key={c.code} value={c.name}>{flagFromCode(c.code)} {c.name}</option>
+                                ))}
+                              </datalist>
+                            </div>
+                          </label>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs sm:text-sm text-slate-300">
+                          <input
+                            id="double-nationality-desktop"
+                            type="checkbox"
+                            checked={!!rosterForm.nationality2Enabled}
+                            onChange={(e) => setRosterForm((prev) => ({ ...prev, nationality2Enabled: e.target.checked }))}
+                            className="h-4 w-4"
+                          />
+                          <label htmlFor="double-nationality-desktop" className="select-none">Add second nationality</label>
+                        </div>
+                        {rosterForm.nationality2Enabled ? (
+                          <label className="space-y-1 text-xs sm:text-sm text-slate-300">
+                            Second nationality
+                            <div>
+                              <input
+                                list="country-options"
+                                placeholder="Search second country..."
+                                value={rosterForm.nationality2}
+                                onChange={(event) => setRosterForm((prev) => ({ ...prev, nationality2: event.target.value }))}
+                                className="w-full rounded-xl sm:rounded-2xl border border-white/10 bg-slate-900/60 px-2 py-2 text-xs sm:text-sm text-white focus:border-white"
+                              />
+                            </div>
+                          </label>
+                        ) : null}
+                        <div className="space-y-3">
+                          <label className="space-y-1 text-xs sm:text-sm text-slate-300">
+                            Upload headshot
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={handlePlayerHeadshotChange}
+                                className="w-full rounded-xl sm:rounded-2xl border border-dashed border-white/20 bg-slate-900/40 px-3 py-2 text-xs text-slate-300"
+                              />
+                              {playerHeadshotFile || playerHeadshotPreview ? (
+                                <button
+                                  type="button"
+                                  onClick={clearPlayerHeadshotSelection}
+                                  className="rounded-full border border-white/20 px-3 py-1 text-[10px] sm:text-xs uppercase tracking-wider text-slate-300 flex-shrink-0"
+                                >
+                                  Clear
+                                </button>
+                              ) : null}
+                            </div>
+                            <p className="text-[10px] sm:text-xs text-slate-500">Stored in Firebase Storage under player-headshots/</p>
+                          </label>
+                          {playerHeadshotPreview && (
+                            <div className="flex items-center gap-3 rounded-xl sm:rounded-2xl border border-white/10 bg-slate-900/40 p-3">
+                              <div className="relative h-12 w-12 sm:h-16 sm:w-16 overflow-hidden rounded-full border border-white/10 bg-black/40 flex-shrink-0">
+                                <Image src={playerHeadshotPreview} alt="Player headshot preview" fill className="object-cover" unoptimized />
+                              </div>
+                              <div className="text-xs text-slate-400 min-w-0">
+                                <p className="font-medium text-white truncate">{rosterForm.firstName || rosterForm.lastName ? `${rosterForm.firstName} ${rosterForm.lastName}`.trim() : "Player name"}</p>
+                                <p className="text-[10px] sm:text-xs">Preview of headshot image</p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+                          <button
+                            type="submit"
+                            disabled={rosterSubmitting}
+                            className="w-full sm:w-auto rounded-full border border-white/20 bg-white/10 px-4 py-2 text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-white transition hover:bg-white/20 disabled:cursor-not-allowed"
+                          >
+                            {rosterSubmitting ? "Saving…" : rosterForm.id ? "Update player" : "Add player"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setRosterFormVisible(false);
+                              resetRosterForm();
+                            }}
+                            className="w-full sm:w-auto rounded-full border border-white/10 px-4 py-2 text-[10px] sm:text-xs uppercase tracking-wider text-slate-300"
+                          >
+                            Cancel
+                          </button>
+                          {rosterForm.id ? (
+                            <span className="text-[10px] sm:text-xs text-slate-400">Editing {rosterForm.firstName || rosterForm.lastName ? `${rosterForm.firstName} ${rosterForm.lastName}`.trim() : "this player"}.</span>
+                          ) : null}
+                        </div>
+                      </form>
+                      ) : null}
+
+                      <div className="space-y-3">
+                        {roster.length ? (
+                          roster.map((player) => (
+                            <div key={player.id} className="rounded-2xl border border-white/10 bg-slate-900/60 p-4">
+                              <div className="flex flex-wrap items-center justify-between gap-3">
+                                <div>
+                                  <p className="text-sm font-semibold text-white">{player.firstName} {player.lastName}</p>
+                                  <p className="text-xs uppercase tracking-[0.3em] text-slate-500">
+                                    #{player.number ?? "—"} · {player.position || "Position TBC"} · {player.height || "Height TBC"}
+                                    {player.nationality && (
+                                      ` · ${player.nationality}${player.nationality2 ? ` / ${player.nationality2}` : ""}`
+                                    )}
+                                  </p>
+                                  {player.playerLicense && (
+                                    <p className="text-[10px] text-slate-500">License: {player.playerLicense}</p>
+                                  )}
+                                </div>
+                                <div className="flex gap-2 text-xs text-slate-300">
+                                  <span>PTS {player.stats.pts || "—"}</span>
+                                  <span>REB {player.stats.reb || "—"}</span>
+                                  <span>STL {player.stats.stl || "—"}</span>
+                                </div>
+                              </div>
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleEditRosterPlayer(player)}
+                                  className="rounded-full border border-white/20 px-3 py-1 text-xs uppercase tracking-[0.3em] text-white hover:border-white/40"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleInitiateTransfer(player)}
+                                  className="rounded-full border border-sky-500/40 px-3 py-1 text-xs uppercase tracking-[0.3em] text-sky-200 hover:border-sky-400"
+                                >
+                                  Transfer
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteRosterPlayer(player)}
+                                  className="rounded-full border border-rose-500/40 px-3 py-1 text-xs uppercase tracking-[0.3em] text-rose-200 hover:border-rose-400"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="rounded-2xl border border-dashed border-white/20 bg-slate-900/40 p-4 text-sm text-slate-400">
+                            No players saved for this roster yet. Use the form above to add the first one.
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Coach/Staff Section */}
+                      <div className="mt-8 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-sm font-semibold uppercase tracking-[0.3em] text-slate-300">
+                            Coaching Staff
+                          </h4>
+                          {!coachStaffFormVisible && (
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => openCoachStaffForm("head_coach")}
+                                disabled={coachStaffList.filter(c => c.role === "head_coach").length >= 1}
+                                className="rounded-full border border-white/20 bg-white/5 px-3 py-1 text-[10px] uppercase tracking-[0.4em] text-white transition hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed"
+                              >
+                                + Head Coach
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openCoachStaffForm("assistant_coach")}
+                                disabled={coachStaffList.filter(c => c.role === "assistant_coach").length >= 2}
+                                className="rounded-full border border-white/20 bg-white/5 px-3 py-1 text-[10px] uppercase tracking-[0.4em] text-white transition hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed"
+                              >
+                                + Assistant
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openCoachStaffForm("staff")}
+                                className="rounded-full border border-white/20 bg-white/5 px-3 py-1 text-[10px] uppercase tracking-[0.4em] text-white transition hover:bg-white/10"
+                              >
+                                + Staff
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {coachStaffFormVisible && coachStaffForm && (
+                          <form onSubmit={handleSubmitCoachStaff} className="space-y-3 rounded-2xl border border-white/10 bg-slate-900/60 p-4">
+                            <div className="flex items-center justify-between">
+                              <h5 className="text-xs uppercase tracking-wider text-slate-400">
+                                {coachStaffForm.id ? "Edit" : "Add"} {coachStaffForm.role === "head_coach" ? "Head Coach" : coachStaffForm.role === "assistant_coach" ? "Assistant Coach" : "Staff Member"}
+                              </h5>
+                              <button
+                                type="button"
+                                onClick={resetCoachStaffForm}
+                                className="text-xs text-slate-400 hover:text-white"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                            
+                            <div className="grid gap-3 sm:grid-cols-2">
+                              <label className="space-y-1 text-xs text-slate-300">
+                                First name
+                                <input
+                                  className="w-full rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
+                                  value={coachStaffForm.firstName}
+                                  onChange={(e) => setCoachStaffForm({ ...coachStaffForm, firstName: e.target.value })}
+                                  required
+                                />
+                              </label>
+                              <label className="space-y-1 text-xs text-slate-300">
+                                Last name
+                                <input
+                                  className="w-full rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
+                                  value={coachStaffForm.lastName}
+                                  onChange={(e) => setCoachStaffForm({ ...coachStaffForm, lastName: e.target.value })}
+                                  required
+                                />
+                              </label>
+                            </div>
+
+                            <div>
+                              <label className="block text-xs text-slate-300 mb-1">Headshot (optional)</label>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={handleCoachHeadshotChange}
+                                className="w-full text-xs text-slate-300"
+                              />
+                              {coachHeadshotPreview && (
+                                <div className="mt-2 relative h-24 w-24 rounded-lg overflow-hidden border border-white/10">
+                                  <Image src={coachHeadshotPreview} alt="Preview" fill className="object-cover" unoptimized />
+                                </div>
+                              )}
+                            </div>
+
+                            <button
+                              type="submit"
+                              disabled={coachStaffSubmitting}
+                              className="w-full rounded-full bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.4em] text-black transition hover:bg-slate-200 disabled:opacity-50"
+                            >
+                              {coachStaffSubmitting ? "Saving..." : coachStaffForm.id ? "Update" : "Add"}
+                            </button>
+                          </form>
+                        )}
+
+                        <div className="space-y-2">
+                          {coachStaffList.length > 0 ? (
+                            coachStaffList.map((member) => (
+                              <div key={member.id} className="rounded-xl border border-white/10 bg-slate-900/40 p-3">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-3">
+                                    {member.headshot ? (
+                                      <div className="relative h-10 w-10 rounded-full overflow-hidden border border-white/10">
+                                        <Image src={member.headshot} alt={member.firstName} fill className="object-cover" unoptimized />
+                                      </div>
+                                    ) : (
+                                      <div className="h-10 w-10 rounded-full border border-white/10 bg-slate-800 flex items-center justify-center text-xs text-slate-400">
+                                        {member.firstName[0]}{member.lastName[0]}
+                                      </div>
+                                    )}
+                                    <div>
+                                      <p className="text-sm font-semibold text-white">{member.firstName} {member.lastName}</p>
+                                      <p className="text-[10px] uppercase tracking-wider text-slate-400">
+                                        {member.role === "head_coach" ? "Head Coach" : member.role === "assistant_coach" ? "Assistant Coach" : "Staff"}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleEditCoachStaff(member)}
+                                      className="rounded-full border border-white/20 px-2 py-1 text-[10px] uppercase tracking-wider text-white hover:border-white/40"
+                                    >
+                                      Edit
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteCoachStaff(member)}
+                                      className="rounded-full border border-rose-500/40 px-2 py-1 text-[10px] uppercase tracking-wider text-rose-200 hover:border-rose-400"
+                                    >
+                                      Delete
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            ))
+                          ) : (
+                            <p className="rounded-xl border border-dashed border-white/20 bg-slate-900/30 p-3 text-xs text-slate-400 text-center">
+                              No coaching staff added yet.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="rounded-2xl border border-dashed border-white/20 bg-slate-900/40 p-4 text-sm text-slate-400">
+                      Select a franchise in the table to manage its roster.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </section>
+
+              {/* Transfer Modal */}
+              {transferModalVisible && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={handleCancelTransfer}>
+                  <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-900 p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+                    <h3 className="text-lg font-semibold text-white mb-4">Transfer Player</h3>
+                    <p className="text-sm text-slate-300 mb-4">
+                      You are about to transfer <span className="font-semibold text-white">{transferPlayerName}</span> from <span className="font-semibold text-white">{transferSourceTeamName}</span> to another team.
+                    </p>
+                    <label className="block text-xs text-slate-400 mb-2">Select destination team:</label>
+                    <select
+                      value={transferTargetTeamId}
+                      onChange={(e) => setTransferTargetTeamId(e.target.value)}
+                      className="w-full rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-sm text-white mb-6 focus:border-white"
+                    >
+                      <option value="">-- Select team --</option>
+                      {teams
+                        .filter((t) => t.id !== transferSourceTeamId)
+                        .map((team) => (
+                          <option key={team.id} value={team.id}>
+                            {team.name} ({team.gender === "men" ? "Men" : "Women"})
+                          </option>
+                        ))}
+                    </select>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={handleConfirmTransfer}
+                        disabled={!transferTargetTeamId || transferSubmitting}
+                        className="flex-1 rounded-lg border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold uppercase tracking-wider text-white hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {transferSubmitting ? "Transferring..." : "Confirm transfer"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCancelTransfer}
+                        disabled={transferSubmitting}
+                        className="rounded-lg border border-white/10 px-4 py-2 text-sm uppercase tracking-wider text-slate-300 hover:bg-white/5 disabled:cursor-not-allowed"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              </div>
+            )}
+              </>
+              )}
+
+            {/* Traffic Tab Content */}
+            {activeTab === 'traffic' && (
+            <>
+            <button
+              type="button"
+              onClick={() => setTrafficModuleOpen(!trafficModuleOpen)}
+              className="group relative w-full overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-red-600/20 to-amber-600/20 p-8 text-left shadow-xl transition hover:border-white/30 hover:shadow-2xl"
+            >
+              <div className="relative z-10 flex items-center justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Module</p>
+                  <h2 className="mt-2 text-3xl font-bold text-white">Traffic — Do Not Acces</h2>
+                  <p className="mt-3 text-sm text-slate-300">
+                    Monitor every roster change triggered inside Team Assistant. Player adds and deletions are logged with timestamps.
+                  </p>
+                </div>
+                <span className="text-2xl text-white">{trafficModuleOpen ? '−' : '+'}</span>
+              </div>
+              <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 to-amber-500/5 opacity-0 transition group-hover:opacity-100"></div>
+            </button>
+
+            {trafficModuleOpen && (
+              <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl">
+                <div className="mb-6 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Traffic monitor</p>
+                    <h2 className="text-2xl font-semibold">Team Assistant change log</h2>
+                    <p className="mt-2 text-sm text-slate-400">
+                      Captures the last 100 roster additions or deletions across every franchise.
+                    </p>
+                  </div>
+                  <span className="text-xs uppercase tracking-[0.4em] text-slate-500">
+                    {trafficEvents.length} events
+                  </span>
+                </div>
+                {trafficEvents.length === 0 ? (
+                  <p className="text-sm text-slate-500">No roster activity has been recorded yet.</p>
+                ) : (
+                  <ul className="space-y-3">
+                    {trafficEvents.map((event) => (
+                      <li
+                        key={event.id}
+                        className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-black/30 p-4 sm:flex-row sm:items-center sm:justify-between"
+                      >
+                        <div>
+                          <p
+                            className={`text-[10px] uppercase tracking-[0.4em] ${
+                              event.action === "player_deleted" 
+                                ? "text-rose-300" 
+                                : event.action === "player_transferred"
+                                ? "text-sky-300"
+                                : "text-emerald-300"
+                            }`}
+                          >
+                            {event.action === "player_deleted" 
+                              ? "Player deleted" 
+                              : event.action === "player_transferred"
+                              ? "Player transferred"
+                              : "Player added"}
+                          </p>
+                          <h3 className="text-lg font-semibold text-white">{event.playerName}</h3>
+                          <p className="text-xs text-slate-400">
+                            {event.teamName} · {event.teamGender === "women" ? "Women" : "Men"} · #{event.jerseyNumber ?? "—"}
+                            {event.action === "player_transferred" && event.targetTeamName && (
+                              <span className="ml-1">→ {event.targetTeamName}</span>
+                            )}
+                          </p>
+                        </div>
+                        <div className="text-xs text-slate-400 sm:text-right">
+                          <p>{event.createdAt ? formatAdminPublishedLabel(event.createdAt) : "Pending timestamp"}</p>
+                          {event.performedBy ? (
+                            <p className="mt-1 text-[11px] text-slate-500">By {event.performedBy}</p>
+                          ) : null}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            )}
+            </>
+            )}
+            
+            {/* Games Tab Content */}
+            {activeTab === 'games' && (
+            <>
+            {/* GAME PLANNER MODULE */}
+            <button
+              type="button"
+              onClick={() => setGamePlannerOpen(!gamePlannerOpen)}
+              className="group relative w-full overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-purple-600/20 to-pink-600/20 p-8 text-left shadow-xl transition hover:border-white/30 hover:shadow-2xl"
+            >
+              <div className="relative z-10 flex items-center justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Module</p>
+                  <h2 className="mt-2 text-3xl font-bold text-white">Game Planner</h2>
+                  <p className="mt-3 text-sm text-slate-300">
+                    Schedule games with full details. The 3 earliest upcoming games automatically get spotlight status until they start.
+                  </p>
+                </div>
+                <span className="text-2xl text-white">{gamePlannerOpen ? '−' : '+'}</span>
+              </div>
+              <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-pink-500/5 opacity-0 transition group-hover:opacity-100"></div>
+            </button>
+
+            {gamePlannerOpen && (
+              <div className="space-y-6">
+                {gameStatus ? (
+                  <div className={`rounded-2xl border ${statusClassMap[gameStatus.type]} p-4 text-sm`}>
+                    {gameStatus.message}
+                  </div>
+                ) : null}
+
+                <section className="rounded-3xl border border-white/10 bg-slate-900/60 p-6">
+                  <div className="space-y-1 mb-6">
+                    <p className="text-xs uppercase tracking-[0.4em] text-slate-500">Game Scheduler</p>
+                    <h3 className="text-lg font-semibold">Schedule a Game</h3>
+                  </div>
+
+                  {!gameFormVisible ? (
+                    <button
+                      onClick={() => setGameFormVisible(true)}
+                      className="w-full rounded-full border border-white/20 bg-white/10 px-5 py-2 text-xs font-semibold uppercase tracking-[0.4em] text-white transition hover:bg-white/20"
+                    >
+                      + Schedule Game
+                    </button>
+                  ) : (
+                    <form onSubmit={handleSubmitGame} className="space-y-6">
+                      {/* Gender Selection */}
+                      <div className="space-y-2">
+                        <label className="block text-sm font-medium text-slate-300">League</label>
+                        <div className="flex gap-3">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setGameForm((prev) => ({ ...prev, gender: "men", homeTeamId: "", awayTeamId: "" }));
+                              setGameTeamSearch("");
+                            }}
+                            className={`flex-1 rounded-xl border px-4 py-3 text-sm font-medium transition ${
+                              gameForm.gender === "men"
+                                ? "border-blue-500 bg-blue-500/20 text-blue-100"
+                                : "border-white/10 bg-slate-900/60 text-slate-300 hover:border-white/20"
+                            }`}
+                            >
+                            Men&apos;s League
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setGameForm((prev) => ({ ...prev, gender: "women", homeTeamId: "", awayTeamId: "" }));
+                              setGameTeamSearch("");
+                            }}
+                            className={`flex-1 rounded-xl border px-4 py-3 text-sm font-medium transition ${
+                              gameForm.gender === "women"
+                                ? "border-pink-500 bg-pink-500/20 text-pink-100"
+                                : "border-white/10 bg-slate-900/60 text-slate-300 hover:border-white/20"
+                            }`}
+                          >
+                            Women&apos;s League
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Team Search */}
+                      <div className="space-y-2">
+                        <label className="block text-sm font-medium text-slate-300">Search Teams</label>
+                        <input
+                          type="text"
+                          value={gameTeamSearch}
+                          onChange={(e) => setGameTeamSearch(e.target.value)}
+                          placeholder="Search by team name or city..."
+                          className="w-full rounded-xl border border-white/10 bg-slate-900/60 px-4 py-2 text-white placeholder-slate-500 focus:border-white/30"
+                        />
+                      </div>
+
+                      {/* Team Selection Grid */}
+                      <div className="grid gap-6 md:grid-cols-2">
+                        {/* Home Team */}
+                        <div className="space-y-2">
+                          <label className="block text-sm font-medium text-slate-300">Home Team</label>
+                          <div className="max-h-64 space-y-2 overflow-y-auto rounded-xl border border-white/10 bg-slate-950/60 p-3">
+                            {filteredGameTeams.length > 0 ? (
+                              filteredGameTeams.map((team) => (
+                                <button
+                                  key={team.id}
+                                  type="button"
+                                  onClick={() => setGameForm((prev) => ({ ...prev, homeTeamId: team.id }))}
+                                  className={`flex w-full items-center gap-3 rounded-lg border p-2 text-left transition ${
+                                    gameForm.homeTeamId === team.id
+                                      ? "border-emerald-500 bg-emerald-500/20"
+                                      : "border-white/5 bg-slate-900/40 hover:border-white/20"
+                                  }`}
+                                >
+                                  {team.logo ? (
+                                    <Image src={team.logo} alt={team.name} width={32} height={32} className="h-8 w-8 rounded-full object-cover" unoptimized />
+                                  ) : (
+                                    <div className="h-8 w-8 rounded-full border border-dashed border-white/20 bg-slate-800"></div>
+                                  )}
+                                  <div className="flex-1">
+                                    <p className="text-sm font-semibold text-white">{team.name}</p>
+                                    <p className="text-xs text-slate-400">{team.city}</p>
+                                  </div>
+                                </button>
+                              ))
+                            ) : (
+                              <p className="text-center text-sm text-slate-500">No teams found</p>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Away Team */}
+                        <div className="space-y-2">
+                          <label className="block text-sm font-medium text-slate-300">Away Team</label>
+                          <div className="max-h-64 space-y-2 overflow-y-auto rounded-xl border border-white/10 bg-slate-950/60 p-3">
+                            {filteredGameTeams.length > 0 ? (
+                              filteredGameTeams.map((team) => (
+                                <button
+                                  key={team.id}
+                                  type="button"
+                                  onClick={() => setGameForm((prev) => ({ ...prev, awayTeamId: team.id }))}
+                                  className={`flex w-full items-center gap-3 rounded-lg border p-2 text-left transition ${
+                                    gameForm.awayTeamId === team.id
+                                      ? "border-blue-500 bg-blue-500/20"
+                                      : "border-white/5 bg-slate-900/40 hover:border-white/20"
+                                  }`}
+                                >
+                                  {team.logo ? (
+                                    <Image src={team.logo} alt={team.name} width={32} height={32} className="h-8 w-8 rounded-full object-cover" unoptimized />
+                                  ) : (
+                                    <div className="h-8 w-8 rounded-full border border-dashed border-white/20 bg-slate-800"></div>
+                                  )}
+                                  <div className="flex-1">
+                                    <p className="text-sm font-semibold text-white">{team.name}</p>
+                                    <p className="text-xs text-slate-400">{team.city}</p>
+                                  </div>
+                                </button>
+                              ))
+                            ) : (
+                              <p className="text-center text-sm text-slate-500">No teams found</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Game Details */}
+                      <div className="grid gap-4 sm:grid-cols-3">
+                        <label className="space-y-1 text-sm text-slate-300">
+                          Date
+                          <input
+                            type="date"
+                            value={gameForm.date}
+                            onChange={(e) => setGameForm((prev) => ({ ...prev, date: e.target.value }))}
+                            className="w-full max-w-full rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
+                            required
+                          />
+                        </label>
+                        <label className="space-y-1 text-sm text-slate-300">
+                          Time
+                          <input
+                            type="time"
+                            value={gameForm.time}
+                            onChange={(e) => setGameForm((prev) => ({ ...prev, time: e.target.value }))}
+                            className="w-full max-w-full rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
+                            required
+                          />
+                        </label>
+                        <label className="space-y-1 text-sm text-slate-300">
+                          Venue
+                          <input
+                            type="text"
+                            value={gameForm.venue}
+                            onChange={(e) => setGameForm((prev) => ({ ...prev, venue: e.target.value }))}
+                            placeholder="Arena name"
+                            className="w-full max-w-full rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-white"
+                            required
+                          />
+                        </label>
+                      </div>
+
+                      {/* Referee Assignment */}
+                      <div className="space-y-3 rounded-xl border border-white/10 bg-slate-950/40 p-4">
+                        <h4 className="text-sm font-semibold text-white">Referee Assignment</h4>
+                        <div className="grid gap-4 sm:grid-cols-3">
+                          <label className="space-y-1 text-xs text-slate-300">
+                            Home Team Referee #1
+                            <select
+                              value={gameForm.refereeHomeTeam1}
+                              onChange={(e) => setGameForm((prev) => ({ ...prev, refereeHomeTeam1: e.target.value }))}
+                              className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
+                            >
+                              <option value="">-- Select Referee --</option>
+                              {referees.map((ref) => (
+                                <option key={ref.id} value={ref.id}>
+                                  {ref.firstName} {ref.lastName}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="space-y-1 text-xs text-slate-300">
+                            Home Team Referee #2
+                            <select
+                              value={gameForm.refereeHomeTeam2}
+                              onChange={(e) => setGameForm((prev) => ({ ...prev, refereeHomeTeam2: e.target.value }))}
+                              className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
+                            >
+                              <option value="">-- Select Referee --</option>
+                              {referees.map((ref) => (
+                                <option key={ref.id} value={ref.id}>
+                                  {ref.firstName} {ref.lastName}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="space-y-1 text-xs text-slate-300">
+                            Away Team Referee
+                            <select
+                              value={gameForm.refereeAwayTeam}
+                              onChange={(e) => setGameForm((prev) => ({ ...prev, refereeAwayTeam: e.target.value }))}
+                              className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
+                            >
+                              <option value="">-- Select Referee --</option>
+                              {referees.map((ref) => (
+                                <option key={ref.id} value={ref.id}>
+                                  {ref.firstName} {ref.lastName}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        </div>
+                      </div>
+
+                      {/* Submit Buttons */}
+                      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+                        <button
+                          type="submit"
+                          disabled={gameSubmitting}
+                          className="w-full rounded-full border border-white/20 bg-white/10 px-5 py-3 text-sm font-semibold uppercase tracking-[0.4em] text-white transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:py-2 sm:text-xs"
+                        >
+                          {gameSubmitting ? "Saving…" : gameForm.id ? "Update Game" : "Post Game"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={resetGameForm}
+                          className="w-full rounded-full border border-white/10 px-4 py-3 text-sm uppercase tracking-[0.4em] text-slate-300 transition hover:border-white/20 sm:w-auto sm:py-2 sm:text-xs"
+                        >
+                          Cancel
+                        </button>
+                        {gameForm.id ? <span className="text-xs text-slate-400">Editing game.</span> : null}
+                      </div>
+                    </form>
+                  )}
+                </section>
+
+                {/* Scheduled Games List */}
+                <section className="rounded-3xl border border-white/10 bg-slate-900/60 p-6">
+                  <div className="space-y-1 mb-6">
+                    <p className="text-xs uppercase tracking-[0.4em] text-slate-500">Scheduled Games</p>
+                    <h3 className="text-lg font-semibold">Upcoming & Past Games</h3>
+                  </div>
+
+                  <div className="space-y-3">
+                    {gamesWithSpotlight.length > 0 ? (
+                      gamesWithSpotlight.map((game) => {
+                        const isCompleted = !!(game as any).winnerScore && !!(game as any).loserScore;
+                        const isLocked = !isCompleted && isGameLocked(game.date, game.time);
+                        return (
+                        <div
+                          key={game.id}
+                          className={`rounded-xl border transition-all ${
+                            isCompleted 
+                              ? "border-slate-700/40 bg-slate-900/30 opacity-60 p-2.5 sm:py-2 sm:px-3" 
+                              : isLocked
+                              ? "border-slate-700/40 bg-slate-900/40 opacity-70 p-2.5 sm:py-3 sm:px-4"
+                              : game.spotlight 
+                                ? "border-orange-500/40 bg-orange-500/10 p-2.5 sm:p-4" 
+                                : "border-white/10 bg-slate-950/60 p-2.5 sm:p-4"
+                          }`}
+                        >
+                          {/* Mobile-first layout */}
+                          <div className="space-y-2">
+                            {/* Badges Row */}
+                            {(game.spotlight || isCompleted) && (
+                              <div className="flex gap-1.5">
+                                {game.spotlight && !isCompleted && (
+                                  <span className="inline-block rounded-full bg-orange-500/20 px-1.5 py-0.5 text-[8px] sm:text-[9px] font-semibold uppercase tracking-wider text-orange-300">
+                                    Spotlight
+                                  </span>
+                                )}
+                                {isCompleted && (
+                                  <span className="inline-block rounded-full bg-slate-700/40 px-1.5 py-0.5 text-[8px] sm:text-[9px] font-semibold uppercase tracking-wider text-slate-400">
+                                    Completed
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                            
+                            {/* Teams Row */}
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                {game.awayTeamLogo && (
+                                  <Image 
+                                    src={game.awayTeamLogo} 
+                                    alt={game.awayTeamName} 
+                                    width={24} 
+                                    height={24} 
+                                    className="h-5 w-5 sm:h-6 sm:w-6 rounded-full flex-shrink-0" 
+                                    unoptimized 
+                                  />
+                                )}
+                                <span className={`text-[11px] sm:text-xs font-semibold ${isCompleted || isLocked ? 'text-slate-400' : 'text-white'} truncate`}>
+                                  {game.awayTeamName}
+                                </span>
+                                {(isCompleted || (isLocked && (game as any).winnerScore)) && (
+                                  <span className="text-[11px] sm:text-xs font-bold text-slate-300 flex-shrink-0">{(game as any).loserTeamId === game.awayTeamId ? (game as any).loserScore : (game as any).winnerScore}</span>
+                                )}
+                              </div>
+                              
+                              <span className="text-[10px] text-slate-500 flex-shrink-0">@</span>
+                              
+                              <div className="flex items-center gap-1.5 min-w-0 flex-1 justify-end">
+                                {(isCompleted || (isLocked && (game as any).winnerScore)) && (
+                                  <span className="text-[11px] sm:text-xs font-bold text-slate-300 flex-shrink-0">{(game as any).loserTeamId === game.homeTeamId ? (game as any).loserScore : (game as any).winnerScore}</span>
+                                )}
+                                <span className={`text-[11px] sm:text-xs font-semibold ${isCompleted || isLocked ? 'text-slate-400' : 'text-white'} truncate text-right`}>
+                                  {game.homeTeamName}
+                                </span>
+                                {game.homeTeamLogo && (
+                                  <Image 
+                                    src={game.homeTeamLogo} 
+                                    alt={game.homeTeamName} 
+                                    width={24} 
+                                    height={24} 
+                                    className="h-5 w-5 sm:h-6 sm:w-6 rounded-full flex-shrink-0" 
+                                    unoptimized 
+                                  />
+                                )}
+                              </div>
+                            </div>
+                            
+                            {/* Details Row */}
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className={`flex flex-wrap gap-1.5 ${isCompleted || isLocked ? 'text-[8px] sm:text-[9px]' : 'text-[9px] sm:text-[10px]'} text-slate-500`}>
+                                  <span>📅 {game.date}</span>
+                                  <span>🕐 {game.time}</span>
+                                  <span>📍 {game.venue}</span>
+                                  <span className="uppercase text-slate-600">{game.gender + "'s"}</span>
+                                </div>
+                                
+                                {/* Action Buttons - Compact */}
+                              <div className="flex gap-1 flex-shrink-0">
+                                {isCompleted ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleEditGame(game)}
+                                    className="rounded-md border border-slate-600/40 px-2 py-1 text-[9px] sm:text-[10px] uppercase tracking-wider text-slate-400 hover:border-slate-500/60"
+                                  >
+                                    Edit
+                                  </button>
+                                ) : isLocked ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleEditGame(game)}
+                                    className="rounded-md border border-amber-400/30 bg-amber-500/10 px-2 py-1 text-[9px] sm:text-[10px] uppercase tracking-wider text-amber-300 hover:border-amber-400/50"
+                                  >
+                                    Modify
+                                  </button>
+                                ) : (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleEditGame(game)}
+                                      className="rounded-md border border-white/20 px-2 py-1 text-[9px] sm:text-[10px] uppercase tracking-wider text-white hover:border-white/40"
+                                    >
+                                      Edit
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteGame(game)}
+                                      className="rounded-md border border-rose-500/40 px-2 py-1 text-[9px] sm:text-[10px] uppercase tracking-wider text-rose-200 hover:border-rose-400"
+                                    >
+                                      Del
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                            
+                            {/* Referees Row */}
+                            {(game.refereeHomeTeam1 || game.refereeHomeTeam2 || game.refereeAwayTeam) && (
+                              <div className="text-[8px] sm:text-[9px] text-slate-600">
+                                <span className="font-semibold">Refs:</span>{' '}
+                                {[
+                                  game.refereeHomeTeam1 && referees.find(r => r.id === game.refereeHomeTeam1)?.lastName,
+                                  game.refereeHomeTeam2 && referees.find(r => r.id === game.refereeHomeTeam2)?.lastName,
+                                  game.refereeAwayTeam && referees.find(r => r.id === game.refereeAwayTeam)?.lastName
+                                ].filter(Boolean).join(', ')}
+                              </div>
+                            )}
+                            </div>
+                          </div>
+                        </div>
+                        );
+                      })
+                    ) : (
+                      <p className="rounded-xl border border-dashed border-white/20 bg-slate-900/40 p-4 text-center text-sm text-slate-400">
+                        No games scheduled yet. Use the form above to add the first one.
+                      </p>
+                    )}
+                  </div>
+                </section>
+              </div>
+            )}
+            </>
+            )}
+
+            {/* Stats Tab Content */}
+            {activeTab === 'stats' && (
+            <>
+            {/* GAME STATS ASSISTANT MODULE */}
+            <button
+              type="button"
+              onClick={() => setGameStatsAssistantOpen(!gameStatsAssistantOpen)}
+              className="group relative w-full overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-emerald-600/20 to-cyan-600/20 p-8 text-left shadow-xl transition hover:border-white/30 hover:shadow-2xl"
+            >
+              <div className="relative z-10 flex items-center justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Module</p>
+                  <h2 className="mt-2 text-3xl font-bold text-white">Game Stats Assistant</h2>
+                  <p className="mt-3 text-sm text-slate-300">
+                    Record final scores and player statistics for completed games (45+ minutes after start time).
+                  </p>
+                </div>
+                <span className="text-2xl text-white">{gameStatsAssistantOpen ? '−' : '+'}</span>
+              </div>
+            </button>
+
+            {gameStatsAssistantOpen && (
+              <div className="space-y-6">
+                {/* Status Callout */}
+                {statsStatus && (
+                  <div className={`rounded-2xl border p-4 ${statusClassMap[statsStatus.type]}`}>
+                    <p className="text-sm font-medium">{statsStatus.message}</p>
+                  </div>
+                )}
+
+                {/* Completed Games List */}
+                <section className="rounded-3xl border border-white/10 bg-slate-900/60 p-6">
+                  <div className="space-y-1 mb-6">
+                    <p className="text-xs uppercase tracking-[0.4em] text-slate-500">Completed Games</p>
+                    <h3 className="text-lg font-semibold">Games Ready for Stats (Last 7 Days)</h3>
+                    <p className="text-xs text-slate-400">Games appear here 45 min after start and stay for 1 week. Stats are permanently saved.</p>
+                  </div>
+
+                  <div className="space-y-3">
+                    {completedGames.length > 0 ? (
+                      completedGames.map((game) => (
+                        <div
+                          key={game.id}
+                          className={`rounded-xl border p-4 ${
+                            game.completed ? "border-emerald-500/40 bg-emerald-500/10" : "border-white/10 bg-slate-950/60"
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex-1">
+                              {game.completed && (
+                                <span className="mb-2 inline-block rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-300">
+                                  Stats Recorded
+                                </span>
+                              )}
+                              <div className="flex items-center gap-3">
+                                {game.awayTeamLogo && (
+                                  <Image src={game.awayTeamLogo} alt={game.awayTeamName} width={32} height={32} className="h-8 w-8 rounded-full" unoptimized />
+                                )}
+                                <span className="text-sm font-semibold text-white">{game.awayTeamName}</span>
+                                {game.completed && game.loserTeamId === game.awayTeamId && (
+                                  <span className="text-xs text-slate-400">{game.loserScore}</span>
+                                )}
+                                <span className="text-xs text-slate-400">@</span>
+                                {game.homeTeamLogo && (
+                                  <Image src={game.homeTeamLogo} alt={game.homeTeamName} width={32} height={32} className="h-8 w-8 rounded-full" unoptimized />
+                                )}
+                                <span className="text-sm font-semibold text-white">{game.homeTeamName}</span>
+                                {game.completed && game.loserTeamId === game.homeTeamId && (
+                                  <span className="text-xs text-slate-400">{game.loserScore}</span>
+                                )}
+                              </div>
+                              <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-400">
+                                <span>📅 {game.date}</span>
+                                <span>🕐 {game.time}</span>
+                                <span>📍 {game.venue}</span>
+                                <span className="uppercase text-slate-500">{game.gender + "'s"}</span>
+                              </div>
+                              {game.completed && game.winnerTeamId && (
+                                <div className="mt-2 text-xs text-emerald-400">
+                                  Winner: {game.winnerTeamId === game.homeTeamId ? game.homeTeamName : game.awayTeamName} ({game.winnerScore})
+                                </div>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleSelectCompletedGame(game)}
+                              className="rounded-full border border-white/20 px-3 py-1 text-xs uppercase tracking-[0.3em] text-white hover:border-white/40"
+                            >
+                              {game.completed ? "Edit Stats" : "Add Stats"}
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="rounded-xl border border-dashed border-white/20 bg-slate-900/40 p-4 text-center text-sm text-slate-400">
+                        No games in the stats window. Games appear 45 minutes after start and remain for 7 days.
+                      </p>
+                    )}
+                  </div>
+                </section>
+
+                {/* Stats Form */}
+                {selectedCompletedGame && gameStatsForm && (
+                  <section className="rounded-3xl border border-emerald-500/30 bg-gradient-to-br from-emerald-950/40 to-slate-950/60 p-6">
+                    <div className="space-y-1 mb-6">
+                      <p className="text-xs uppercase tracking-[0.4em] text-slate-500">Recording Stats</p>
+                      <h3 className="text-lg font-semibold">
+                        {selectedCompletedGame.awayTeamName} @ {selectedCompletedGame.homeTeamName}
+                      </h3>
+                      <p className="text-xs text-slate-400">
+                        {selectedCompletedGame.date} · {selectedCompletedGame.time} · {selectedCompletedGame.venue}
+                      </p>
+                    </div>
+
+                    {/* Score Input */}
+                    <div className="space-y-4 mb-6">
+                      <h4 className="text-sm font-semibold uppercase tracking-[0.3em] text-slate-300">Game Result</h4>
+                      
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <label className="flex flex-col gap-2">
+                          <span className="text-xs uppercase tracking-[0.3em] text-slate-400">Winner</span>
+                          <select
+                            value={gameStatsForm.winnerTeamId}
+                            onChange={(e) => handleWinnerChange(e.target.value)}
+                            className="rounded-xl border border-white/10 bg-slate-900/60 px-4 py-3 text-base text-white focus:border-white sm:px-3 sm:py-2 sm:text-sm"
+                            required
+                          >
+                            <option value="">Select winner</option>
+                            <option value={selectedCompletedGame.homeTeamId}>{selectedCompletedGame.homeTeamName}</option>
+                            <option value={selectedCompletedGame.awayTeamId}>{selectedCompletedGame.awayTeamName}</option>
+                          </select>
+                        </label>
+
+                        <label className="flex flex-col gap-2">
+                          <span className="text-xs uppercase tracking-[0.3em] text-slate-400">Winner Score</span>
+                          <input
+                            type="number"
+                            value={gameStatsForm.winnerScore}
+                            onChange={(e) => setGameStatsForm({ ...gameStatsForm, winnerScore: e.target.value })}
+                            placeholder="0"
+                            min="0"
+                            className="rounded-xl border border-white/10 bg-slate-900/60 px-4 py-3 text-base text-white focus:border-white sm:px-3 sm:py-2 sm:text-sm"
+                            required
+                          />
+                        </label>
+
+                        <label className="flex flex-col gap-2">
+                          <span className="text-xs uppercase tracking-[0.3em] text-slate-400">Loser</span>
+                          <div className="rounded-xl border border-white/10 bg-slate-900/60 px-4 py-3 text-base text-slate-400 italic sm:px-3 sm:py-2 sm:text-sm">
+                            {gameStatsForm.loserTeamId 
+                              ? (gameStatsForm.loserTeamId === selectedCompletedGame.homeTeamId 
+                                  ? selectedCompletedGame.homeTeamName 
+                                  : selectedCompletedGame.awayTeamName)
+                              : "Select winner first"}
+                          </div>
+                        </label>
+
+                        <label className="flex flex-col gap-2">
+                          <span className="text-xs uppercase tracking-[0.3em] text-slate-400">Loser Score</span>
+                          <input
+                            type="number"
+                            value={gameStatsForm.loserScore}
+                            onChange={(e) => setGameStatsForm({ ...gameStatsForm, loserScore: e.target.value })}
+                            placeholder="0"
+                            min="0"
+                            className="rounded-xl border border-white/10 bg-slate-900/60 px-4 py-3 text-base text-white focus:border-white sm:px-3 sm:py-2 sm:text-sm"
+                            required
+                          />
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Player Stats */}
+                    {winnerRoster.length > 0 && (
+                      <div className="space-y-4">
+                        <h4 className="text-sm font-semibold uppercase tracking-[0.3em] text-slate-300">
+                          Player Stats - {gameStatsForm.winnerTeamId === selectedCompletedGame.homeTeamId ? selectedCompletedGame.homeTeamName : selectedCompletedGame.awayTeamName}
+                        </h4>
+                        
+                        <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                          {winnerRoster.map((player) => {
+                            const stats = playerStatsMap[player.id] || { two_pm: "", two_pa: "", three_pm: "", three_pa: "", ft_m: "", ft_a: "", ast: "", oreb: "", dreb: "", reb: "", stl: "", blk: "", fls: "", min: "", pf: "", to: "" };
+                            return (
+                              <div key={player.id} className="rounded-xl border border-white/10 bg-slate-950/60 p-4">
+                                <div className="mb-3 flex items-center gap-3">
+                                  {player.headshot && (
+                                    <Image src={player.headshot} alt={`${player.firstName} ${player.lastName}`} width={32} height={32} className="h-8 w-8 rounded-full" unoptimized />
+                                  )}
+                                  <div>
+                                    <p className="text-sm font-semibold text-white">
+                                      #{player.number} {player.firstName} {player.lastName}
+                                    </p>
+                                    <p className="text-xs text-slate-400">{player.height}</p>
+                                  </div>
+                                </div>
+                                <div className="space-y-2">
+                                  {/* Shooting Stats - Makes/Attempts */}
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <div className="space-y-1">
+                                      <label className="text-[10px] uppercase tracking-wider text-slate-400">2PT M/A</label>
+                                      <div className="flex gap-1">
+                                        <input
+                                          type="number"
+                                          placeholder="M"
+                                          value={stats.two_pm}
+                                          onChange={(e) => {
+                                            const made = parseInt(e.target.value) || 0;
+                                            const attempts = parseInt(stats.two_pa) || 0;
+                                            if (attempts > 0 && made > attempts) {
+                                              setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, two_pm: attempts.toString() }});
+                                            } else {
+                                              setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, two_pm: e.target.value }});
+                                            }
+                                          }}
+                                          min="0"
+                                          className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
+                                        />
+                                        <span className="text-slate-500">/</span>
+                                        <input
+                                          type="number"
+                                          placeholder="A"
+                                          value={stats.two_pa}
+                                          onChange={(e) => {
+                                            const attempts = parseInt(e.target.value) || 0;
+                                            const made = parseInt(stats.two_pm) || 0;
+                                            if (made > attempts && attempts > 0) {
+                                              setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, two_pa: e.target.value, two_pm: attempts.toString() }});
+                                            } else {
+                                              setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, two_pa: e.target.value }});
+                                            }
+                                          }}
+                                          min="0"
+                                          className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
+                                        />
+                                      </div>
+                                    </div>
+                                    <div className="space-y-1">
+                                      <label className="text-[10px] uppercase tracking-wider text-slate-400">3PT M/A</label>
+                                      <div className="flex gap-1">
+                                        <input
+                                          type="number"
+                                          placeholder="M"
+                                          value={stats.three_pm}
+                                          onChange={(e) => {
+                                            const made = parseInt(e.target.value) || 0;
+                                            const attempts = parseInt(stats.three_pa) || 0;
+                                            if (attempts > 0 && made > attempts) {
+                                              setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, three_pm: attempts.toString() }});
+                                            } else {
+                                              setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, three_pm: e.target.value }});
+                                            }
+                                          }}
+                                          min="0"
+                                          className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
+                                        />
+                                        <span className="text-slate-500">/</span>
+                                        <input
+                                          type="number"
+                                          placeholder="A"
+                                          value={stats.three_pa}
+                                          onChange={(e) => {
+                                            const attempts = parseInt(e.target.value) || 0;
+                                            const made = parseInt(stats.three_pm) || 0;
+                                            if (made > attempts && attempts > 0) {
+                                              setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, three_pa: e.target.value, three_pm: attempts.toString() }});
+                                            } else {
+                                              setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, three_pa: e.target.value }});
+                                            }
+                                          }}
+                                          min="0"
+                                          className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
+                                        />
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="space-y-1">
+                                    <label className="text-[10px] uppercase tracking-wider text-slate-400">FT M/A</label>
+                                    <div className="flex gap-1">
+                                      <input
+                                        type="number"
+                                        placeholder="M"
+                                        value={stats.ft_m}
+                                        onChange={(e) => {
+                                          const made = parseInt(e.target.value) || 0;
+                                          const attempts = parseInt(stats.ft_a) || 0;
+                                          if (attempts > 0 && made > attempts) {
+                                            setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, ft_m: attempts.toString() }});
+                                          } else {
+                                            setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, ft_m: e.target.value }});
+                                          }
+                                        }}
+                                        min="0"
+                                        className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
+                                      />
+                                      <span className="text-slate-500">/</span>
+                                      <input
+                                        type="number"
+                                        placeholder="A"
+                                        value={stats.ft_a}
+                                        onChange={(e) => {
+                                          const attempts = parseInt(e.target.value) || 0;
+                                          const made = parseInt(stats.ft_m) || 0;
+                                          if (made > attempts && attempts > 0) {
+                                            setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, ft_a: e.target.value, ft_m: attempts.toString() }});
+                                          } else {
+                                            setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, ft_a: e.target.value }});
+                                          }
+                                        }}
+                                        min="0"
+                                        className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
+                                      />
+                                    </div>
+                                  </div>
+                                  {/* Total Points Display */}
+                                  <div className="rounded-lg border border-emerald-500/30 bg-emerald-950/40 px-2 py-1.5">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="text-[9px] uppercase tracking-wider text-emerald-300 font-semibold">PTS</span>
+                                      <span className="text-sm font-bold text-emerald-200 tabular-nums">
+                                        {(() => {
+                                          const twoPts = (parseInt(stats.two_pm) || 0) * 2;
+                                          const threePts = (parseInt(stats.three_pm) || 0) * 3;
+                                          const ftPts = (parseInt(stats.ft_m) || 0) * 1;
+                                          return twoPts + threePts + ftPts;
+                                        })()}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  {/* Other Stats */}
+                                  <div className="grid grid-cols-4 gap-2 sm:grid-cols-8">
+                                    <input
+                                      type="number"
+                                      placeholder="AST"
+                                      value={stats.ast}
+                                      onChange={(e) => setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, ast: e.target.value }})}
+                                      min="0"
+                                      className="rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
+                                    />
+                                    <input
+                                      type="number"
+                                      placeholder="OREB"
+                                      value={stats.oreb}
+                                      onChange={(e) => {
+                                        const oreb = parseInt(e.target.value) || 0;
+                                        const dreb = parseInt(stats.dreb) || 0;
+                                        const reb = (oreb + dreb).toString();
+                                        setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, oreb: e.target.value, reb }});
+                                      }}
+                                      min="0"
+                                      className="rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
+                                    />
+                                    <input
+                                      type="number"
+                                      placeholder="DREB"
+                                      value={stats.dreb}
+                                      onChange={(e) => {
+                                        const dreb = parseInt(e.target.value) || 0;
+                                        const oreb = parseInt(stats.oreb) || 0;
+                                        const reb = (oreb + dreb).toString();
+                                        setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, dreb: e.target.value, reb }});
+                                      }}
+                                      min="0"
+                                      className="rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
+                                    />
+                                    <input
+                                      type="number"
+                                      placeholder="REB"
+                                      value={stats.reb}
+                                      readOnly
+                                      className="rounded-lg border border-emerald-500/30 bg-emerald-950/40 px-2 py-1 text-center text-xs text-emerald-200 cursor-not-allowed"
+                                      title="Auto-calculated: OREB + DREB"
+                                    />
+                                    <input
+                                      type="number"
+                                      placeholder="STL"
+                                      value={stats.stl}
+                                      onChange={(e) => setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, stl: e.target.value }})}
+                                      min="0"
+                                      className="rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
+                                    />
+                                    <input
+                                      type="number"
+                                      placeholder="BLK"
+                                      value={stats.blk}
+                                      onChange={(e) => setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, blk: e.target.value }})}
+                                      min="0"
+                                      className="rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
+                                    />
+                                    <input
+                                      type="number"
+                                      placeholder="TO"
+                                      value={stats.to}
+                                      onChange={(e) => setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, to: e.target.value }})}
+                                      min="0"
+                                      className="rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
+                                    />
+                                    <input
+                                      type="number"
+                                      placeholder="PF"
+                                      value={stats.fls}
+                                      onChange={(e) => {
+                                        const value = parseInt(e.target.value) || 0;
+                                        if (value <= 6) {
+                                          setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, fls: e.target.value }});
+                                        }
+                                      }}
+                                      min="0"
+                                      max="6"
+                                      className="rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Loser Team Player Stats */}
+                    {loserRoster.length > 0 && (
+                      <div className="space-y-4">
+                        <h4 className="text-sm font-semibold uppercase tracking-[0.3em] text-slate-300">
+                          Player Stats - {gameStatsForm.winnerTeamId === selectedCompletedGame.homeTeamId ? selectedCompletedGame.awayTeamName : selectedCompletedGame.homeTeamName}
+                        </h4>
+                        
+                        <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                          {loserRoster.map((player) => {
+                            const stats = loserStatsMap[player.id] || { two_pm: "", two_pa: "", three_pm: "", three_pa: "", ft_m: "", ft_a: "", ast: "", oreb: "", dreb: "", reb: "", stl: "", blk: "", fls: "", min: "", pf: "", to: "" };
+                            return (
+                              <div key={player.id} className="rounded-xl border border-white/10 bg-slate-950/60 p-4">
+                                <div className="mb-3 flex items-center gap-3">
+                                  {player.headshot && (
+                                    <Image src={player.headshot} alt={`${player.firstName} ${player.lastName}`} width={32} height={32} className="h-8 w-8 rounded-full" unoptimized />
+                                  )}
+                                  <div>
+                                    <p className="text-sm font-semibold text-white">
+                                      #{player.number} {player.firstName} {player.lastName}
+                                    </p>
+                                    <p className="text-xs text-slate-400">{player.height}</p>
+                                  </div>
+                                </div>
+                                <div className="space-y-2">
+                                  {/* Shooting Stats - Makes/Attempts */}
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <div className="space-y-1">
+                                      <label className="text-[10px] uppercase tracking-wider text-slate-400">2PT M/A</label>
+                                      <div className="flex gap-1">
+                                        <input
+                                          type="number"
+                                          placeholder="M"
+                                          value={stats.two_pm}
+                                          onChange={(e) => {
+                                            const made = parseInt(e.target.value) || 0;
+                                            const attempts = parseInt(stats.two_pa) || 0;
+                                            if (attempts > 0 && made > attempts) {
+                                              setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, two_pm: attempts.toString() }});
+                                            } else {
+                                              setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, two_pm: e.target.value }});
+                                            }
+                                          }}
+                                          min="0"
+                                          className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
+                                        />
+                                        <span className="text-slate-500">/</span>
+                                        <input
+                                          type="number"
+                                          placeholder="A"
+                                          value={stats.two_pa}
+                                          onChange={(e) => {
+                                            const attempts = parseInt(e.target.value) || 0;
+                                            const made = parseInt(stats.two_pm) || 0;
+                                            if (made > attempts && attempts > 0) {
+                                              setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, two_pa: e.target.value, two_pm: attempts.toString() }});
+                                            } else {
+                                              setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, two_pa: e.target.value }});
+                                            }
+                                          }}
+                                          min="0"
+                                          className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
+                                        />
+                                      </div>
+                                    </div>
+                                    <div className="space-y-1">
+                                      <label className="text-[10px] uppercase tracking-wider text-slate-400">3PT M/A</label>
+                                      <div className="flex gap-1">
+                                        <input
+                                          type="number"
+                                          placeholder="M"
+                                          value={stats.three_pm}
+                                          onChange={(e) => {
+                                            const made = parseInt(e.target.value) || 0;
+                                            const attempts = parseInt(stats.three_pa) || 0;
+                                            if (attempts > 0 && made > attempts) {
+                                              setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, three_pm: attempts.toString() }});
+                                            } else {
+                                              setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, three_pm: e.target.value }});
+                                            }
+                                          }}
+                                          min="0"
+                                          className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
+                                        />
+                                        <span className="text-slate-500">/</span>
+                                        <input
+                                          type="number"
+                                          placeholder="A"
+                                          value={stats.three_pa}
+                                          onChange={(e) => {
+                                            const attempts = parseInt(e.target.value) || 0;
+                                            const made = parseInt(stats.three_pm) || 0;
+                                            if (made > attempts && attempts > 0) {
+                                              setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, three_pa: e.target.value, three_pm: attempts.toString() }});
+                                            } else {
+                                              setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, three_pa: e.target.value }});
+                                            }
+                                          }}
+                                          min="0"
+                                          className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
+                                        />
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="space-y-1">
+                                    <label className="text-[10px] uppercase tracking-wider text-slate-400">FT M/A</label>
+                                    <div className="flex gap-1">
+                                      <input
+                                        type="number"
+                                        placeholder="M"
+                                        value={stats.ft_m}
+                                        onChange={(e) => {
+                                          const made = parseInt(e.target.value) || 0;
+                                          const attempts = parseInt(stats.ft_a) || 0;
+                                          if (attempts > 0 && made > attempts) {
+                                            setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, ft_m: attempts.toString() }});
+                                          } else {
+                                            setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, ft_m: e.target.value }});
+                                          }
+                                        }}
+                                        min="0"
+                                        className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
+                                      />
+                                      <span className="text-slate-500">/</span>
+                                      <input
+                                        type="number"
+                                        placeholder="A"
+                                        value={stats.ft_a}
+                                        onChange={(e) => {
+                                          const attempts = parseInt(e.target.value) || 0;
+                                          const made = parseInt(stats.ft_m) || 0;
+                                          if (made > attempts && attempts > 0) {
+                                            setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, ft_a: e.target.value, ft_m: attempts.toString() }});
+                                          } else {
+                                            setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, ft_a: e.target.value }});
+                                          }
+                                        }}
+                                        min="0"
+                                        className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
+                                      />
+                                    </div>
+                                  </div>
+                                  {/* Total Points Display */}
+                                  <div className="rounded-lg border border-emerald-500/30 bg-emerald-950/40 px-2 py-1.5">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="text-[9px] uppercase tracking-wider text-emerald-300 font-semibold">PTS</span>
+                                      <span className="text-sm font-bold text-emerald-200 tabular-nums">
+                                        {(() => {
+                                          const twoPts = (parseInt(stats.two_pm) || 0) * 2;
+                                          const threePts = (parseInt(stats.three_pm) || 0) * 3;
+                                          const ftPts = (parseInt(stats.ft_m) || 0) * 1;
+                                          return twoPts + threePts + ftPts;
+                                        })()}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  {/* Other Stats */}
+                                  <div className="grid grid-cols-4 gap-2 sm:grid-cols-8">
+                                    <input
+                                      type="number"
+                                      placeholder="AST"
+                                      value={stats.ast}
+                                      onChange={(e) => setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, ast: e.target.value }})}
+                                      min="0"
+                                      className="rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
+                                    />
+                                    <input
+                                      type="number"
+                                      placeholder="OREB"
+                                      value={stats.oreb}
+                                      onChange={(e) => {
+                                        const oreb = parseInt(e.target.value) || 0;
+                                        const dreb = parseInt(stats.dreb) || 0;
+                                        const reb = (oreb + dreb).toString();
+                                        setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, oreb: e.target.value, reb }});
+                                      }}
+                                      min="0"
+                                      className="rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
+                                    />
+                                    <input
+                                    type="number"
+                                    placeholder="DREB"
+                                    value={stats.dreb}
+                                    onChange={(e) => {
+                                      const dreb = parseInt(e.target.value) || 0;
+                                      const oreb = parseInt(stats.oreb) || 0;
+                                      const reb = (oreb + dreb).toString();
+                                      setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, dreb: e.target.value, reb }});
+                                    }}
+                                    min="0"
+                                    className="rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
+                                  />
+                                  <input
+                                    type="number"
+                                    placeholder="REB"
+                                    value={stats.reb}
+                                    readOnly
+                                    className="rounded-lg border border-emerald-500/30 bg-emerald-950/40 px-2 py-1 text-center text-xs text-emerald-200 cursor-not-allowed"
+                                    title="Auto-calculated: OREB + DREB"
+                                  />
+                                  <input
+                                    type="number"
+                                    placeholder="STL"
+                                    value={stats.stl}
+                                    onChange={(e) => setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, stl: e.target.value }})}
+                                    min="0"
+                                    className="rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
+                                  />
+                                  <input
+                                    type="number"
+                                    placeholder="BLK"
+                                    value={stats.blk}
+                                    onChange={(e) => setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, blk: e.target.value }})}
+                                    min="0"
+                                    className="rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
+                                  />
+                                  <input
+                                    type="number"
+                                    placeholder="TO"
+                                    value={stats.to}
+                                    onChange={(e) => setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, to: e.target.value }})}
+                                    min="0"
+                                    className="rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
+                                  />
+                                  <input
+                                    type="number"
+                                    placeholder="PF"
+                                    value={stats.fls}
+                                    onChange={(e) => {
+                                      const value = parseInt(e.target.value) || 0;
+                                      if (value <= 6) {
+                                        setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, fls: e.target.value }});
+                                      }
+                                    }}
+                                    min="0"
+                                    max="6"
+                                    className="rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Action Buttons */}
+                    <div className="mt-6 flex flex-wrap items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={handleSubmitGameStats}
+                        disabled={statsSubmitting}
+                        className="rounded-full border border-white/20 bg-emerald-500/20 px-5 py-2 text-xs font-semibold uppercase tracking-[0.4em] text-white transition hover:bg-emerald-500/30 disabled:cursor-not-allowed"
+                      >
+                        {statsSubmitting ? "Saving…" : "Save Stats"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedCompletedGame(null);
+                          setGameStatsForm(null);
+                          setWinnerRoster([]);
+                          setLoserRoster([]);
+                          setPlayerStatsMap({});
+                          setLoserStatsMap({});
+                        }}
+                        className="rounded-full border border-white/10 px-4 py-2 text-xs uppercase tracking-[0.4em] text-slate-300"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </section>
+                )}
+              </div>
+            )}
+            </>
+            )}
+
+            {/* League Tab Content */}
+            {activeTab === 'league' && (
+            <>
+            {/* LEAGUE GESTION MODULE */}
+            <button
+              type="button"
+              onClick={() => setLeagueGestionOpen(!leagueGestionOpen)}
+              className="group relative w-full overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-indigo-600/20 to-violet-600/20 p-8 text-left shadow-xl transition hover:border-white/30 hover:shadow-2xl"
+            >
+              <div className="relative z-10 flex items-center justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Module</p>
+                  <h2 className="mt-2 text-3xl font-bold text-white">League Gestion</h2>
+                  <p className="mt-3 text-sm text-slate-300">
+                    Manage referees, committee members, and game venues for the league.
+                  </p>
+                </div>
+                <span className="text-2xl text-white">{leagueGestionOpen ? '−' : '+'}</span>
+              </div>
+              <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-violet-500/5 opacity-0 transition group-hover:opacity-100"></div>
+            </button>
+
+            {leagueGestionOpen && (
+              <div className="space-y-6">
+                {leagueGestionStatus && (
+                  <div className={`rounded-2xl border ${statusClassMap[leagueGestionStatus.type]} p-4 text-sm`}>
+                    {leagueGestionStatus.message}
+                  </div>
+                )}
+
+                <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl">
+                  <h3 className="mb-6 text-xl font-semibold text-white">Referees</h3>
+                  
+                  {!refereeFormVisible && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRefereeForm({ firstName: "", lastName: "", phone: "", certificationLevel: "" });
+                        setRefereeFormVisible(true);
+                      }}
+                      className="mb-4 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white hover:bg-white/20"
+                    >
+                      + Add Referee
+                    </button>
+                  )}
+
+                  {refereeFormVisible && (
+                    <form onSubmit={handleSubmitReferee} className="mb-6 space-y-4 rounded-2xl border border-white/10 bg-black/30 p-4">
+                      <h4 className="text-sm font-semibold text-white">{refereeForm.id ? "Edit Referee" : "Add Referee"}</h4>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <label className="space-y-1 text-xs text-slate-300">
+                          First Name *
+                          <input
+                            type="text"
+                            required
+                            value={refereeForm.firstName}
+                            onChange={(e) => setRefereeForm({ ...refereeForm, firstName: e.target.value })}
+                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
+                          />
+                        </label>
+                        <label className="space-y-1 text-xs text-slate-300">
+                          Last Name *
+                          <input
+                            type="text"
+                            required
+                            value={refereeForm.lastName}
+                            onChange={(e) => setRefereeForm({ ...refereeForm, lastName: e.target.value })}
+                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
+                          />
+                        </label>
+                        <label className="space-y-1 text-xs text-slate-300">
+                          Phone
+                          <input
+                            type="tel"
+                            value={refereeForm.phone}
+                            onChange={(e) => setRefereeForm({ ...refereeForm, phone: e.target.value })}
+                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
+                          />
+                        </label>
+                        <label className="space-y-1 text-xs text-slate-300">
+                          Certification Level
+                          <input
+                            type="text"
+                            value={refereeForm.certificationLevel}
+                            onChange={(e) => setRefereeForm({ ...refereeForm, certificationLevel: e.target.value })}
+                            placeholder="e.g., Level 1, Level 2"
+                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
+                          />
+                        </label>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          type="submit"
+                          disabled={refereeSubmitting}
+                          className="rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white hover:bg-white/20 disabled:cursor-not-allowed"
+                        >
+                          {refereeSubmitting ? "Saving..." : refereeForm.id ? "Update" : "Add"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRefereeFormVisible(false);
+                            setRefereeForm({ firstName: "", lastName: "", phone: "", certificationLevel: "" });
+                          }}
+                          className="rounded-full border border-white/10 px-4 py-2 text-xs uppercase tracking-wider text-slate-300"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  <div className="space-y-3">
+                    {referees.length > 0 ? (
+                      referees.map((referee) => (
+                        <div key={referee.id} className="rounded-2xl border border-white/10 bg-black/30 p-4">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold text-white">{referee.firstName} {referee.lastName}</p>
+                              {referee.certificationLevel && (
+                                <p className="text-xs text-slate-400">{referee.certificationLevel}</p>
+                              )}
+                              {referee.email && (
+                                <p className="text-xs text-slate-500">{referee.email}</p>
+                              )}
+                              {referee.phone && (
+                                <p className="text-xs text-slate-500">{referee.phone}</p>
+                              )}
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleEditReferee(referee)}
+                                className="rounded-full border border-white/20 px-3 py-1 text-xs uppercase tracking-wider text-white hover:bg-white/10"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteReferee(referee)}
+                                className="rounded-full border border-rose-500/40 px-3 py-1 text-xs uppercase tracking-wider text-rose-200 hover:bg-rose-500/10"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-slate-400">No referees added yet.</p>
+                    )}
+                  </div>
+                </section>
+
+                <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl">
+                  <h3 className="mb-6 text-xl font-semibold text-white">Committee Members</h3>
+                  
+                  {/* Existing Members List - Always Visible */}
+                  <div className="mb-6 space-y-3">
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="text-sm font-semibold text-slate-300">Current Members</h4>
+                      {!committeeFormVisible && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCommitteeForm({ firstName: "", lastName: "", role: "", email: "", phone: "" });
+                            setCommitteePhotoPreview("");
+                            setCommitteePhotoFile(null);
+                            setCommitteeFormVisible(true);
+                          }}
+                          className="rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white hover:bg-white/20"
+                        >
+                          + Add Member
+                        </button>
+                      )}
+                    </div>
+                    {committeeMembers.length > 0 ? (
+                      committeeMembers.map((member) => (
+                        <div key={member.id} className="rounded-2xl border border-white/10 bg-black/30 p-4">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div className="flex items-center gap-3">
+                              {member.photo && (
+                                <Image
+                                  src={member.photo}
+                                  alt={`${member.firstName} ${member.lastName}`}
+                                  width={60}
+                                  height={60}
+                                  className="h-15 w-15 rounded-full object-cover"
+                                />
+                              )}
+                              <div>
+                                <p className="text-sm font-semibold text-white">{member.firstName} {member.lastName}</p>
+                                <p className="text-xs uppercase tracking-wider text-slate-400">{member.role}</p>
+                                {member.email && (
+                                  <p className="text-xs text-slate-500">{member.email}</p>
+                                )}
+                                {member.phone && (
+                                  <p className="text-xs text-slate-500">{member.phone}</p>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleEditCommittee(member)}
+                                className="rounded-full border border-white/20 px-3 py-1 text-xs uppercase tracking-wider text-white hover:bg-white/10"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteCommittee(member)}
+                                className="rounded-full border border-rose-500/40 px-3 py-1 text-xs uppercase tracking-wider text-rose-200 hover:bg-rose-500/10"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-slate-400">No committee members added yet.</p>
+                    )}
+                  </div>
+
+                  {/* Add/Edit Form */}
+                  {committeeFormVisible && (
+                    <form onSubmit={handleSubmitCommittee} className="space-y-4 rounded-2xl border border-white/10 bg-black/30 p-4">
+                      <h4 className="text-sm font-semibold text-white">{committeeForm.id ? "Edit Member" : "Add New Member"}</h4>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <label className="space-y-1 text-xs text-slate-300">
+                          First Name *
+                          <input
+                            type="text"
+                            required
+                            value={committeeForm.firstName}
+                            onChange={(e) => setCommitteeForm({ ...committeeForm, firstName: e.target.value })}
+                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
+                          />
+                        </label>
+                        <label className="space-y-1 text-xs text-slate-300">
+                          Last Name *
+                          <input
+                            type="text"
+                            required
+                            value={committeeForm.lastName}
+                            onChange={(e) => setCommitteeForm({ ...committeeForm, lastName: e.target.value })}
+                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
+                          />
+                        </label>
+                        <label className="space-y-1 text-xs text-slate-300">
+                          Role *
+                          <input
+                            type="text"
+                            required
+                            value={committeeForm.role}
+                            onChange={(e) => setCommitteeForm({ ...committeeForm, role: e.target.value })}
+                            placeholder="e.g., President, Secretary"
+                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
+                          />
+                        </label>
+                        <label className="space-y-1 text-xs text-slate-300">
+                          Email
+                          <input
+                            type="email"
+                            value={committeeForm.email}
+                            onChange={(e) => setCommitteeForm({ ...committeeForm, email: e.target.value })}
+                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
+                          />
+                        </label>
+                        <label className="space-y-1 text-xs text-slate-300">
+                          Phone
+                          <input
+                            type="tel"
+                            value={committeeForm.phone}
+                            onChange={(e) => setCommitteeForm({ ...committeeForm, phone: e.target.value })}
+                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
+                          />
+                        </label>
+                        <label className="space-y-1 text-xs text-slate-300">
+                          Photo
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleCommitteePhotoChange}
+                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
+                          />
+                        </label>
+                      </div>
+                      {committeePhotoPreview && (
+                        <div className="rounded-lg border border-white/10 bg-black/30 p-3">
+                          <p className="mb-2 text-xs text-slate-400">Photo Preview:</p>
+                          <Image
+                            src={committeePhotoPreview}
+                            alt="Committee member photo preview"
+                            width={200}
+                            height={200}
+                            className="h-32 w-32 rounded-lg object-cover"
+                          />
+                        </div>
+                      )}
+                      <div className="flex gap-2">
+                        <button
+                          type="submit"
+                          disabled={committeeSubmitting}
+                          className="rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white hover:bg-white/20 disabled:cursor-not-allowed"
+                        >
+                          {committeeSubmitting ? "Saving..." : committeeForm.id ? "Update" : "Add"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCommitteeFormVisible(false);
+                            setCommitteeForm({ firstName: "", lastName: "", role: "", email: "", phone: "" });
+                            setCommitteePhotoPreview("");
+                            setCommitteePhotoFile(null);
+                          }}
+                          className="rounded-full border border-white/10 px-4 py-2 text-xs uppercase tracking-wider text-slate-300"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  )}
+                </section>
+
+                <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl">
+                  <h3 className="mb-6 text-xl font-semibold text-white">Venues</h3>
+                  
+                  {!venueFormVisible && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setVenueForm({ name: "", address: "", city: "", capacity: "", courts: "" });
+                        setVenueFormVisible(true);
+                      }}
+                      className="mb-4 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white hover:bg-white/20"
+                    >
+                      + Add Venue
+                    </button>
+                  )}
+
+                  {venueFormVisible && (
+                    <form onSubmit={handleSubmitVenue} className="mb-6 space-y-4 rounded-2xl border border-white/10 bg-black/30 p-4">
+                      <h4 className="text-sm font-semibold text-white">{venueForm.id ? "Edit Venue" : "Add Venue"}</h4>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <label className="space-y-1 text-xs text-slate-300">
+                          Name *
+                          <input
+                            type="text"
+                            required
+                            value={venueForm.name}
+                            onChange={(e) => setVenueForm({ ...venueForm, name: e.target.value })}
+                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
+                          />
+                        </label>
+                        <label className="space-y-1 text-xs text-slate-300">
+                          City *
+                          <input
+                            type="text"
+                            required
+                            value={venueForm.city}
+                            onChange={(e) => setVenueForm({ ...venueForm, city: e.target.value })}
+                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
+                          />
+                        </label>
+                        <label className="space-y-1 text-xs text-slate-300 sm:col-span-2">
+                          Address *
+                          <input
+                            type="text"
+                            required
+                            value={venueForm.address}
+                            onChange={(e) => setVenueForm({ ...venueForm, address: e.target.value })}
+                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
+                          />
+                        </label>
+                        <label className="space-y-1 text-xs text-slate-300">
+                          Capacity
+                          <input
+                            type="text"
+                            value={venueForm.capacity}
+                            onChange={(e) => setVenueForm({ ...venueForm, capacity: e.target.value })}
+                            placeholder="e.g., 500 people"
+                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
+                          />
+                        </label>
+                        <label className="space-y-1 text-xs text-slate-300">
+                          Number of Courts
+                          <input
+                            type="number"
+                            min="1"
+                            value={venueForm.courts}
+                            onChange={(e) => setVenueForm({ ...venueForm, courts: e.target.value })}
+                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
+                          />
+                        </label>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          type="submit"
+                          disabled={venueSubmitting}
+                          className="rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white hover:bg-white/20 disabled:cursor-not-allowed"
+                        >
+                          {venueSubmitting ? "Saving..." : venueForm.id ? "Update" : "Add"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setVenueFormVisible(false);
+                            setVenueForm({ name: "", address: "", city: "", capacity: "", courts: "" });
+                          }}
+                          className="rounded-full border border-white/10 px-4 py-2 text-xs uppercase tracking-wider text-slate-300"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  <div className="space-y-3">
+                    {venues.length > 0 ? (
+                      venues.map((venue) => (
+                        <div key={venue.id} className="rounded-2xl border border-white/10 bg-black/30 p-4">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold text-white">{venue.name}</p>
+                              <p className="text-xs text-slate-400">{venue.address}, {venue.city}</p>
+                              {venue.capacity && (
+                                <p className="text-xs text-slate-500">Capacity: {venue.capacity}</p>
+                              )}
+                              {venue.courts && (
+                                <p className="text-xs text-slate-500">Courts: {venue.courts}</p>
+                              )}
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleEditVenue(venue)}
+                                className="rounded-full border border-white/20 px-3 py-1 text-xs uppercase tracking-wider text-white hover:bg-white/10"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteVenue(venue)}
+                                className="rounded-full border border-rose-500/40 px-3 py-1 text-xs uppercase tracking-wider text-rose-200 hover:bg-rose-500/10"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-slate-400">No venues added yet.</p>
+                    )}
+                  </div>
+                </section>
+
+                <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl">
+                  <h3 className="mb-6 text-xl font-semibold text-white">Partners</h3>
+                  
+                  {!partnerFormVisible && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPartnerForm({ name: "", logo: "" });
+                        setPartnerLogoFile(null);
+                        setPartnerLogoPreview("");
+                        setPartnerFormVisible(true);
+                      }}
+                      className="mb-4 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white hover:bg-white/20"
+                    >
+                      + Add Partner
+                    </button>
+                  )}
+
+                  {partnerFormVisible && (
+                    <form onSubmit={handleSubmitPartner} className="mb-6 space-y-4 rounded-2xl border border-white/10 bg-black/30 p-4">
+                      <h4 className="text-sm font-semibold text-white">{partnerForm.id ? "Edit Partner" : "Add Partner"}</h4>
+                      <div className="space-y-3">
+                        <label className="space-y-1 text-xs text-slate-300">
+                          Partner Name *
+                          <input
+                            type="text"
+                            required
+                            value={partnerForm.name}
+                            onChange={(e) => setPartnerForm({ ...partnerForm, name: e.target.value })}
+                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
+                          />
+                        </label>
+                        <label className="space-y-1 text-xs text-slate-300">
+                          Partner Logo *
+                          <input
+                            type="file"
+                            accept="image/*"
+                            required={!partnerForm.id}
+                            onChange={handlePartnerLogoChange}
+                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
+                          />
+                        </label>
+                        {partnerLogoPreview && (
+                          <div className="relative h-32 w-32 overflow-hidden rounded-lg border border-white/10">
+                            <Image
+                              src={partnerLogoPreview}
+                              alt="Partner logo preview"
+                              fill
+                              className="object-contain"
+                              unoptimized
+                            />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex gap-3">
+                        <button
+                          type="submit"
+                          disabled={partnerSubmitting}
+                          className="rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white hover:bg-white/20 disabled:opacity-40"
+                        >
+                          {partnerSubmitting ? "Saving..." : partnerForm.id ? "Update Partner" : "Add Partner"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPartnerForm({ name: "", logo: "" });
+                            setPartnerLogoFile(null);
+                            setPartnerLogoPreview("");
+                            setPartnerFormVisible(false);
+                          }}
+                          className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white hover:bg-white/10"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  <div className="space-y-3">
+                    {partners.length > 0 ? (
+                      partners.map((partner) => (
+                        <div key={partner.id} className="rounded-xl border border-white/10 bg-black/20 p-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                              {partner.logo && (
+                                <div className="relative h-16 w-16 overflow-hidden rounded-lg border border-white/10">
+                                  <Image
+                                    src={partner.logo}
+                                    alt={partner.name}
+                                    fill
+                                    className="object-contain"
+                                    unoptimized
+                                  />
+                                </div>
+                              )}
+                              <p className="text-sm font-semibold text-white">{partner.name}</p>
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleEditPartner(partner)}
+                                className="rounded-full border border-white/20 px-3 py-1 text-xs uppercase tracking-wider text-white hover:bg-white/10"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeletePartner(partner)}
+                                className="rounded-full border border-rose-500/40 px-3 py-1 text-xs uppercase tracking-wider text-rose-200 hover:bg-rose-500/10"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-slate-400">No partners added yet.</p>
+                    )}
+                  </div>
+                </section>
+              </div>
+            )}
+            </>
+            )}
+
+              </div>
+            </div>
+          </div>
+        </main>
+      )}
+    </div>
+  );
+}

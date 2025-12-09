@@ -1,0 +1,38 @@
+[
+  {
+    "id": "299bF2gtgorIQLApGqrU",
+    "name": "Orange",
+    "logo": "https://firebasestorage.googleapis.com/v0/b/ppop-35930.firebasestorage.app/o/partners%2F1764864809658_Screenshot%202025-12-04%20105226.png?alt=media&token=90ead075-6a73-4dcf-99d6-ee84ab011a5a",
+    "createdAt": {
+      "_seconds": 1764864810,
+      "_nanoseconds": 345000000
+    }
+  },
+  {
+    "id": "TMNeloDS9Tnm74YWPtN1",
+    "name": "Vodacom",
+    "logo": "https://firebasestorage.googleapis.com/v0/b/ppop-35930.firebasestorage.app/o/partners%2F1764864759473_Screenshot%202025-12-04%20105210.png?alt=media&token=65f1e539-e306-4187-9eee-1f7513293263",
+    "createdAt": {
+      "_seconds": 1764864760,
+      "_nanoseconds": 649000000
+    }
+  },
+  {
+    "id": "fzoLoOePt0iUVfE9xrJR",
+    "name": "Firstbank",
+    "logo": "https://firebasestorage.googleapis.com/v0/b/ppop-35930.firebasestorage.app/o/partners%2F1764864779324_Screenshot%202025-12-04%20105332.png?alt=media&token=391843d6-9a45-4b1b-b96d-9b95ec5656d5",
+    "createdAt": {
+      "_seconds": 1764864779,
+      "_nanoseconds": 963000000
+    }
+  },
+  {
+    "id": "llfbs5dNwHyiiFeoGi5S",
+    "name": "Rawbank",
+    "logo": "https://firebasestorage.googleapis.com/v0/b/ppop-35930.firebasestorage.app/o/partners%2F1764864730929_Screenshot%202025-12-04%20105244.png?alt=media&token=b2f26913-538a-431a-80ad-66e53ba3a340",
+    "createdAt": {
+      "_seconds": 1764864731,
+      "_nanoseconds": 909000000
+    }
+  }
+]

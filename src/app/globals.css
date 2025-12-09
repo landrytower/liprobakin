@@ -35,3 +35,46 @@ body {
   background: var(--accent-strong);
   color: #020617;
 }
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+@keyframes scroll-left {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-scroll {
+  animation: scroll-left 30s linear infinite;
+}
+
+.animate-scroll:hover {
+  animation-play-state: paused;
+}
+
+@keyframes auto-scroll {
+  0% {
+    scroll-behavior: smooth;
+  }
+  100% {
+    scroll-behavior: smooth;
+  }
+}
+
+.animate-scroll-slow {
+  animation: auto-scroll 20s linear infinite;
+}
+
+.animation-paused {
+  animation-play-state: paused !important;
+}

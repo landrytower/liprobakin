@@ -1,0 +1,926 @@
+[
+  {
+    "id": "0qTFCpH7Qd4r1KFNNwbw",
+    "name": "Fukash",
+    "city": "Espoir",
+    "gender": "men",
+    "colors": [
+      "#4ade80",
+      "#15803d"
+    ],
+    "logo": "/logos/Males/Espoir Fukash.png",
+    "createdAt": {
+      "_seconds": 1764696561,
+      "_nanoseconds": 125000000
+    },
+    "wins": 0,
+    "totalPoints": 0,
+    "losses": 0,
+    "updatedAt": {
+      "_seconds": 1764855920,
+      "_nanoseconds": 11000000
+    }
+  },
+  {
+    "id": "14Pt1XpwyeMBDzVrqepE",
+    "name": "Kauka",
+    "city": "City",
+    "gender": "men",
+    "colors": [
+      "#67e8f9",
+      "#0ea5e9"
+    ],
+    "logo": "/logos/Males/City kauka.jpg",
+    "createdAt": {
+      "_seconds": 1764696561,
+      "_nanoseconds": 504000000
+    },
+    "wins": 0,
+    "totalPoints": 0,
+    "losses": 0,
+    "updatedAt": {
+      "_seconds": 1764855920,
+      "_nanoseconds": 142000000
+    }
+  },
+  {
+    "id": "1sNUD68AULfA8It8u4hm",
+    "name": "Binza City",
+    "city": "",
+    "gender": "men",
+    "colors": [
+      "#60a5fa",
+      "#2563eb"
+    ],
+    "logo": "/logos/Males/binza_city.jpg",
+    "createdAt": {
+      "_seconds": 1764696560,
+      "_nanoseconds": 781000000
+    },
+    "wins": 0,
+    "totalPoints": 0,
+    "losses": 0,
+    "updatedAt": {
+      "_seconds": 1764855920,
+      "_nanoseconds": 199000000
+    }
+  },
+  {
+    "id": "6VbPyzEcawttb4W0pnjZ",
+    "name": "Ballers",
+    "city": "",
+    "gender": "men",
+    "colors": [
+      "#cbd5f5",
+      "#3b82f6"
+    ],
+    "logo": "/logos/Males/ballers.jpg",
+    "createdAt": {
+      "_seconds": 1764696560,
+      "_nanoseconds": 703000000
+    },
+    "wins": 1,
+    "totalPoints": 198,
+    "losses": 1,
+    "updatedAt": {
+      "_seconds": 1764856298,
+      "_nanoseconds": 727000000
+    }
+  },
+  {
+    "id": "6djAxePwGjpsEi3z3TDK",
+    "name": "NMG",
+    "city": "",
+    "gender": "men",
+    "colors": [
+      "#38bdf8",
+      "#0284c7"
+    ],
+    "logo": "/logos/Males/bcnmg.jpg",
+    "createdAt": {
+      "_seconds": 1764696561,
+      "_nanoseconds": 844000000
+    },
+    "wins": 0,
+    "totalPoints": 0,
+    "losses": 0,
+    "updatedAt": {
+      "_seconds": 1764855920,
+      "_nanoseconds": 299000000
+    }
+  },
+  {
+    "id": "7XtU7tZsf0cXLVAI9DmG",
+    "name": "Ngaba Basket Center",
+    "city": "",
+    "gender": "men",
+    "colors": [
+      "#fcd34d",
+      "#fb923c"
+    ],
+    "logo": "/logos/Males/ngaba_basketball_center.jpg",
+    "createdAt": {
+      "_seconds": 1764696561,
+      "_nanoseconds": 742000000
+    },
+    "wins": 0,
+    "totalPoints": 0,
+    "losses": 0,
+    "updatedAt": {
+      "_seconds": 1764855920,
+      "_nanoseconds": 347000000
+    }
+  },
+  {
+    "id": "B2MWgXxBPkmsH18Ze7u8",
+    "name": "Tourbillon",
+    "city": "",
+    "gender": "women",
+    "colors": [
+      "#f472b6",
+      "#9333ea"
+    ],
+    "logo": "/logos/Females/tourbillion.jpg",
+    "createdAt": {
+      "_seconds": 1764696562,
+      "_nanoseconds": 320000000
+    },
+    "wins": 0,
+    "totalPoints": 0,
+    "losses": 0,
+    "updatedAt": {
+      "_seconds": 1764855920,
+      "_nanoseconds": 403000000
+    }
+  },
+  {
+    "id": "EukWQAR0Id9ftU5nWjsG",
+    "name": "CSM",
+    "city": "",
+    "gender": "men",
+    "colors": [
+      "#ec4899",
+      "#9333ea"
+    ],
+    "logo": "/logos/Males/CSM.jpg",
+    "createdAt": {
+      "_seconds": 1764696561,
+      "_nanoseconds": 12000000
+    },
+    "wins": 0,
+    "totalPoints": 0,
+    "losses": 0,
+    "updatedAt": {
+      "_seconds": 1764855920,
+      "_nanoseconds": 451000000
+    }
+  },
+  {
+    "id": "FPr13h8uKYaqmDlvHT36",
+    "name": "Raphael",
+    "city": "",
+    "gender": "women",
+    "colors": [
+      "#fde047",
+      "#facc15"
+    ],
+    "logo": "/logos/Females/raphael.jpg",
+    "createdAt": {
+      "_seconds": 1764696562,
+      "_nanoseconds": 180000000
+    },
+    "wins": 0,
+    "totalPoints": 0,
+    "losses": 0,
+    "updatedAt": {
+      "_seconds": 1764855920,
+      "_nanoseconds": 499000000
+    }
+  },
+  {
+    "id": "H6Lxmj2a0MTUyKhBdqPX",
+    "name": "Police",
+    "city": "",
+    "gender": "men",
+    "colors": [
+      "#0f172a",
+      "#38bdf8"
+    ],
+    "logo": "/logos/Males/police.jpg",
+    "createdAt": {
+      "_seconds": 1764696562,
+      "_nanoseconds": 72000000
+    },
+    "wins": 0,
+    "totalPoints": 0,
+    "losses": 0,
+    "updatedAt": {
+      "_seconds": 1764855920,
+      "_nanoseconds": 525000000
+    }
+  },
+  {
+    "id": "HNI96RID2BP4ueqH52nM",
+    "name": "Bana Lingwala",
+    "city": "",
+    "gender": "men",
+    "colors": [
+      "#4ade80",
+      "#16a34a"
+    ],
+    "logo": "/logos/Males/bana_lingwala.jpg",
+    "createdAt": {
+      "_seconds": 1764696560,
+      "_nanoseconds": 756000000
+    },
+    "wins": 0,
+    "totalPoints": 0,
+    "losses": 0,
+    "updatedAt": {
+      "_seconds": 1764950960,
+      "_nanoseconds": 455000000
+    }
+  },
+  {
+    "id": "ITVu0YulCXjMxLMu0U30",
+    "name": "Jourdain",
+    "city": "",
+    "gender": "men",
+    "colors": [
+      "#93c5fd",
+      "#3b82f6"
+    ],
+    "logo": "/logos/Males/jourdain.jpg",
+    "createdAt": {
+      "_seconds": 1764696561,
+      "_nanoseconds": 452000000
+    },
+    "wins": 0,
+    "totalPoints": 0,
+    "losses": 0,
+    "updatedAt": {
+      "_seconds": 1764855920,
+      "_nanoseconds": 580000000
+    }
+  },
+  {
+    "id": "JsnEzaizmcp7VnxrfNhk",
+    "name": "Hatari",
+    "city": "",
+    "gender": "women",
+    "colors": [
+      "#fb7185",
+      "#9f1239"
+    ],
+    "logo": "/logos/Females/hatari.jpg",
+    "createdAt": {
+      "_seconds": 1764696561,
+      "_nanoseconds": 197000000
+    },
+    "wins": 0,
+    "totalPoints": 0,
+    "losses": 0,
+    "updatedAt": {
+      "_seconds": 1764855920,
+      "_nanoseconds": 608000000
+    }
+  },
+  {
+    "id": "LA7imw3o1c2PJmoz7mzv",
+    "name": "Yellow Center",
+    "city": "",
+    "gender": "women",
+    "colors": [
+      "#fef08a",
+      "#eab308"
+    ],
+    "logo": "/logos/Females/yellow_star.jpg",
+    "createdAt": {
+      "_seconds": 1764696562,
+      "_nanoseconds": 374000000
+    },
+    "wins": 0,
+    "totalPoints": 0,
+    "losses": 0,
+    "updatedAt": {
+      "_seconds": 1764855920,
+      "_nanoseconds": 657000000
+    }
+  },
+  {
+    "id": "NevjhkPzfPWysQtmkvjL",
+    "name": "One Team",
+    "city": "",
+    "gender": "men",
+    "colors": [
+      "#f472b6",
+      "#be185d"
+    ],
+    "logo": "/logos/Males/one_team.jpg",
+    "createdAt": {
+      "_seconds": 1764696561,
+      "_nanoseconds": 917000000
+    },
+    "wins": 0,
+    "totalPoints": 0,
+    "losses": 0,
+    "updatedAt": {
+      "_seconds": 1764855920,
+      "_nanoseconds": 693000000
+    }
+  },
+  {
+    "id": "PfN8KNnimkpmXV8rckT5",
+    "name": "CNSS",
+    "city": "",
+    "gender": "women",
+    "colors": [
+      "#22d3ee",
+      "#0f172a"
+    ],
+    "logo": "/logos/Females/CNSS.jpg",
+    "createdAt": {
+      "_seconds": 1764696560,
+      "_nanoseconds": 918000000
+    },
+    "wins": 0,
+    "totalPoints": 0,
+    "losses": 0,
+    "updatedAt": {
+      "_seconds": 1764855920,
+      "_nanoseconds": 739000000
+    }
+  },
+  {
+    "id": "QROowP7by7UdiR2oieHg",
+    "name": "SCTP",
+    "city": "",
+    "gender": "men",
+    "colors": [
+      "#22d3ee",
+      "#0ea5e9"
+    ],
+    "logo": "/logos/Males/sctp.jpg",
+    "createdAt": {
+      "_seconds": 1764696562,
+      "_nanoseconds": 232000000
+    },
+    "wins": 0,
+    "totalPoints": 0,
+    "losses": 0,
+    "updatedAt": {
+      "_seconds": 1764855920,
+      "_nanoseconds": 764000000
+    }
+  },
+  {
+    "id": "RjONkGRZ5EPkVCcVJLg5",
+    "name": "Ngaba Basketball Center",
+    "city": "",
+    "gender": "women",
+    "colors": [
+      "#fcd34d",
+      "#eab308"
+    ],
+    "logo": "/logos/Females/ngaba_basketball_center.jpg",
+    "createdAt": {
+      "_seconds": 1764696561,
+      "_nanoseconds": 769000000
+    },
+    "wins": 0,
+    "totalPoints": 0,
+    "losses": 0,
+    "updatedAt": {
+      "_seconds": 1764855920,
+      "_nanoseconds": 791000000
+    }
+  },
+  {
+    "id": "SDH6nTFhz1de2vcPS0pB",
+    "name": "Raphael",
+    "city": "",
+    "gender": "men",
+    "colors": [
+      "#fde047",
+      "#facc15"
+    ],
+    "logo": "/logos/Males/raphael.jpg",
+    "createdAt": {
+      "_seconds": 1764696562,
+      "_nanoseconds": 126000000
+    },
+    "wins": 0,
+    "totalPoints": 0,
+    "losses": 0,
+    "updatedAt": {
+      "_seconds": 1764855920,
+      "_nanoseconds": 839000000
+    }
+  },
+  {
+    "id": "SYT1hriQyeBana2kfGTO",
+    "name": "Ajakm",
+    "city": "",
+    "gender": "women",
+    "colors": [
+      "#c7d2fe",
+      "#6366f1"
+    ],
+    "logo": "/logos/Females/ajakm.jpg",
+    "createdAt": {
+      "_seconds": 1764696560,
+      "_nanoseconds": 588000000
+    },
+    "wins": 0,
+    "totalPoints": 0,
+    "losses": 0,
+    "updatedAt": {
+      "_seconds": 1764855920,
+      "_nanoseconds": 865000000
+    }
+  },
+  {
+    "id": "TUwOjJeIQjh7SYezBoAw",
+    "name": "Rich",
+    "city": "",
+    "gender": "men",
+    "colors": [
+      "#fda4af",
+      "#fb7185"
+    ],
+    "logo": "/logos/Males/rich.jpg",
+    "createdAt": {
+      "_seconds": 1764696562,
+      "_nanoseconds": 206000000
+    },
+    "wins": 0,
+    "totalPoints": 0,
+    "losses": 0,
+    "updatedAt": {
+      "_seconds": 1764855920,
+      "_nanoseconds": 921000000
+    }
+  },
+  {
+    "id": "V7nGtzG9pWwWGlrBmnnw",
+    "name": "Molokai",
+    "city": "",
+    "gender": "men",
+    "colors": [
+      "#fbbf24",
+      "#fb923c"
+    ],
+    "logo": "/logos/Males/molokai.jpg",
+    "createdAt": {
+      "_seconds": 1764696561,
+      "_nanoseconds": 715000000
+    },
+    "wins": 0,
+    "totalPoints": 0,
+    "losses": 0,
+    "updatedAt": {
+      "_seconds": 1764855920,
+      "_nanoseconds": 952000000
+    }
+  },
+  {
+    "id": "XvM2rJ8jpfhjK4gSXZ6O",
+    "name": "Maison des Jeunes",
+    "city": "",
+    "gender": "women",
+    "colors": [
+      "#c4b5fd",
+      "#8b5cf6"
+    ],
+    "logo": "/logos/Females/maison_des_jeunes.jpg",
+    "createdAt": {
+      "_seconds": 1764696561,
+      "_nanoseconds": 531000000
+    },
+    "wins": 0,
+    "totalPoints": 0,
+    "losses": 0,
+    "updatedAt": {
+      "_seconds": 1764855921,
+      "_nanoseconds": 11000000
+    }
+  },
+  {
+    "id": "YmPWwnanrzfRz9udP3kE",
+    "name": "Opportunidade",
+    "city": "",
+    "gender": "men",
+    "colors": [
+      "#fb923c",
+      "#ea580c"
+    ],
+    "logo": "/logos/Males/oportunidade.jpg",
+    "createdAt": {
+      "_seconds": 1764696561,
+      "_nanoseconds": 964000000
+    },
+    "wins": 0,
+    "totalPoints": 0,
+    "losses": 0,
+    "updatedAt": {
+      "_seconds": 1764855921,
+      "_nanoseconds": 37000000
+    }
+  },
+  {
+    "id": "ZAbLiu2G7E0g63dzgjmU",
+    "name": "Yolo",
+    "city": "",
+    "gender": "women",
+    "colors": [
+      "#38bdf8",
+      "#0ea5e9"
+    ],
+    "logo": "/logos/Females/yolo.jpg",
+    "createdAt": {
+      "_seconds": 1764696562,
+      "_nanoseconds": 400000000
+    },
+    "wins": 0,
+    "totalPoints": 0,
+    "losses": 0,
+    "updatedAt": {
+      "_seconds": 1764855921,
+      "_nanoseconds": 63000000
+    }
+  },
+  {
+    "id": "ZHAinwa6X6xC7tI0ZvQD",
+    "name": "Heritage",
+    "city": "",
+    "gender": "women",
+    "colors": [
+      "#facc15",
+      "#d97706"
+    ],
+    "logo": "/logos/Females/heritage.jpg",
+    "createdAt": {
+      "_seconds": 1764696561,
+      "_nanoseconds": 295000000
+    },
+    "losses": 0,
+    "wins": 0,
+    "totalPoints": 0,
+    "updatedAt": {
+      "_seconds": 1764855921,
+      "_nanoseconds": 90000000
+    }
+  },
+  {
+    "id": "akzcvqKFB7KOtpQJP7eg",
+    "name": "Figuier",
+    "city": "",
+    "gender": "men",
+    "colors": [
+      "#a5b4fc",
+      "#6366f1"
+    ],
+    "logo": "/logos/Males/figuier.jpg",
+    "createdAt": {
+      "_seconds": 1764696561,
+      "_nanoseconds": 75000000
+    },
+    "wins": 0,
+    "totalPoints": 0,
+    "losses": 0,
+    "updatedAt": {
+      "_seconds": 1764855921,
+      "_nanoseconds": 138000000
+    }
+  },
+  {
+    "id": "cV6FBNchXTBb6DRp2QXs",
+    "name": "Mboka Mboka",
+    "city": "",
+    "gender": "women",
+    "colors": [
+      "#86efac",
+      "#22c55e"
+    ],
+    "logo": "/logos/Females/mboka_mboka.jpg",
+    "createdAt": {
+      "_seconds": 1764696561,
+      "_nanoseconds": 689000000
+    },
+    "wins": 0,
+    "totalPoints": 0,
+    "losses": 0,
+    "updatedAt": {
+      "_seconds": 1764855921,
+      "_nanoseconds": 165000000
+    }
+  },
+  {
+    "id": "cyTRuNiAGi0OukEOWV3m",
+    "name": "Corridor de l'Espoir",
+    "city": "",
+    "gender": "women",
+    "colors": [
+      "#fda4af",
+      "#f43f5e"
+    ],
+    "logo": "/logos/Females/corridor_de_lespoir.jpg",
+    "createdAt": {
+      "_seconds": 1764696560,
+      "_nanoseconds": 969000000
+    },
+    "losses": 0,
+    "wins": 0,
+    "totalPoints": 0,
+    "updatedAt": {
+      "_seconds": 1764855921,
+      "_nanoseconds": 193000000
+    }
+  },
+  {
+    "id": "dpphI0kA0iGBnxhv61sd",
+    "name": "Marche de la Liberte",
+    "city": "",
+    "gender": "men",
+    "colors": [
+      "#fb7185",
+      "#be123c"
+    ],
+    "logo": "/logos/Males/marche_de_la_liberte.jpg",
+    "createdAt": {
+      "_seconds": 1764696561,
+      "_nanoseconds": 582000000
+    },
+    "wins": 0,
+    "totalPoints": 0,
+    "losses": 0,
+    "updatedAt": {
+      "_seconds": 1764855921,
+      "_nanoseconds": 220000000
+    }
+  },
+  {
+    "id": "gCB7vzHS39YgJBh0heF1",
+    "name": "Ngaliema",
+    "city": "",
+    "gender": "men",
+    "colors": [
+      "#2dd4bf",
+      "#0f766e"
+    ],
+    "logo": "/logos/Males/ngaliema.jpg",
+    "createdAt": {
+      "_seconds": 1764696561,
+      "_nanoseconds": 817000000
+    },
+    "wins": 0,
+    "totalPoints": 0,
+    "losses": 0,
+    "updatedAt": {
+      "_seconds": 1764855921,
+      "_nanoseconds": 246000000
+    }
+  },
+  {
+    "id": "hx7ZYUawHp3exAKHc9jR",
+    "name": "Terreur",
+    "city": "",
+    "gender": "men",
+    "colors": [
+      "#ef4444",
+      "#0f172a"
+    ],
+    "logo": "/logos/Males/terreur.jpg",
+    "createdAt": {
+      "_seconds": 1764696562,
+      "_nanoseconds": 280000000
+    },
+    "wins": 0,
+    "totalPoints": 0,
+    "losses": 0,
+    "updatedAt": {
+      "_seconds": 1764855921,
+      "_nanoseconds": 270000000
+    }
+  },
+  {
+    "id": "i9eu37kHH5Cfdq0jOc1r",
+    "name": "Masano",
+    "city": "",
+    "gender": "men",
+    "colors": [
+      "#34d399",
+      "#047857"
+    ],
+    "logo": "/logos/Males/masano.jpg",
+    "createdAt": {
+      "_seconds": 1764696561,
+      "_nanoseconds": 634000000
+    },
+    "wins": 0,
+    "totalPoints": 0,
+    "losses": 0,
+    "updatedAt": {
+      "_seconds": 1764855921,
+      "_nanoseconds": 319000000
+    }
+  },
+  {
+    "id": "ksaMs6VSxJd1CwbW8bcD",
+    "name": "Vita Club",
+    "city": "",
+    "gender": "women",
+    "colors": [
+      "#34d399",
+      "#047857"
+    ],
+    "logo": "/logos/Females/vita_club.jpg",
+    "createdAt": {
+      "_seconds": 1764696562,
+      "_nanoseconds": 346000000
+    },
+    "wins": 0,
+    "totalPoints": 0,
+    "losses": 0,
+    "updatedAt": {
+      "_seconds": 1764855921,
+      "_nanoseconds": 346000000
+    }
+  },
+  {
+    "id": "mgcKp3yjoMQM1WItClmj",
+    "name": "J&A",
+    "city": "",
+    "gender": "men",
+    "colors": [
+      "#c4b5fd",
+      "#9333ea"
+    ],
+    "logo": "/logos/Males/J&A.jpg",
+    "createdAt": {
+      "_seconds": 1764696561,
+      "_nanoseconds": 402000000
+    },
+    "wins": 0,
+    "totalPoints": 0,
+    "losses": 0,
+    "updatedAt": {
+      "_seconds": 1764855921,
+      "_nanoseconds": 400000000
+    }
+  },
+  {
+    "id": "tRMw63hEMXwHjUEtR5Ho",
+    "name": "OGKS",
+    "city": "",
+    "gender": "women",
+    "colors": [
+      "#fde047",
+      "#f97316"
+    ],
+    "logo": "/logos/Females/OGKS.jpg",
+    "createdAt": {
+      "_seconds": 1764696561,
+      "_nanoseconds": 871000000
+    },
+    "wins": 0,
+    "totalPoints": 0,
+    "losses": 0,
+    "updatedAt": {
+      "_seconds": 1764855921,
+      "_nanoseconds": 425000000
+    }
+  },
+  {
+    "id": "tUURXDv7RRn1IjWXD8Wn",
+    "name": "Gen",
+    "city": "New",
+    "gender": "men",
+    "colors": [
+      "#38bdf8",
+      "#a855f7"
+    ],
+    "logo": "/logos/Males/New Gen.png",
+    "createdAt": {
+      "_seconds": 1764696561,
+      "_nanoseconds": 171000000
+    },
+    "wins": 0,
+    "totalPoints": 0,
+    "losses": 0,
+    "updatedAt": {
+      "_seconds": 1764855921,
+      "_nanoseconds": 476000000
+    }
+  },
+  {
+    "id": "tqkf0paFOlMCMwq2Hoxv",
+    "name": "Bosco",
+    "city": "Don",
+    "gender": "men",
+    "colors": [
+      "#fcd34d",
+      "#f97316"
+    ],
+    "logo": "/logos/Males/don bosco.jpg",
+    "createdAt": {
+      "_seconds": 1764696560,
+      "_nanoseconds": 809000000
+    },
+    "wins": 0,
+    "totalPoints": 0,
+    "losses": 0,
+    "updatedAt": {
+      "_seconds": 1764855921,
+      "_nanoseconds": 521000000
+    }
+  },
+  {
+    "id": "v0LpCzG5pheZ2gYSBPKb",
+    "name": "Heritage",
+    "city": "",
+    "gender": "men",
+    "colors": [
+      "#facc15",
+      "#d97706"
+    ],
+    "logo": "/logos/Males/heritage.jpg",
+    "createdAt": {
+      "_seconds": 1764696561,
+      "_nanoseconds": 247000000
+    },
+    "losses": 1,
+    "wins": 1,
+    "totalPoints": 164,
+    "updatedAt": {
+      "_seconds": 1764856298,
+      "_nanoseconds": 612000000
+    }
+  },
+  {
+    "id": "x31wXrYPbConE4QuRiv0",
+    "name": "Jourdain",
+    "city": "",
+    "gender": "women",
+    "colors": [
+      "#a5f3fc",
+      "#06b6d4"
+    ],
+    "logo": "/logos/Females/jourdain.jpg",
+    "createdAt": {
+      "_seconds": 1764696561,
+      "_nanoseconds": 478000000
+    },
+    "losses": 0,
+    "wins": 0,
+    "totalPoints": 0,
+    "updatedAt": {
+      "_seconds": 1764855921,
+      "_nanoseconds": 592000000
+    }
+  },
+  {
+    "id": "xMtRuxfgvkvaeVpNhTv9",
+    "name": "Bosco",
+    "city": "Don",
+    "gender": "women",
+    "colors": [
+      "#fcd34d",
+      "#f97316"
+    ],
+    "logo": "/logos/Females/don_bosco.jpg",
+    "createdAt": {
+      "_seconds": 1764696560,
+      "_nanoseconds": 866000000
+    },
+    "wins": 0,
+    "totalPoints": 0,
+    "losses": 0,
+    "updatedAt": {
+      "_seconds": 1764855921,
+      "_nanoseconds": 651000000
+    }
+  },
+  {
+    "id": "xofkx8ifMcgH8F5OBqj0",
+    "name": "INRI",
+    "city": "",
+    "gender": "women",
+    "colors": [
+      "#c084fc",
+      "#7c3aed"
+    ],
+    "logo": "/logos/Females/inri.jpg",
+    "createdAt": {
+      "_seconds": 1764696561,
+      "_nanoseconds": 346000000
+    },
+    "wins": 0,
+    "totalPoints": 0,
+    "losses": 0,
+    "updatedAt": {
+      "_seconds": 1764855921,
+      "_nanoseconds": 679000000
+    }
+  }
+]

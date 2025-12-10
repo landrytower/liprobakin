@@ -1099,6 +1099,8 @@ export default function AdminPage() {
       gender: team.gender,
       colorsInput: team.colors.join(", "),
       logo: team.logo,
+      nationality: team.nationality || "DRC",
+      nationality2: team.nationality2 || "",
     });
     setTeamLogoFile(null);
     updateTeamLogoPreview(team.logo ?? "");
@@ -4417,7 +4419,7 @@ export default function AdminPage() {
             )}
             </>
             )}
-            
+
             {/* Games Tab Content */}
             {activeTab === 'games' && (
             <>

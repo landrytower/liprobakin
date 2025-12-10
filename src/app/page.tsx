@@ -1197,8 +1197,8 @@ export default function Home() {
               dateObj: data.date ? new Date(data.date) : null,
             };
           })
-          .filter((game) => game.completed === true)
-          .sort((a, b) => (b.dateObj?.getTime() || 0) - (a.dateObj?.getTime() || 0))
+          .filter((game: any) => game.completed === true)
+          .sort((a: any, b: any) => (b.dateObj?.getTime() || 0) - (a.dateObj?.getTime() || 0))
           .slice(0, 7);
         
         setCompletedGames(completedGamesData);

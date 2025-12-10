@@ -127,27 +127,27 @@ export default function GameDetailPage() {
   const awayStats = game.playerStats?.filter(stat => stat.teamId === game.awayTeamId) || [];
 
   // Calculate team totals from player stats
-  const calculateTeamStats = (stats: PlayerStat[]) => {
+  const calculateTeamStats = (stats: PlayerStat[]): TeamStats => {
     return stats.reduce((acc, player) => ({
-      pts: acc.pts + (player.pts || 0),
-      reb: acc.reb + (player.reb || 0),
-      oreb: acc.oreb + (player.oreb || 0),
-      dreb: acc.dreb + (player.dreb || 0),
-      ast: acc.ast + (player.ast || 0),
-      stl: acc.stl + (player.stl || 0),
-      blk: acc.blk + (player.blk || 0),
-      to: acc.to + (player.to || 0),
-      pf: acc.pf + (player.pf || 0),
-      fg2Made: acc.fg2Made + (player.two_pm || 0),
-      fg2Attempted: acc.fg2Attempted + (player.two_pa || 0),
-      fg3Made: acc.fg3Made + (player.three_pm || 0),
-      fg3Attempted: acc.fg3Attempted + (player.three_pa || 0),
-      ftMade: acc.ftMade + (player.ft_m || 0),
-      ftAttempted: acc.ftAttempted + (player.ft_a || 0),
+      pts: (acc.pts || 0) + (player.pts || 0),
+      reb: (acc.reb || 0) + (player.reb || 0),
+      oreb: (acc.oreb || 0) + (player.oreb || 0),
+      dreb: (acc.dreb || 0) + (player.dreb || 0),
+      ast: (acc.ast || 0) + (player.ast || 0),
+      stl: (acc.stl || 0) + (player.stl || 0),
+      blk: (acc.blk || 0) + (player.blk || 0),
+      to: (acc.to || 0) + (player.to || 0),
+      pf: (acc.pf || 0) + (player.pf || 0),
+      fg2Made: (acc.fg2Made || 0) + (player.two_pm || 0),
+      fg2Attempted: (acc.fg2Attempted || 0) + (player.two_pa || 0),
+      fg3Made: (acc.fg3Made || 0) + (player.three_pm || 0),
+      fg3Attempted: (acc.fg3Attempted || 0) + (player.three_pa || 0),
+      ftMade: (acc.ftMade || 0) + (player.ft_m || 0),
+      ftAttempted: (acc.ftAttempted || 0) + (player.ft_a || 0),
     }), {
       pts: 0, reb: 0, oreb: 0, dreb: 0, ast: 0, stl: 0, blk: 0, to: 0, pf: 0,
       fg2Made: 0, fg2Attempted: 0, fg3Made: 0, fg3Attempted: 0, ftMade: 0, ftAttempted: 0
-    });
+    } as TeamStats);
   };
 
   const homeTeamStats = calculateTeamStats(homeStats);
@@ -166,32 +166,32 @@ export default function GameDetailPage() {
   };
 
   const homeOverallPct = calculatePercentage(
-    homeTeamStats.fg2Made + homeTeamStats.fg3Made + homeTeamStats.ftMade,
-    homeTeamStats.fg2Attempted + homeTeamStats.fg3Attempted + homeTeamStats.ftAttempted
+    (homeTeamStats.fg2Made || 0) + (homeTeamStats.fg3Made || 0) + (homeTeamStats.ftMade || 0),
+    (homeTeamStats.fg2Attempted || 0) + (homeTeamStats.fg3Attempted || 0) + (homeTeamStats.ftAttempted || 0)
   );
   const awayOverallPct = calculatePercentage(
-    awayTeamStats.fg2Made + awayTeamStats.fg3Made + awayTeamStats.ftMade,
-    awayTeamStats.fg2Attempted + awayTeamStats.fg3Attempted + awayTeamStats.ftAttempted
+    (awayTeamStats.fg2Made || 0) + (awayTeamStats.fg3Made || 0) + (awayTeamStats.ftMade || 0),
+    (awayTeamStats.fg2Attempted || 0) + (awayTeamStats.fg3Attempted || 0) + (awayTeamStats.ftAttempted || 0)
   );
 
   // Field Goal % (2PT + 3PT combined, excluding FT)
   const homeFgPct = calculatePercentage(
-    homeTeamStats.fg2Made + homeTeamStats.fg3Made,
-    homeTeamStats.fg2Attempted + homeTeamStats.fg3Attempted
+    (homeTeamStats.fg2Made || 0) + (homeTeamStats.fg3Made || 0),
+    (homeTeamStats.fg2Attempted || 0) + (homeTeamStats.fg3Attempted || 0)
   );
   const awayFgPct = calculatePercentage(
-    awayTeamStats.fg2Made + awayTeamStats.fg3Made,
-    awayTeamStats.fg2Attempted + awayTeamStats.fg3Attempted
+    (awayTeamStats.fg2Made || 0) + (awayTeamStats.fg3Made || 0),
+    (awayTeamStats.fg2Attempted || 0) + (awayTeamStats.fg3Attempted || 0)
   );
 
-  const home2PtPct = calculatePercentage(homeTeamStats.fg2Made, homeTeamStats.fg2Attempted);
-  const away2PtPct = calculatePercentage(awayTeamStats.fg2Made, awayTeamStats.fg2Attempted);
+  const home2PtPct = calculatePercentage(homeTeamStats.fg2Made || 0, homeTeamStats.fg2Attempted || 0);
+  const away2PtPct = calculatePercentage(awayTeamStats.fg2Made || 0, awayTeamStats.fg2Attempted || 0);
 
-  const home3PtPct = calculatePercentage(homeTeamStats.fg3Made, homeTeamStats.fg3Attempted);
-  const away3PtPct = calculatePercentage(awayTeamStats.fg3Made, awayTeamStats.fg3Attempted);
+  const home3PtPct = calculatePercentage(homeTeamStats.fg3Made || 0, homeTeamStats.fg3Attempted || 0);
+  const away3PtPct = calculatePercentage(awayTeamStats.fg3Made || 0, awayTeamStats.fg3Attempted || 0);
 
-  const homeFtPct = calculatePercentage(homeTeamStats.ftMade, homeTeamStats.ftAttempted);
-  const awayFtPct = calculatePercentage(awayTeamStats.ftMade, awayTeamStats.ftAttempted);
+  const homeFtPct = calculatePercentage(homeTeamStats.ftMade || 0, homeTeamStats.ftAttempted || 0);
+  const awayFtPct = calculatePercentage(awayTeamStats.ftMade || 0, awayTeamStats.ftAttempted || 0);
 
   return (
     <div className="min-h-screen bg-slate-950">
@@ -494,7 +494,7 @@ export default function GameDetailPage() {
                   </div>
                   <p className="text-sm font-medium text-slate-300">{game.awayTeamName}</p>
                   <p className="text-xs text-slate-500 mt-1">
-                    {awayTeamStats.fg2Made + awayTeamStats.fg3Made}/{awayTeamStats.fg2Attempted + awayTeamStats.fg3Attempted}
+                    {(awayTeamStats.fg2Made || 0) + (awayTeamStats.fg3Made || 0)}/{(awayTeamStats.fg2Attempted || 0) + (awayTeamStats.fg3Attempted || 0)}
                   </p>
                 </div>
 
@@ -531,7 +531,7 @@ export default function GameDetailPage() {
                   </div>
                   <p className="text-sm font-medium text-slate-300">{game.homeTeamName}</p>
                   <p className="text-xs text-slate-500 mt-1">
-                    {homeTeamStats.fg2Made + homeTeamStats.fg3Made}/{homeTeamStats.fg2Attempted + homeTeamStats.fg3Attempted}
+                    {(homeTeamStats.fg2Made || 0) + (homeTeamStats.fg3Made || 0)}/{(homeTeamStats.fg2Attempted || 0) + (homeTeamStats.fg3Attempted || 0)}
                   </p>
                 </div>
               </div>
@@ -543,15 +543,15 @@ export default function GameDetailPage() {
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-6 rounded bg-blue-500 flex items-center justify-center">
-                        <span className="text-xs font-bold text-white">{awayTeamStats.fg2Made}</span>
+                        <span className="text-xs font-bold text-white">{awayTeamStats.fg2Made || 0}</span>
                       </div>
-                      <span className="text-xs text-slate-400">{awayTeamStats.fg2Made}/{awayTeamStats.fg2Attempted}</span>
+                      <span className="text-xs text-slate-400">{awayTeamStats.fg2Made || 0}/{awayTeamStats.fg2Attempted || 0}</span>
                     </div>
                     <span className="text-sm font-medium text-white">2PT FG</span>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-slate-400">{homeTeamStats.fg2Made}/{homeTeamStats.fg2Attempted}</span>
+                      <span className="text-xs text-slate-400">{homeTeamStats.fg2Made || 0}/{homeTeamStats.fg2Attempted || 0}</span>
                       <div className="w-8 h-6 rounded bg-red-500 flex items-center justify-center">
-                        <span className="text-xs font-bold text-white">{homeTeamStats.fg2Made}</span>
+                        <span className="text-xs font-bold text-white">{homeTeamStats.fg2Made || 0}</span>
                       </div>
                     </div>
                   </div>
@@ -576,15 +576,15 @@ export default function GameDetailPage() {
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-6 rounded bg-blue-500 flex items-center justify-center">
-                        <span className="text-xs font-bold text-white">{awayTeamStats.fg3Made}</span>
+                        <span className="text-xs font-bold text-white">{awayTeamStats.fg3Made || 0}</span>
                       </div>
-                      <span className="text-xs text-slate-400">{awayTeamStats.fg3Made}/{awayTeamStats.fg3Attempted}</span>
+                      <span className="text-xs text-slate-400">{awayTeamStats.fg3Made || 0}/{awayTeamStats.fg3Attempted || 0}</span>
                     </div>
                     <span className="text-sm font-medium text-white">3PT FG</span>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-slate-400">{homeTeamStats.fg3Made}/{homeTeamStats.fg3Attempted}</span>
+                      <span className="text-xs text-slate-400">{homeTeamStats.fg3Made || 0}/{homeTeamStats.fg3Attempted || 0}</span>
                       <div className="w-8 h-6 rounded bg-red-500 flex items-center justify-center">
-                        <span className="text-xs font-bold text-white">{homeTeamStats.fg3Made}</span>
+                        <span className="text-xs font-bold text-white">{homeTeamStats.fg3Made || 0}</span>
                       </div>
                     </div>
                   </div>
@@ -609,15 +609,15 @@ export default function GameDetailPage() {
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-6 rounded bg-blue-500 flex items-center justify-center">
-                        <span className="text-xs font-bold text-white">{awayTeamStats.ftMade}</span>
+                        <span className="text-xs font-bold text-white">{awayTeamStats.ftMade || 0}</span>
                       </div>
-                      <span className="text-xs text-slate-400">{awayTeamStats.ftMade}/{awayTeamStats.ftAttempted}</span>
+                      <span className="text-xs text-slate-400">{awayTeamStats.ftMade || 0}/{awayTeamStats.ftAttempted || 0}</span>
                     </div>
                     <span className="text-sm font-medium text-white">FT</span>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-slate-400">{homeTeamStats.ftMade}/{homeTeamStats.ftAttempted}</span>
+                      <span className="text-xs text-slate-400">{homeTeamStats.ftMade || 0}/{homeTeamStats.ftAttempted || 0}</span>
                       <div className="w-8 h-6 rounded bg-red-500 flex items-center justify-center">
-                        <span className="text-xs font-bold text-white">{homeTeamStats.ftMade}</span>
+                        <span className="text-xs font-bold text-white">{homeTeamStats.ftMade || 0}</span>
                       </div>
                     </div>
                   </div>
@@ -644,15 +644,15 @@ export default function GameDetailPage() {
               <h3 className="text-base font-semibold text-white mb-4">Key Stats</h3>
               <div className="space-y-3">
                 {[
-                  { label: 'PTS', away: awayTeamStats.pts, home: homeTeamStats.pts },
-                  { label: 'REB', away: awayTeamStats.reb, home: homeTeamStats.reb },
-                  { label: 'OREB', away: awayTeamStats.oreb, home: homeTeamStats.oreb },
-                  { label: 'DREB', away: awayTeamStats.dreb, home: homeTeamStats.dreb },
-                  { label: 'AST', away: awayTeamStats.ast, home: homeTeamStats.ast },
-                  { label: 'STL', away: awayTeamStats.stl, home: homeTeamStats.stl },
-                  { label: 'BLK', away: awayTeamStats.blk, home: homeTeamStats.blk },
-                  { label: 'TO', away: awayTeamStats.to, home: homeTeamStats.to },
-                  { label: 'PF', away: awayTeamStats.pf, home: homeTeamStats.pf },
+                  { label: 'PTS', away: awayTeamStats.pts || 0, home: homeTeamStats.pts || 0 },
+                  { label: 'REB', away: awayTeamStats.reb || 0, home: homeTeamStats.reb || 0 },
+                  { label: 'OREB', away: awayTeamStats.oreb || 0, home: homeTeamStats.oreb || 0 },
+                  { label: 'DREB', away: awayTeamStats.dreb || 0, home: homeTeamStats.dreb || 0 },
+                  { label: 'AST', away: awayTeamStats.ast || 0, home: homeTeamStats.ast || 0 },
+                  { label: 'STL', away: awayTeamStats.stl || 0, home: homeTeamStats.stl || 0 },
+                  { label: 'BLK', away: awayTeamStats.blk || 0, home: homeTeamStats.blk || 0 },
+                  { label: 'TO', away: awayTeamStats.to || 0, home: homeTeamStats.to || 0 },
+                  { label: 'PF', away: awayTeamStats.pf || 0, home: homeTeamStats.pf || 0 },
                 ].map((stat) => {
                   const total = stat.away + stat.home || 1;
                   const awayPercent = (stat.away / total) * 100;

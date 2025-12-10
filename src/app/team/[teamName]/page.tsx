@@ -59,34 +59,31 @@ export default function TeamPage() {
         const teamsRef = collection(firebaseDB, "teams");
         const teamsSnapshot = await getDocs(teamsRef);
         
-        let foundTeam: TeamData | null = null;
-        let foundTeamId = "";
-        
-        teamsSnapshot.docs.forEach((doc) => {
+        const teamDoc = teamsSnapshot.docs.find((doc) => {
           const data = doc.data();
           const fullName = [data.city, data.name].filter(Boolean).join(" ").trim();
-          
-          if (fullName === teamName || data.name === teamName) {
-            foundTeam = {
-              id: doc.id,
-              name: data.name,
-              city: data.city,
-              logo: data.logo,
-              colors: data.colors || ["#000000", "#FFFFFF"],
-              wins: data.wins || 0,
-              losses: data.losses || 0,
-              conference: data.conference,
-              nationality: data.nationality,
-              nationality2: data.nationality2,
-            };
-            foundTeamId = doc.id;
-          }
+          return fullName === teamName || data.name === teamName;
         });
         
-        if (!foundTeam) {
+        if (!teamDoc) {
           setLoading(false);
           return;
         }
+        
+        const data = teamDoc.data();
+        const foundTeamId = teamDoc.id;
+        const foundTeam: TeamData = {
+          id: teamDoc.id,
+          name: data.name,
+          city: data.city,
+          logo: data.logo,
+          colors: data.colors || ["#000000", "#FFFFFF"],
+          wins: data.wins || 0,
+          losses: data.losses || 0,
+          conference: data.conference,
+          nationality: data.nationality,
+          nationality2: data.nationality2,
+        };
         
         // Calculate wins/losses from games
         const gamesRef = collection(firebaseDB, "games");
@@ -104,10 +101,20 @@ export default function TeamPage() {
           }
         });
         
-        foundTeam.wins = wins;
-        foundTeam.losses = losses;
+        const updatedTeam: TeamData = {
+          id: foundTeam.id,
+          name: foundTeam.name,
+          city: foundTeam.city,
+          logo: foundTeam.logo,
+          colors: foundTeam.colors,
+          conference: foundTeam.conference,
+          nationality: foundTeam.nationality,
+          nationality2: foundTeam.nationality2,
+          wins,
+          losses,
+        };
         
-        setTeamData(foundTeam);
+        setTeamData(updatedTeam);
         
         // Fetch roster
         const rosterRef = collection(firebaseDB, "teams", foundTeamId, "roster");
@@ -140,8 +147,8 @@ export default function TeamPage() {
         
         // Sort by number
         rosterData.sort((a, b) => {
-          const numA = parseInt(a.number) || 999;
-          const numB = parseInt(b.number) || 999;
+          const numA = typeof a.number === 'number' ? a.number : parseInt(String(a.number)) || 999;
+          const numB = typeof b.number === 'number' ? b.number : parseInt(String(b.number)) || 999;
           return numA - numB;
         });
         
@@ -240,7 +247,7 @@ export default function TeamPage() {
       <div 
         className="relative overflow-hidden border-b border-white/10"
         style={{
-          backgroundImage: `linear-gradient(135deg, ${teamData.colors[0]}33, ${teamData.colors[1]}22)`,
+          backgroundImage: `linear-gradient(135deg, ${teamData.colors?.[0] || '#000000'}33, ${teamData.colors?.[1] || '#FFFFFF'}22)`,
         }}
       >
         <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
@@ -263,7 +270,7 @@ export default function TeamPage() {
                 )}
               </div>
               <div className="mt-3 flex gap-2 justify-center sm:justify-start">
-                {teamData.colors.map((color, idx) => (
+                {teamData.colors?.map((color, idx) => (
                   <span
                     key={idx}
                     className="h-3 w-12 rounded-full"

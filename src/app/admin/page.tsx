@@ -10,6 +10,7 @@ import {
   addDoc,
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -1407,15 +1408,19 @@ export default function AdminPage() {
     setTeamSubmitting(true);
     setTeamStatus({ type: "info", message: teamForm.id ? "Updating team..." : "Creating team..." });
 
-    const payload = {
+    const payload: any = {
       name,
       city,
       gender: teamForm.gender,
       colors,
       logo,
       nationality: teamForm.nationality || "DRC",
-      nationality2: teamForm.nationality2 && teamForm.nationality2.trim() !== "" ? teamForm.nationality2 : undefined,
     };
+    
+    // Only add nationality2 if it has a value
+    if (teamForm.nationality2 && teamForm.nationality2.trim() !== "") {
+      payload.nationality2 = teamForm.nationality2;
+    }
 
     try {
       if (teamLogoFile) {
@@ -1426,19 +1431,34 @@ export default function AdminPage() {
         payload.logo = logo;
       }
       if (teamForm.id) {
-        await updateDoc(doc(firebaseDB, "teams", teamForm.id), {
-          ...payload,
+        // Create update payload
+        const updatePayload: any = {
+          name: payload.name,
+          city: payload.city,
+          gender: payload.gender,
+          colors: payload.colors,
+          logo: payload.logo,
+          nationality: payload.nationality,
           updatedAt: serverTimestamp(),
-        });
+        };
+        
+        // Handle nationality2: either set it or remove it
+        if (teamForm.nationality2 && teamForm.nationality2.trim() !== "") {
+          updatePayload.nationality2 = teamForm.nationality2;
+        } else {
+          // Remove the field if it's empty
+          updatePayload.nationality2 = deleteField();
+        }
+        
+        await updateDoc(doc(firebaseDB, "teams", teamForm.id), updatePayload);
         setTeamStatus({ type: "success", message: "Team updated." });
       } else {
-        const newTeamRef = await addDoc(collection(firebaseDB, "teams"), {
+        await addDoc(collection(firebaseDB, "teams"), {
           ...payload,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
         setTeamStatus({ type: "success", message: "Team created." });
-        setSelectedTeamId(newTeamRef.id);
       }
       resetTeamForm();
     } catch (error) {

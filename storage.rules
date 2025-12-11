@@ -1,0 +1,32 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Allow public read access to all files
+    // This fixes logos not showing on live site
+    match /{allPaths=**} {
+      allow read: if true;
+      
+      // Only authenticated users can write
+      allow write: if request.auth != null;
+    }
+    
+    // Specific rules for team logos
+    match /team-logos/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    
+    // Specific rules for player photos
+    match /players/{teamName}/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    
+    // Specific rules for news images
+    match /news/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+  }
+}

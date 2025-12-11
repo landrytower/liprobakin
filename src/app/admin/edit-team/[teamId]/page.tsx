@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { collection, doc, getDoc, getDocs, updateDoc, addDoc, deleteDoc, query, where, orderBy, onSnapshot } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, updateDoc, addDoc, deleteDoc, setDoc, query, where, orderBy, onSnapshot } from "firebase/firestore";
 import { firebaseDB, firebaseAuth, firebaseStorage } from "@/lib/firebase";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { onAuthStateChanged } from "firebase/auth";
@@ -63,6 +63,11 @@ export default function EditTeamPage() {
   const [addingPlayer, setAddingPlayer] = useState(false);
   const [playerHeadshotFile, setPlayerHeadshotFile] = useState<File | null>(null);
   const [teamLogoFile, setTeamLogoFile] = useState<File | null>(null);
+  const [transferModalVisible, setTransferModalVisible] = useState(false);
+  const [transferPlayerId, setTransferPlayerId] = useState<string | null>(null);
+  const [transferPlayerName, setTransferPlayerName] = useState<string>("");
+  const [transferTargetTeamId, setTransferTargetTeamId] = useState<string>("");
+  const [transferSubmitting, setTransferSubmitting] = useState(false);
 
   const [teamForm, setTeamForm] = useState({
     name: "",
@@ -373,6 +378,68 @@ export default function EditTeamPage() {
     } catch (error) {
       console.error("Error saving player:", error);
     }
+  };
+
+  const handleInitiateTransfer = (player: Player) => {
+    if (!team) return;
+    setTransferPlayerId(player.id);
+    setTransferPlayerName(`${player.firstName} ${player.lastName}`);
+    setTransferTargetTeamId("");
+    setTransferModalVisible(true);
+  };
+
+  const handleConfirmTransfer = async () => {
+    if (!user || !transferPlayerId || !team || !transferTargetTeamId) {
+      alert("Missing transfer details");
+      return;
+    }
+    if (transferTargetTeamId === team.id) {
+      alert("Cannot transfer to the same team");
+      return;
+    }
+
+    setTransferSubmitting(true);
+
+    try {
+      // Get player data from source team
+      const sourcePlayerRef = doc(firebaseDB, "teams", team.id, "roster", transferPlayerId);
+      const sourcePlayerSnap = await getDoc(sourcePlayerRef);
+      
+      if (!sourcePlayerSnap.exists()) {
+        throw new Error("Player not found");
+      }
+
+      const playerData = sourcePlayerSnap.data();
+
+      // Add player to target team
+      const targetPlayerRef = doc(firebaseDB, "teams", transferTargetTeamId, "roster", transferPlayerId);
+      await updateDoc(targetPlayerRef, playerData).catch(async () => {
+        // If document doesn't exist, create it
+        await addDoc(collection(firebaseDB, "teams", transferTargetTeamId, "roster"), playerData);
+      });
+
+      // Delete player from source team
+      await deleteDoc(sourcePlayerRef);
+
+      alert(`${transferPlayerName} transferred successfully`);
+      setTransferModalVisible(false);
+      setTransferPlayerId(null);
+      setTransferPlayerName("");
+      setTransferTargetTeamId("");
+      await loadData();
+    } catch (error) {
+      console.error("Transfer error:", error);
+      alert("Transfer failed");
+    } finally {
+      setTransferSubmitting(false);
+    }
+  };
+
+  const handleCancelTransfer = () => {
+    setTransferModalVisible(false);
+    setTransferPlayerId(null);
+    setTransferPlayerName("");
+    setTransferTargetTeamId("");
   };
 
   const navigateToTeam = (direction: "prev" | "next") => {
@@ -867,6 +934,12 @@ export default function EditTeamPage() {
                           Edit
                         </button>
                         <button
+                          onClick={() => handleInitiateTransfer(player)}
+                          className="rounded-lg border border-sky-500/30 bg-sky-500/10 px-4 py-2 text-sm font-medium text-sky-300 transition hover:bg-sky-500/20"
+                        >
+                          Transfer
+                        </button>
+                        <button
                           onClick={() => handleDeletePlayer(player.id)}
                           className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-300 transition hover:bg-red-500/20"
                         >
@@ -893,6 +966,51 @@ export default function EditTeamPage() {
           </div>
         </div>
       </div>
+
+      {/* Transfer Modal */}
+      {transferModalVisible && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={handleCancelTransfer}>
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-900 p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-white mb-4">Transfer Player</h3>
+            <p className="text-sm text-slate-300 mb-4">
+              You are about to transfer <span className="font-semibold text-white">{transferPlayerName}</span> from <span className="font-semibold text-white">{team?.name}</span> to another team.
+            </p>
+            <label className="block text-xs text-slate-400 mb-2">Select destination team:</label>
+            <select
+              value={transferTargetTeamId}
+              onChange={(e) => setTransferTargetTeamId(e.target.value)}
+              className="w-full rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-sm text-white mb-6 focus:border-white"
+            >
+              <option value="">-- Select team --</option>
+              {allTeams
+                .filter((t) => t.id !== teamId)
+                .map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name} ({t.gender === "men" ? "Men" : "Women"})
+                  </option>
+                ))}
+            </select>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleConfirmTransfer}
+                disabled={!transferTargetTeamId || transferSubmitting}
+                className="flex-1 rounded-lg border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold uppercase tracking-wider text-white hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {transferSubmitting ? "Transferring..." : "Confirm transfer"}
+              </button>
+              <button
+                type="button"
+                onClick={handleCancelTransfer}
+                disabled={transferSubmitting}
+                className="rounded-lg border border-white/10 px-4 py-2 text-sm uppercase tracking-wider text-slate-300 hover:bg-white/5 disabled:cursor-not-allowed"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

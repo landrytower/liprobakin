@@ -19,6 +19,7 @@ import {
 } from "firebase/firestore";
 import type { AdminUser, AdminRole } from "@/types/admin";
 import { mergePermissions } from "@/types/admin";
+import { logAuditAction } from "./auditLog";
 
 /**
  * Create a new admin user account (via API route with Firebase Admin SDK)
@@ -166,6 +167,22 @@ export async function updateAdminRoles(
       permissions,
     });
     
+    // Log audit trail
+    const currentUser = firebaseAuth.currentUser;
+    const adminDoc = await getDoc(doc(firebaseDB, "adminUsers", uid));
+    const targetEmail = adminDoc.exists() ? adminDoc.data()?.email : "unknown";
+    
+    if (currentUser) {
+      await logAuditAction(
+        "admin_roles_updated",
+        currentUser.uid,
+        currentUser.email || "unknown",
+        "admin",
+        uid,
+        targetEmail
+      );
+    }
+    
     return { success: true };
   } catch (error) {
     console.error("Error updating admin roles:", error);
@@ -187,6 +204,22 @@ export async function deactivateAdminUser(
       isActive: false,
     });
     
+    // Log audit trail
+    const currentUser = firebaseAuth.currentUser;
+    const adminDoc = await getDoc(doc(firebaseDB, "adminUsers", uid));
+    const targetEmail = adminDoc.exists() ? adminDoc.data()?.email : "unknown";
+    
+    if (currentUser) {
+      await logAuditAction(
+        "admin_user_deactivated",
+        currentUser.uid,
+        currentUser.email || "unknown",
+        "admin",
+        uid,
+        targetEmail
+      );
+    }
+    
     return { success: true };
   } catch (error) {
     console.error("Error deactivating admin user:", error);
@@ -207,6 +240,22 @@ export async function reactivateAdminUser(
     await updateDoc(doc(firebaseDB, "adminUsers", uid), {
       isActive: true,
     });
+    
+    // Log audit trail
+    const currentUser = firebaseAuth.currentUser;
+    const adminDoc = await getDoc(doc(firebaseDB, "adminUsers", uid));
+    const targetEmail = adminDoc.exists() ? adminDoc.data()?.email : "unknown";
+    
+    if (currentUser) {
+      await logAuditAction(
+        "admin_user_reactivated",
+        currentUser.uid,
+        currentUser.email || "unknown",
+        "admin",
+        uid,
+        targetEmail
+      );
+    }
     
     return { success: true };
   } catch (error) {
@@ -276,6 +325,19 @@ export async function deleteAdminUser(
 
     // Delete from Firestore (auth account will remain but won't have admin access)
     await deleteDoc(doc(firebaseDB, 'adminUsers', targetUid));
+
+    // Log audit trail
+    const currentUser = firebaseAuth.currentUser;
+    if (currentUser) {
+      await logAuditAction(
+        "admin_user_deleted",
+        deletedByUid,
+        currentUser.email || "unknown",
+        "admin",
+        targetUid,
+        target?.email || "unknown"
+      );
+    }
 
     return { success: true };
   } catch (error: unknown) {

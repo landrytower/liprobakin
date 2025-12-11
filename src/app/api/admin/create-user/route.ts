@@ -85,6 +85,17 @@ export async function POST(request: NextRequest) {
       isActive: true,
     });
 
+    // Log audit trail
+    await db.collection('auditLogs').add({
+      action: 'admin_user_created',
+      userId: createdByUid,
+      userEmail: (await db.collection('adminUsers').doc(createdByUid).get()).data()?.email || 'unknown',
+      targetType: 'admin',
+      targetId: userRecord.uid,
+      targetName: displayName,
+      timestamp: FieldValue.serverTimestamp(),
+    });
+
     console.log(`✅ Admin user created: ${email} with roles:`, roles);
 
     return NextResponse.json({

@@ -1150,13 +1150,19 @@ export default function AdminPage() {
           ...payload,
           updatedAt: serverTimestamp(),
         });
+        if (user) {
+          await logAuditAction("news_updated", user.uid, user.email || "unknown", "news", form.id, payload.title);
+        }
         setStatus({ type: "success", message: "Story updated successfully." });
       } else {
-        await addDoc(collection(firebaseDB, "news"), {
+        const newNewsRef = await addDoc(collection(firebaseDB, "news"), {
           ...payload,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
+        if (user) {
+          await logAuditAction("news_created", user.uid, user.email || "unknown", "news", newNewsRef.id, payload.title);
+        }
         setStatus({ type: "success", message: "Story published to Firestore." });
       }
       resetForm();
@@ -1968,9 +1974,11 @@ export default function AdminPage() {
 
       if (refereeForm.id) {
         await updateDoc(doc(firebaseDB, "referees", refereeForm.id), refereeData);
+        await logAuditAction("referee_updated", user.uid, user.email || "unknown", "referee", refereeForm.id, `${firstName} ${lastName}`);
         setLeagueGestionStatus({ type: "success", message: "Referee updated." });
       } else {
-        await addDoc(collection(firebaseDB, "referees"), refereeData);
+        const newRefereeRef = await addDoc(collection(firebaseDB, "referees"), refereeData);
+        await logAuditAction("referee_added", user.uid, user.email || "unknown", "referee", newRefereeRef.id, `${firstName} ${lastName}`);
         setLeagueGestionStatus({ type: "success", message: "Referee added." });
       }
 
@@ -2007,6 +2015,7 @@ export default function AdminPage() {
     setLeagueGestionStatus({ type: "info", message: "Deleting referee..." });
     try {
       await deleteDoc(doc(firebaseDB, "referees", referee.id));
+      await logAuditAction("referee_deleted", user.uid, user.email || "unknown", "referee", referee.id, `${referee.firstName} ${referee.lastName}`);
       setLeagueGestionStatus({ type: "success", message: "Referee deleted." });
     } catch (error) {
       console.error(error);
@@ -2053,9 +2062,11 @@ export default function AdminPage() {
 
       if (committeeForm.id) {
         await updateDoc(doc(firebaseDB, "committee", committeeForm.id), committeeData);
+        await logAuditAction("committee_updated", user.uid, user.email || "unknown", "committee", committeeForm.id, `${firstName} ${lastName}`);
         setLeagueGestionStatus({ type: "success", message: "Committee member updated." });
       } else {
-        await addDoc(collection(firebaseDB, "committee"), committeeData);
+        const newCommitteeRef = await addDoc(collection(firebaseDB, "committee"), committeeData);
+        await logAuditAction("committee_added", user.uid, user.email || "unknown", "committee", newCommitteeRef.id, `${firstName} ${lastName}`);
         setLeagueGestionStatus({ type: "success", message: "Committee member added." });
       }
 
@@ -2107,6 +2118,7 @@ export default function AdminPage() {
         }
       }
       await deleteDoc(doc(firebaseDB, "committee", member.id));
+      await logAuditAction("committee_deleted", user.uid, user.email || "unknown", "committee", member.id, `${member.firstName} ${member.lastName}`);
       setLeagueGestionStatus({ type: "success", message: "Committee member deleted." });
     } catch (error) {
       console.error(error);
@@ -2155,9 +2167,11 @@ export default function AdminPage() {
 
       if (venueForm.id) {
         await updateDoc(doc(firebaseDB, "venues", venueForm.id), venueData);
+        await logAuditAction("venue_updated", user.uid, user.email || "unknown", "venue", venueForm.id, name);
         setLeagueGestionStatus({ type: "success", message: "Venue updated." });
       } else {
-        await addDoc(collection(firebaseDB, "venues"), venueData);
+        const newVenueRef = await addDoc(collection(firebaseDB, "venues"), venueData);
+        await logAuditAction("venue_added", user.uid, user.email || "unknown", "venue", newVenueRef.id, name);
         setLeagueGestionStatus({ type: "success", message: "Venue added." });
       }
 
@@ -2195,6 +2209,7 @@ export default function AdminPage() {
     setLeagueGestionStatus({ type: "info", message: "Deleting venue..." });
     try {
       await deleteDoc(doc(firebaseDB, "venues", venue.id));
+      await logAuditAction("venue_deleted", user.uid, user.email || "unknown", "venue", venue.id, venue.name);
       setLeagueGestionStatus({ type: "success", message: "Venue deleted." });
     } catch (error) {
       console.error(error);
@@ -2251,9 +2266,11 @@ export default function AdminPage() {
 
       if (partnerForm.id) {
         await updateDoc(doc(firebaseDB, "partners", partnerForm.id), partnerData);
+        await logAuditAction("partner_updated", user.uid, user.email || "unknown", "partner", partnerForm.id, name);
         setLeagueGestionStatus({ type: "success", message: "Partner updated." });
       } else {
-        await addDoc(collection(firebaseDB, "partners"), partnerData);
+        const newPartnerRef = await addDoc(collection(firebaseDB, "partners"), partnerData);
+        await logAuditAction("partner_added", user.uid, user.email || "unknown", "partner", newPartnerRef.id, name);
         setLeagueGestionStatus({ type: "success", message: "Partner added." });
       }
 
@@ -2299,6 +2316,7 @@ export default function AdminPage() {
         }
       }
       await deleteDoc(doc(firebaseDB, "partners", partner.id));
+      await logAuditAction("partner_deleted", user.uid, user.email || "unknown", "partner", partner.id, partner.name);
       setLeagueGestionStatus({ type: "success", message: "Partner deleted." });
     } catch (error) {
       console.error(error);
@@ -2540,12 +2558,14 @@ export default function AdminPage() {
 
       if (gameForm.id) {
         await updateDoc(doc(firebaseDB, "games", gameForm.id), payload);
+        await logAuditAction("game_updated", user.uid, user.email || "unknown", "game", gameForm.id, `${awayTeam.name} @ ${homeTeam.name}`);
         setGameStatus({ type: "success", message: "Game updated." });
       } else {
-        await addDoc(collection(firebaseDB, "games"), {
+        const newGameRef = await addDoc(collection(firebaseDB, "games"), {
           ...payload,
           createdAt: serverTimestamp(),
         });
+        await logAuditAction("game_created", user.uid, user.email || "unknown", "game", newGameRef.id, `${awayTeam.name} @ ${homeTeam.name}`);
         setGameStatus({ type: "success", message: "Game scheduled." });
       }
       resetGameForm();
@@ -2570,6 +2590,7 @@ export default function AdminPage() {
 
     try {
       await deleteDoc(doc(firebaseDB, "games", game.id));
+      await logAuditAction("game_deleted", user.uid, user.email || "unknown", "game", game.id, `${game.awayTeamName} @ ${game.homeTeamName}`);
       setGameStatus({ type: "success", message: "Game removed." });
       if (gameForm.id === game.id) {
         resetGameForm();
@@ -3036,6 +3057,7 @@ export default function AdminPage() {
         });
       }
 
+      await logAuditAction("game_stats_updated", user.uid, user.email || "unknown", "game", selectedCompletedGame.id, `${winnerTeamName} vs ${loserTeamName}`);
       setStatsStatus({ type: "success", message: "Game stats saved, player averages and team records updated!" });
       setSelectedCompletedGame(null);
       setGameStatsForm(null);

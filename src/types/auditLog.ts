@@ -28,9 +28,11 @@ export type AuditAction =
   | "committee_added"
   | "committee_updated"
   | "committee_deleted"
-  | "admin_created"
-  | "admin_role_changed"
-  | "admin_deleted";
+  | "admin_user_created"
+  | "admin_roles_updated"
+  | "admin_user_deactivated"
+  | "admin_user_reactivated"
+  | "admin_user_deleted";
 
 export type AuditLog = {
   id: string;

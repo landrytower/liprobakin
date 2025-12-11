@@ -737,14 +737,17 @@ export default function AdminPage() {
     const unsubscribe = onAuthStateChanged(firebaseAuth, async (next) => {
       setUser(next);
       if (next) {
+        console.log("🔐 User logged in:", next.email, "UID:", next.uid);
         // Load admin user data
         const adminData = await getAdminUser(next.uid);
+        console.log("📄 Admin data loaded:", adminData ? `Found (${adminData.roles.join(', ')})` : "NOT FOUND");
         setCurrentAdminUser(adminData);
         // Record last login
         if (adminData) {
           await recordLastLogin(next.uid);
         }
       } else {
+        console.log("🚪 User logged out");
         setCurrentAdminUser(null);
       }
       setAuthLoading(false);
@@ -3015,16 +3018,49 @@ export default function AdminPage() {
           </p>
         </div>
       ) : user && !currentAdminUser ? (
-        <div className="w-full max-w-md space-y-6 text-center">
-          <div className="space-y-4">
+        <div className="w-full max-w-2xl space-y-6">
+          <div className="space-y-4 text-center">
             <div className="text-6xl">🔒</div>
-            <h1 className="text-2xl font-semibold">{t.accessRequired}</h1>
+            <h1 className="text-2xl font-semibold text-white">{t.accessRequired}</h1>
             <p className="text-sm text-slate-300">
               {t.notAuthorized}
             </p>
+          </div>
+          
+          <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-6 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="text-2xl">⚠️</div>
+              <div className="flex-1 space-y-3">
+                <p className="text-sm font-semibold text-yellow-200">Your account is not set up as an admin</p>
+                <div className="space-y-2 text-xs text-yellow-100">
+                  <p><strong>Logged in as:</strong> {user?.email}</p>
+                  <p><strong>User ID:</strong> {user?.uid}</p>
+                  <p><strong>Status:</strong> No admin document found in Firestore</p>
+                </div>
+                
+                <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-4 space-y-2">
+                  <p className="text-xs font-semibold text-yellow-200">To fix this issue:</p>
+                  <ol className="list-decimal list-inside space-y-1 text-xs text-yellow-100">
+                    <li>If you are the master admin, run the setup script: <code className="bg-black/30 px-1 rounded">node scripts/create-master-admin.js</code></li>
+                    <li>Or visit: <a href="/setup-admin" className="text-yellow-300 underline hover:text-yellow-100">/setup-admin</a> and create your master account</li>
+                    <li>If you are not the master admin, ask a master admin to create an admin account for you</li>
+                    <li>After setup, refresh this page</li>
+                  </ol>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div className="flex gap-3">
+            <button
+              onClick={() => window.location.reload()}
+              className="flex-1 rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-6 py-3 text-sm font-semibold text-emerald-200 transition hover:bg-emerald-500/30"
+            >
+              🔄 Refresh Page
+            </button>
             <button
               onClick={handleSignOut}
-              className="rounded-xl border border-white/20 bg-white/5 px-6 py-3 text-sm font-semibold uppercase tracking-wider text-white transition hover:bg-white/10"
+              className="flex-1 rounded-xl border border-white/20 bg-white/5 px-6 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
             >
               {t.signOut}
             </button>

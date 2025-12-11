@@ -338,7 +338,7 @@ export default function TeamPage() {
               <p>No coaching staff data available for this team.</p>
             </div>
           ) : (
-          <div className="grid gap-2 grid-cols-6">
+          <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
             {staff.map((member) => {
               const staffImage = member.headshot || "/players/default-avatar.png";
               const fullName = `${member.firstName} ${member.lastName}`.trim();
@@ -363,17 +363,17 @@ export default function TeamPage() {
                     />
                     {!member.headshot && (
                       <div className="absolute inset-0 flex items-center justify-center bg-slate-800">
-                        <span className="text-xl font-bold text-slate-500">
+                        <span className="text-2xl md:text-xl font-bold text-slate-500">
                           {member.firstName?.charAt(0) || ""}{member.lastName?.charAt(0) || ""}
                         </span>
                       </div>
                     )}
                     <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent"></div>
-                    <div className="absolute bottom-0 left-0 right-0 p-1.5">
-                      <p className="text-[10px] uppercase tracking-wide text-orange-500 font-semibold mb-0.5">
+                    <div className="absolute bottom-0 left-0 right-0 p-2 sm:p-1.5">
+                      <p className="text-xs sm:text-[10px] uppercase tracking-wide text-orange-500 font-semibold mb-0.5">
                         {roleDisplay}
                       </p>
-                      <h3 className="text-xs font-semibold text-white leading-tight">
+                      <h3 className="text-sm sm:text-xs font-semibold text-white leading-tight">
                         {fullName}
                       </h3>
                     </div>

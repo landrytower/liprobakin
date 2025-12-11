@@ -1,5 +1,6 @@
 export type AdminRole = 
   | "master" 
+  | "league_manager"
   | "news_editor" 
   | "game_scheduler" 
   | "team_manager" 
@@ -43,6 +44,17 @@ export const ROLE_PERMISSIONS: Record<AdminRole, AdminPermissions> = {
     canManagePartners: true,
     canManageCommittee: true,
     canManageAdmins: true,
+  },
+  league_manager: {
+    canManageNews: true,
+    canManageGames: true,
+    canManageTeams: true,
+    canManagePlayers: true,
+    canManageReferees: true,
+    canManageVenues: true,
+    canManagePartners: true,
+    canManageCommittee: true,
+    canManageAdmins: false,
   },
   news_editor: {
     canManageNews: true,

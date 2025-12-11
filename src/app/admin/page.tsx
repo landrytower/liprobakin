@@ -27,6 +27,7 @@ import type { DocumentData, DocumentSnapshot } from "firebase/firestore";
 import { deleteObject, getDownloadURL, ref as storageRef, uploadBytes } from "firebase/storage";
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, type User } from "firebase/auth";
 import type { AdminUser, AdminRole } from "@/types/admin";
+import type { AuditLog } from "@/types/auditLog";
 import { 
   createAdminAccount, 
   getAllAdminUsers, 
@@ -38,6 +39,7 @@ import {
   recordLastLogin,
   updateAdminProfile
 } from "@/lib/adminAuth";
+import { logAuditAction, formatAuditLogDisplay } from "@/lib/auditLog";
 
 type AdminNewsArticle = {
   id: string;
@@ -601,6 +603,7 @@ export default function AdminPage() {
   const [statsSubmitting, setStatsSubmitting] = useState(false);
   const [statsStatus, setStatsStatus] = useState<StatusCallout | null>(null);
   const [trafficEvents, setTrafficEvents] = useState<TeamTrafficEntry[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [referees, setReferees] = useState<Referee[]>([]);
   const [refereeForm, setRefereeForm] = useState<RefereeFormState>({ firstName: "", lastName: "", phone: "", certificationLevel: "" });
   const [refereeFormVisible, setRefereeFormVisible] = useState(false);
@@ -845,6 +848,19 @@ export default function AdminPage() {
     const trafficQuery = query(collection(firebaseDB, "teamTraffic"), orderBy("createdAt", "desc"), limit(100));
     const unsubscribe = onSnapshot(trafficQuery, (snapshot) => {
       setTrafficEvents(snapshot.docs.map(mapSnapshotToTrafficEntry));
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Sync audit logs
+  useEffect(() => {
+    const auditQuery = query(collection(firebaseDB, "auditLogs"), orderBy("timestamp", "desc"), limit(100));
+    const unsubscribe = onSnapshot(auditQuery, (snapshot) => {
+      setAuditLogs(snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        timestamp: doc.data().timestamp?.toDate() ?? new Date(),
+      } as AuditLog)));
     });
     return () => unsubscribe();
   }, []);
@@ -1503,6 +1519,7 @@ export default function AdminPage() {
         }
         
         await updateDoc(doc(firebaseDB, "teams", teamForm.id), updatePayload);
+        await logAuditAction("team_updated", user.uid, user.email || "unknown", "team", teamForm.id, name);
         
         // Update all games that reference this team (so logo/name changes propagate everywhere)
         const gamesUpdated = await updateGamesWithTeamData(teamForm.id, name, logo);
@@ -1531,6 +1548,7 @@ export default function AdminPage() {
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
+        await logAuditAction("team_created", user.uid, user.email || "unknown", "team", newTeamRef.id, name);
         setTeamStatus({ type: "success", message: `✓ Team "${name}" created successfully!` });
         setSelectedTeamId(newTeamRef.id);
         resetTeamForm();
@@ -1591,6 +1609,7 @@ export default function AdminPage() {
       
       batch.delete(teamDocRef);
       await batch.commit();
+      await logAuditAction("team_deleted", user.uid, user.email || "unknown", "team", team.id, team.name);
       setTeamStatus({ type: "success", message: "Team removed." });
       if (teamForm.id === team.id) {
         resetTeamForm();
@@ -1751,12 +1770,14 @@ export default function AdminPage() {
       const rosterCollectionRef = collection(firebaseDB, "teams", selectedTeamId, "roster");
       if (rosterForm.id) {
         await updateDoc(doc(firebaseDB, "teams", selectedTeamId, "roster", rosterForm.id), payload);
+        await logAuditAction("player_updated", user.uid, user.email || "unknown", "player", rosterForm.id, `${firstName} ${lastName}`, { teamName: selectedTeam?.name, jerseyNumber });
         setRosterStatus({ type: "success", message: "Player updated." });
       } else {
         const newPlayerRef = await addDoc(rosterCollectionRef, {
           ...payload,
           createdAt: serverTimestamp(),
         });
+        await logAuditAction("player_added", user.uid, user.email || "unknown", "player", newPlayerRef.id, `${firstName} ${lastName}`, { teamName: selectedTeam?.name, jerseyNumber });
         setRosterStatus({ type: "success", message: "Player added." });
         if (selectedTeamId) {
           await recordTrafficEvent("player_added", {
@@ -1796,6 +1817,7 @@ export default function AdminPage() {
     try {
       // Delete the player document from Firestore
       await deleteDoc(doc(firebaseDB, "teams", selectedTeamId, "roster", player.id));
+      await logAuditAction("player_deleted", user.uid, user.email || "unknown", "player", player.id, `${player.firstName} ${player.lastName}`, { teamName: selectedTeam?.name, jerseyNumber: player.number });
       
       // Delete the headshot image from Storage if it exists
       if (player.headshot) {
@@ -2379,12 +2401,14 @@ export default function AdminPage() {
       const coachStaffCollectionRef = collection(firebaseDB, "teams", selectedTeamId, "coachStaff");
       if (coachStaffForm.id) {
         await updateDoc(doc(firebaseDB, "teams", selectedTeamId, "coachStaff", coachStaffForm.id), payload);
+        await logAuditAction("coach_updated", user.uid, user.email || "unknown", "coach", coachStaffForm.id, `${firstName} ${lastName}`, { teamName: selectedTeam?.name, role: coachStaffForm.role });
         setRosterStatus({ type: "success", message: "Staff member updated." });
       } else {
-        await addDoc(coachStaffCollectionRef, {
+        const newCoachRef = await addDoc(coachStaffCollectionRef, {
           ...payload,
           createdAt: serverTimestamp(),
         });
+        await logAuditAction("coach_added", user.uid, user.email || "unknown", "coach", newCoachRef.id, `${firstName} ${lastName}`, { teamName: selectedTeam?.name, role: coachStaffForm.role });
         setRosterStatus({ type: "success", message: "Staff member added." });
       }
       resetCoachStaffForm();
@@ -2421,6 +2445,7 @@ export default function AdminPage() {
 
     try {
       await deleteDoc(doc(firebaseDB, "teams", selectedTeamId, "coachStaff", member.id));
+      await logAuditAction("coach_deleted", user.uid, user.email || "unknown", "coach", member.id, `${member.firstName} ${member.lastName}`, { teamName: selectedTeam?.name, role: member.role });
       if (member.headshot) {
         try {
           const headshotRef = storageRef(firebaseStorage, member.headshot);
@@ -4745,9 +4770,9 @@ export default function AdminPage() {
               <div className="relative z-10 flex items-center justify-between">
                 <div>
                   <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Module</p>
-                  <h2 className="mt-2 text-3xl font-bold text-white">Traffic — Do Not Acces</h2>
+                  <h2 className="mt-2 text-3xl font-bold text-white">Traffic & Audit Log</h2>
                   <p className="mt-3 text-sm text-slate-300">
-                    Monitor every roster change triggered inside Team Assistant. Player adds and deletions are logged with timestamps.
+                    Complete audit trail of all admin activity: teams, players, coaches, refs, games, news, and more.
                   </p>
                 </div>
                 <span className="text-2xl text-white">{trafficModuleOpen ? '−' : '+'}</span>
@@ -4759,58 +4784,48 @@ export default function AdminPage() {
               <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl">
                 <div className="mb-6 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Traffic monitor</p>
-                    <h2 className="text-2xl font-semibold">Team Assistant change log</h2>
+                    <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Audit Log</p>
+                    <h2 className="text-2xl font-semibold">Admin Activity Monitor</h2>
                     <p className="mt-2 text-sm text-slate-400">
-                      Captures the last 100 roster additions or deletions across every franchise.
+                      Complete audit trail of all admin actions: teams, players, coaches, games, news, and more.
                     </p>
                   </div>
                   <span className="text-xs uppercase tracking-[0.4em] text-slate-500">
-                    {trafficEvents.length} events
+                    {auditLogs.length} logs
                   </span>
                 </div>
-                {trafficEvents.length === 0 ? (
-                  <p className="text-sm text-slate-500">No roster activity has been recorded yet.</p>
+                {auditLogs.length === 0 ? (
+                  <p className="text-sm text-slate-500">No activity recorded yet.</p>
                 ) : (
-                  <ul className="space-y-3">
-                    {trafficEvents.map((event) => (
-                      <li
-                        key={event.id}
-                        className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-black/30 p-4 sm:flex-row sm:items-center sm:justify-between"
-                      >
-                        <div>
-                          <p
-                            className={`text-[10px] uppercase tracking-[0.4em] ${
-                              event.action === "player_deleted" 
-                                ? "text-rose-300" 
-                                : event.action === "player_transferred"
-                                ? "text-sky-300"
-                                : "text-emerald-300"
-                            }`}
-                          >
-                            {event.action === "player_deleted" 
-                              ? "Player deleted" 
-                              : event.action === "player_transferred"
-                              ? "Player transferred"
-                              : "Player added"}
-                          </p>
-                          <h3 className="text-lg font-semibold text-white">{event.playerName}</h3>
-                          <p className="text-xs text-slate-400">
-                            {event.teamName} · {event.teamGender === "women" ? "Women" : "Men"} · #{event.jerseyNumber ?? "—"}
-                            {event.action === "player_transferred" && event.targetTeamName && (
-                              <span className="ml-1">→ {event.targetTeamName}</span>
-                            )}
-                          </p>
+                  <div className="space-y-2 max-h-[600px] overflow-y-auto">
+                    {auditLogs.map((log) => {
+                      const actionColor = log.action.includes("deleted") ? "text-rose-400" 
+                        : log.action.includes("created") || log.action.includes("added") ? "text-emerald-400"
+                        : "text-sky-400";
+                      const bgColor = log.action.includes("deleted") ? "bg-rose-500/10 border-rose-500/20" 
+                        : log.action.includes("created") || log.action.includes("added") ? "bg-emerald-500/10 border-emerald-500/20"
+                        : "bg-sky-500/10 border-sky-500/20";
+                      
+                      return (
+                        <div
+                          key={log.id}
+                          className={`flex items-start justify-between gap-3 rounded-lg border ${bgColor} p-3 text-sm`}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <p className={`font-medium ${actionColor}`}>
+                              {formatAuditLogDisplay(log)}
+                            </p>
+                            <p className="text-xs text-slate-500 mt-1">
+                              by {log.userEmail.split('@')[0]} · {log.timestamp.toLocaleString()}
+                            </p>
+                          </div>
+                          <span className="text-[10px] uppercase tracking-wider text-slate-600 flex-shrink-0">
+                            {log.targetType}
+                          </span>
                         </div>
-                        <div className="text-xs text-slate-400 sm:text-right">
-                          <p>{event.createdAt ? formatAdminPublishedLabel(event.createdAt) : "Pending timestamp"}</p>
-                          {event.performedBy ? (
-                            <p className="mt-1 text-[11px] text-slate-500">By {event.performedBy}</p>
-                          ) : null}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
+                      );
+                    })}
+                  </div>
                 )}
               </section>
             )}
@@ -6642,6 +6657,7 @@ export default function AdminPage() {
                       <div className="grid gap-2 sm:grid-cols-2">
                         {[
                           { role: 'master' as AdminRole, label: '👑 Master (Full Access)', desc: 'Complete control including admin management' },
+                          { role: 'league_manager' as AdminRole, label: '⚡ League Manager', desc: 'Manage all league content except admins' },
                           { role: 'news_editor' as AdminRole, label: '📰 News Editor', desc: 'Manage news and stories' },
                           { role: 'game_scheduler' as AdminRole, label: '📅 Game Scheduler', desc: 'Create and manage games' },
                           { role: 'team_manager' as AdminRole, label: '👥 Team Manager', desc: 'Manage teams and players' },
@@ -6724,6 +6740,7 @@ export default function AdminPage() {
                                 <div className="space-y-1">
                                   {[
                                     { role: 'master' as AdminRole, label: '👑 Master' },
+                                    { role: 'league_manager' as AdminRole, label: '⚡ League Manager' },
                                     { role: 'news_editor' as AdminRole, label: '📰 News Editor' },
                                     { role: 'game_scheduler' as AdminRole, label: '📅 Game Scheduler' },
                                     { role: 'team_manager' as AdminRole, label: '👥 Team Manager' },

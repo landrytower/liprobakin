@@ -615,6 +615,7 @@ export default function Home() {
   const [menTeams, setMenTeams] = useState<Franchise[]>([]);
   const [womenTeams, setWomenTeams] = useState<Franchise[]>([]);
   const [leagueTopPlayers, setLeagueTopPlayers] = useState<any[]>([]);
+  const [leagueLeadersExpanded, setLeagueLeadersExpanded] = useState(false);
   const [newsArticles, setNewsArticles] = useState<NewsArticle[]>([]);
   const [featuredArticleId, setFeaturedArticleId] = useState<string | null>(null);
   const [expandedArticleId, setExpandedArticleId] = useState<string | null>(null);
@@ -1587,57 +1588,61 @@ export default function Home() {
                     key={game.id}
                     className="rounded-2xl border border-white/5 bg-black/30 p-3 sm:p-4"
                   >
-                    {/* Always Horizontal Layout - Date left, Teams center, Venue/Gender right */}
-                    <div className="flex items-center justify-between gap-2 sm:gap-4">
-                      {/* Date/Time - Left */}
-                      <div className="flex flex-col min-w-[60px] sm:min-w-[80px] flex-shrink-0">
-                        <p className="text-xs sm:text-sm font-semibold text-white truncate">{game.tipoff.split(" · ")[0]}</p>
+                    {/* Mobile: Vertical Stack, Desktop: Horizontal */}
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-4">
+                      {/* Date/Time */}
+                      <div className="flex items-center justify-between md:flex-col md:items-start md:min-w-[80px] md:flex-shrink-0">
+                        <p className="text-sm font-semibold text-white">{game.tipoff.split(" · ")[0]}</p>
                         {game.tipoff.split(" · ")[1] && (
-                          <p className="text-[10px] sm:text-xs text-slate-400 truncate">{game.tipoff.split(" · ")[1]}</p>
+                          <p className="text-xs text-slate-400">{game.tipoff.split(" · ")[1]}</p>
                         )}
                       </div>
                       
-                      {/* Teams - Center */}
-                      <div className="flex items-center gap-2 sm:gap-3 flex-1 justify-center">
+                      {/* Teams Section - Horizontal on desktop, vertical on mobile */}
+                      <div className="flex flex-col gap-2 flex-1 md:flex-row md:items-center md:justify-center md:gap-4">
                         {/* Away Team */}
-                        <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+                        <div className="flex items-center gap-2 md:flex-1 md:justify-end">
                           {game.awayTeamLogo && (
                             <Image
                               src={game.awayTeamLogo}
                               alt={game.away.team}
-                              width={24}
-                              height={24}
-                              className="h-5 w-5 sm:h-6 sm:w-6 rounded-full border border-white/10 object-cover"
+                              width={28}
+                              height={28}
+                              className="h-7 w-7 rounded-full border border-white/10 object-cover flex-shrink-0"
                             />
                           )}
-                          <span className="text-xs sm:text-sm font-medium text-white whitespace-nowrap">{game.away.team}</span>
-                          <span className="text-[10px] sm:text-xs text-slate-400 hidden min-[400px]:inline whitespace-nowrap">({game.away.record})</span>
+                          <div className="flex items-baseline gap-2 min-w-0 flex-1 md:flex-initial">
+                            <span className="text-sm font-medium text-white truncate">{game.away.team}</span>
+                            <span className="text-xs text-slate-400 flex-shrink-0">({game.away.record})</span>
+                          </div>
                         </div>
                         
-                        {/* VS Divider */}
-                        <span className="text-[10px] sm:text-xs uppercase tracking-wider text-slate-500 flex-shrink-0">vs</span>
+                        {/* VS Divider - hidden on mobile, shown on desktop */}
+                        <span className="hidden md:inline text-xs uppercase tracking-wider text-slate-500 flex-shrink-0">vs</span>
                         
                         {/* Home Team */}
-                        <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+                        <div className="flex items-center gap-2 md:flex-1">
                           {game.homeTeamLogo && (
                             <Image
                               src={game.homeTeamLogo}
                               alt={game.home.team}
-                              width={24}
-                              height={24}
-                              className="h-5 w-5 sm:h-6 sm:w-6 rounded-full border border-white/10 object-cover"
+                              width={28}
+                              height={28}
+                              className="h-7 w-7 rounded-full border border-white/10 object-cover flex-shrink-0"
                             />
                           )}
-                          <span className="text-xs sm:text-sm font-medium text-white whitespace-nowrap">{game.home.team}</span>
-                          <span className="text-[10px] sm:text-xs text-slate-400 hidden min-[400px]:inline whitespace-nowrap">({game.home.record})</span>
+                          <div className="flex items-baseline gap-2 min-w-0 flex-1 md:flex-initial">
+                            <span className="text-sm font-medium text-white truncate">{game.home.team}</span>
+                            <span className="text-xs text-slate-400 flex-shrink-0">({game.home.record})</span>
+                          </div>
                         </div>
                       </div>
                       
-                      {/* Venue & Gender - Right */}
-                      <div className="flex flex-col items-end text-[10px] sm:text-xs flex-shrink-0 min-w-[60px] sm:min-w-[100px]">
-                        <span className="text-slate-300 truncate max-w-full">{game.venue}</span>
-                        <span className="text-slate-500 uppercase tracking-wider whitespace-nowrap">
-                          {game.gender === "men" ? "MEN" : game.gender === "women" ? "WOM" : ""}
+                      {/* Venue & Gender */}
+                      <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/5 md:flex-col md:items-end md:border-t-0 md:pt-0 md:min-w-[100px] md:flex-shrink-0">
+                        <span className="text-xs text-slate-300 truncate">{game.venue}</span>
+                        <span className="text-[10px] text-slate-500 uppercase tracking-wider whitespace-nowrap">
+                          {game.gender === "men" ? "MEN'S" : game.gender === "women" ? "WOMEN'S" : ""}
                         </span>
                       </div>
                     </div>
@@ -1795,7 +1800,7 @@ export default function Home() {
                     : b.stats.stl;
                   return statB - statA;
                 })
-                .slice(0, 5)
+                .slice(0, leagueLeadersExpanded ? 10 : 3)
                 .map((player, index) => {
                 const isLeader = index === 0;
                 const playerName = `${player.firstName} ${player.lastName}`.trim();
@@ -1810,52 +1815,52 @@ export default function Home() {
                     key={`${player.id}-${playerMetric}`}
                     type="button"
                     onClick={() => {}}
-                    className={`flex w-full flex-col gap-3 rounded-3xl border text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 sm:flex-row sm:items-center sm:justify-between ${
+                    className={`flex w-full flex-col gap-3 rounded-3xl border text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 sm:flex-row sm:items-center sm:justify-between overflow-hidden ${
                       isLeader
                         ? "border-white/40 bg-gradient-to-r from-sky-500/20 to-indigo-500/10 px-7 py-5 shadow-lg shadow-sky-500/20"
                         : "border-white/10 bg-slate-900/60 px-5 py-3 hover:border-white/50"
                     }`}
                   >
-                    <div className="flex items-center gap-3">
-                      <span className={`font-semibold ${isLeader ? "text-base text-white" : "text-sm text-slate-400"}`}>
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <span className={`font-semibold flex-shrink-0 ${isLeader ? "text-base text-white" : "text-sm text-slate-400"}`}>
                         {String(index + 1).padStart(2, "0")}
                       </span>
-                      <div className="flex items-center gap-2.5">
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
                         <Image
                           src={playerImage}
                           alt={`${player.name} portrait`}
                           width={isLeader ? 61 : 48}
                           height={isLeader ? 61 : 48}
-                          className="rounded-full border border-white/10 object-cover"
+                          className="rounded-full border border-white/10 object-cover flex-shrink-0"
                           style={{
                             width: isLeader ? 61 : 48,
                             height: isLeader ? 61 : 48,
                           }}
                         />
-                        <div>
-                          <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs uppercase tracking-[0.3em] text-slate-400 truncate">
                             #{player.number} · {player.teamName}
                           </p>
-                          <p className={`${isLeader ? "text-xl" : "text-base"} font-semibold text-white`}>
+                          <p className={`${isLeader ? "text-xl" : "text-base"} font-semibold text-white truncate`}>
                             {playerName}
                           </p>
                         </div>
                       </div>
                     </div>
-                    <div className="flex gap-3">
-                      <div className="text-center">
+                    <div className="flex gap-2 sm:gap-3 flex-shrink-0">
+                      <div className="text-center min-w-[40px]">
                         <p className="text-xs text-slate-400">PTS</p>
                         <p className={`${isLeader ? "text-xl" : "text-base"} font-bold text-white`}>{player.stats.pts}</p>
                       </div>
-                      <div className="text-center">
+                      <div className="text-center min-w-[40px]">
                         <p className="text-xs text-slate-400">REB</p>
                         <p className={`${isLeader ? "text-xl" : "text-base"} font-bold text-white`}>{player.stats.reb}</p>
                       </div>
-                      <div className="text-center">
+                      <div className="text-center min-w-[40px]">
                         <p className="text-xs text-slate-400">AST</p>
                         <p className={`${isLeader ? "text-xl" : "text-base"} font-bold text-white`}>{player.stats.ast}</p>
                       </div>
-                      <div className="text-center">
+                      <div className="text-center min-w-[40px]">
                         <p className="text-xs text-slate-400">BLK</p>
                         <p className={`${isLeader ? "text-xl" : "text-base"} font-bold text-white`}>{player.stats.blk}</p>
                       </div>
@@ -1864,6 +1869,17 @@ export default function Home() {
                 );
               })}
             </div>
+            {leagueTopPlayers.length > 3 && (
+              <div className="mt-6 flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => setLeagueLeadersExpanded(!leagueLeadersExpanded)}
+                  className="rounded-full border border-white/30 bg-white/5 px-6 py-2.5 text-sm font-semibold uppercase tracking-[0.3em] text-white transition hover:border-white hover:bg-white/10"
+                >
+                  {leagueLeadersExpanded ? "Show Less" : "Show Top 10"}
+                </button>
+              </div>
+            )}
           </div>
         </section>
 

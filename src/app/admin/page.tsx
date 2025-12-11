@@ -567,6 +567,7 @@ export default function AdminPage() {
   const [currentAdminUser, setCurrentAdminUser] = useState<AdminUser | null>(null);
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
   const [showOnlineAdminsDropdown, setShowOnlineAdminsDropdown] = useState(false);
+  const [disconnectedAdmins, setDisconnectedAdmins] = useState<Map<string, number>>(new Map());
   const [adminFormVisible, setAdminFormVisible] = useState(false);
   const [newAdminEmail, setNewAdminEmail] = useState("");
   const [newAdminName, setNewAdminName] = useState("");
@@ -858,6 +859,18 @@ export default function AdminPage() {
       return () => document.removeEventListener('click', handleClickOutside);
     }
   }, [showOnlineAdminsDropdown]);
+
+  // Force re-render every second to update disconnection countdown
+  useEffect(() => {
+    if (disconnectedAdmins.size === 0) return;
+    
+    const interval = setInterval(() => {
+      // Trigger a re-render by updating a dummy state
+      setDisconnectedAdmins(prev => new Map(prev));
+    }, 1000);
+    
+    return () => clearInterval(interval);
+  }, [disconnectedAdmins.size]);
 
   // Set default active tab based on permissions
   useEffect(() => {
@@ -3373,13 +3386,44 @@ export default function AdminPage() {
                     {/* Online Admins Display with Dropdown */}
                     {(() => {
                       const now = Date.now();
-                      const onlineAdmins = adminUsers.filter(admin => {
-                        if (admin.id === user?.uid) return false; // Exclude current user
-                        const lastActivity = admin.lastActivity ? new Date(admin.lastActivity).getTime() : 0;
-                        return admin.isActive && lastActivity > 0 && (now - lastActivity) < 5 * 60 * 1000;
-                      });
                       
-                      if (onlineAdmins.length === 0) return null;
+                      // Categorize admins into online and recently disconnected
+                      const categorizedAdmins = adminUsers.reduce((acc, admin) => {
+                        if (admin.id === user?.uid) return acc; // Exclude current user
+                        
+                        const lastActivity = admin.lastActivity ? new Date(admin.lastActivity).getTime() : 0;
+                        const timeSinceActivity = now - lastActivity;
+                        
+                        if (admin.isActive && lastActivity > 0 && timeSinceActivity < 5 * 60 * 1000) {
+                          // Online (within 5 minutes)
+                          acc.online.push({ ...admin, status: 'online' as const });
+                        } else if (lastActivity > 0 && timeSinceActivity >= 5 * 60 * 1000) {
+                          // Check if they just went offline
+                          const disconnectedTime = disconnectedAdmins.get(admin.id);
+                          if (!disconnectedTime) {
+                            // First time seeing them as disconnected, track it
+                            setDisconnectedAdmins(prev => new Map(prev).set(admin.id, now));
+                            acc.disconnected.push({ ...admin, status: 'disconnected' as const, disconnectedAt: now });
+                          } else if (now - disconnectedTime < 10000) {
+                            // Still within 10-second grace period
+                            acc.disconnected.push({ ...admin, status: 'disconnected' as const, disconnectedAt: disconnectedTime });
+                          } else {
+                            // Grace period expired, remove from tracking
+                            setDisconnectedAdmins(prev => {
+                              const next = new Map(prev);
+                              next.delete(admin.id);
+                              return next;
+                            });
+                          }
+                        }
+                        
+                        return acc;
+                      }, { online: [] as Array<AdminUser & { status: 'online' }>, disconnected: [] as Array<AdminUser & { status: 'disconnected', disconnectedAt: number }> });
+                      
+                      const allVisibleAdmins = [...categorizedAdmins.online, ...categorizedAdmins.disconnected];
+                      const onlineCount = categorizedAdmins.online.length;
+                      
+                      if (allVisibleAdmins.length === 0) return null;
                       
                       return (
                         <div className="relative">
@@ -3393,31 +3437,35 @@ export default function AdminPage() {
                                 <div className="absolute inset-0 h-2 w-2 animate-ping rounded-full bg-emerald-400 opacity-75" />
                               </div>
                               <span className="text-xs text-emerald-300">
-                                {onlineAdmins.length === 1 
-                                  ? onlineAdmins[0].displayName || onlineAdmins[0].email
-                                  : `${onlineAdmins.length} admins online`
+                                {onlineCount === 1 && categorizedAdmins.disconnected.length === 0
+                                  ? categorizedAdmins.online[0].displayName || categorizedAdmins.online[0].email
+                                  : `${onlineCount} admin${onlineCount !== 1 ? 's' : ''} online`
                                 }
                               </span>
                             </div>
-                            {onlineAdmins.length > 1 && (
+                            {allVisibleAdmins.length > 1 && (
                               <div className="ml-1 flex -space-x-2">
-                                {onlineAdmins.slice(0, 3).map((admin) => (
+                                {allVisibleAdmins.slice(0, 3).map((admin) => (
                                   <div
                                     key={admin.id}
-                                    className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-slate-950 bg-emerald-500/20 text-[10px] font-bold text-emerald-300"
-                                    title={admin.displayName || admin.email}
+                                    className={`flex h-6 w-6 items-center justify-center rounded-full border-2 border-slate-950 text-[10px] font-bold ${
+                                      admin.status === 'online'
+                                        ? 'bg-emerald-500/20 text-emerald-300'
+                                        : 'bg-red-500/20 text-red-300'
+                                    }`}
+                                    title={`${admin.displayName || admin.email} - ${admin.status}`}
                                   >
                                     {(admin.displayName || admin.email).charAt(0).toUpperCase()}
                                   </div>
                                 ))}
-                                {onlineAdmins.length > 3 && (
+                                {allVisibleAdmins.length > 3 && (
                                   <div className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-slate-950 bg-slate-700 text-[10px] font-bold text-slate-300">
-                                    +{onlineAdmins.length - 3}
+                                    +{allVisibleAdmins.length - 3}
                                   </div>
                                 )}
                               </div>
                             )}
-                            {onlineAdmins.length > 1 && (
+                            {allVisibleAdmins.length > 1 && (
                               <svg 
                                 className={`ml-1 h-3 w-3 text-emerald-300 transition-transform ${showOnlineAdminsDropdown ? 'rotate-180' : ''}`} 
                                 fill="none" 
@@ -3430,14 +3478,15 @@ export default function AdminPage() {
                           </button>
 
                           {/* Dropdown Menu */}
-                          {showOnlineAdminsDropdown && onlineAdmins.length > 1 && (
+                          {showOnlineAdminsDropdown && allVisibleAdmins.length > 1 && (
                             <div className="absolute right-0 top-full mt-2 w-64 rounded-lg border border-emerald-500/30 bg-slate-900/95 backdrop-blur-xl shadow-xl z-50">
                               <div className="p-2">
                                 <div className="mb-2 px-2 py-1 text-xs font-semibold text-emerald-300 border-b border-emerald-500/20">
-                                  Online Admins
+                                  Admin Status
                                 </div>
-                                {onlineAdmins.map((admin) => {
+                                {allVisibleAdmins.map((admin) => {
                                   const lastActivity = admin.lastActivity ? new Date(admin.lastActivity) : null;
+                                  const isOnline = admin.status === 'online';
                                   const timeAgo = lastActivity 
                                     ? Math.floor((now - lastActivity.getTime()) / 1000 / 60) 
                                     : null;
@@ -3445,27 +3494,42 @@ export default function AdminPage() {
                                   return (
                                     <div
                                       key={admin.id}
-                                      className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-emerald-500/10 transition"
+                                      className={`flex items-center gap-3 rounded-lg px-2 py-2 transition ${
+                                        isOnline ? 'hover:bg-emerald-500/10' : 'hover:bg-red-500/10'
+                                      }`}
                                     >
-                                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500/20 text-xs font-bold text-emerald-300">
+                                      <div className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${
+                                        isOnline ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/20 text-red-300'
+                                      }`}>
                                         {(admin.displayName || admin.email).charAt(0).toUpperCase()}
                                       </div>
                                       <div className="flex-1 min-w-0">
                                         <div className="text-xs font-medium text-white truncate">
                                           {admin.displayName || admin.email}
                                         </div>
-                                        <div className="text-[10px] text-slate-400">
-                                          {timeAgo !== null 
-                                            ? timeAgo < 1 
-                                              ? 'Active now' 
-                                              : `Active ${timeAgo}m ago`
-                                            : 'Recently active'
-                                          }
+                                        <div className={`text-[10px] ${
+                                          isOnline ? 'text-emerald-400' : 'text-red-400'
+                                        }`}>
+                                          {isOnline ? (
+                                            timeAgo !== null 
+                                              ? timeAgo < 1 
+                                                ? 'Active now' 
+                                                : `Active ${timeAgo}m ago`
+                                              : 'Recently active'
+                                          ) : (
+                                            'Disconnected'
+                                          )}
                                         </div>
                                       </div>
                                       <div className="relative">
-                                        <div className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]" />
-                                        <div className="absolute inset-0 h-2 w-2 animate-ping rounded-full bg-emerald-400 opacity-75" />
+                                        <div className={`h-2 w-2 rounded-full ${
+                                          isOnline
+                                            ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]'
+                                            : 'bg-red-400 shadow-[0_0_8px_rgba(239,68,68,0.6)]'
+                                        }`} />
+                                        {isOnline && (
+                                          <div className="absolute inset-0 h-2 w-2 animate-ping rounded-full bg-emerald-400 opacity-75" />
+                                        )}
                                       </div>
                                     </div>
                                   );

@@ -1385,6 +1385,52 @@ export default function AdminPage() {
   };
 
 
+  // Update all games that reference this team with new team data
+  const updateGamesWithTeamData = async (teamId: string, teamName: string, teamLogo: string) => {
+    try {
+      const gamesSnapshot = await getDocs(collection(firebaseDB, "games"));
+      const batch = writeBatch(firebaseDB);
+      let updateCount = 0;
+
+      gamesSnapshot.docs.forEach((gameDoc) => {
+        const gameData = gameDoc.data();
+        const updates: any = {};
+
+        // Update home team data if this game uses this team as home
+        if (gameData.homeTeamId === teamId) {
+          updates.homeTeamName = teamName;
+          updates.homeTeamLogo = teamLogo;
+          updateCount++;
+        }
+
+        // Update away team data if this game uses this team as away
+        if (gameData.awayTeamId === teamId) {
+          updates.awayTeamName = teamName;
+          updates.awayTeamLogo = teamLogo;
+          updateCount++;
+        }
+
+        // If there are updates, add to batch
+        if (Object.keys(updates).length > 0) {
+          batch.update(doc(firebaseDB, "games", gameDoc.id), {
+            ...updates,
+            updatedAt: serverTimestamp(),
+          });
+        }
+      });
+
+      if (updateCount > 0) {
+        await batch.commit();
+        console.log(`✓ Updated ${updateCount} game references for team: ${teamName}`);
+      }
+
+      return updateCount;
+    } catch (error) {
+      console.error("Error updating games with team data:", error);
+      throw error;
+    }
+  };
+
   const handleSubmitTeam = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!user) {
@@ -1406,7 +1452,7 @@ export default function AdminPage() {
     }
 
     setTeamSubmitting(true);
-    setTeamStatus({ type: "info", message: teamForm.id ? "Updating team..." : "Creating team..." });
+    setTeamStatus({ type: "info", message: teamForm.id ? "Updating team and related games..." : "Creating team..." });
 
     const payload: any = {
       name,
@@ -1451,7 +1497,15 @@ export default function AdminPage() {
         }
         
         await updateDoc(doc(firebaseDB, "teams", teamForm.id), updatePayload);
-        setTeamStatus({ type: "success", message: `✓ Team "${name}" updated successfully!` });
+        
+        // Update all games that reference this team (so logo/name changes propagate everywhere)
+        const gamesUpdated = await updateGamesWithTeamData(teamForm.id, name, logo);
+        
+        const successMsg = gamesUpdated > 0 
+          ? `✓ Team "${name}" updated! ${gamesUpdated} game${gamesUpdated > 1 ? 's' : ''} synced.`
+          : `✓ Team "${name}" updated successfully!`;
+        
+        setTeamStatus({ type: "success", message: successMsg });
         
         // Update the form with the new values (keeping form open so user can see changes)
         setTeamForm({

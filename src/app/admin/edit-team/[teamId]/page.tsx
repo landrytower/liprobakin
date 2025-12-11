@@ -142,20 +142,20 @@ export default function EditTeamPage() {
     return () => unsubscribe();
   }, [router]);
 
-  // Real-time listener for all teams (for navigation)
+  // Load all teams once for navigation
   useEffect(() => {
     if (!user || !adminUser) return;
 
-    const teamsQuery = query(collection(firebaseDB, "teams"));
-    const unsubscribe = onSnapshot(teamsQuery, (snapshot) => {
-      const teamsData = snapshot.docs.map((doc) => ({
+    const loadTeams = async () => {
+      const teamsSnapshot = await getDocs(collection(firebaseDB, "teams"));
+      const teamsData = teamsSnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       })) as Team[];
       setAllTeams(teamsData.sort((a, b) => a.name.localeCompare(b.name)));
-    });
+    };
 
-    return () => unsubscribe();
+    loadTeams();
   }, [user, adminUser]);
 
   useEffect(() => {

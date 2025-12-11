@@ -534,7 +534,13 @@ export default function AdminPage() {
   const [rosterForm, setRosterForm] = useState<RosterFormState>(initialRosterFormState);
   const [rosterSubmitting, setRosterSubmitting] = useState(false);
   const [rosterStatus, setRosterStatus] = useState<StatusCallout | null>(null);
-  const [teamGenderFilter, setTeamGenderFilter] = useState<GenderKey>("men");
+  const [teamGenderFilter, setTeamGenderFilter] = useState<GenderKey>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('adminTeamGenderFilter');
+      return (saved === 'women' ? 'women' : 'men') as GenderKey;
+    }
+    return 'men';
+  });
   const [teamSearchQuery, setTeamSearchQuery] = useState("");
   const [teamCurrentPage, setTeamCurrentPage] = useState(1);
   const teamsPerPage = 6;
@@ -4089,14 +4095,20 @@ export default function AdminPage() {
                         <button
                           type="button"
                           className={`rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.4em] transition ${teamGenderFilter === "men" ? "bg-white text-black" : "border border-white/30 text-white hover:border-white/60"}`}
-                          onClick={() => setTeamGenderFilter("men")}
+                          onClick={() => {
+                            setTeamGenderFilter("men");
+                            localStorage.setItem('adminTeamGenderFilter', 'men');
+                          }}
                         >
                           Men
                         </button>
                         <button
                           type="button"
                           className={`rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.4em] transition ${teamGenderFilter === "women" ? "bg-white text-black" : "border border-white/30 text-white hover:border-white/60"}`}
-                          onClick={() => setTeamGenderFilter("women")}
+                          onClick={() => {
+                            setTeamGenderFilter("women");
+                            localStorage.setItem('adminTeamGenderFilter', 'women');
+                          }}
                         >
                           Women
                         </button>
@@ -4121,7 +4133,7 @@ export default function AdminPage() {
 
                     {paginatedTeams.length ? (
                       <>
-                        <div className="grid gap-3 md:grid-cols-2">
+                        <div className="grid gap-2.5 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
                           {paginatedTeams.map((team, teamIndex) => {
                           const isFirestore = teams.some(t => t.id === team.id);
                           const isActive = isFirestore && selectedTeamId === team.id;
@@ -4130,16 +4142,16 @@ export default function AdminPage() {
                             <article
                               key={`${team.id}-${team.gender}-${teamIndex}`}
                               onClick={() => isFirestore && handleSelectTeam(team.id)}
-                              className={`rounded-2xl border p-4 transition ${
+                              className={`group rounded-xl border p-3 transition-all duration-200 ${
                                 isActive
-                                  ? "border-orange-400/60 bg-orange-500/10"
+                                  ? "border-orange-400/60 bg-orange-500/10 scale-[1.02]"
                                   : isTemplate
                                     ? "border-dashed border-white/15 bg-slate-900/30"
                                     : "border-white/10 bg-slate-900/50"
-                              } ${isFirestore ? "cursor-pointer hover:border-white/30" : ""}`}
+                              } ${isFirestore ? "cursor-pointer hover:border-white/30 hover:scale-[1.02]" : ""}`}
                             >
-                              <div className="flex items-center gap-3">
-                                <div className="relative h-12 w-12 overflow-hidden rounded-xl border border-white/10 bg-black/30">
+                              <div className="flex items-center gap-2.5">
+                                <div className="relative h-10 w-10 flex-shrink-0 overflow-hidden rounded-lg border border-white/10 bg-black/30">
                                   {team.logo ? (
                                     <Image
                                       src={team.logo}
@@ -4155,8 +4167,8 @@ export default function AdminPage() {
                                     </div>
                                   )}
                                 </div>
-                                <div className="flex-1">
-                                  <p className="text-sm font-semibold text-white flex items-center gap-2">
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-semibold text-white flex items-center gap-1.5 truncate">
                                     {team.name}
                                     {isTemplate ? (
                                       <span className="rounded-full border border-white/20 px-2 py-[2px] text-[9px] uppercase tracking-[0.4em] text-slate-300">

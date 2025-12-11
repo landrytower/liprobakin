@@ -88,6 +88,7 @@ export async function getAdminUser(uid: string): Promise<AdminUser | null> {
       isFirstLogin: data.isFirstLogin ?? true,
       createdAt: data.createdAt?.toDate() ?? null,
       createdBy: data.createdBy,
+      lastActivity: data.lastActivity?.toDate() ?? null,
       lastLogin: data.lastLogin?.toDate() ?? null,
       isActive: data.isActive ?? true,
     };
@@ -115,6 +116,7 @@ export async function getAllAdminUsers(): Promise<AdminUser[]> {
         createdAt: data.createdAt?.toDate() ?? null,
         createdBy: data.createdBy,
         lastLogin: data.lastLogin?.toDate() ?? null,
+        lastActivity: data.lastActivity?.toDate() ?? null,
         isActive: data.isActive ?? true,
       };
     });
@@ -274,9 +276,23 @@ export async function recordLastLogin(uid: string): Promise<void> {
   try {
     await updateDoc(doc(firebaseDB, "adminUsers", uid), {
       lastLogin: serverTimestamp(),
+      lastActivity: serverTimestamp(),
     });
   } catch (error) {
     console.error("Error recording last login:", error);
+  }
+}
+
+/**
+ * Update last activity timestamp (called periodically while user is active)
+ */
+export async function updateLastActivity(uid: string): Promise<void> {
+  try {
+    await updateDoc(doc(firebaseDB, "adminUsers", uid), {
+      lastActivity: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error("Error updating last activity:", error);
   }
 }
 

@@ -37,7 +37,8 @@ import {
   deleteAdminUser,
   getAdminUser,
   recordLastLogin,
-  updateAdminProfile
+  updateAdminProfile,
+  updateLastActivity
 } from "@/lib/adminAuth";
 import { logAuditAction, formatAuditLogDisplay } from "@/lib/auditLog";
 
@@ -765,6 +766,38 @@ export default function AdminPage() {
     return () => unsubscribe();
   }, []);
 
+  // Update current user's activity every 2 minutes
+  useEffect(() => {
+    if (!user?.uid) return;
+    
+    const updateActivity = () => {
+      updateLastActivity(user.uid);
+    };
+    
+    // Update immediately
+    updateActivity();
+    
+    // Update every 2 minutes
+    const interval = setInterval(updateActivity, 2 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [user?.uid]);
+
+  // Update current user's activity every 2 minutes
+  useEffect(() => {
+    if (!user?.uid) return;
+    
+    const updateActivity = () => {
+      updateLastActivity(user.uid);
+    };
+    
+    // Update immediately
+    updateActivity();
+    
+    // Update every 2 minutes
+    const interval = setInterval(updateActivity, 2 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [user?.uid]);
+
   // Load all admin users if current user is master
   useEffect(() => {
     if (!currentAdminUser?.permissions.canManageAdmins) {
@@ -779,7 +812,7 @@ export default function AdminPage() {
     
     loadAdminUsers();
     
-    // Refresh every 30 seconds
+    // Refresh every 30 seconds to see online status updates
     const interval = setInterval(loadAdminUsers, 30000);
     return () => clearInterval(interval);
   }, [currentAdminUser]);
@@ -6742,6 +6775,21 @@ export default function AdminPage() {
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <div className="flex items-center gap-2">
+                              {(() => {
+                                const now = Date.now();
+                                const lastActivity = admin.lastActivity ? new Date(admin.lastActivity).getTime() : 0;
+                                const isOnline = admin.isActive && lastActivity > 0 && (now - lastActivity) < 5 * 60 * 1000; // 5 minutes
+                                return (
+                                  <div className="relative">
+                                    <div className={`h-2.5 w-2.5 rounded-full ${
+                                      isOnline ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]' : 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.4)]'
+                                    }`} />
+                                    {isOnline && (
+                                      <div className="absolute inset-0 h-2.5 w-2.5 animate-ping rounded-full bg-emerald-400 opacity-75" />
+                                    )}
+                                  </div>
+                                );
+                              })()}
                               <p className="text-sm font-semibold text-white">{admin.displayName || admin.email}</p>
                               {!admin.isActive && (
                                 <span className="rounded-full bg-rose-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-rose-200">
@@ -6827,8 +6875,44 @@ export default function AdminPage() {
                               </div>
                             )}
                             
-                            <div className="mt-2 text-[10px] text-slate-500">
-                              Last login: {admin.lastLogin ? new Date(admin.lastLogin).toLocaleDateString() : 'Never'}
+                            <div className="mt-2 space-y-0.5 text-[10px] text-slate-500">
+                              <div>
+                                Last login: {admin.lastLogin ? (() => {
+                                  const lastLogin = new Date(admin.lastLogin);
+                                  const now = new Date();
+                                  const diffMs = now.getTime() - lastLogin.getTime();
+                                  const diffMins = Math.floor(diffMs / (1000 * 60));
+                                  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+                                  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                                  
+                                  if (diffMins < 1) return 'Just now';
+                                  if (diffMins < 60) return `${diffMins} min ago`;
+                                  if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+                                  if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+                                  return lastLogin.toLocaleDateString();
+                                })() : 'Never'}
+                              </div>
+                              {admin.lastActivity && (() => {
+                                const now = Date.now();
+                                const lastActivity = new Date(admin.lastActivity).getTime();
+                                const isOnline = admin.isActive && (now - lastActivity) < 5 * 60 * 1000;
+                                return (
+                                  <div className={isOnline ? 'text-emerald-400' : 'text-slate-500'}>
+                                    {isOnline ? '🟢 Online now' : `Last seen: ${(() => {
+                                      const diffMs = now - lastActivity;
+                                      const diffMins = Math.floor(diffMs / (1000 * 60));
+                                      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+                                      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                                      
+                                      if (diffMins < 1) return 'Just now';
+                                      if (diffMins < 60) return `${diffMins} min ago`;
+                                      if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+                                      if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+                                      return new Date(lastActivity).toLocaleDateString();
+                                    })()}`}
+                                  </div>
+                                );
+                              })()}
                             </div>
                           </div>
                           

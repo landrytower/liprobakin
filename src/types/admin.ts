@@ -30,6 +30,7 @@ export type AdminUser = {
   createdAt: Date | null;
   createdBy: string;
   lastLogin: Date | null;
+  lastActivity?: Date | null;
   isActive: boolean;
 };
 

@@ -1002,13 +1002,19 @@ export default function AdminPage() {
 
     const coachStaffRef = collection(firebaseDB, `teams/${selectedTeamId}/coachStaff`);
     const unsubscribeCoachStaff = onSnapshot(coachStaffRef, (snapshot) => {
-      setCoachStaffList(snapshot.docs.map((doc) => ({
+      const coaches = snapshot.docs.map((doc) => ({
         id: doc.id,
         firstName: doc.data()?.firstName ?? "",
         lastName: doc.data()?.lastName ?? "",
         role: doc.data()?.role ?? "staff",
         headshot: doc.data()?.headshot ?? "",
-      })));
+      }));
+      // Sort: head_coach first, then assistant_coach, then staff
+      coaches.sort((a, b) => {
+        const order: Record<CoachStaffRole, number> = { head_coach: 0, assistant_coach: 1, staff: 2 };
+        return (order[a.role as CoachStaffRole] ?? 3) - (order[b.role as CoachStaffRole] ?? 3);
+      });
+      setCoachStaffList(coaches);
     });
 
     return () => {
@@ -4630,35 +4636,64 @@ export default function AdminPage() {
 
                       {/* Coach/Staff Section */}
                       <div className="mt-8 space-y-4">
-                        <div className="flex items-center justify-between">
-                          <h4 className="text-sm font-semibold uppercase tracking-[0.3em] text-slate-300">
+                        <div>
+                          <h4 className="mb-4 text-sm font-semibold uppercase tracking-[0.3em] text-slate-300">
                             Coaching Staff
                           </h4>
                           {!coachStaffFormVisible && (
-                            <div className="flex gap-2">
-                              <button
-                                type="button"
-                                onClick={() => openCoachStaffForm("head_coach")}
-                                disabled={coachStaffList.filter(c => c.role === "head_coach").length >= 1}
-                                className="rounded-full border border-white/20 bg-white/5 px-3 py-1 text-[10px] uppercase tracking-[0.4em] text-white transition hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed"
-                              >
-                                + Head Coach
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => openCoachStaffForm("assistant_coach")}
-                                disabled={coachStaffList.filter(c => c.role === "assistant_coach").length >= 2}
-                                className="rounded-full border border-white/20 bg-white/5 px-3 py-1 text-[10px] uppercase tracking-[0.4em] text-white transition hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed"
-                              >
-                                + Assistant
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => openCoachStaffForm("staff")}
-                                className="rounded-full border border-white/20 bg-white/5 px-3 py-1 text-[10px] uppercase tracking-[0.4em] text-white transition hover:bg-white/10"
-                              >
-                                + Staff
-                              </button>
+                            <div className="space-y-3">
+                              {/* Head Coach Section - Priority */}
+                              <div className="rounded-xl border-2 border-orange-500/30 bg-orange-500/5 p-3">
+                                <div className="mb-2 flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-orange-500/20 text-xs font-bold text-orange-400">
+                                      👑
+                                    </div>
+                                    <span className="text-xs font-semibold uppercase tracking-wider text-orange-400">Head Coach</span>
+                                  </div>
+                                  {coachStaffList.filter(c => c.role === "head_coach").length === 0 && (
+                                    <span className="text-[10px] uppercase tracking-wider text-orange-400/60">Required</span>
+                                  )}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => openCoachStaffForm("head_coach")}
+                                  disabled={coachStaffList.filter(c => c.role === "head_coach").length >= 1}
+                                  className="w-full rounded-lg border border-orange-500/40 bg-orange-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-orange-300 transition hover:bg-orange-500/20 disabled:opacity-30 disabled:cursor-not-allowed"
+                                >
+                                  {coachStaffList.filter(c => c.role === "head_coach").length >= 1 ? '✓ Head Coach Added' : '+ Add Head Coach'}
+                                </button>
+                              </div>
+
+                              {/* Assistant Coaches */}
+                              <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                                <div className="mb-2 flex items-center justify-between">
+                                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-300">Assistant Coaches</span>
+                                  <span className="text-[10px] text-slate-500">{coachStaffList.filter(c => c.role === "assistant_coach").length}/2</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => openCoachStaffForm("assistant_coach")}
+                                  disabled={coachStaffList.filter(c => c.role === "assistant_coach").length >= 2}
+                                  className="w-full rounded-lg border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white transition hover:bg-white/20 disabled:opacity-30 disabled:cursor-not-allowed"
+                                >
+                                  + Add Assistant Coach
+                                </button>
+                              </div>
+
+                              {/* Support Staff */}
+                              <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                                <div className="mb-2">
+                                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-300">Support Staff</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => openCoachStaffForm("staff")}
+                                  className="w-full rounded-lg border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white transition hover:bg-white/20"
+                                >
+                                  + Add Staff Member
+                                </button>
+                              </div>
                             </div>
                           )}
                         </div>
@@ -4727,21 +4762,45 @@ export default function AdminPage() {
                         <div className="space-y-2">
                           {coachStaffList.length > 0 ? (
                             coachStaffList.map((member) => (
-                              <div key={member.id} className="rounded-xl border border-white/10 bg-slate-900/40 p-3">
+                              <div 
+                                key={member.id} 
+                                className={`rounded-xl border p-3 ${
+                                  member.role === 'head_coach' 
+                                    ? 'border-orange-500/40 bg-orange-500/10' 
+                                    : 'border-white/10 bg-slate-900/40'
+                                }`}
+                              >
                                 <div className="flex items-center justify-between">
                                   <div className="flex items-center gap-3">
                                     {member.headshot ? (
-                                      <div className="relative h-10 w-10 rounded-full overflow-hidden border border-white/10">
+                                      <div className={`relative h-12 w-12 rounded-full overflow-hidden border-2 ${
+                                        member.role === 'head_coach' ? 'border-orange-500/60' : 'border-white/10'
+                                      }`}>
                                         <Image src={member.headshot} alt={member.firstName} fill className="object-cover" unoptimized />
                                       </div>
                                     ) : (
-                                      <div className="h-10 w-10 rounded-full border border-white/10 bg-slate-800 flex items-center justify-center text-xs text-slate-400">
+                                      <div className={`h-12 w-12 rounded-full border-2 flex items-center justify-center text-sm font-bold ${
+                                        member.role === 'head_coach' 
+                                          ? 'border-orange-500/60 bg-orange-500/20 text-orange-300' 
+                                          : 'border-white/10 bg-slate-800 text-slate-400'
+                                      }`}>
                                         {member.firstName[0]}{member.lastName[0]}
                                       </div>
                                     )}
                                     <div>
-                                      <p className="text-sm font-semibold text-white">{member.firstName} {member.lastName}</p>
-                                      <p className="text-[10px] uppercase tracking-wider text-slate-400">
+                                      <div className="flex items-center gap-2">
+                                        {member.role === 'head_coach' && (
+                                          <span className="text-xs">👑</span>
+                                        )}
+                                        <p className={`text-sm font-semibold ${
+                                          member.role === 'head_coach' ? 'text-orange-200' : 'text-white'
+                                        }`}>
+                                          {member.firstName} {member.lastName}
+                                        </p>
+                                      </div>
+                                      <p className={`text-[10px] font-semibold uppercase tracking-wider ${
+                                        member.role === 'head_coach' ? 'text-orange-400' : 'text-slate-400'
+                                      }`}>
                                         {member.role === "head_coach" ? "Head Coach" : member.role === "assistant_coach" ? "Assistant Coach" : "Staff"}
                                       </p>
                                     </div>
@@ -4750,14 +4809,14 @@ export default function AdminPage() {
                                     <button
                                       type="button"
                                       onClick={() => handleEditCoachStaff(member)}
-                                      className="rounded-full border border-white/20 px-2 py-1 text-[10px] uppercase tracking-wider text-white hover:border-white/40"
+                                      className="rounded-full border border-white/20 px-3 py-1 text-[10px] uppercase tracking-wider text-white hover:border-white/40 hover:bg-white/10"
                                     >
                                       Edit
                                     </button>
                                     <button
                                       type="button"
                                       onClick={() => handleDeleteCoachStaff(member)}
-                                      className="rounded-full border border-rose-500/40 px-2 py-1 text-[10px] uppercase tracking-wider text-rose-200 hover:border-rose-400"
+                                      className="rounded-full border border-rose-500/40 px-3 py-1 text-[10px] uppercase tracking-wider text-rose-200 hover:border-rose-400 hover:bg-rose-500/10"
                                     >
                                       Delete
                                     </button>
@@ -4766,9 +4825,14 @@ export default function AdminPage() {
                               </div>
                             ))
                           ) : (
-                            <p className="rounded-xl border border-dashed border-white/20 bg-slate-900/30 p-3 text-xs text-slate-400 text-center">
-                              No coaching staff added yet.
-                            </p>
+                            <div className="rounded-xl border border-dashed border-white/20 bg-slate-900/30 p-4">
+                              <p className="text-xs text-slate-400 text-center mb-2">
+                                No coaching staff added yet.
+                              </p>
+                              <p className="text-[10px] text-slate-500 text-center">
+                                Start by adding a head coach first
+                              </p>
+                            </div>
                           )}
                         </div>
                       </div>

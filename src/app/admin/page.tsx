@@ -548,7 +548,7 @@ export default function AdminPage() {
   });
   const [teamSearchQuery, setTeamSearchQuery] = useState("");
   const [teamCurrentPage, setTeamCurrentPage] = useState(1);
-  const teamsPerPage = 6;
+  const teamsPerPage = 8;
   const [rosterFormVisible, setRosterFormVisible] = useState(false);
   const [transferModalVisible, setTransferModalVisible] = useState(false);
   const [transferPlayerId, setTransferPlayerId] = useState<string | null>(null);
@@ -4160,15 +4160,15 @@ export default function AdminPage() {
                                   : "border-white/10 bg-slate-900/50"
                               } ${isFirestore ? "cursor-pointer hover:border-white/30 hover:scale-[1.02]" : ""}`}
                             >
-                              <div className="flex items-center gap-2.5">
-                                <div className="relative h-10 w-10 flex-shrink-0 overflow-hidden rounded-lg border border-white/10 bg-black/30">
+                              <div className="flex items-center gap-3">
+                                <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-xl border-2 border-white/20 bg-gradient-to-br from-slate-800 to-slate-900 p-2 shadow-lg">
                                   {team.logo ? (
                                     <Image
                                       src={team.logo}
                                       alt={`${team.name} logo`}
                                       fill
                                       className="object-contain p-1"
-                                      sizes="48px"
+                                      sizes="64px"
                                       unoptimized
                                     />
                                   ) : (

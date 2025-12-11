@@ -71,6 +71,22 @@ const slug = (label: string) => label.toLowerCase();
 const formatFranchiseName = (team: Franchise) =>
   [team.city, team.name].filter(Boolean).join(" ").trim();
 
+const formatTimeAgo = (date: Date): string => {
+  const now = Date.now();
+  const diff = now - date.getTime();
+  const minutes = Math.floor(diff / (1000 * 60));
+  const hours = Math.floor(diff / (1000 * 60 * 60));
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+
+  if (minutes < 60) {
+    return `il y a ${minutes} min`;
+  } else if (hours < 24) {
+    return `il y a ${hours} h`;
+  } else {
+    return `il y a ${days} j`;
+  }
+};
+
 const translations = {
   en: {
     brand: "LIPROBAKIN",
@@ -1408,7 +1424,7 @@ export default function Home() {
                           
                           {featured.createdAt && (
                             <p className="mb-4 text-xs text-slate-300">
-                              il y a {Math.floor((Date.now() - featured.createdAt.getTime()) / (1000 * 60))} min
+                              {formatTimeAgo(featured.createdAt)}
                             </p>
                           )}
                           

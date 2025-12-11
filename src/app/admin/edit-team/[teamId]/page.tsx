@@ -2,11 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { collection, doc, getDoc, getDocs, updateDoc, query, where } from "firebase/firestore";
-import { firebaseDB, firebaseAuth } from "@/lib/firebase";
+import { collection, doc, getDoc, getDocs, updateDoc, addDoc, deleteDoc, query, where, orderBy, onSnapshot } from "firebase/firestore";
+import { firebaseDB, firebaseAuth, firebaseStorage } from "@/lib/firebase";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { onAuthStateChanged } from "firebase/auth";
 import { getAdminUser } from "@/lib/adminAuth";
 import type { AdminUser } from "@/types/admin";
+import Image from "next/image";
 
 type Player = {
   id: string;
@@ -19,6 +21,8 @@ type Player = {
   height: string;
   dateOfBirth: string;
   nationality: string;
+  nationality2?: string;
+  playerLicense?: string;
   headshot: string;
   stats: {
     pts: string;
@@ -56,6 +60,9 @@ export default function EditTeamPage() {
   const [allTeams, setAllTeams] = useState<Team[]>([]);
   const [editingTeam, setEditingTeam] = useState(false);
   const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null);
+  const [addingPlayer, setAddingPlayer] = useState(false);
+  const [playerHeadshotFile, setPlayerHeadshotFile] = useState<File | null>(null);
+  const [teamLogoFile, setTeamLogoFile] = useState<File | null>(null);
 
   const [teamForm, setTeamForm] = useState({
     name: "",
@@ -64,6 +71,27 @@ export default function EditTeamPage() {
     color1: "",
     color2: "",
     logo: "",
+  });
+
+  // Persist teamForm changes to sessionStorage
+  useEffect(() => {
+    if (teamId && editingTeam && teamForm.name) {
+      const savedFormKey = `teamForm_${teamId}`;
+      sessionStorage.setItem(savedFormKey, JSON.stringify(teamForm));
+    }
+  }, [teamForm, teamId, editingTeam]);
+
+  const [newPlayerForm, setNewPlayerForm] = useState({
+    firstName: "",
+    lastName: "",
+    number: "",
+    position: "",
+    height: "",
+    dateOfBirth: "",
+    nationality: "",
+    nationality2: "",
+    playerLicense: "",
+    headshot: "",
   });
 
   useEffect(() => {
@@ -83,6 +111,22 @@ export default function EditTeamPage() {
     return () => unsubscribe();
   }, [router]);
 
+  // Real-time listener for all teams (for navigation)
+  useEffect(() => {
+    if (!user || !adminUser) return;
+
+    const teamsQuery = query(collection(firebaseDB, "teams"));
+    const unsubscribe = onSnapshot(teamsQuery, (snapshot) => {
+      const teamsData = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as Team[];
+      setAllTeams(teamsData.sort((a, b) => a.name.localeCompare(b.name)));
+    });
+
+    return () => unsubscribe();
+  }, [user, adminUser]);
+
   useEffect(() => {
     if (user && adminUser) {
       loadData();
@@ -93,33 +137,36 @@ export default function EditTeamPage() {
     try {
       setLoading(true);
 
-      // Load all teams for navigation
-      const teamsSnapshot = await getDocs(collection(firebaseDB, "teams"));
-      const teamsData = teamsSnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as Team[];
-      setAllTeams(teamsData.sort((a, b) => a.name.localeCompare(b.name)));
-
       // Load current team
       const teamDoc = await getDoc(doc(firebaseDB, "teams", teamId));
       if (teamDoc.exists()) {
         const teamData = { id: teamDoc.id, ...teamDoc.data() } as Team;
         setTeam(teamData);
-        setTeamForm({
-          name: teamData.name || "",
-          city: teamData.city || "",
-          gender: teamData.gender || "",
-          color1: teamData.colors?.[0] || "",
-          color2: teamData.colors?.[1] || "",
-          logo: teamData.logo || "",
-        });
+        
+        // Check if there's a saved editing state for this team
+        const savedFormKey = `teamForm_${teamId}`;
+        const savedForm = sessionStorage.getItem(savedFormKey);
+        
+        if (savedForm) {
+          // Restore the saved form state (preserves user edits like gender toggle)
+          setTeamForm(JSON.parse(savedForm));
+        } else {
+          // Load fresh data from database
+          setTeamForm({
+            name: teamData.name || "",
+            city: teamData.city || "",
+            gender: teamData.gender || "",
+            color1: teamData.colors?.[0] || "",
+            color2: teamData.colors?.[1] || "",
+            logo: teamData.logo || "",
+          });
+        }
       }
 
       // Load players for this team
       const playersQuery = query(
-        collection(firebaseDB, "players"),
-        where("teamId", "==", teamId)
+        collection(firebaseDB, "teams", teamId as string, "roster"),
+        orderBy("number", "asc")
       );
       const playersSnapshot = await getDocs(playersQuery);
       const playersData = playersSnapshot.docs.map((doc) => ({
@@ -134,29 +181,193 @@ export default function EditTeamPage() {
     }
   };
 
+  const handleCancelTeamEdit = () => {
+    if (!team) return;
+    // Clear saved form state and restore original data
+    const savedFormKey = `teamForm_${team.id}`;
+    sessionStorage.removeItem(savedFormKey);
+    setTeamForm({
+      name: team.name || "",
+      city: team.city || "",
+      gender: team.gender || "",
+      color1: team.colors?.[0] || "",
+      color2: team.colors?.[1] || "",
+      logo: team.logo || "",
+    });
+    setTeamLogoFile(null);
+    setEditingTeam(false);
+  };
+
+  const handleDeleteTeam = async () => {
+    if (!team || !confirm(`Are you sure you want to delete ${team.name}? This will also delete all players in the roster.`)) return;
+    
+    try {
+      setSaving(true);
+      
+      // Delete all players in roster
+      const rosterSnapshot = await getDocs(collection(firebaseDB, "teams", team.id, "roster"));
+      const deletePromises = rosterSnapshot.docs.map(doc => deleteDoc(doc.ref));
+      await Promise.all(deletePromises);
+      
+      // Delete team document
+      await deleteDoc(doc(firebaseDB, "teams", team.id));
+      
+      alert("Team deleted successfully!");
+      router.push("/admin");
+    } catch (error) {
+      console.error("Error deleting team:", error);
+      alert("Failed to delete team. Please try again.");
+      setSaving(false);
+    }
+  };
+
   const handleSaveTeam = async () => {
     if (!team) return;
     try {
       setSaving(true);
+      
+      const oldTeamName = team.name;
+      const newTeamName = teamForm.name;
+      const teamNameChanged = oldTeamName !== newTeamName;
+      
+      // Upload logo if file selected
+      let logoUrl = teamForm.logo;
+      if (teamLogoFile) {
+        const storageRefPath = ref(firebaseStorage, `team-logos/${Date.now()}_${teamLogoFile.name}`);
+        await uploadBytes(storageRefPath, teamLogoFile);
+        logoUrl = await getDownloadURL(storageRefPath);
+      }
+      
+      // Update team document
       await updateDoc(doc(firebaseDB, "teams", team.id), {
         name: teamForm.name,
         city: teamForm.city,
         gender: teamForm.gender,
         colors: [teamForm.color1, teamForm.color2],
-        logo: teamForm.logo,
+        logo: logoUrl,
       });
+      
+      // If team name changed, update all references
+      if (teamNameChanged) {
+        // Update all players in roster with new teamName
+        const rosterSnapshot = await getDocs(collection(firebaseDB, "teams", team.id, "roster"));
+        const rosterUpdates = rosterSnapshot.docs.map(playerDoc => 
+          updateDoc(doc(firebaseDB, "teams", team.id, "roster", playerDoc.id), {
+            teamName: newTeamName
+          })
+        );
+        await Promise.all(rosterUpdates);
+        
+        // Update all games that reference this team
+        const gamesSnapshot = await getDocs(collection(firebaseDB, "games"));
+        const gameUpdates = gamesSnapshot.docs.map(async (gameDoc) => {
+          const gameData = gameDoc.data();
+          const updates: any = {};
+          
+          if (gameData.homeTeamId === team.id) {
+            updates.homeTeamName = newTeamName;
+          }
+          if (gameData.awayTeamId === team.id) {
+            updates.awayTeamName = newTeamName;
+          }
+          
+          if (Object.keys(updates).length > 0) {
+            await updateDoc(doc(firebaseDB, "games", gameDoc.id), updates);
+          }
+        });
+        await Promise.all(gameUpdates);
+      }
+      
+      // Clear saved form state after successful save
+      const savedFormKey = `teamForm_${team.id}`;
+      sessionStorage.removeItem(savedFormKey);
+      
+      // Reload data immediately to show changes
       await loadData();
       setEditingTeam(false);
+      alert("Team updated successfully! All references have been synced.");
     } catch (error) {
       console.error("Error saving team:", error);
+      alert("Error saving team. Please try again.");
     } finally {
       setSaving(false);
     }
   };
 
-  const handleSavePlayer = async (player: Player) => {
+  const handleAddPlayer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!team) return;
+
     try {
-      await updateDoc(doc(firebaseDB, "players", player.id), player);
+      setSaving(true);
+
+      let headshotUrl = "";
+      if (playerHeadshotFile) {
+        const storageRef = ref(firebaseStorage, `players/${Date.now()}_${playerHeadshotFile.name}`);
+        await uploadBytes(storageRef, playerHeadshotFile);
+        headshotUrl = await getDownloadURL(storageRef);
+      }
+
+      await addDoc(collection(firebaseDB, "teams", team.id, "roster"), {
+        number: parseInt(newPlayerForm.number),
+        firstName: newPlayerForm.firstName,
+        lastName: newPlayerForm.lastName,
+        position: newPlayerForm.position,
+        height: newPlayerForm.height,
+        dateOfBirth: newPlayerForm.dateOfBirth,
+        nationality: newPlayerForm.nationality,
+        nationality2: newPlayerForm.nationality2 || null,
+        playerLicense: newPlayerForm.playerLicense || null,
+        headshot: headshotUrl,
+        stats: {
+          pts: 0,
+          ast: 0,
+          reb: 0,
+          stl: 0,
+          blk: 0,
+          gp: 0,
+        },
+      });
+
+      setNewPlayerForm({
+        firstName: "",
+        lastName: "",
+        number: "",
+        position: "",
+        height: "",
+        dateOfBirth: "",
+        nationality: "",
+        nationality2: "",
+        playerLicense: "",
+        headshot: "",
+      });
+      setPlayerHeadshotFile(null);
+      setAddingPlayer(false);
+      await loadData();
+    } catch (error) {
+      console.error("Error adding player:", error);
+      alert("Error adding player");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeletePlayer = async (playerId: string) => {
+    if (!team || !confirm("Are you sure you want to delete this player?")) return;
+    
+    try {
+      await deleteDoc(doc(firebaseDB, "teams", team.id, "roster", playerId));
+      await loadData();
+    } catch (error) {
+      console.error("Error deleting player:", error);
+      alert("Error deleting player");
+    }
+  };
+
+  const handleSavePlayer = async (player: Player) => {
+    if (!team) return;
+    try {
+      await updateDoc(doc(firebaseDB, "teams", team.id, "roster", player.id), player);
       await loadData();
       setEditingPlayerId(null);
     } catch (error) {
@@ -289,49 +500,80 @@ export default function EditTeamPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Logo URL</label>
+                <label className="block text-sm font-medium text-slate-300 mb-2">Team Logo</label>
                 <input
-                  type="text"
-                  value={teamForm.logo}
-                  onChange={(e) => setTeamForm({ ...teamForm, logo: e.target.value })}
-                  className="w-full rounded-lg border border-white/20 bg-white/5 px-4 py-2 text-white"
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setTeamLogoFile(e.target.files?.[0] || null)}
+                  className="w-full rounded-lg border border-dashed border-white/20 bg-white/5 px-4 py-2 text-slate-300 text-sm"
                 />
+                {teamLogoFile && (
+                  <p className="mt-1 text-xs text-emerald-400">✓ {teamLogoFile.name}</p>
+                )}
+                {!teamLogoFile && teamForm.logo && (
+                  <p className="mt-1 text-xs text-slate-400">Current: {teamForm.logo.substring(0, 50)}...</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2">Primary Color</label>
-                <input
-                  type="text"
-                  value={teamForm.color1}
-                  onChange={(e) => setTeamForm({ ...teamForm, color1: e.target.value })}
-                  className="w-full rounded-lg border border-white/20 bg-white/5 px-4 py-2 text-white"
-                  placeholder="#000000"
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="color"
+                    value={teamForm.color1}
+                    onChange={(e) => setTeamForm({ ...teamForm, color1: e.target.value })}
+                    className="h-12 w-20 rounded-lg border border-white/20 bg-white/5 cursor-pointer"
+                  />
+                  <input
+                    type="text"
+                    value={teamForm.color1}
+                    onChange={(e) => setTeamForm({ ...teamForm, color1: e.target.value })}
+                    className="flex-1 rounded-lg border border-white/20 bg-white/5 px-4 py-2 text-white"
+                    placeholder="#000000"
+                  />
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2">Secondary Color</label>
-                <input
-                  type="text"
-                  value={teamForm.color2}
-                  onChange={(e) => setTeamForm({ ...teamForm, color2: e.target.value })}
-                  className="w-full rounded-lg border border-white/20 bg-white/5 px-4 py-2 text-white"
-                  placeholder="#FFFFFF"
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="color"
+                    value={teamForm.color2}
+                    onChange={(e) => setTeamForm({ ...teamForm, color2: e.target.value })}
+                    className="h-12 w-20 rounded-lg border border-white/20 bg-white/5 cursor-pointer"
+                  />
+                  <input
+                    type="text"
+                    value={teamForm.color2}
+                    onChange={(e) => setTeamForm({ ...teamForm, color2: e.target.value })}
+                    className="flex-1 rounded-lg border border-white/20 bg-white/5 px-4 py-2 text-white"
+                    placeholder="#FFFFFF"
+                  />
+                </div>
               </div>
               
-              <div className="md:col-span-2 flex gap-2 justify-end">
+              <div className="md:col-span-2 flex gap-2 justify-between">
                 <button
-                  onClick={() => setEditingTeam(false)}
-                  className="rounded-lg border border-white/20 bg-white/5 px-6 py-2 text-sm font-medium text-white transition hover:bg-white/10"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSaveTeam}
+                  onClick={handleDeleteTeam}
                   disabled={saving}
-                  className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-6 py-2 text-sm font-medium text-emerald-300 transition hover:bg-emerald-500/20 disabled:opacity-50"
+                  className="rounded-lg border border-red-500/30 bg-red-500/10 px-6 py-2 text-sm font-medium text-red-300 transition hover:bg-red-500/20 disabled:opacity-50"
                 >
-                  {saving ? "Saving..." : "Save Changes"}
+                  Delete Team
                 </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleCancelTeamEdit}
+                    className="rounded-lg border border-white/20 bg-white/5 px-6 py-2 text-sm font-medium text-white transition hover:bg-white/10"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSaveTeam}
+                    disabled={saving}
+                    className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-6 py-2 text-sm font-medium text-emerald-300 transition hover:bg-emerald-500/20 disabled:opacity-50"
+                  >
+                    {saving ? "Saving..." : "Save Changes"}
+                  </button>
+                </div>
               </div>
             </div>
           ) : (
@@ -366,9 +608,193 @@ export default function EditTeamPage() {
 
         {/* Players Section */}
         <div className="rounded-xl border border-white/10 bg-slate-900/50 p-6">
-          <h2 className="mb-4 text-xl font-bold text-white">
-            Roster ({players.length} Players)
-          </h2>
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-xl font-bold text-white">
+              Roster ({players.length} Players)
+            </h2>
+            {!addingPlayer && (
+              <button
+                onClick={() => setAddingPlayer(true)}
+                className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-300 transition hover:bg-emerald-500/20"
+              >
+                + Add Player
+              </button>
+            )}
+          </div>
+
+          {/* Add Player Form */}
+          {addingPlayer && (
+            <form onSubmit={handleAddPlayer} className="mb-6 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4">
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-white">Add New Player</h3>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAddingPlayer(false);
+                    setNewPlayerForm({
+                      firstName: "",
+                      lastName: "",
+                      number: "",
+                      position: "",
+                      height: "",
+                      dateOfBirth: "",
+                      nationality: "",
+                      nationality2: "",
+                      playerLicense: "",
+                      headshot: "",
+                    });
+                    setPlayerHeadshotFile(null);
+                  }}
+                  className="text-slate-400 hover:text-white"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div>
+                  <label className="block text-xs text-slate-300 mb-1">First Name *</label>
+                  <input
+                    type="text"
+                    value={newPlayerForm.firstName}
+                    onChange={(e) => setNewPlayerForm({ ...newPlayerForm, firstName: e.target.value })}
+                    className="w-full rounded border border-white/20 bg-white/5 px-3 py-2 text-white text-sm"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-300 mb-1">Last Name *</label>
+                  <input
+                    type="text"
+                    value={newPlayerForm.lastName}
+                    onChange={(e) => setNewPlayerForm({ ...newPlayerForm, lastName: e.target.value })}
+                    className="w-full rounded border border-white/20 bg-white/5 px-3 py-2 text-white text-sm"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-300 mb-1">Jersey # *</label>
+                  <input
+                    type="number"
+                    value={newPlayerForm.number}
+                    onChange={(e) => setNewPlayerForm({ ...newPlayerForm, number: e.target.value })}
+                    className="w-full rounded border border-white/20 bg-white/5 px-3 py-2 text-white text-sm"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-300 mb-1">Position *</label>
+                  <select
+                    value={newPlayerForm.position}
+                    onChange={(e) => setNewPlayerForm({ ...newPlayerForm, position: e.target.value })}
+                    className="w-full rounded border border-white/20 bg-white/5 px-3 py-2 text-white text-sm"
+                    required
+                  >
+                    <option value="">Select position</option>
+                    <option value="Point Guard">Point Guard</option>
+                    <option value="Shooting Guard">Shooting Guard</option>
+                    <option value="Small Forward">Small Forward</option>
+                    <option value="Power Forward">Power Forward</option>
+                    <option value="Center">Center</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-300 mb-1">Height</label>
+                  <input
+                    type="text"
+                    value={newPlayerForm.height}
+                    onChange={(e) => setNewPlayerForm({ ...newPlayerForm, height: e.target.value })}
+                    className="w-full rounded border border-white/20 bg-white/5 px-3 py-2 text-white text-sm"
+                    placeholder="6'2&quot;"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-300 mb-1">Date of Birth</label>
+                  <input
+                    type="date"
+                    value={newPlayerForm.dateOfBirth}
+                    onChange={(e) => setNewPlayerForm({ ...newPlayerForm, dateOfBirth: e.target.value })}
+                    className="w-full rounded border border-white/20 bg-white/5 px-3 py-2 text-white text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-300 mb-1">Nationality</label>
+                  <input
+                    type="text"
+                    value={newPlayerForm.nationality}
+                    onChange={(e) => setNewPlayerForm({ ...newPlayerForm, nationality: e.target.value })}
+                    className="w-full rounded border border-white/20 bg-white/5 px-3 py-2 text-white text-sm"
+                    placeholder="USA"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-300 mb-1">Second Nationality</label>
+                  <input
+                    type="text"
+                    value={newPlayerForm.nationality2}
+                    onChange={(e) => setNewPlayerForm({ ...newPlayerForm, nationality2: e.target.value })}
+                    className="w-full rounded border border-white/20 bg-white/5 px-3 py-2 text-white text-sm"
+                    placeholder="Optional"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-300 mb-1">Player License</label>
+                  <input
+                    type="text"
+                    value={newPlayerForm.playerLicense}
+                    onChange={(e) => setNewPlayerForm({ ...newPlayerForm, playerLicense: e.target.value })}
+                    className="w-full rounded border border-white/20 bg-white/5 px-3 py-2 text-white text-sm"
+                    placeholder="Optional"
+                  />
+                </div>
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-xs text-slate-300 mb-1">Headshot Photo</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setPlayerHeadshotFile(e.target.files?.[0] || null)}
+                  className="w-full rounded border border-dashed border-white/20 bg-white/5 px-3 py-2 text-slate-300 text-xs"
+                />
+                {playerHeadshotFile && (
+                  <p className="mt-1 text-xs text-emerald-400">✓ {playerHeadshotFile.name}</p>
+                )}
+              </div>
+
+              <div className="flex gap-2 justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAddingPlayer(false);
+                    setNewPlayerForm({
+                      firstName: "",
+                      lastName: "",
+                      number: "",
+                      position: "",
+                      height: "",
+                      dateOfBirth: "",
+                      nationality: "",
+                      nationality2: "",
+                      playerLicense: "",
+                      headshot: "",
+                    });
+                    setPlayerHeadshotFile(null);
+                  }}
+                  className="rounded-lg border border-white/20 bg-white/5 px-6 py-2 text-sm font-medium text-white transition hover:bg-white/10"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-6 py-2 text-sm font-medium text-emerald-300 transition hover:bg-emerald-500/20 disabled:opacity-50"
+                >
+                  {saving ? "Adding..." : "Add Player"}
+                </button>
+              </div>
+            </form>
+          )}
 
           <div className="space-y-2">
             {players.map((player) => {
@@ -433,12 +859,20 @@ export default function EditTeamPage() {
                         </div>
                       </div>
 
-                      <button
-                        onClick={() => setEditingPlayerId(player.id)}
-                        className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-2 text-sm font-medium text-blue-300 transition hover:bg-blue-500/20"
-                      >
-                        Edit
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setEditingPlayerId(player.id)}
+                          className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-2 text-sm font-medium text-blue-300 transition hover:bg-blue-500/20"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeletePlayer(player.id)}
+                          className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-300 transition hover:bg-red-500/20"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </div>
                   ) : (
                     <PlayerEditForm

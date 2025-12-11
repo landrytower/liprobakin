@@ -3328,23 +3328,52 @@ export default function AdminPage() {
                     <p className="text-xs text-slate-400">{t.contentManagement}</p>
                   </div>
                   <div className="flex items-center gap-3">
-                    {/* Current User Info */}
-                    <div className="flex items-center gap-2 rounded-lg border border-white/20 bg-white/5 px-3 py-2">
-                      <div className="relative">
-                        <div className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]" />
-                        <div className="absolute inset-0 h-2 w-2 animate-ping rounded-full bg-emerald-400 opacity-75" />
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-xs font-semibold text-white">
-                          {currentAdminUser.displayName || currentAdminUser.email}
-                        </span>
-                        {currentAdminUser.roles.includes('master') && (
-                          <span className="text-[10px] font-semibold uppercase tracking-wider text-orange-400">
-                            Master Admin
-                          </span>
-                        )}
-                      </div>
-                    </div>
+                    {/* Online Admins Display */}
+                    {(() => {
+                      const now = Date.now();
+                      const onlineAdmins = adminUsers.filter(admin => {
+                        if (admin.id === user?.uid) return false; // Exclude current user
+                        const lastActivity = admin.lastActivity ? new Date(admin.lastActivity).getTime() : 0;
+                        return admin.isActive && lastActivity > 0 && (now - lastActivity) < 5 * 60 * 1000;
+                      });
+                      
+                      if (onlineAdmins.length === 0) return null;
+                      
+                      return (
+                        <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            <div className="relative">
+                              <div className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]" />
+                              <div className="absolute inset-0 h-2 w-2 animate-ping rounded-full bg-emerald-400 opacity-75" />
+                            </div>
+                            <span className="text-xs text-emerald-300">
+                              {onlineAdmins.length === 1 
+                                ? onlineAdmins[0].displayName || onlineAdmins[0].email
+                                : `${onlineAdmins.length} admins online`
+                              }
+                            </span>
+                          </div>
+                          {onlineAdmins.length > 1 && (
+                            <div className="ml-1 flex -space-x-2">
+                              {onlineAdmins.slice(0, 3).map((admin) => (
+                                <div
+                                  key={admin.id}
+                                  className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-slate-950 bg-emerald-500/20 text-[10px] font-bold text-emerald-300"
+                                  title={admin.displayName || admin.email}
+                                >
+                                  {(admin.displayName || admin.email).charAt(0).toUpperCase()}
+                                </div>
+                              ))}
+                              {onlineAdmins.length > 3 && (
+                                <div className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-slate-950 bg-slate-700 text-[10px] font-bold text-slate-300">
+                                  +{onlineAdmins.length - 3}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                     {/* Language Toggle */}
                     <div className="flex rounded-lg border border-white/20 bg-white/5 overflow-hidden">
                       <button

@@ -1451,19 +1451,34 @@ export default function AdminPage() {
         }
         
         await updateDoc(doc(firebaseDB, "teams", teamForm.id), updatePayload);
-        setTeamStatus({ type: "success", message: "Team updated." });
+        setTeamStatus({ type: "success", message: `✓ Team "${name}" updated successfully!` });
+        
+        // Update the form with the new values (keeping form open so user can see changes)
+        setTeamForm({
+          ...teamForm,
+          name,
+          city,
+          colorsInput: colors.join(", "),
+          logo,
+          nationality: payload.nationality,
+          nationality2: teamForm.nationality2,
+        });
+        setTeamLogoFile(null);
+        updateTeamLogoPreview(logo);
       } else {
-        await addDoc(collection(firebaseDB, "teams"), {
+        const newTeamRef = await addDoc(collection(firebaseDB, "teams"), {
           ...payload,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
-        setTeamStatus({ type: "success", message: "Team created." });
+        setTeamStatus({ type: "success", message: `✓ Team "${name}" created successfully!` });
+        setSelectedTeamId(newTeamRef.id);
+        resetTeamForm();
       }
-      resetTeamForm();
     } catch (error) {
-      console.error(error);
-      setTeamStatus({ type: "error", message: "Unable to save team changes." });
+      console.error("Team save error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Unable to save team changes.";
+      setTeamStatus({ type: "error", message: `❌ Error: ${errorMessage}` });
     } finally {
       setTeamSubmitting(false);
     }

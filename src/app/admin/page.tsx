@@ -3910,282 +3910,8 @@ export default function AdminPage() {
                   pull updated data in real time.
                 </p>
               </div>
-              <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
-                {/* Mobile Modal: Roster editor popup */}
-                {selectedTeamId ? (
-                  <div 
-                    className="lg:hidden fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-xl px-4"
-                    onClick={() => { setSelectedTeamId(null); resetRosterForm(); }}
-                  >
-                    <div 
-                      className="w-full max-w-md max-h-[85vh] overflow-y-auto rounded-2xl border border-white/20 bg-slate-900 shadow-2xl"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {/* Header */}
-                      <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-white/10 bg-slate-900 px-4 py-3">
-                        <div className="min-w-0 flex-1">
-                          <h3 className="text-sm font-semibold text-white truncate">Roster Editor</h3>
-                          <p className="text-[9px] uppercase tracking-[0.3em] text-slate-400">
-                            {teams.find((team) => team.id === selectedTeamId)?.name ?? "Selected team"}
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => { setSelectedTeamId(null); resetRosterForm(); }}
-                          className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 transition"
-                        >
-                          ✕
-                        </button>
-                      </div>
-
-                      {/* Content */}
-                      <div className="p-4 space-y-3">
-                        {!rosterFormVisible ? (
-                          <button
-                            type="button"
-                            onClick={() => setRosterFormVisible(true)}
-                            className="w-full rounded-xl border border-white/20 bg-white/10 px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.3em] text-white transition hover:bg-white/20"
-                          >
-                            + Add Player
-                          </button>
-                        ) : (
-                          <form onSubmit={handleSubmitRosterPlayer} className="space-y-2.5 overflow-hidden">
-                            <div className="grid gap-2.5 grid-cols-1">
-                              <label className="space-y-1 text-[10px] text-slate-300 min-w-0">
-                                First name
-                                <input
-                                  className="w-full min-w-0 rounded-lg border border-white/10 bg-slate-900/60 px-2.5 py-2 text-sm text-white focus:border-white"
-                                  value={rosterForm.firstName}
-                                  onChange={(event) => setRosterForm((prev) => ({ ...prev, firstName: event.target.value }))}
-                                  required
-                                />
-                              </label>
-                              <label className="space-y-1 text-[10px] text-slate-300 min-w-0">
-                                Last name
-                                <input
-                                  className="w-full min-w-0 rounded-lg border border-white/10 bg-slate-900/60 px-2.5 py-2 text-sm text-white focus:border-white"
-                                  value={rosterForm.lastName}
-                                  onChange={(event) => setRosterForm((prev) => ({ ...prev, lastName: event.target.value }))}
-                                  required
-                                />
-                              </label>
-                              <label className="space-y-1 text-[10px] text-slate-300 min-w-0">
-                                Jersey #
-                                <input
-                                  className="w-full min-w-0 rounded-lg border border-white/10 bg-slate-900/60 px-2.5 py-2 text-sm text-white focus:border-white"
-                                  value={rosterForm.number}
-                                  onChange={(event) => setRosterForm((prev) => ({ ...prev, number: event.target.value }))}
-                                  inputMode="numeric"
-                                  required
-                                />
-                              </label>
-                              <label className="space-y-1 text-[10px] text-slate-300 min-w-0">
-                                Player License
-                                <input
-                                  className="w-full min-w-0 rounded-lg border border-white/10 bg-slate-900/60 px-2.5 py-2 text-sm text-white focus:border-white disabled:bg-slate-900/30 disabled:cursor-not-allowed"
-                                  value={rosterForm.playerLicense}
-                                  onChange={(event) => setRosterForm((prev) => ({ ...prev, playerLicense: event.target.value }))}
-                                  disabled={!!rosterForm.id}
-                                  required={!rosterForm.id}
-                                  placeholder="Unique ID (cannot be changed)"
-                                />
-                              </label>
-                              <label className="space-y-1 text-[10px] text-slate-300 min-w-0">
-                                Height
-                                <input
-                                  className="w-full min-w-0 rounded-lg border border-white/10 bg-slate-900/60 px-2.5 py-2 text-sm text-white focus:border-white"
-                                  value={rosterForm.height}
-                                  onChange={(event) => setRosterForm((prev) => ({ ...prev, height: event.target.value }))}
-                                />
-                              </label>
-                              <label className="space-y-1 text-[10px] text-slate-300 min-w-0">
-                                Date of birth
-                                <input
-                                  type="date"
-                                  className="w-full min-w-0 rounded-lg border border-white/10 bg-slate-900/60 px-2.5 py-2 text-sm text-white focus:border-white"
-                                  value={rosterForm.dateOfBirth}
-                                  onChange={(event) => setRosterForm((prev) => ({ ...prev, dateOfBirth: event.target.value }))}
-                                />
-                              </label>
-                              <label className="space-y-1 text-[10px] text-slate-300 min-w-0">
-                                Position
-                                <select
-                                  className="w-full min-w-0 rounded-lg border border-white/10 bg-slate-900/60 px-2.5 py-2 text-sm text-white focus:border-white"
-                                  value={rosterForm.position}
-                                  onChange={(event) => setRosterForm((prev) => ({ ...prev, position: event.target.value }))}
-                                  required
-                                >
-                                  <option value="">Select position</option>
-                                  <option value="Point Guard">Point Guard</option>
-                                  <option value="Shooting Guard">Shooting Guard</option>
-                                  <option value="Small Forward">Small Forward</option>
-                                  <option value="Power Forward">Power Forward</option>
-                                  <option value="Center">Center</option>
-                                </select>
-                              </label>
-                              <label className="space-y-1 text-[10px] text-slate-300 min-w-0">
-                                Nationality
-                                  <div>
-                                    <input
-                                      list="country-options"
-                                      placeholder="Search country..."
-                                      value={rosterForm.nationality}
-                                      onChange={(event) => setRosterForm((prev) => ({ ...prev, nationality: event.target.value }))}
-                                      className="w-full min-w-0 rounded-lg border border-white/10 bg-slate-900/60 px-2.5 py-2 text-sm text-white focus:border-white"
-                                    />
-                                    <datalist id="country-options">
-                                      {countries.map((c) => (
-                                        <option key={c.code} value={c.name}>{flagFromCode(c.code)} {c.name}</option>
-                                      ))}
-                                    </datalist>
-                                  </div>
-                              </label>
-                              <div className="flex items-center gap-2 text-[12px] text-slate-300">
-                                <input
-                                  id="double-nationality"
-                                  type="checkbox"
-                                  checked={!!rosterForm.nationality2Enabled}
-                                  onChange={(e) => setRosterForm((prev) => ({ ...prev, nationality2Enabled: e.target.checked }))}
-                                  className="h-4 w-4"
-                                />
-                                <label htmlFor="double-nationality" className="select-none text-[11px]">Add second nationality</label>
-                              </div>
-                              {rosterForm.nationality2Enabled ? (
-                                <label className="space-y-1 text-[10px] text-slate-300 min-w-0">
-                                  Second nationality
-                                  <div>
-                                    <input
-                                      list="country-options"
-                                      placeholder="Search second country..."
-                                      value={rosterForm.nationality2}
-                                      onChange={(event) => setRosterForm((prev) => ({ ...prev, nationality2: event.target.value }))}
-                                      className="w-full min-w-0 rounded-lg border border-white/10 bg-slate-900/60 px-2.5 py-2 text-sm text-white focus:border-white"
-                                    />
-                                  </div>
-                                </label>
-                              ) : null}
-                            </div>
-                            <div className="space-y-2">
-                              <label className="space-y-1 text-[10px] text-slate-300 min-w-0">
-                                Upload headshot
-                                <input
-                                  type="file"
-                                  accept="image/*"
-                                  onChange={handlePlayerHeadshotChange}
-                                  className="w-full min-w-0 rounded-lg border border-dashed border-white/20 bg-slate-900/40 px-2.5 py-2 text-[10px] text-slate-300"
-                                />
-                                {playerHeadshotFile || playerHeadshotPreview ? (
-                                  <button
-                                    type="button"
-                                    onClick={clearPlayerHeadshotSelection}
-                                    className="self-start rounded-lg border border-white/20 px-2 py-1 text-[9px] uppercase tracking-[0.3em] text-slate-300 hover:bg-white/5"
-                                  >
-                                    Clear
-                                  </button>
-                                ) : null}
-                              </label>
-                              {playerHeadshotPreview ? (
-                                <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-slate-900/40 p-2">
-                                  <div className="relative h-10 w-10 flex-shrink-0 overflow-hidden rounded-lg border border-white/10 bg-black/40">
-                                    <Image src={playerHeadshotPreview} alt="Preview" fill className="object-cover" unoptimized />
-                                  </div>
-                                  <p className="text-[10px] text-slate-400">
-                                    {playerHeadshotFile ? "Ready to save" : "Current image"}
-                                  </p>
-                                </div>
-                              ) : null}
-                            </div>
-                            <div className="flex gap-2 pt-1">
-                              <button
-                                type="submit"
-                                disabled={rosterSubmitting}
-                                className="flex-1 rounded-lg border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50"
-                              >
-                                {rosterSubmitting ? "Saving…" : rosterForm.id ? "Update" : "Add"}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setRosterFormVisible(false)}
-                                className="rounded-lg border border-white/10 px-3 py-2 text-xs uppercase tracking-[0.3em] text-slate-300 hover:bg-white/5"
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          </form>
-                        )}
-
-                        {/* Current Roster List */}
-                        {roster.length > 0 ? (
-                          <div className="space-y-2 pt-1">
-                            <div className="flex items-center justify-between px-1">
-                              <p className="text-[10px] uppercase tracking-[0.3em] text-slate-400">Roster ({roster.length})</p>
-                            </div>
-                            <div className="space-y-2">
-                              {roster.map((player) => (
-                                <div
-                                  key={player.id}
-                                  className="flex items-center gap-2 rounded-lg border border-white/10 bg-slate-900/50 p-2.5 hover:bg-slate-900/70 transition"
-                                >
-                                  <div className="relative h-8 w-8 flex-shrink-0 overflow-hidden rounded-lg border border-white/10 bg-black/30">
-                                    {player.headshot ? (
-                                      <Image src={player.headshot} alt={player.firstName} fill className="object-cover" unoptimized />
-                                    ) : (
-                                      <div className="flex h-full w-full items-center justify-center text-[10px] font-semibold text-slate-500">
-                                        {player.firstName[0]}{player.lastName[0]}
-                                      </div>
-                                    )}
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-xs font-semibold text-white truncate">
-                                      #{player.number} {player.firstName} {player.lastName}
-                                    </p>
-                                    <p className="text-[10px] text-slate-400">
-                                      {player.position || "—"} · {player.height || "—"}
-                                      {player.nationality && (
-                                        ` · ${player.nationality}${player.nationality2 ? ` / ${player.nationality2}` : ""}`
-                                      )}
-                                    </p>
-                                    {player.playerLicense && (
-                                      <p className="text-[9px] text-slate-500">License: {player.playerLicense}</p>
-                                    )}
-                                  </div>
-                                  <div className="flex gap-1">
-                                    <button
-                                      type="button"
-                                      onClick={() => handleEditRosterPlayer(player)}
-                                      className="rounded-lg border border-white/20 px-2 py-1 text-[9px] uppercase tracking-[0.3em] text-white hover:bg-white/10"
-                                    >
-                                      Edit
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleInitiateTransfer(player)}
-                                      className="rounded-lg border border-sky-500/40 px-2 py-1 text-[9px] uppercase tracking-[0.3em] text-sky-200 hover:bg-sky-500/10"
-                                    >
-                                      Transfer
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDeleteRosterPlayer(player)}
-                                      className="rounded-lg border border-rose-500/40 px-2 py-1 text-[9px] uppercase tracking-[0.3em] text-rose-200 hover:bg-rose-500/10"
-                                    >
-                                      Del
-                                    </button>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="text-center py-6 text-xs text-slate-500">
-                            No players yet
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ) : null}
-                
+              <div className="grid gap-6">
+                {/* Teams section - click any team to open the dedicated editor */}
                 <div className="space-y-6">
                   {teamFormExpanded ? (
                     <form onSubmit={handleSubmitTeam} className="space-y-3 sm:space-y-4 overflow-hidden rounded-2xl border border-white/10 bg-black/30 p-4 sm:p-5">
@@ -4364,10 +4090,10 @@ export default function AdminPage() {
                     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <h3 className="text-sm font-semibold uppercase tracking-[0.3em] text-slate-300">
-                          Team Management {selectedTeamId ? <span className="text-orange-400">· Selected</span> : null}
+                          Team Management
                         </h3>
                         <p className="text-xs text-slate-500">
-                          {teams.length} saved · {selectedTeamId ? "Tap a different team to switch" : "Tap a team to edit roster"}
+                          {teams.length} saved · Click any team to open the editor
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
@@ -4423,18 +4149,15 @@ export default function AdminPage() {
                         <div className="grid gap-2.5 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
                           {paginatedTeams.map((team, teamIndex) => {
                           const isFirestore = teams.some(t => t.id === team.id);
-                          const isActive = isFirestore && selectedTeamId === team.id;
                           const isTemplate = !isFirestore;
                           return (
                             <article
                               key={`${team.id}-${team.gender}-${teamIndex}`}
-                              onClick={() => isFirestore && handleSelectTeam(team.id)}
+                              onClick={() => isFirestore && router.push(`/admin/edit-team/${team.id}`)}
                               className={`group rounded-xl border p-3 transition-all duration-200 ${
-                                isActive
-                                  ? "border-orange-400/60 bg-orange-500/10 scale-[1.02]"
-                                  : isTemplate
-                                    ? "border-dashed border-white/15 bg-slate-900/30"
-                                    : "border-white/10 bg-slate-900/50"
+                                isTemplate
+                                  ? "border-dashed border-white/15 bg-slate-900/30"
+                                  : "border-white/10 bg-slate-900/50"
                               } ${isFirestore ? "cursor-pointer hover:border-white/30 hover:scale-[1.02]" : ""}`}
                             >
                               <div className="flex items-center gap-2.5">

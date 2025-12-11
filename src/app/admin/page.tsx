@@ -566,6 +566,7 @@ export default function AdminPage() {
   const [language, setLanguage] = useState<'en' | 'fr'>('fr');
   const [currentAdminUser, setCurrentAdminUser] = useState<AdminUser | null>(null);
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
+  const [showOnlineAdminsDropdown, setShowOnlineAdminsDropdown] = useState(false);
   const [adminFormVisible, setAdminFormVisible] = useState(false);
   const [newAdminEmail, setNewAdminEmail] = useState("");
   const [newAdminName, setNewAdminName] = useState("");
@@ -749,8 +750,16 @@ export default function AdminPage() {
       setUser(next);
       if (next) {
         console.log("🔐 User logged in:", next.email, "UID:", next.uid);
-        // Load admin user data
-        const adminData = await getAdminUser(next.uid);
+        // Load admin user data with retry logic
+        let adminData = await getAdminUser(next.uid);
+        
+        // If no admin data found, wait a moment and retry (handles race condition)
+        if (!adminData) {
+          console.log("⏳ Admin data not found, retrying in 1 second...");
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          adminData = await getAdminUser(next.uid);
+        }
+        
         console.log("📄 Admin data loaded:", adminData ? `Found (${adminData.roles.join(', ')})` : "NOT FOUND");
         setCurrentAdminUser(adminData);
         // Record last login
@@ -798,24 +807,57 @@ export default function AdminPage() {
     return () => clearInterval(interval);
   }, [user?.uid]);
 
-  // Load all admin users if current user is master
+  // Real-time listener for all admin users to see who's online
   useEffect(() => {
-    if (!currentAdminUser?.permissions.canManageAdmins) {
+    if (!currentAdminUser) {
       setAdminUsers([]);
       return;
     }
     
-    const loadAdminUsers = async () => {
-      const users = await getAllAdminUsers();
-      setAdminUsers(users);
-    };
+    // Set up real-time listener for immediate updates
+    const unsubscribe = onSnapshot(
+      collection(firebaseDB, "adminUsers"),
+      (snapshot) => {
+        const users = snapshot.docs.map((doc) => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            email: data.email,
+            displayName: data.displayName,
+            roles: data.roles || [],
+            permissions: data.permissions || {},
+            isFirstLogin: data.isFirstLogin ?? true,
+            createdAt: data.createdAt?.toDate() ?? null,
+            createdBy: data.createdBy,
+            lastLogin: data.lastLogin?.toDate() ?? null,
+            lastActivity: data.lastActivity?.toDate() ?? null,
+            isActive: data.isActive ?? true,
+          };
+        });
+        setAdminUsers(users);
+      },
+      (error) => {
+        console.error("Error listening to admin users:", error);
+      }
+    );
     
-    loadAdminUsers();
-    
-    // Refresh every 30 seconds to see online status updates
-    const interval = setInterval(loadAdminUsers, 30000);
-    return () => clearInterval(interval);
+    return () => unsubscribe();
   }, [currentAdminUser]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (showOnlineAdminsDropdown && !target.closest('.relative')) {
+        setShowOnlineAdminsDropdown(false);
+      }
+    };
+
+    if (showOnlineAdminsDropdown) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [showOnlineAdminsDropdown]);
 
   // Set default active tab based on permissions
   useEffect(() => {
@@ -3328,7 +3370,7 @@ export default function AdminPage() {
                     <p className="text-xs text-slate-400">{t.contentManagement}</p>
                   </div>
                   <div className="flex items-center gap-3">
-                    {/* Online Admins Display */}
+                    {/* Online Admins Display with Dropdown */}
                     {(() => {
                       const now = Date.now();
                       const onlineAdmins = adminUsers.filter(admin => {
@@ -3340,35 +3382,95 @@ export default function AdminPage() {
                       if (onlineAdmins.length === 0) return null;
                       
                       return (
-                        <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2">
-                          <div className="flex items-center gap-2">
-                            <div className="relative">
-                              <div className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]" />
-                              <div className="absolute inset-0 h-2 w-2 animate-ping rounded-full bg-emerald-400 opacity-75" />
+                        <div className="relative">
+                          <button
+                            onClick={() => setShowOnlineAdminsDropdown(!showOnlineAdminsDropdown)}
+                            className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 transition hover:bg-emerald-500/20 hover:border-emerald-500/50"
+                          >
+                            <div className="flex items-center gap-2">
+                              <div className="relative">
+                                <div className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]" />
+                                <div className="absolute inset-0 h-2 w-2 animate-ping rounded-full bg-emerald-400 opacity-75" />
+                              </div>
+                              <span className="text-xs text-emerald-300">
+                                {onlineAdmins.length === 1 
+                                  ? onlineAdmins[0].displayName || onlineAdmins[0].email
+                                  : `${onlineAdmins.length} admins online`
+                                }
+                              </span>
                             </div>
-                            <span className="text-xs text-emerald-300">
-                              {onlineAdmins.length === 1 
-                                ? onlineAdmins[0].displayName || onlineAdmins[0].email
-                                : `${onlineAdmins.length} admins online`
-                              }
-                            </span>
-                          </div>
-                          {onlineAdmins.length > 1 && (
-                            <div className="ml-1 flex -space-x-2">
-                              {onlineAdmins.slice(0, 3).map((admin) => (
-                                <div
-                                  key={admin.id}
-                                  className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-slate-950 bg-emerald-500/20 text-[10px] font-bold text-emerald-300"
-                                  title={admin.displayName || admin.email}
-                                >
-                                  {(admin.displayName || admin.email).charAt(0).toUpperCase()}
+                            {onlineAdmins.length > 1 && (
+                              <div className="ml-1 flex -space-x-2">
+                                {onlineAdmins.slice(0, 3).map((admin) => (
+                                  <div
+                                    key={admin.id}
+                                    className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-slate-950 bg-emerald-500/20 text-[10px] font-bold text-emerald-300"
+                                    title={admin.displayName || admin.email}
+                                  >
+                                    {(admin.displayName || admin.email).charAt(0).toUpperCase()}
+                                  </div>
+                                ))}
+                                {onlineAdmins.length > 3 && (
+                                  <div className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-slate-950 bg-slate-700 text-[10px] font-bold text-slate-300">
+                                    +{onlineAdmins.length - 3}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            {onlineAdmins.length > 1 && (
+                              <svg 
+                                className={`ml-1 h-3 w-3 text-emerald-300 transition-transform ${showOnlineAdminsDropdown ? 'rotate-180' : ''}`} 
+                                fill="none" 
+                                stroke="currentColor" 
+                                viewBox="0 0 24 24"
+                              >
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
+                            )}
+                          </button>
+
+                          {/* Dropdown Menu */}
+                          {showOnlineAdminsDropdown && onlineAdmins.length > 1 && (
+                            <div className="absolute right-0 top-full mt-2 w-64 rounded-lg border border-emerald-500/30 bg-slate-900/95 backdrop-blur-xl shadow-xl z-50">
+                              <div className="p-2">
+                                <div className="mb-2 px-2 py-1 text-xs font-semibold text-emerald-300 border-b border-emerald-500/20">
+                                  Online Admins
                                 </div>
-                              ))}
-                              {onlineAdmins.length > 3 && (
-                                <div className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-slate-950 bg-slate-700 text-[10px] font-bold text-slate-300">
-                                  +{onlineAdmins.length - 3}
-                                </div>
-                              )}
+                                {onlineAdmins.map((admin) => {
+                                  const lastActivity = admin.lastActivity ? new Date(admin.lastActivity) : null;
+                                  const timeAgo = lastActivity 
+                                    ? Math.floor((now - lastActivity.getTime()) / 1000 / 60) 
+                                    : null;
+                                  
+                                  return (
+                                    <div
+                                      key={admin.id}
+                                      className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-emerald-500/10 transition"
+                                    >
+                                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500/20 text-xs font-bold text-emerald-300">
+                                        {(admin.displayName || admin.email).charAt(0).toUpperCase()}
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <div className="text-xs font-medium text-white truncate">
+                                          {admin.displayName || admin.email}
+                                        </div>
+                                        <div className="text-[10px] text-slate-400">
+                                          {timeAgo !== null 
+                                            ? timeAgo < 1 
+                                              ? 'Active now' 
+                                              : `Active ${timeAgo}m ago`
+                                            : 'Recently active'
+                                          }
+                                        </div>
+                                      </div>
+                                      <div className="relative">
+                                        <div className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]" />
+                                        <div className="absolute inset-0 h-2 w-2 animate-ping rounded-full bg-emerald-400 opacity-75" />
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
                             </div>
                           )}
                         </div>

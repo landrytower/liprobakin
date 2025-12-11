@@ -329,25 +329,25 @@ const MatchupTeam = ({ team, record, logo, allFranchises }: { team: string; reco
     .toUpperCase();
 
   return (
-    <div className="flex flex-col items-center gap-1.5 md:gap-2 text-center min-w-0">
+    <div className="flex flex-col items-center gap-1 md:gap-2 text-center min-w-0">
       {teamLogo ? (
         <Image
           src={teamLogo}
           alt={`${displayName} logo`}
           width={48}
           height={48}
-          className="h-10 w-10 md:h-12 md:w-12 rounded-full border border-white/10 bg-white/5 object-cover flex-shrink-0"
+          className="h-8 w-8 md:h-12 md:w-12 rounded-full border border-white/10 bg-white/5 object-cover flex-shrink-0"
         />
       ) : (
-        <span className="flex h-10 w-10 md:h-12 md:w-12 items-center justify-center rounded-full bg-white/10 text-xs md:text-sm font-semibold flex-shrink-0">
+        <span className="flex h-8 w-8 md:h-12 md:w-12 items-center justify-center rounded-full bg-white/10 text-[10px] md:text-sm font-semibold flex-shrink-0">
           {initials}
         </span>
       )}
       <div className="min-w-0 w-full">
-        <p className="text-xs md:text-sm font-semibold text-white truncate">{displayName}</p>
-        <p className="text-[9px] md:text-[10px] text-slate-400">{record}</p>
+        <p className="text-[10px] md:text-sm font-semibold text-white truncate">{displayName}</p>
+        <p className="text-[8px] md:text-[10px] text-slate-400">{record}</p>
       </div>
-      <div className="flex w-12 md:w-16 gap-1 flex-shrink-0">
+      <div className="flex w-10 md:w-16 gap-1 flex-shrink-0">
         {colors.map((color) => (
           <span key={`${team}-${color}`} className="h-0.5 flex-1 rounded-full" style={{ backgroundColor: color }} />
         ))}
@@ -618,6 +618,7 @@ export default function Home() {
   const [newsArticles, setNewsArticles] = useState<NewsArticle[]>([]);
   const [featuredArticleId, setFeaturedArticleId] = useState<string | null>(null);
   const [expandedArticleId, setExpandedArticleId] = useState<string | null>(null);
+  const [newsGridStartIndex, setNewsGridStartIndex] = useState(0);
   const [dynamicStandings, setDynamicStandings] = useState<any[]>([]);
   const [currentPartnerIndex, setCurrentPartnerIndex] = useState(0);
   const [currentCommitteeIndex, setCurrentCommitteeIndex] = useState(0);
@@ -926,6 +927,17 @@ export default function Home() {
     
     return () => clearInterval(interval);
   }, [dynamicCommittee]);
+
+  // Auto-rotate news grid on mobile every 6 seconds
+  useEffect(() => {
+    if (newsArticles.length <= 2) return;
+    
+    const interval = setInterval(() => {
+      setNewsGridStartIndex((prev) => (prev + 1) % newsArticles.length);
+    }, 6000);
+    
+    return () => clearInterval(interval);
+  }, [newsArticles]);
 
   useEffect(() => {
     const fetchLeagueTopPlayers = async () => {
@@ -1422,10 +1434,17 @@ export default function Home() {
                         
                         {/* Article Grid - Below button, hidden when expanded */}
                         {newsArticles.length > 0 && !isExpanded && (
-                          <div className="grid gap-4 grid-cols-1 md:grid-cols-3 pb-16 mt-6 max-w-4xl mx-auto">
+                          <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 pb-16 mt-6 max-w-4xl mx-auto">
                             {(() => {
-                              // Show all articles including the featured one, up to 3 total
-                              const gridArticles = newsArticles.slice(0, 3);
+                              // On mobile (< 640px): show 2 articles with rotation
+                              // On larger screens: show 3 articles
+                              const articlesToShow = 3;
+                              const gridArticles = [];
+                              
+                              for (let i = 0; i < articlesToShow; i++) {
+                                const index = (newsGridStartIndex + i) % newsArticles.length;
+                                gridArticles.push(newsArticles[index]);
+                              }
                               
                               return gridArticles.map((article, index) => (
                                 <button
@@ -1439,10 +1458,10 @@ export default function Home() {
                                     article.id === featured.id 
                                       ? 'border-orange-500 bg-slate-900/80' 
                                       : 'border-white/10 bg-slate-900/60'
-                                  }`}
+                                  } ${index === 2 ? 'hidden sm:block' : ''}`}
                               >
                                 {article.imageUrl && (
-                                  <div className="relative h-28 overflow-hidden">
+                                  <div className="relative h-20 md:h-28 overflow-hidden">
                                     <Image
                                       src={article.imageUrl}
                                       alt={article.title}
@@ -1453,21 +1472,21 @@ export default function Home() {
                                   </div>
                                 )}
                                 
-                                <div className="p-3">
-                                  <span className="mb-1 inline-block text-[10px] font-semibold uppercase tracking-wider text-orange-500">
+                                <div className="p-2 md:p-3">
+                                  <span className="mb-1 inline-block text-[9px] md:text-[10px] font-semibold uppercase tracking-wider text-orange-500">
                                     {article.category}
                                   </span>
                                   
-                                  <h3 className="mb-1.5 text-xs font-bold leading-tight text-white group-hover:text-orange-500 transition-colors line-clamp-2">
+                                  <h3 className="mb-1 md:mb-1.5 text-[10px] md:text-xs font-bold leading-tight text-white group-hover:text-orange-500 transition-colors line-clamp-2">
                                     {article.title}
                                   </h3>
                                   
-                                  <p className="text-[11px] text-slate-400 line-clamp-2">
+                                  <p className="text-[9px] md:text-[11px] text-slate-400 line-clamp-2">
                                     {article.headline}
                                   </p>
                                   
                                   {article.createdAt && (
-                                    <p className="mt-1.5 text-[10px] text-slate-500">
+                                    <p className="mt-1 md:mt-1.5 text-[9px] md:text-[10px] text-slate-500">
                                       {new Intl.DateTimeFormat("fr-FR", {
                                         month: "short",
                                         day: "numeric",
@@ -1536,9 +1555,9 @@ export default function Home() {
                       allFranchises={allFranchises}
                     />
                   </div>
-                  <div className="space-y-2 rounded-xl border border-white/5 bg-black/30 p-3 overflow-hidden">
+                  <div className="space-y-2 rounded-xl border border-white/5 bg-black/30 p-3 overflow-hidden flex flex-col items-center justify-center">
                     <p className="text-[10px] uppercase tracking-[0.3em] text-slate-400">Leaders</p>
-                    <div className="grid grid-cols-2 gap-3 min-w-0">
+                    <div className="grid grid-cols-2 gap-3 min-w-0 w-full">
                       {matchup.leaders.map((leader) => (
                         <LeaderRow key={`${matchup.id}-${leader.player}`} leader={leader} allFranchises={allFranchises} />
                       ))}
@@ -1566,43 +1585,61 @@ export default function Home() {
                 weeklyScheduleGames.slice(0, 5).map((game) => (
                   <div
                     key={game.id}
-                    className="grid gap-4 rounded-2xl border border-white/5 bg-black/30 p-4 sm:grid-cols-[1fr_2fr_auto]"
+                    className="rounded-2xl border border-white/5 bg-black/30 p-3 sm:p-4"
                   >
-                    <div className="flex items-center justify-between sm:block">
-                      <p className="text-sm font-semibold text-white">{game.tipoff.split(" · ")[0]}</p>
-                      <p className="text-xs text-slate-400">{game.tipoff.split(" · ")[1] || "TBD"}</p>
-                    </div>
-                    <div className="flex flex-1 flex-col gap-4 sm:flex-row sm:items-center sm:justify-center">
-                      <div className="flex items-center gap-2">
-                        {game.awayTeamLogo && (
-                          <Image
-                            src={game.awayTeamLogo}
-                            alt={game.away.team}
-                            width={24}
-                            height={24}
-                            className="h-6 w-6 rounded-full border border-white/10 object-cover"
-                          />
+                    {/* Always Horizontal Layout - Date left, Teams center, Venue/Gender right */}
+                    <div className="flex items-center justify-between gap-2 sm:gap-4">
+                      {/* Date/Time - Left */}
+                      <div className="flex flex-col min-w-[60px] sm:min-w-[80px] flex-shrink-0">
+                        <p className="text-xs sm:text-sm font-semibold text-white truncate">{game.tipoff.split(" · ")[0]}</p>
+                        {game.tipoff.split(" · ")[1] && (
+                          <p className="text-[10px] sm:text-xs text-slate-400 truncate">{game.tipoff.split(" · ")[1]}</p>
                         )}
-                        <span className="text-sm font-medium text-white">{game.away.team}</span>
-                        <span className="text-xs text-slate-400">({game.away.record})</span>
                       </div>
-                      <span className="text-xs uppercase tracking-[0.4em] text-slate-500">at</span>
-                      <div className="flex items-center gap-2">
-                        {game.homeTeamLogo && (
-                          <Image
-                            src={game.homeTeamLogo}
-                            alt={game.home.team}
-                            width={24}
-                            height={24}
-                            className="h-6 w-6 rounded-full border border-white/10 object-cover"
-                          />
-                        )}
-                        <span className="text-sm font-medium text-white">{game.home.team}</span>
-                        <span className="text-xs text-slate-400">({game.home.record})</span>
+                      
+                      {/* Teams - Center */}
+                      <div className="flex items-center gap-2 sm:gap-3 flex-1 justify-center">
+                        {/* Away Team */}
+                        <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+                          {game.awayTeamLogo && (
+                            <Image
+                              src={game.awayTeamLogo}
+                              alt={game.away.team}
+                              width={24}
+                              height={24}
+                              className="h-5 w-5 sm:h-6 sm:w-6 rounded-full border border-white/10 object-cover"
+                            />
+                          )}
+                          <span className="text-xs sm:text-sm font-medium text-white whitespace-nowrap">{game.away.team}</span>
+                          <span className="text-[10px] sm:text-xs text-slate-400 hidden min-[400px]:inline whitespace-nowrap">({game.away.record})</span>
+                        </div>
+                        
+                        {/* VS Divider */}
+                        <span className="text-[10px] sm:text-xs uppercase tracking-wider text-slate-500 flex-shrink-0">vs</span>
+                        
+                        {/* Home Team */}
+                        <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+                          {game.homeTeamLogo && (
+                            <Image
+                              src={game.homeTeamLogo}
+                              alt={game.home.team}
+                              width={24}
+                              height={24}
+                              className="h-5 w-5 sm:h-6 sm:w-6 rounded-full border border-white/10 object-cover"
+                            />
+                          )}
+                          <span className="text-xs sm:text-sm font-medium text-white whitespace-nowrap">{game.home.team}</span>
+                          <span className="text-[10px] sm:text-xs text-slate-400 hidden min-[400px]:inline whitespace-nowrap">({game.home.record})</span>
+                        </div>
                       </div>
-                    </div>
-                    <div className="text-sm text-slate-300 sm:min-w-[150px] sm:text-right">
-                      <p>{game.venue}</p>
+                      
+                      {/* Venue & Gender - Right */}
+                      <div className="flex flex-col items-end text-[10px] sm:text-xs flex-shrink-0 min-w-[60px] sm:min-w-[100px]">
+                        <span className="text-slate-300 truncate max-w-full">{game.venue}</span>
+                        <span className="text-slate-500 uppercase tracking-wider whitespace-nowrap">
+                          {game.gender === "men" ? "MEN" : game.gender === "women" ? "WOM" : ""}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 ))
@@ -1636,14 +1673,14 @@ export default function Home() {
                     <Link
                       key={game.id}
                       href={`/game/${game.id}`}
-                      className="block rounded-2xl border border-white/5 bg-slate-900/70 p-4 overflow-hidden transition-all hover:border-orange-500 hover:bg-slate-900/80 cursor-pointer"
+                      className="block rounded-2xl border border-white/5 bg-slate-900/70 p-3 sm:p-4 overflow-hidden transition-all hover:border-orange-500 hover:bg-slate-900/80 cursor-pointer"
                     >
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="rounded-full border border-white/15 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.2em] text-slate-300">
+                      <div className="flex items-center justify-between mb-2 sm:mb-3">
+                        <span className="rounded-full border border-white/15 px-1.5 py-0.5 sm:px-2 text-[8px] sm:text-[9px] font-semibold uppercase tracking-[0.2em] text-slate-300">
                           FINAL
                         </span>
                         <div className="text-right">
-                          <p className="text-xs text-slate-400">
+                          <p className="text-[10px] sm:text-xs text-slate-400">
                             {game.dateObj ? new Intl.DateTimeFormat("en-US", {
                               month: "short",
                               day: "numeric",
@@ -1652,26 +1689,26 @@ export default function Home() {
                         </div>
                       </div>
                       
-                      <div className="space-y-2">
+                      <div className="space-y-1.5 sm:space-y-2">
                         {/* Away Team */}
                         <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
                             {game.awayTeamLogo && (
                               <Image
                                 src={game.awayTeamLogo}
                                 alt={game.awayTeamName || "Away team"}
                                 width={32}
                                 height={32}
-                                className="h-8 w-8 rounded-full border border-white/10 bg-white/5 object-cover flex-shrink-0"
+                                className="h-5 w-5 sm:h-8 sm:w-8 rounded-full border border-white/10 bg-white/5 object-cover flex-shrink-0"
                               />
                             )}
-                            <span className={`text-sm font-medium truncate ${
+                            <span className={`text-[11px] sm:text-sm font-medium truncate ${
                               awayWon ? "text-white" : "text-slate-400"
                             }`}>
                               {game.awayTeamName || "Away"}
                             </span>
                           </div>
-                          <span className={`text-xl font-bold ${
+                          <span className={`text-base sm:text-xl font-bold ${
                             awayWon ? "text-white" : "text-slate-500"
                           }`}>
                             {awayScore ?? 0}
@@ -1680,23 +1717,23 @@ export default function Home() {
                         
                         {/* Home Team */}
                         <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
                             {game.homeTeamLogo && (
                               <Image
                                 src={game.homeTeamLogo}
                                 alt={game.homeTeamName || "Home team"}
                                 width={32}
                                 height={32}
-                                className="h-8 w-8 rounded-full border border-white/10 bg-white/5 object-cover flex-shrink-0"
+                                className="h-5 w-5 sm:h-8 sm:w-8 rounded-full border border-white/10 bg-white/5 object-cover flex-shrink-0"
                               />
                             )}
-                            <span className={`text-sm font-medium truncate ${
+                            <span className={`text-[11px] sm:text-sm font-medium truncate ${
                               homeWon ? "text-white" : "text-slate-400"
                             }`}>
                               {game.homeTeamName || "Home"}
                             </span>
                           </div>
-                          <span className={`text-xl font-bold ${
+                          <span className={`text-base sm:text-xl font-bold ${
                             homeWon ? "text-white" : "text-slate-500"
                           }`}>
                             {homeScore ?? 0}
@@ -1705,7 +1742,7 @@ export default function Home() {
                       </div>
                       
                       {/* Venue and Gender */}
-                      <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between text-xs">
+                      <div className="mt-2 pt-2 sm:mt-3 sm:pt-3 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-xs">
                         <span className="text-slate-400 truncate">{game.venue || ""}</span>
                         <span className="text-slate-500 uppercase tracking-wider ml-2">{game.gender === "men" ? "MEN'S" : game.gender === "women" ? "WOMEN'S" : ""}</span>
                       </div>
@@ -1980,16 +2017,16 @@ export default function Home() {
         </section>
 
         {/* Partners and Committee Sections */}
-        <div className="grid gap-8 lg:grid-cols-2">
+        <div className="grid gap-4 grid-cols-2">
           {/* Partners Section */}
-          <section className="space-y-6">
+          <section className="space-y-3">
             <SectionHeader
               id="partners"
               eyebrow={sectionCopy.partners.eyebrow}
               title={sectionCopy.partners.title}
               description={sectionCopy.partners.description}
             />
-            <div className="relative aspect-[4/3] overflow-hidden rounded-2xl border border-white/10 bg-slate-900/70 p-8">
+            <div className="relative aspect-[4/3] overflow-hidden rounded-xl border border-white/10 bg-slate-900/70 p-4 md:p-8">
               {dynamicPartners.length > 0 ? (
                 <div className="flex h-full items-center justify-center">
                   {dynamicPartners[currentPartnerIndex].logo ? (
@@ -2002,7 +2039,7 @@ export default function Home() {
                     />
                   ) : (
                     <div className="text-center">
-                      <p className="text-2xl font-semibold text-white">
+                      <p className="text-sm md:text-2xl font-semibold text-white">
                         {dynamicPartners[currentPartnerIndex].name}
                       </p>
                     </div>
@@ -2010,16 +2047,16 @@ export default function Home() {
                 </div>
               ) : (
                 <div className="flex h-full items-center justify-center text-slate-400">
-                  <p>No partners yet</p>
+                  <p className="text-xs md:text-base">No partners yet</p>
                 </div>
               )}
               {dynamicPartners.length > 1 && (
-                <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 gap-2">
+                <div className="absolute bottom-2 md:bottom-4 left-1/2 flex -translate-x-1/2 gap-1.5 md:gap-2">
                   {dynamicPartners.map((_, index) => (
                     <button
                       key={index}
                       onClick={() => setCurrentPartnerIndex(index)}
-                      className={`h-2 w-2 rounded-full transition ${
+                      className={`h-1.5 w-1.5 md:h-2 md:w-2 rounded-full transition ${
                         index === currentPartnerIndex
                           ? "bg-orange-500"
                           : "bg-white/30 hover:bg-white/50"
@@ -2033,14 +2070,14 @@ export default function Home() {
           </section>
 
           {/* Committee Section */}
-          <section className="space-y-6">
+          <section className="space-y-3">
             <SectionHeader
               id="committee"
               eyebrow={sectionCopy.committee.eyebrow}
               title={sectionCopy.committee.title}
               description={sectionCopy.committee.description}
             />
-            <div className="relative aspect-[4/3] overflow-hidden rounded-2xl border border-white/10 bg-slate-900/70">
+            <div className="relative aspect-[4/3] overflow-hidden rounded-xl border border-white/10 bg-slate-900/70">
               {dynamicCommittee.length > 0 ? (
                 <div className="relative h-full">
                   {dynamicCommittee[currentCommitteeIndex].photo ? (
@@ -2052,32 +2089,32 @@ export default function Home() {
                     />
                   ) : (
                     <div className="flex h-full items-center justify-center bg-gradient-to-br from-orange-900/20 to-slate-900">
-                      <div className="flex h-32 w-32 items-center justify-center rounded-full bg-orange-600 text-5xl font-bold text-white">
+                      <div className="flex h-16 w-16 md:h-32 md:w-32 items-center justify-center rounded-full bg-orange-600 text-2xl md:text-5xl font-bold text-white">
                         {dynamicCommittee[currentCommitteeIndex].name.charAt(0)}
                       </div>
                     </div>
                   )}
-                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-6">
-                    <p className="text-xl font-semibold text-white">
+                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-3 md:p-6">
+                    <p className="text-sm md:text-xl font-semibold text-white truncate">
                       {dynamicCommittee[currentCommitteeIndex].name}
                     </p>
-                    <p className="text-sm text-orange-400">
+                    <p className="text-xs md:text-sm text-orange-400 truncate">
                       {dynamicCommittee[currentCommitteeIndex].role}
                     </p>
                   </div>
                 </div>
               ) : (
                 <div className="flex h-full items-center justify-center text-slate-400">
-                  <p>No committee members yet</p>
+                  <p className="text-xs md:text-base">No committee members yet</p>
                 </div>
               )}
               {dynamicCommittee.length > 1 && (
-                <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 gap-2">
+                <div className="absolute bottom-2 md:bottom-4 left-1/2 flex -translate-x-1/2 gap-1.5 md:gap-2">
                   {dynamicCommittee.map((_, index) => (
                     <button
                       key={index}
                       onClick={() => setCurrentCommitteeIndex(index)}
-                      className={`h-2 w-2 rounded-full transition ${
+                      className={`h-1.5 w-1.5 md:h-2 md:w-2 rounded-full transition ${
                         index === currentCommitteeIndex
                           ? "bg-orange-500"
                           : "bg-white/30 hover:bg-white/50"

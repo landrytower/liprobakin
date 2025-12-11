@@ -217,7 +217,7 @@ export default function GameDetailPage() {
         </div>
 
         {/* Score Card */}
-        <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-6 mb-6">
+        <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-6 mb-6 overflow-hidden">
           <div className="flex items-center justify-center mb-4">
             <span className="rounded-full bg-red-600 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-white">
               FINAL
@@ -226,18 +226,18 @@ export default function GameDetailPage() {
 
           <div className="grid grid-cols-[1fr_auto_1fr] gap-6 items-center mb-4">
             {/* Away Team */}
-            <div className="flex flex-col items-center gap-3">
+            <div className="flex flex-col items-center gap-3 min-w-0">
               {game.awayTeamLogo && (
                 <Image
                   src={game.awayTeamLogo}
                   alt={game.awayTeamName || "Away team"}
                   width={60}
                   height={60}
-                  className="rounded-full border border-white/10 bg-white/5 object-cover"
+                  className="rounded-full border border-white/10 bg-white/5 object-cover flex-shrink-0"
                 />
               )}
-              <div className="text-center">
-                <h2 className={`text-xl font-bold ${awayWon ? "text-white" : "text-slate-400"}`}>
+              <div className="text-center w-full min-w-0">
+                <h2 className={`text-xl font-bold truncate ${awayWon ? "text-white" : "text-slate-400"}`}>
                   {game.awayTeamName}
                 </h2>
                 <p className="text-xs uppercase tracking-wider text-slate-500 mt-1">
@@ -260,18 +260,18 @@ export default function GameDetailPage() {
             </div>
 
             {/* Home Team */}
-            <div className="flex flex-col items-center gap-3">
+            <div className="flex flex-col items-center gap-3 min-w-0">
               {game.homeTeamLogo && (
                 <Image
                   src={game.homeTeamLogo}
                   alt={game.homeTeamName || "Home team"}
                   width={60}
                   height={60}
-                  className="rounded-full border border-white/10 bg-white/5 object-cover"
+                  className="rounded-full border border-white/10 bg-white/5 object-cover flex-shrink-0"
                 />
               )}
-              <div className="text-center">
-                <h2 className={`text-xl font-bold ${homeWon ? "text-white" : "text-slate-400"}`}>
+              <div className="text-center w-full min-w-0">
+                <h2 className={`text-xl font-bold truncate ${homeWon ? "text-white" : "text-slate-400"}`}>
                   {game.homeTeamName}
                 </h2>
                 <p className="text-xs uppercase tracking-wider text-slate-500 mt-1">
@@ -282,12 +282,12 @@ export default function GameDetailPage() {
           </div>
 
           {/* Game Info */}
-          <div className="flex items-center justify-center gap-6 text-sm text-slate-400 border-t border-white/5 pt-4">
-            <div className="flex items-center gap-2">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="flex items-center justify-center gap-6 text-sm text-slate-400 border-t border-white/5 pt-4 flex-wrap">
+            <div className="flex items-center gap-2 min-w-0">
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
-              <span className="text-xs">
+              <span className="text-xs truncate">
                 {game.date ? new Date(game.date).toLocaleDateString("en-US", {
                   weekday: "long",
                   year: "numeric",
@@ -296,12 +296,12 @@ export default function GameDetailPage() {
                 }) : "Date TBD"}
               </span>
             </div>
-            <div className="flex items-center gap-2">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="flex items-center gap-2 min-w-0">
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
-              <span className="text-xs">{game.venue || "Venue TBD"}</span>
+              <span className="text-xs truncate">{game.venue || "Venue TBD"}</span>
             </div>
           </div>
         </div>

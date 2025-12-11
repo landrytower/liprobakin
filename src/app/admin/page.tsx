@@ -25,6 +25,18 @@ import {
 import type { DocumentData, DocumentSnapshot } from "firebase/firestore";
 import { deleteObject, getDownloadURL, ref as storageRef, uploadBytes } from "firebase/storage";
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, type User } from "firebase/auth";
+import type { AdminUser, AdminRole } from "@/types/admin";
+import { 
+  createAdminAccount, 
+  getAllAdminUsers, 
+  updateAdminRoles, 
+  deactivateAdminUser, 
+  reactivateAdminUser,
+  deleteAdminUser,
+  getAdminUser,
+  recordLastLogin,
+  updateAdminProfile
+} from "@/lib/adminAuth";
 
 type AdminNewsArticle = {
   id: string;
@@ -498,6 +510,7 @@ const formatAdminPublishedLabel = (date: Date | null) => {
  
 export default function AdminPage() {
   const [user, setUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [authForm, setAuthForm] = useState({ email: "", password: "" });
   const [authError, setAuthError] = useState<string | null>(null);
   const [authSubmitting, setAuthSubmitting] = useState(false);
@@ -539,8 +552,25 @@ export default function AdminPage() {
   const [coachHeadshotPreview, setCoachHeadshotPreview] = useState<string>("");
   const [coachStaffSubmitting, setCoachStaffSubmitting] = useState(false);
   const coachHeadshotPreviewBlobRef = useRef<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'stories' | 'teams' | 'traffic' | 'games' | 'stats' | 'league'>('stories');
+  const [activeTab, setActiveTab] = useState<'stories' | 'teams' | 'traffic' | 'games' | 'stats' | 'league' | 'admins'>('stories');
+  const [language, setLanguage] = useState<'en' | 'fr'>('fr');
+  const [currentAdminUser, setCurrentAdminUser] = useState<AdminUser | null>(null);
+  const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
+  const [adminFormVisible, setAdminFormVisible] = useState(false);
+  const [newAdminEmail, setNewAdminEmail] = useState("");
+  const [newAdminName, setNewAdminName] = useState("");
+  const [newAdminPassword, setNewAdminPassword] = useState("");
+  const [newAdminRoles, setNewAdminRoles] = useState<AdminRole[]>([]);
+  const [adminSubmitting, setAdminSubmitting] = useState(false);
+  const [adminStatus, setAdminStatus] = useState<StatusCallout | null>(null);
+  const [editingAdminId, setEditingAdminId] = useState<string | null>(null);
+  const [showPasswordChange, setShowPasswordChange] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordChangeStatus, setPasswordChangeStatus] = useState<StatusCallout | null>(null);
+  const [editingAdminRoles, setEditingAdminRoles] = useState<AdminRole[]>([]);
   const [storyEditorOpen, setStoryEditorOpen] = useState(false);
+  const [showStoryPreview, setShowStoryPreview] = useState(false);
   const [teamAssistantOpen, setTeamAssistantOpen] = useState(false);
   const [trafficModuleOpen, setTrafficModuleOpen] = useState(false);
   const [gamePlannerOpen, setGamePlannerOpen] = useState(false);
@@ -638,12 +668,132 @@ export default function AdminPage() {
     return staticTeamCatalog.filter((team) => !firestoreKeys.has(getTeamKey(team)));
   }, [teams]);
 
+  // Translations
+  const t = {
+    adminDashboard: language === 'fr' ? 'Tableau de bord administrateur' : 'Admin Dashboard',
+    contentManagement: language === 'fr' ? 'Système de gestion de contenu' : 'Content Management System',
+    changePassword: language === 'fr' ? 'CHANGER LE MOT DE PASSE' : 'CHANGE PASSWORD',
+    signOut: language === 'fr' ? 'SE DÉCONNECTER' : 'SIGN OUT',
+    stories: language === 'fr' ? 'HISTOIRES' : 'STORIES',
+    teams: language === 'fr' ? 'ÉQUIPES' : 'TEAMS',
+    traffic: language === 'fr' ? 'TRAFIC' : 'TRAFFIC',
+    games: language === 'fr' ? 'MATCHS' : 'GAMES',
+    stats: language === 'fr' ? 'STATISTIQUES' : 'STATS',
+    league: language === 'fr' ? 'LIGUE' : 'LEAGUE',
+    admins: language === 'fr' ? 'ADMINISTRATEURS' : 'ADMINS',
+    databaseReset: language === 'fr' ? 'Réinitialisation de la base de données' : 'Database Reset',
+    resetDescription: language === 'fr' ? 'Supprimer tous les matchs, classements et réinitialiser toutes les statistiques des équipes/joueurs à 0.' : 'Delete all games, standings, and reset all team/player stats to 0.',
+    resetAllStats: language === 'fr' ? 'Réinitialiser toutes les stats' : 'Reset All Stats',
+    resetting: language === 'fr' ? 'Réinitialisation...' : 'Resetting...',
+    createStory: language === 'fr' ? 'Créer une histoire' : 'Create Story',
+    editStory: language === 'fr' ? 'Modifier l\'histoire' : 'Edit Story',
+    newStory: language === 'fr' ? '+ Nouvelle histoire' : '+ New Story',
+    title: language === 'fr' ? 'Titre' : 'Title',
+    category: language === 'fr' ? 'Catégorie' : 'Category',
+    headline: language === 'fr' ? 'Titre principal' : 'Headline',
+    summary: language === 'fr' ? 'Résumé' : 'Summary',
+    coverPhoto: language === 'fr' ? 'Photo de couverture' : 'Cover Photo',
+    chooseFile: language === 'fr' ? 'Choisir un fichier' : 'Choose File',
+    noFileChosen: language === 'fr' ? 'Aucun fichier choisi' : 'No file chosen',
+    publish: language === 'fr' ? 'Publier' : 'Publish',
+    update: language === 'fr' ? 'Mettre à jour' : 'Update',
+    clear: language === 'fr' ? 'Effacer' : 'Clear',
+    saving: language === 'fr' ? 'Enregistrement...' : 'Saving...',
+    publishedStories: language === 'fr' ? 'Histoires publiées' : 'Published Stories',
+    noStoriesYet: language === 'fr' ? 'Aucune histoire publiée.' : 'No stories published yet.',
+    createFirstStory: language === 'fr' ? 'Créez votre première histoire ci-dessus.' : 'Create your first story above.',
+    noImage: language === 'fr' ? 'Pas d\'image' : 'No image',
+    edit: language === 'fr' ? 'Modifier' : 'Edit',
+    delete: language === 'fr' ? 'Supprimer' : 'Delete',
+    previewStory: language === 'fr' ? 'Aperçu de l\'histoire' : 'Preview Story',
+    previewDescription: language === 'fr' ? 'Voici comment votre histoire apparaîtra sur la page principale' : 'This is how your story will appear on the main page',
+    justNow: language === 'fr' ? 'À l\'instant' : 'Just now',
+    confirmPublish: language === 'fr' ? 'Confirmer et publier' : 'Confirm & Publish',
+    confirmUpdate: language === 'fr' ? 'Confirmer la mise à jour' : 'Confirm Update',
+    publishing: language === 'fr' ? 'Publication...' : 'Publishing...',
+    signIn: language === 'fr' ? 'Se connecter' : 'Sign in',
+    signingIn: language === 'fr' ? 'Connexion...' : 'Signing in...',
+    emailAddress: language === 'fr' ? 'Adresse e-mail' : 'Email Address',
+    password: language === 'fr' ? 'Mot de passe' : 'Password',
+    useCredentials: language === 'fr' ? 'Utilisez vos identifiants Firebase admin.' : 'Use your Firebase admin credentials to unlock the news editor.',
+    accessRequired: language === 'fr' ? 'Accès requis' : 'Access Required',
+    notAuthorized: language === 'fr' ? 'Votre compte n\'est pas autorisé. Contactez un administrateur principal.' : 'Your account is not authorized for admin access. Please contact a master administrator to grant you permissions.',
+    adminUserManagement: language === 'fr' ? 'Gestion des utilisateurs admin' : 'Admin User Management',
+    createAdminAccounts: language === 'fr' ? 'Créer des comptes admin, attribuer des rôles et gérer les autorisations.' : 'Create admin accounts, assign roles, and manage access permissions.',
+    createNewAdmin: language === 'fr' ? '+ Créer un nouvel admin' : '+ Create New Admin',
+    allAdminUsers: language === 'fr' ? 'Tous les utilisateurs admin' : 'All Admin Users',
+    displayName: language === 'fr' ? 'Nom d\'affichage' : 'Display Name',
+    assignRoles: language === 'fr' ? 'Attribuer des rôles' : 'Assign Roles',
+    createAdminAccount: language === 'fr' ? 'Créer un compte admin' : 'Create Admin Account',
+    creating: language === 'fr' ? 'Création...' : 'Creating...',
+    cancel: language === 'fr' ? 'Annuler' : 'Cancel',
+    lastLogin: language === 'fr' ? 'Dernière connexion' : 'Last login',
+    newPassword: language === 'fr' ? 'Nouveau mot de passe' : 'New Password',
+    confirmPassword: language === 'fr' ? 'Confirmer le mot de passe' : 'Confirm Password',
+    changing: language === 'fr' ? 'Modification...' : 'Changing...',
+  };
+
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(firebaseAuth, (next) => {
+    const unsubscribe = onAuthStateChanged(firebaseAuth, async (next) => {
       setUser(next);
+      if (next) {
+        // Load admin user data
+        const adminData = await getAdminUser(next.uid);
+        setCurrentAdminUser(adminData);
+        // Record last login
+        if (adminData) {
+          await recordLastLogin(next.uid);
+        }
+      } else {
+        setCurrentAdminUser(null);
+      }
+      setAuthLoading(false);
     });
     return () => unsubscribe();
   }, []);
+
+  // Load all admin users if current user is master
+  useEffect(() => {
+    if (!currentAdminUser?.permissions.canManageAdmins) {
+      setAdminUsers([]);
+      return;
+    }
+    
+    const loadAdminUsers = async () => {
+      const users = await getAllAdminUsers();
+      setAdminUsers(users);
+    };
+    
+    loadAdminUsers();
+    
+    // Refresh every 30 seconds
+    const interval = setInterval(loadAdminUsers, 30000);
+    return () => clearInterval(interval);
+  }, [currentAdminUser]);
+
+  // Set default active tab based on permissions
+  useEffect(() => {
+    if (!currentAdminUser) return;
+
+    const perms = currentAdminUser.permissions;
+    
+    // Set first available tab as active
+    if (perms.canManageNews && activeTab !== 'stories') {
+      setActiveTab('stories');
+    } else if (!perms.canManageNews && perms.canManageTeams && (activeTab === 'stories' || activeTab === 'traffic')) {
+      setActiveTab('teams');
+    } else if (!perms.canManageNews && !perms.canManageTeams && perms.canManageGames && (activeTab === 'stories' || activeTab === 'teams' || activeTab === 'traffic' || activeTab === 'stats')) {
+      setActiveTab('games');
+    } else if (!perms.canManageNews && !perms.canManageTeams && !perms.canManageGames && 
+               (perms.canManageReferees || perms.canManageVenues || perms.canManagePartners) && 
+               activeTab !== 'league') {
+      setActiveTab('league');
+    } else if (!perms.canManageNews && !perms.canManageTeams && !perms.canManageGames && 
+               !perms.canManageReferees && !perms.canManageVenues && !perms.canManagePartners && 
+               perms.canManageAdmins) {
+      setActiveTab('admins');
+    }
+  }, [currentAdminUser]);
 
   useEffect(() => {
     const newsQuery = query(collection(firebaseDB, "news"), orderBy("createdAt", "desc"));
@@ -943,7 +1093,13 @@ export default function AdminPage() {
       setStatus({ type: "error", message: "Title, headline, and summary are required." });
       return;
     }
+    // Show preview instead of publishing directly
+    setShowStoryPreview(true);
+  };
+
+  const handleConfirmPublish = async () => {
     setSubmitting(true);
+    setShowStoryPreview(false);
     setStatus({ type: "info", message: form.id ? "Updating story..." : "Publishing story..." });
 
     try {
@@ -2805,32 +2961,19 @@ export default function AdminPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4 py-10 text-white">
-      <div className="w-full max-w-md space-y-6">
-        <div className="space-y-2">
-          <p className="text-xs uppercase tracking-[0.4em] text-slate-500">Admin console</p>
-          <h1 className="text-3xl font-semibold">News desk</h1>
-          <p className="text-sm text-slate-300">
-            Authenticate with Firebase, then curate the league storytelling vault. Add a headline, attach a hero image,
-            and the home feed will update in real time.
-          </p>
-        </div>
-
-        {user ? (
-          <div className="space-y-4 rounded-2xl border border-white/10 bg-black/30 p-4 text-left">
-            <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Firebase auth</p>
-            <div className="space-y-2">
-              <p className="text-sm text-slate-400">Signed in as</p>
-              <p className="text-lg font-semibold text-white" title={user.email ?? undefined}>{user.email}</p>
-            </div>
-            <button
-              type="button"
-              onClick={handleSignOut}
-              className="w-full rounded-2xl border border-white/30 bg-white/10 px-4 py-3 text-sm font-semibold uppercase tracking-[0.4em] text-white transition hover:bg-white/20"
-            >
-              Sign out
-            </button>
+      {authLoading ? (
+        <div className="text-slate-400">Loading...</div>
+      ) : !user ? (
+        <div className="w-full max-w-md space-y-6">
+          <div className="space-y-2">
+            <p className="text-xs uppercase tracking-[0.4em] text-slate-500">Admin console</p>
+            <h1 className="text-3xl font-semibold">News desk</h1>
+            <p className="text-sm text-slate-300">
+              Authenticate with Firebase, then curate the league storytelling vault. Add a headline, attach a hero image,
+              and the home feed will update in real time.
+            </p>
           </div>
-        ) : (
+
           <form onSubmit={handleLogin} className="space-y-4 rounded-2xl border border-white/10 bg-black/30 p-4 text-left">
             <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Firebase auth</p>
             <div className="space-y-2 text-sm">
@@ -2863,18 +3006,31 @@ export default function AdminPage() {
               disabled={authSubmitting}
               className="w-full rounded-2xl border border-white/30 bg-white/10 px-4 py-3 text-sm font-semibold uppercase tracking-[0.4em] text-white transition hover:bg-white/20 disabled:opacity-50"
             >
-              {authSubmitting ? "Signing in…" : "Sign in"}
+              {authSubmitting ? t.signingIn : t.signIn}
             </button>
           </form>
-        )}
 
-        <p className="text-sm text-slate-400">
-          {user
-            ? "You're authenticated. Share the latest transfer, recap, or showcase story below."
-            : "Use your Firebase admin credentials to unlock the news editor."
-          }
-        </p>
-      </div>
+          <p className="text-sm text-slate-400">
+            {t.useCredentials}
+          </p>
+        </div>
+      ) : user && !currentAdminUser ? (
+        <div className="w-full max-w-md space-y-6 text-center">
+          <div className="space-y-4">
+            <div className="text-6xl">🔒</div>
+            <h1 className="text-2xl font-semibold">{t.accessRequired}</h1>
+            <p className="text-sm text-slate-300">
+              {t.notAuthorized}
+            </p>
+            <button
+              onClick={handleSignOut}
+              className="rounded-xl border border-white/20 bg-white/5 px-6 py-3 text-sm font-semibold uppercase tracking-wider text-white transition hover:bg-white/10"
+            >
+              {t.signOut}
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {status && (
         <div className={`fixed bottom-6 right-6 max-w-md rounded-2xl border ${statusClassMap[status.type]} p-4 text-sm shadow-2xl`}>
@@ -2882,7 +3038,68 @@ export default function AdminPage() {
         </div>
       )}
 
-      {user && (
+      {/* First Login Setup */}
+      {user && currentAdminUser?.isFirstLogin && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <div className="w-full max-w-md space-y-6 rounded-3xl border border-white/20 bg-slate-900 p-8 shadow-2xl">
+            <div className="space-y-2">
+              <h2 className="text-2xl font-bold text-white">Welcome! 👋</h2>
+              <p className="text-sm text-slate-300">
+                This is your first login. Please set your display name to continue.
+              </p>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.currentTarget);
+                const displayName = formData.get('displayName') as string;
+                
+                if (!displayName.trim()) return;
+                
+                setAdminSubmitting(true);
+                const result = await updateAdminProfile(user.uid, displayName.trim());
+                
+                if (result.success) {
+                  // Reload admin user data
+                  const updated = await getAdminUser(user.uid);
+                  setCurrentAdminUser(updated);
+                  setStatus({ type: 'success', message: 'Welcome! Your profile has been set up.' });
+                } else {
+                  setStatus({ type: 'error', message: result.error || 'Failed to update profile' });
+                }
+                setAdminSubmitting(false);
+              }}
+              className="space-y-4"
+            >
+              <label className="block space-y-2 text-sm text-slate-300">
+                Display Name *
+                <input
+                  type="text"
+                  name="displayName"
+                  required
+                  placeholder="Enter your name"
+                  className="w-full rounded-xl border border-white/20 bg-slate-800 px-4 py-3 text-white placeholder:text-slate-500 focus:border-white"
+                />
+              </label>
+
+              <button
+                type="submit"
+                disabled={adminSubmitting}
+                className="w-full rounded-xl border border-white/20 bg-orange-500 px-4 py-3 text-sm font-semibold uppercase tracking-wider text-white transition hover:bg-orange-600 disabled:opacity-50"
+              >
+                {adminSubmitting ? 'Setting up...' : 'Continue to Dashboard'}
+              </button>
+            </form>
+
+            <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-4 text-xs text-blue-200">
+              <strong>Note:</strong> You can change your password anytime using the "Change Password" button in the dashboard.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {user && currentAdminUser && !currentAdminUser.isFirstLogin && (
         <main className="fixed inset-0 overflow-auto bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
           <div className="mx-auto flex max-w-7xl flex-col">
             {/* Header */}
@@ -2890,93 +3107,154 @@ export default function AdminPage() {
               <div className="px-6 py-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h1 className="text-xl font-bold text-white">Admin Dashboard</h1>
-                    <p className="text-xs text-slate-400">Content Management System</p>
+                    <h1 className="text-xl font-bold text-white">{t.adminDashboard}</h1>
+                    <p className="text-xs text-slate-400">{t.contentManagement}</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleSignOut}
-                    className="rounded-xl border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white transition hover:bg-white/10"
-                  >
-                    Sign out
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {/* Language Toggle */}
+                    <div className="flex rounded-lg border border-white/20 bg-white/5 overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() => setLanguage('en')}
+                        className={`px-3 py-2 text-xs font-semibold transition ${
+                          language === 'en' 
+                            ? 'bg-orange-500 text-white' 
+                            : 'text-slate-300 hover:bg-white/5'
+                        }`}
+                      >
+                        EN
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setLanguage('fr')}
+                        className={`px-3 py-2 text-xs font-semibold transition ${
+                          language === 'fr' 
+                            ? 'bg-orange-500 text-white' 
+                            : 'text-slate-300 hover:bg-white/5'
+                        }`}
+                      >
+                        FR
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowPasswordChange(true)}
+                      className="rounded-xl border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white transition hover:bg-white/10"
+                    >
+                      {t.changePassword}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSignOut}
+                      className="rounded-xl border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white transition hover:bg-white/10"
+                    >
+                      {t.signOut}
+                    </button>
+                  </div>
                 </div>
               </div>
               
               {/* Tab Navigation */}
               <div className="flex gap-1 overflow-x-auto px-6">
-                <button
-                  onClick={() => setActiveTab('stories')}
-                  className={`whitespace-nowrap border-b-2 px-4 py-3 text-xs font-semibold uppercase tracking-wider transition ${
-                    activeTab === 'stories'
-                      ? 'border-orange-500 text-orange-400'
-                      : 'border-transparent text-slate-400 hover:text-slate-300'
-                  }`}
-                >
-                  📰 Stories
-                </button>
-                <button
-                  onClick={() => setActiveTab('teams')}
-                  className={`whitespace-nowrap border-b-2 px-4 py-3 text-xs font-semibold uppercase tracking-wider transition ${
-                    activeTab === 'teams'
-                      ? 'border-orange-500 text-orange-400'
-                      : 'border-transparent text-slate-400 hover:text-slate-300'
-                  }`}
-                >
-                  🏀 Teams
-                </button>
-                <button
-                  onClick={() => setActiveTab('traffic')}
-                  className={`whitespace-nowrap border-b-2 px-4 py-3 text-xs font-semibold uppercase tracking-wider transition ${
-                    activeTab === 'traffic'
-                      ? 'border-orange-500 text-orange-400'
-                      : 'border-transparent text-slate-400 hover:text-slate-300'
-                  }`}
-                >
-                  🔄 Traffic
-                </button>
-                <button
-                  onClick={() => setActiveTab('games')}
-                  className={`whitespace-nowrap border-b-2 px-4 py-3 text-xs font-semibold uppercase tracking-wider transition ${
-                    activeTab === 'games'
-                      ? 'border-orange-500 text-orange-400'
-                      : 'border-transparent text-slate-400 hover:text-slate-300'
-                  }`}
-                >
-                  🗓️ Games
-                </button>
-                <button
-                  onClick={() => setActiveTab('stats')}
-                  className={`whitespace-nowrap border-b-2 px-4 py-3 text-xs font-semibold uppercase tracking-wider transition ${
-                    activeTab === 'stats'
-                      ? 'border-orange-500 text-orange-400'
-                      : 'border-transparent text-slate-400 hover:text-slate-300'
-                  }`}
-                >
-                  📊 Stats
-                </button>
-                <button
-                  onClick={() => setActiveTab('league')}
-                  className={`whitespace-nowrap border-b-2 px-4 py-3 text-xs font-semibold uppercase tracking-wider transition ${
-                    activeTab === 'league'
-                      ? 'border-orange-500 text-orange-400'
-                      : 'border-transparent text-slate-400 hover:text-slate-300'
-                  }`}
-                >
-                  ⚙️ League
-                </button>
+                {currentAdminUser?.permissions.canManageNews && (
+                  <button
+                    onClick={() => setActiveTab('stories')}
+                    className={`whitespace-nowrap border-b-2 px-4 py-3 text-xs font-semibold uppercase tracking-wider transition ${
+                      activeTab === 'stories'
+                        ? 'border-orange-500 text-orange-400'
+                        : 'border-transparent text-slate-400 hover:text-slate-300'
+                    }`}
+                  >
+                    📰 {t.stories}
+                  </button>
+                )}
+                {currentAdminUser?.permissions.canManageTeams && (
+                  <button
+                    onClick={() => setActiveTab('teams')}
+                    className={`whitespace-nowrap border-b-2 px-4 py-3 text-xs font-semibold uppercase tracking-wider transition ${
+                      activeTab === 'teams'
+                        ? 'border-orange-500 text-orange-400'
+                        : 'border-transparent text-slate-400 hover:text-slate-300'
+                    }`}
+                  >
+                    🏀 {t.teams}
+                  </button>
+                )}
+                {currentAdminUser?.permissions.canManageTeams && (
+                  <button
+                    onClick={() => setActiveTab('traffic')}
+                    className={`whitespace-nowrap border-b-2 px-4 py-3 text-xs font-semibold uppercase tracking-wider transition ${
+                      activeTab === 'traffic'
+                        ? 'border-orange-500 text-orange-400'
+                        : 'border-transparent text-slate-400 hover:text-slate-300'
+                    }`}
+                  >
+                    🔄 {t.traffic}
+                  </button>
+                )}
+                {currentAdminUser?.permissions.canManageGames && (
+                  <button
+                    onClick={() => setActiveTab('games')}
+                    className={`whitespace-nowrap border-b-2 px-4 py-3 text-xs font-semibold uppercase tracking-wider transition ${
+                      activeTab === 'games'
+                        ? 'border-orange-500 text-orange-400'
+                        : 'border-transparent text-slate-400 hover:text-slate-300'
+                    }`}
+                  >
+                    🗓️ {t.games}
+                  </button>
+                )}
+                {currentAdminUser?.permissions.canManageGames && (
+                  <button
+                    onClick={() => setActiveTab('stats')}
+                    className={`whitespace-nowrap border-b-2 px-4 py-3 text-xs font-semibold uppercase tracking-wider transition ${
+                      activeTab === 'stats'
+                        ? 'border-orange-500 text-orange-400'
+                        : 'border-transparent text-slate-400 hover:text-slate-300'
+                    }`}
+                  >
+                    📊 {t.stats}
+                  </button>
+                )}
+                {(currentAdminUser?.permissions.canManageReferees || 
+                  currentAdminUser?.permissions.canManageVenues || 
+                  currentAdminUser?.permissions.canManagePartners) && (
+                  <button
+                    onClick={() => setActiveTab('league')}
+                    className={`whitespace-nowrap border-b-2 px-4 py-3 text-xs font-semibold uppercase tracking-wider transition ${
+                      activeTab === 'league'
+                        ? 'border-orange-500 text-orange-400'
+                        : 'border-transparent text-slate-400 hover:text-slate-300'
+                    }`}
+                  >
+                    ⚙️ {t.league}
+                  </button>
+                )}
+                {currentAdminUser?.permissions.canManageAdmins && (
+                  <button
+                    onClick={() => setActiveTab('admins')}
+                    className={`whitespace-nowrap border-b-2 px-4 py-3 text-xs font-semibold uppercase tracking-wider transition ${
+                      activeTab === 'admins'
+                        ? 'border-orange-500 text-orange-400'
+                        : 'border-transparent text-slate-400 hover:text-slate-300'
+                    }`}
+                  >
+                    👥 {t.admins}
+                  </button>
+                )}
               </div>
             </div>
 
             {/* Main Content Area */}
             <div className="px-6 py-8">
-              {/* Database Reset Section - Always visible at top */}
+              {/* Database Reset Section - Only for master admins */}
+              {currentAdminUser?.roles.includes('master') && (
               <section className="mb-8 rounded-2xl border border-rose-400/40 bg-rose-500/10 p-6">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <h3 className="text-sm font-semibold uppercase tracking-wider text-rose-200">⚠️ Database Reset</h3>
+                    <h3 className="text-sm font-semibold uppercase tracking-wider text-rose-200">⚠️ {t.databaseReset}</h3>
                     <p className="mt-1 text-xs text-rose-300/80">
-                      Delete all games, standings, and reset all team/player stats to 0.
+                      {t.resetDescription}
                     </p>
                   </div>
                   <button
@@ -2985,7 +3263,7 @@ export default function AdminPage() {
                     disabled={resetSubmitting}
                     className="w-full shrink-0 rounded-full border border-rose-400/60 bg-rose-500/20 px-4 py-3 text-xs font-semibold uppercase tracking-[0.4em] text-rose-100 transition hover:border-rose-400/80 hover:bg-rose-500/30 disabled:opacity-50 sm:w-auto sm:py-2"
                   >
-                    {resetSubmitting ? "Resetting..." : "Reset All Stats"}
+                    {resetSubmitting ? t.resetting : t.resetAllStats}
                   </button>
                 </div>
                 {resetStatus && (
@@ -2994,201 +3272,183 @@ export default function AdminPage() {
                   </div>
                 )}
               </section>
+              )}
 
               {/* Tab Content Sections */}
               <div className="space-y-4">
               {/* Stories Tab Content */}
-              {activeTab === 'stories' && (
-              <>
-              <button
-                type="button"
-                onClick={() => setStoryEditorOpen(!storyEditorOpen)}
-                className="group relative w-full overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-blue-600/20 to-purple-600/20 p-8 text-left shadow-xl transition hover:border-white/30 hover:shadow-2xl"
-              >
-                <div className="relative z-10 flex items-center justify-between">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Module</p>
-                    <h2 className="mt-2 text-3xl font-bold text-white">Story Editor</h2>
-                    <p className="mt-3 text-sm text-slate-300">
-                      Publish news updates, attach hero images, and manage the league storytelling vault.
-                    </p>
-                  </div>
-                  <span className="text-2xl text-white">{storyEditorOpen ? '−' : '+'}</span>
-                </div>
-                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5 opacity-0 transition group-hover:opacity-100"></div>
-              </button>
-
-            {storyEditorOpen && (
-              <div className="space-y-6">
-            <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl">
-              <div className="mb-4 flex items-center justify-between">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Story editor</p>
-                  <h2 className="text-2xl font-semibold">Publish a news update</h2>
-                </div>
-                <button
-                  type="button"
-                  onClick={resetForm}
-                  className="rounded-full border border-white/20 px-3 py-1 text-xs uppercase tracking-[0.4em] text-slate-300"
-                >
-                  New story
-                </button>
+              {activeTab === 'stories' && currentAdminUser?.permissions.canManageNews && (
+              <div className="space-y-4">
+            {/* Story Form */}
+            <section className="rounded-2xl border border-white/10 bg-slate-900/70 p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-lg font-bold text-white">📰 {form.id ? t.editStory : t.createStory}</h2>
+                {form.id && (
+                  <button
+                    type="button"
+                    onClick={resetForm}
+                    className="text-xs text-slate-400 hover:text-white"
+                  >
+                    {t.newStory}
+                  </button>
+                )}
               </div>
-              <form onSubmit={handleSubmitNews} className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-3">
-                  <label className="space-y-1 text-sm text-slate-300">
-                    Title
+              <form onSubmit={handleSubmitNews} className="space-y-3">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="space-y-1 text-xs text-slate-300">
+                    {t.title} *
                     <input
-                      className="w-full rounded-2xl border border-white/10 bg-black/30 px-3 py-2 text-white focus:border-white"
+                      className="w-full rounded-lg border border-white/10 bg-slate-800/50 px-3 py-2 text-sm text-white focus:border-orange-500 focus:outline-none"
                       value={form.title}
                       onChange={(event) => updateFormField("title", event.target.value)}
-                      placeholder="Malik Kasongo rattles off 30 in overtime"
+                      placeholder=""
                       required
                     />
                   </label>
-                  <label className="space-y-1 text-sm text-slate-300">
-                    Headline
+                  <label className="space-y-1 text-xs text-slate-300">
+                    {t.category}
                     <input
-                      className="w-full rounded-2xl border border-white/10 bg-black/30 px-3 py-2 text-white focus:border-white"
-                      value={form.headline}
-                      onChange={(event) => updateFormField("headline", event.target.value)}
-                      placeholder="Star guard punches home a closing run"
-                      required
-                    />
-                  </label>
-                  <label className="space-y-1 text-sm text-slate-300">
-                    Category
-                    <input
-                      className="w-full rounded-2xl border border-white/10 bg-black/30 px-3 py-2 text-white focus:border-white"
+                      className="w-full rounded-lg border border-white/10 bg-slate-800/50 px-3 py-2 text-sm text-white focus:border-orange-500 focus:outline-none"
                       value={form.category}
                       onChange={(event) => updateFormField("category", event.target.value)}
-                      placeholder="Feature / Spotlight"
+                      placeholder=""
                     />
                   </label>
                 </div>
-                <label className="space-y-1 text-sm text-slate-300">
-                  Summary
-                  <textarea
-                    className="w-full rounded-2xl border border-white/10 bg-black/30 px-3 py-2 text-white focus:border-white"
-                    rows={4}
-                    value={form.summary}
-                    onChange={(event) => updateFormField("summary", event.target.value)}
-                    placeholder="Summaries appear under the hero and inside the timeline. Keep them punchy."
+                <label className="space-y-1 text-xs text-slate-300">
+                  {t.headline} *
+                  <input
+                    className="w-full rounded-lg border border-white/10 bg-slate-800/50 px-3 py-2 text-sm text-white focus:border-orange-500 focus:outline-none"
+                    value={form.headline}
+                    onChange={(event) => updateFormField("headline", event.target.value)}
+                    placeholder=""
                     required
                   />
                 </label>
-                <label className="space-y-1 text-sm text-slate-300">
-                  Cover photo
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageChange}
-                    className="w-full rounded-2xl border border-dashed border-white/20 bg-black/20 px-3 py-2 text-sm text-white file:mr-3 file:rounded-full file:border-0 file:bg-white/10 file:px-3 file:py-1 file:text-xs file:font-semibold file:text-slate-100"
+                <label className="space-y-1 text-xs text-slate-300">
+                  {t.summary} *
+                  <textarea
+                    className="w-full rounded-lg border border-white/10 bg-slate-800/50 px-3 py-2 text-sm text-white focus:border-orange-500 focus:outline-none"
+                    rows={3}
+                    value={form.summary}
+                    onChange={(event) => updateFormField("summary", event.target.value)}
+                    placeholder=""
+                    required
                   />
                 </label>
-                {imagePreview ? (
-                  <div className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-black/40 p-4">
-                    <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Preview</p>
-                    <div className="relative h-48 w-full overflow-hidden rounded-2xl">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-300">{t.coverPhoto}</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageChange}
+                      className="w-full rounded-lg border border-white/10 bg-slate-800/50 px-3 py-2 text-xs text-slate-400 file:mr-2 file:rounded file:border-0 file:bg-orange-500 file:px-2 file:py-1 file:text-xs file:text-white hover:file:bg-orange-600"
+                    />
+                  </div>
+                  {imagePreview && (
+                    <div className="relative h-20 overflow-hidden rounded-lg border border-white/10">
                       <Image
                         src={imagePreview}
-                        alt="Cover preview"
+                        alt="Preview"
                         fill
                         className="object-cover"
-                        sizes="(max-width: 768px) 100vw, 400px"
+                        sizes="200px"
                         unoptimized
                       />
                     </div>
-                  </div>
-                ) : (
-                  <p className="text-xs text-slate-500">Upload an image to set the hero background.</p>
-                )}
-                <div className="flex flex-wrap gap-3">
+                  )}
+                </div>
+                <div className="flex gap-2 pt-2">
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="rounded-2xl border border-white/30 bg-gradient-to-r from-orange-500/80 to-amber-400/80 px-6 py-3 text-xs font-semibold uppercase tracking-[0.4em] text-black transition hover:opacity-90"
+                    className="rounded-lg bg-orange-500 px-4 py-2 text-xs font-semibold text-white hover:bg-orange-600 disabled:opacity-50"
                   >
-                    {submitting ? "Saving..." : form.id ? "Update story" : "Publish story"}
+                    {submitting ? t.saving : form.id ? t.update : t.publish}
                   </button>
                   <button
                     type="button"
                     onClick={resetForm}
-                    className="rounded-2xl border border-white/20 px-5 py-3 text-xs font-semibold uppercase tracking-[0.4em] text-white"
+                    className="rounded-lg border border-white/20 px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-white/5"
                   >
-                    Reset fields
+                    {t.clear}
                   </button>
                 </div>
               </form>
             </section>
 
-            <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl">
-              <div className="mb-6 flex flex-col gap-1">
-                <h2 className="text-2xl font-semibold">Stories</h2>
-              </div>
+            {/* Published Stories List */}
+            <section className="rounded-2xl border border-white/10 bg-slate-900/70 p-4">
+              <h2 className="mb-3 text-lg font-bold text-white">{t.publishedStories} ({news.length})</h2>
               {news.length === 0 ? (
-                <p className="text-sm text-slate-400">No stories yet.</p>
+                <div className="py-8 text-center">
+                  <p className="text-sm text-slate-400">{t.noStoriesYet}</p>
+                  <p className="text-xs text-slate-500 mt-1">{t.createFirstStory}</p>
+                </div>
               ) : (
-                <ul className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
                   {news.map((article) => (
-                    <li
+                    <div
                       key={article.id}
-                      className="flex flex-col gap-3 rounded-3xl border border-white/5 bg-black/40 p-4"
+                      className="flex items-center gap-3 rounded-lg border border-white/5 bg-slate-800/30 p-3 hover:bg-slate-800/50 transition"
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-[10px] uppercase tracking-[0.4em] text-slate-400">{article.category}</p>
-                          <h3 className="text-base font-semibold text-white">{article.title}</h3>
-                        </div>
-                        <span className="text-xs text-slate-400" aria-label="Published label">
-                          {formatAdminPublishedLabel(article.createdAt)}
-                        </span>
-                      </div>
-                      <p className="text-sm text-slate-300 line-clamp-3">{article.summary}</p>
                       {article.imageUrl ? (
-                        <div className="relative h-32 w-full overflow-hidden rounded-2xl">
+                        <div className="relative h-16 w-24 flex-shrink-0 overflow-hidden rounded border border-white/10">
                           <Image
                             src={article.imageUrl}
                             alt={article.title}
                             fill
                             className="object-cover"
-                            sizes="(max-width: 768px) 100vw, 320px"
+                            sizes="100px"
                             unoptimized
                           />
                         </div>
                       ) : (
-                        <div className="flex h-32 items-center justify-center rounded-2xl border border-dashed border-white/10 text-xs uppercase tracking-[0.3em] text-slate-500">
-                          No image
+                        <div className="flex h-16 w-24 flex-shrink-0 items-center justify-center rounded border border-dashed border-white/10 bg-slate-900/50">
+                          <span className="text-xs text-slate-600">{t.noImage}</span>
                         </div>
                       )}
-                      <div className="flex flex-wrap gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            {article.category && (
+                              <span className="text-[10px] text-orange-400 uppercase">{article.category}</span>
+                            )}
+                            <h3 className="text-sm font-semibold text-white truncate">{article.title}</h3>
+                            <p className="text-xs text-slate-400 line-clamp-1">{article.headline}</p>
+                          </div>
+                          <span className="text-[10px] text-slate-500 flex-shrink-0">
+                            {formatAdminPublishedLabel(article.createdAt)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex gap-2 flex-shrink-0">
                         <button
                           type="button"
                           onClick={() => handleEdit(article)}
-                          className="rounded-full border border-white/30 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.4em] text-slate-200"
+                          className="rounded border border-white/20 px-3 py-1 text-xs text-slate-300 hover:bg-white/5"
                         >
-                          Edit
+                          {t.edit}
                         </button>
                         <button
                           type="button"
                           onClick={() => handleDelete(article)}
-                          className="rounded-full border border-rose-500/60 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.4em] text-rose-200"
+                          className="rounded border border-rose-500/30 px-3 py-1 text-xs text-rose-300 hover:bg-rose-500/10"
                         >
-                          Delete
+                          {t.delete}
                         </button>
                       </div>
-                    </li>
+                    </div>
                   ))}
-                </ul>
+                </div>
               )}
             </section>
               </div>
-            )}
-              </>
               )}
 
               {/* Teams Tab Content */}
-              {activeTab === 'teams' && (
+              {activeTab === 'teams' && currentAdminUser?.permissions.canManageTeams && (
               <>
               <button
                 type="button"
@@ -4338,7 +4598,7 @@ export default function AdminPage() {
               )}
 
             {/* Traffic Tab Content */}
-            {activeTab === 'traffic' && (
+            {activeTab === 'traffic' && currentAdminUser?.permissions.canManageTeams && (
             <>
             <button
               type="button"
@@ -4421,7 +4681,7 @@ export default function AdminPage() {
             )}
 
             {/* Games Tab Content */}
-            {activeTab === 'games' && (
+            {activeTab === 'games' && currentAdminUser?.permissions.canManageGames && (
             <>
             {/* GAME PLANNER MODULE */}
             <button
@@ -4854,7 +5114,7 @@ export default function AdminPage() {
             )}
 
             {/* Stats Tab Content */}
-            {activeTab === 'stats' && (
+            {activeTab === 'stats' && currentAdminUser?.permissions.canManageGames && (
             <>
             {/* GAME STATS ASSISTANT MODULE */}
             <button
@@ -5550,7 +5810,7 @@ export default function AdminPage() {
             )}
 
             {/* League Tab Content */}
-            {activeTab === 'league' && (
+            {activeTab === 'league' && (currentAdminUser?.permissions.canManageReferees || currentAdminUser?.permissions.canManageVenues || currentAdminUser?.permissions.canManagePartners) && (
             <>
             {/* LEAGUE GESTION MODULE */}
             <button
@@ -5579,558 +5839,907 @@ export default function AdminPage() {
                   </div>
                 )}
 
+                {/* REFEREES SECTION - Compact Table View */}
                 <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl">
-                  <h3 className="mb-6 text-xl font-semibold text-white">Referees</h3>
-                  
-                  {!refereeFormVisible && (
+                  <div className="mb-4 flex items-center justify-between">
+                    <h3 className="text-lg font-semibold text-white">Arbitres</h3>
                     <button
                       type="button"
                       onClick={() => {
                         setRefereeForm({ firstName: "", lastName: "", phone: "", certificationLevel: "" });
-                        setRefereeFormVisible(true);
+                        setRefereeFormVisible(!refereeFormVisible);
                       }}
-                      className="mb-4 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white hover:bg-white/20"
+                      className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500"
                     >
-                      + Add Referee
+                      {refereeFormVisible ? "− Annuler" : "+ Ajouter"}
                     </button>
-                  )}
+                  </div>
 
                   {refereeFormVisible && (
-                    <form onSubmit={handleSubmitReferee} className="mb-6 space-y-4 rounded-2xl border border-white/10 bg-black/30 p-4">
-                      <h4 className="text-sm font-semibold text-white">{refereeForm.id ? "Edit Referee" : "Add Referee"}</h4>
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <label className="space-y-1 text-xs text-slate-300">
-                          First Name *
-                          <input
-                            type="text"
-                            required
-                            value={refereeForm.firstName}
-                            onChange={(e) => setRefereeForm({ ...refereeForm, firstName: e.target.value })}
-                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
-                          />
-                        </label>
-                        <label className="space-y-1 text-xs text-slate-300">
-                          Last Name *
-                          <input
-                            type="text"
-                            required
-                            value={refereeForm.lastName}
-                            onChange={(e) => setRefereeForm({ ...refereeForm, lastName: e.target.value })}
-                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
-                          />
-                        </label>
-                        <label className="space-y-1 text-xs text-slate-300">
-                          Phone
-                          <input
-                            type="tel"
-                            value={refereeForm.phone}
-                            onChange={(e) => setRefereeForm({ ...refereeForm, phone: e.target.value })}
-                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
-                          />
-                        </label>
-                        <label className="space-y-1 text-xs text-slate-300">
-                          Certification Level
-                          <input
-                            type="text"
-                            value={refereeForm.certificationLevel}
-                            onChange={(e) => setRefereeForm({ ...refereeForm, certificationLevel: e.target.value })}
-                            placeholder="e.g., Level 1, Level 2"
-                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
-                          />
-                        </label>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          type="submit"
-                          disabled={refereeSubmitting}
-                          className="rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white hover:bg-white/20 disabled:cursor-not-allowed"
-                        >
-                          {refereeSubmitting ? "Saving..." : refereeForm.id ? "Update" : "Add"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setRefereeFormVisible(false);
-                            setRefereeForm({ firstName: "", lastName: "", phone: "", certificationLevel: "" });
-                          }}
-                          className="rounded-full border border-white/10 px-4 py-2 text-xs uppercase tracking-wider text-slate-300"
-                        >
-                          Cancel
-                        </button>
-                      </div>
+                    <form onSubmit={handleSubmitReferee} className="mb-4 grid grid-cols-2 gap-3 rounded-xl border border-white/10 bg-black/30 p-4 sm:grid-cols-4">
+                      <input
+                        type="text"
+                        required
+                        placeholder="Prénom *"
+                        value={refereeForm.firstName}
+                        onChange={(e) => setRefereeForm({ ...refereeForm, firstName: e.target.value })}
+                        className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-indigo-500 focus:outline-none"
+                      />
+                      <input
+                        type="text"
+                        required
+                        placeholder="Nom *"
+                        value={refereeForm.lastName}
+                        onChange={(e) => setRefereeForm({ ...refereeForm, lastName: e.target.value })}
+                        className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-indigo-500 focus:outline-none"
+                      />
+                      <input
+                        type="tel"
+                        placeholder="Téléphone"
+                        value={refereeForm.phone}
+                        onChange={(e) => setRefereeForm({ ...refereeForm, phone: e.target.value })}
+                        className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-indigo-500 focus:outline-none"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Certification"
+                        value={refereeForm.certificationLevel}
+                        onChange={(e) => setRefereeForm({ ...refereeForm, certificationLevel: e.target.value })}
+                        className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-indigo-500 focus:outline-none"
+                      />
+                      <button
+                        type="submit"
+                        disabled={refereeSubmitting}
+                        className="col-span-2 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50"
+                      >
+                        {refereeSubmitting ? "..." : refereeForm.id ? "Modifier" : "Ajouter"}
+                      </button>
                     </form>
                   )}
 
-                  <div className="space-y-3">
+                  {/* Mobile: Card view, Desktop: Table view */}
+                  <div className="hidden overflow-x-auto md:block">
+                    <table className="w-full text-left text-sm">
+                      <thead className="border-b border-white/10 text-xs uppercase tracking-wider text-slate-400">
+                        <tr>
+                          <th className="pb-3 font-semibold">Nom</th>
+                          <th className="pb-3 font-semibold">Certification</th>
+                          <th className="pb-3 font-semibold">Téléphone</th>
+                          <th className="pb-3 text-right font-semibold">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5">
+                        {referees.length > 0 ? (
+                          referees.map((referee) => (
+                            <tr key={referee.id} className="group hover:bg-white/5">
+                              <td className="py-3 text-white">{referee.firstName} {referee.lastName}</td>
+                              <td className="py-3 text-slate-400">{referee.certificationLevel || "—"}</td>
+                              <td className="py-3 text-slate-400">{referee.phone || "—"}</td>
+                              <td className="py-3 text-right">
+                                <button
+                                  type="button"
+                                  onClick={() => handleEditReferee(referee)}
+                                  className="mr-2 text-xs text-indigo-400 hover:text-indigo-300"
+                                >
+                                  Modifier
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteReferee(referee)}
+                                  className="text-xs text-rose-400 hover:text-rose-300"
+                                >
+                                  Supprimer
+                                </button>
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan={4} className="py-6 text-center text-slate-500">
+                              Aucun arbitre ajouté.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                  
+                  {/* Mobile Card View */}
+                  <div className="space-y-3 md:hidden">
                     {referees.length > 0 ? (
                       referees.map((referee) => (
-                        <div key={referee.id} className="rounded-2xl border border-white/10 bg-black/30 p-4">
-                          <div className="flex flex-wrap items-center justify-between gap-3">
-                            <div>
-                              <p className="text-sm font-semibold text-white">{referee.firstName} {referee.lastName}</p>
-                              {referee.certificationLevel && (
-                                <p className="text-xs text-slate-400">{referee.certificationLevel}</p>
-                              )}
-                              {referee.email && (
-                                <p className="text-xs text-slate-500">{referee.email}</p>
-                              )}
-                              {referee.phone && (
-                                <p className="text-xs text-slate-500">{referee.phone}</p>
-                              )}
-                            </div>
-                            <div className="flex gap-2">
-                              <button
-                                type="button"
-                                onClick={() => handleEditReferee(referee)}
-                                className="rounded-full border border-white/20 px-3 py-1 text-xs uppercase tracking-wider text-white hover:bg-white/10"
-                              >
-                                Edit
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteReferee(referee)}
-                                className="rounded-full border border-rose-500/40 px-3 py-1 text-xs uppercase tracking-wider text-rose-200 hover:bg-rose-500/10"
-                              >
-                                Delete
-                              </button>
-                            </div>
+                        <div key={referee.id} className="rounded-lg border border-white/10 bg-black/30 p-3 min-w-0">
+                          <div className="mb-2">
+                            <p className="text-sm font-semibold text-white">{referee.firstName} {referee.lastName}</p>
+                            {referee.certificationLevel && (
+                              <p className="text-xs text-slate-400">{referee.certificationLevel}</p>
+                            )}
+                            {referee.phone && (
+                              <p className="text-xs text-slate-400">{referee.phone}</p>
+                            )}
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleEditReferee(referee)}
+                              className="flex-1 rounded-lg bg-indigo-600/20 px-2 py-1.5 text-xs font-medium text-indigo-300 hover:bg-indigo-600/30 whitespace-nowrap"
+                            >
+                              Modif.
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteReferee(referee)}
+                              className="flex-1 rounded-lg bg-rose-600/20 px-2 py-1.5 text-xs font-medium text-rose-300 hover:bg-rose-600/30 whitespace-nowrap"
+                            >
+                              Suppr.
+                            </button>
                           </div>
                         </div>
                       ))
                     ) : (
-                      <p className="text-sm text-slate-400">No referees added yet.</p>
+                      <p className="py-6 text-center text-slate-500">Aucun arbitre ajouté.</p>
                     )}
                   </div>
                 </section>
 
+                {/* COMMITTEE MEMBERS - Card Grid View */}
                 <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl">
-                  <h3 className="mb-6 text-xl font-semibold text-white">Committee Members</h3>
-                  
-                  {/* Existing Members List - Always Visible */}
-                  <div className="mb-6 space-y-3">
-                    <div className="flex items-center justify-between mb-4">
-                      <h4 className="text-sm font-semibold text-slate-300">Current Members</h4>
-                      {!committeeFormVisible && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setCommitteeForm({ firstName: "", lastName: "", role: "", email: "", phone: "" });
-                            setCommitteePhotoPreview("");
-                            setCommitteePhotoFile(null);
-                            setCommitteeFormVisible(true);
-                          }}
-                          className="rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white hover:bg-white/20"
-                        >
-                          + Add Member
-                        </button>
-                      )}
-                    </div>
-                    {committeeMembers.length > 0 ? (
-                      committeeMembers.map((member) => (
-                        <div key={member.id} className="rounded-2xl border border-white/10 bg-black/30 p-4">
-                          <div className="flex flex-wrap items-center justify-between gap-3">
-                            <div className="flex items-center gap-3">
-                              {member.photo && (
-                                <Image
-                                  src={member.photo}
-                                  alt={`${member.firstName} ${member.lastName}`}
-                                  width={60}
-                                  height={60}
-                                  className="h-15 w-15 rounded-full object-cover"
-                                />
-                              )}
-                              <div>
-                                <p className="text-sm font-semibold text-white">{member.firstName} {member.lastName}</p>
-                                <p className="text-xs uppercase tracking-wider text-slate-400">{member.role}</p>
-                                {member.email && (
-                                  <p className="text-xs text-slate-500">{member.email}</p>
-                                )}
-                                {member.phone && (
-                                  <p className="text-xs text-slate-500">{member.phone}</p>
-                                )}
-                              </div>
-                            </div>
-                            <div className="flex gap-2">
-                              <button
-                                type="button"
-                                onClick={() => handleEditCommittee(member)}
-                                className="rounded-full border border-white/20 px-3 py-1 text-xs uppercase tracking-wider text-white hover:bg-white/10"
-                              >
-                                Edit
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteCommittee(member)}
-                                className="rounded-full border border-rose-500/40 px-3 py-1 text-xs uppercase tracking-wider text-rose-200 hover:bg-rose-500/10"
-                              >
-                                Delete
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-sm text-slate-400">No committee members added yet.</p>
-                    )}
+                  <div className="mb-4 flex items-center justify-between">
+                    <h3 className="text-lg font-semibold text-white">Membres du Comité</h3>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCommitteeForm({ firstName: "", lastName: "", role: "", email: "", phone: "" });
+                        setCommitteePhotoPreview("");
+                        setCommitteePhotoFile(null);
+                        setCommitteeFormVisible(!committeeFormVisible);
+                      }}
+                      className="rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-500"
+                    >
+                      {committeeFormVisible ? "− Annuler" : "+ Ajouter"}
+                    </button>
                   </div>
 
-                  {/* Add/Edit Form */}
                   {committeeFormVisible && (
-                    <form onSubmit={handleSubmitCommittee} className="space-y-4 rounded-2xl border border-white/10 bg-black/30 p-4">
-                      <h4 className="text-sm font-semibold text-white">{committeeForm.id ? "Edit Member" : "Add New Member"}</h4>
+                    <form onSubmit={handleSubmitCommittee} className="mb-6 space-y-3 rounded-xl border border-white/10 bg-black/30 p-4">
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <label className="space-y-1 text-xs text-slate-300">
-                          First Name *
-                          <input
-                            type="text"
-                            required
-                            value={committeeForm.firstName}
-                            onChange={(e) => setCommitteeForm({ ...committeeForm, firstName: e.target.value })}
-                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
-                          />
-                        </label>
-                        <label className="space-y-1 text-xs text-slate-300">
-                          Last Name *
-                          <input
-                            type="text"
-                            required
-                            value={committeeForm.lastName}
-                            onChange={(e) => setCommitteeForm({ ...committeeForm, lastName: e.target.value })}
-                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
-                          />
-                        </label>
-                        <label className="space-y-1 text-xs text-slate-300">
-                          Role *
-                          <input
-                            type="text"
-                            required
-                            value={committeeForm.role}
-                            onChange={(e) => setCommitteeForm({ ...committeeForm, role: e.target.value })}
-                            placeholder="e.g., President, Secretary"
-                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
-                          />
-                        </label>
-                        <label className="space-y-1 text-xs text-slate-300">
-                          Email
-                          <input
-                            type="email"
-                            value={committeeForm.email}
-                            onChange={(e) => setCommitteeForm({ ...committeeForm, email: e.target.value })}
-                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
-                          />
-                        </label>
-                        <label className="space-y-1 text-xs text-slate-300">
-                          Phone
-                          <input
-                            type="tel"
-                            value={committeeForm.phone}
-                            onChange={(e) => setCommitteeForm({ ...committeeForm, phone: e.target.value })}
-                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
-                          />
-                        </label>
-                        <label className="space-y-1 text-xs text-slate-300">
-                          Photo
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={handleCommitteePhotoChange}
-                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
-                          />
-                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="Prénom *"
+                          value={committeeForm.firstName}
+                          onChange={(e) => setCommitteeForm({ ...committeeForm, firstName: e.target.value })}
+                          className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-violet-500 focus:outline-none"
+                        />
+                        <input
+                          type="text"
+                          required
+                          placeholder="Nom *"
+                          value={committeeForm.lastName}
+                          onChange={(e) => setCommitteeForm({ ...committeeForm, lastName: e.target.value })}
+                          className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-violet-500 focus:outline-none"
+                        />
+                        <input
+                          type="text"
+                          required
+                          placeholder="Rôle *"
+                          value={committeeForm.role}
+                          onChange={(e) => setCommitteeForm({ ...committeeForm, role: e.target.value })}
+                          className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-violet-500 focus:outline-none"
+                        />
+                        <input
+                          type="email"
+                          placeholder="Email"
+                          value={committeeForm.email}
+                          onChange={(e) => setCommitteeForm({ ...committeeForm, email: e.target.value })}
+                          className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-violet-500 focus:outline-none"
+                        />
+                        <input
+                          type="tel"
+                          placeholder="Téléphone"
+                          value={committeeForm.phone}
+                          onChange={(e) => setCommitteeForm({ ...committeeForm, phone: e.target.value })}
+                          className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-violet-500 focus:outline-none"
+                        />
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleCommitteePhotoChange}
+                          className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white file:mr-2 file:rounded file:border-0 file:bg-violet-600 file:px-2 file:py-1 file:text-xs file:text-white focus:outline-none"
+                        />
                       </div>
                       {committeePhotoPreview && (
-                        <div className="rounded-lg border border-white/10 bg-black/30 p-3">
-                          <p className="mb-2 text-xs text-slate-400">Photo Preview:</p>
+                        <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 p-2">
                           <Image
                             src={committeePhotoPreview}
-                            alt="Committee member photo preview"
-                            width={200}
-                            height={200}
-                            className="h-32 w-32 rounded-lg object-cover"
+                            alt="Preview"
+                            width={48}
+                            height={48}
+                            className="h-12 w-12 rounded-lg object-cover"
                           />
+                          <span className="text-xs text-slate-400">Photo aperçu</span>
                         </div>
                       )}
-                      <div className="flex gap-2">
-                        <button
-                          type="submit"
-                          disabled={committeeSubmitting}
-                          className="rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white hover:bg-white/20 disabled:cursor-not-allowed"
-                        >
-                          {committeeSubmitting ? "Saving..." : committeeForm.id ? "Update" : "Add"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setCommitteeFormVisible(false);
-                            setCommitteeForm({ firstName: "", lastName: "", role: "", email: "", phone: "" });
-                            setCommitteePhotoPreview("");
-                            setCommitteePhotoFile(null);
-                          }}
-                          className="rounded-full border border-white/10 px-4 py-2 text-xs uppercase tracking-wider text-slate-300"
-                        >
-                          Cancel
-                        </button>
-                      </div>
+                      <button
+                        type="submit"
+                        disabled={committeeSubmitting}
+                        className="w-full rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-50"
+                      >
+                        {committeeSubmitting ? "..." : committeeForm.id ? "Modifier" : "Ajouter"}
+                      </button>
                     </form>
+                  )}
+
+                  {committeeMembers.length > 0 ? (
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                      {committeeMembers.map((member) => (
+                        <div key={member.id} className="group relative overflow-hidden rounded-xl border border-white/10 bg-gradient-to-br from-violet-600/10 to-indigo-600/10 p-3 transition hover:border-white/30">
+                          <div className="flex items-start gap-3">
+                            {member.photo ? (
+                              <Image
+                                src={member.photo}
+                                alt={`${member.firstName} ${member.lastName}`}
+                                width={48}
+                                height={48}
+                                className="h-12 w-12 flex-shrink-0 rounded-full border-2 border-white/20 object-cover"
+                              />
+                            ) : (
+                              <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full border-2 border-white/20 bg-slate-800 text-sm font-bold text-slate-400">
+                                {member.firstName[0]}{member.lastName[0]}
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <h4 className="text-sm font-semibold text-white truncate">{member.firstName} {member.lastName}</h4>
+                              <p className="text-xs font-medium uppercase tracking-wider text-violet-300 truncate">{member.role}</p>
+                              {member.email && (
+                                <p className="mt-0.5 text-xs text-slate-400 truncate">{member.email}</p>
+                              )}
+                              {member.phone && (
+                                <p className="text-xs text-slate-400 truncate">{member.phone}</p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="mt-3 flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleEditCommittee(member)}
+                              className="flex-1 rounded-lg bg-white/5 px-2 py-1.5 text-xs font-medium text-white hover:bg-white/10 whitespace-nowrap"
+                            >
+                              Modif.
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteCommittee(member)}
+                              className="flex-1 rounded-lg bg-rose-600/20 px-2 py-1.5 text-xs font-medium text-rose-200 hover:bg-rose-600/30 whitespace-nowrap"
+                            >
+                              Suppr.
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="py-8 text-center text-sm text-slate-500">
+                      Aucun membre ajouté.
+                    </div>
                   )}
                 </section>
 
+                {/* VENUES SECTION - Compact Table View */}
                 <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl">
-                  <h3 className="mb-6 text-xl font-semibold text-white">Venues</h3>
-                  
-                  {!venueFormVisible && (
+                  <div className="mb-4 flex items-center justify-between">
+                    <h3 className="text-lg font-semibold text-white">Salles</h3>
                     <button
                       type="button"
                       onClick={() => {
                         setVenueForm({ name: "", address: "", city: "", capacity: "", courts: "" });
-                        setVenueFormVisible(true);
+                        setVenueFormVisible(!venueFormVisible);
                       }}
-                      className="mb-4 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white hover:bg-white/20"
+                      className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500"
                     >
-                      + Add Venue
+                      {venueFormVisible ? "− Annuler" : "+ Ajouter"}
                     </button>
-                  )}
+                  </div>
 
                   {venueFormVisible && (
-                    <form onSubmit={handleSubmitVenue} className="mb-6 space-y-4 rounded-2xl border border-white/10 bg-black/30 p-4">
-                      <h4 className="text-sm font-semibold text-white">{venueForm.id ? "Edit Venue" : "Add Venue"}</h4>
+                    <form onSubmit={handleSubmitVenue} className="mb-4 space-y-3 rounded-xl border border-white/10 bg-black/30 p-4">
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <label className="space-y-1 text-xs text-slate-300">
-                          Name *
-                          <input
-                            type="text"
-                            required
-                            value={venueForm.name}
-                            onChange={(e) => setVenueForm({ ...venueForm, name: e.target.value })}
-                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
-                          />
-                        </label>
-                        <label className="space-y-1 text-xs text-slate-300">
-                          City *
-                          <input
-                            type="text"
-                            required
-                            value={venueForm.city}
-                            onChange={(e) => setVenueForm({ ...venueForm, city: e.target.value })}
-                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
-                          />
-                        </label>
-                        <label className="space-y-1 text-xs text-slate-300 sm:col-span-2">
-                          Address *
-                          <input
-                            type="text"
-                            required
-                            value={venueForm.address}
-                            onChange={(e) => setVenueForm({ ...venueForm, address: e.target.value })}
-                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
-                          />
-                        </label>
-                        <label className="space-y-1 text-xs text-slate-300">
-                          Capacity
-                          <input
-                            type="text"
-                            value={venueForm.capacity}
-                            onChange={(e) => setVenueForm({ ...venueForm, capacity: e.target.value })}
-                            placeholder="e.g., 500 people"
-                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
-                          />
-                        </label>
-                        <label className="space-y-1 text-xs text-slate-300">
-                          Number of Courts
-                          <input
-                            type="number"
-                            min="1"
-                            value={venueForm.courts}
-                            onChange={(e) => setVenueForm({ ...venueForm, courts: e.target.value })}
-                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
-                          />
-                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="Nom de la salle *"
+                          value={venueForm.name}
+                          onChange={(e) => setVenueForm({ ...venueForm, name: e.target.value })}
+                          className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-emerald-500 focus:outline-none"
+                        />
+                        <input
+                          type="text"
+                          required
+                          placeholder="Ville *"
+                          value={venueForm.city}
+                          onChange={(e) => setVenueForm({ ...venueForm, city: e.target.value })}
+                          className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-emerald-500 focus:outline-none"
+                        />
+                        <input
+                          type="text"
+                          required
+                          placeholder="Adresse complète *"
+                          value={venueForm.address}
+                          onChange={(e) => setVenueForm({ ...venueForm, address: e.target.value })}
+                          className="col-span-1 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-emerald-500 focus:outline-none sm:col-span-2"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Capacité"
+                          value={venueForm.capacity}
+                          onChange={(e) => setVenueForm({ ...venueForm, capacity: e.target.value })}
+                          className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-emerald-500 focus:outline-none"
+                        />
+                        <input
+                          type="number"
+                          min="1"
+                          placeholder="Nombre de terrains"
+                          value={venueForm.courts}
+                          onChange={(e) => setVenueForm({ ...venueForm, courts: e.target.value })}
+                          className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-emerald-500 focus:outline-none"
+                        />
                       </div>
-                      <div className="flex gap-2">
-                        <button
-                          type="submit"
-                          disabled={venueSubmitting}
-                          className="rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white hover:bg-white/20 disabled:cursor-not-allowed"
-                        >
-                          {venueSubmitting ? "Saving..." : venueForm.id ? "Update" : "Add"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setVenueFormVisible(false);
-                            setVenueForm({ name: "", address: "", city: "", capacity: "", courts: "" });
-                          }}
-                          className="rounded-full border border-white/10 px-4 py-2 text-xs uppercase tracking-wider text-slate-300"
-                        >
-                          Cancel
-                        </button>
-                      </div>
+                      <button
+                        type="submit"
+                        disabled={venueSubmitting}
+                        className="w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+                      >
+                        {venueSubmitting ? "..." : venueForm.id ? "Modifier" : "Ajouter"}
+                      </button>
                     </form>
                   )}
 
-                  <div className="space-y-3">
+                  {/* Desktop: Table view */}
+                  <div className="hidden overflow-x-auto md:block">
+                    <table className="w-full text-left text-sm">
+                      <thead className="border-b border-white/10 text-xs uppercase tracking-wider text-slate-400">
+                        <tr>
+                          <th className="pb-3 font-semibold">Nom</th>
+                          <th className="pb-3 font-semibold">Ville</th>
+                          <th className="pb-3 font-semibold">Capacité</th>
+                          <th className="pb-3 font-semibold">Terrains</th>
+                          <th className="pb-3 text-right font-semibold">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5">
+                        {venues.length > 0 ? (
+                          venues.map((venue) => (
+                            <tr key={venue.id} className="group hover:bg-white/5">
+                              <td className="py-3 font-medium text-white">{venue.name}</td>
+                              <td className="py-3 text-slate-400">{venue.city}</td>
+                              <td className="py-3 text-slate-400">{venue.capacity || "—"}</td>
+                              <td className="py-3 text-slate-400">{venue.courts || "—"}</td>
+                              <td className="py-3 text-right">
+                                <button
+                                  type="button"
+                                  onClick={() => handleEditVenue(venue)}
+                                  className="mr-2 text-xs text-emerald-400 hover:text-emerald-300"
+                                >
+                                  Modifier
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteVenue(venue)}
+                                  className="text-xs text-rose-400 hover:text-rose-300"
+                                >
+                                  Supprimer
+                                </button>
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan={5} className="py-6 text-center text-slate-500">
+                              Aucune salle ajoutée.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                  
+                  {/* Mobile: Card view */}
+                  <div className="space-y-3 md:hidden">
                     {venues.length > 0 ? (
                       venues.map((venue) => (
-                        <div key={venue.id} className="rounded-2xl border border-white/10 bg-black/30 p-4">
-                          <div className="flex flex-wrap items-center justify-between gap-3">
-                            <div>
-                              <p className="text-sm font-semibold text-white">{venue.name}</p>
-                              <p className="text-xs text-slate-400">{venue.address}, {venue.city}</p>
-                              {venue.capacity && (
-                                <p className="text-xs text-slate-500">Capacity: {venue.capacity}</p>
-                              )}
-                              {venue.courts && (
-                                <p className="text-xs text-slate-500">Courts: {venue.courts}</p>
-                              )}
+                        <div key={venue.id} className="rounded-lg border border-white/10 bg-black/30 p-3 min-w-0">
+                          <div className="mb-2">
+                            <p className="text-sm font-semibold text-white">{venue.name}</p>
+                            <p className="text-xs text-slate-400">{venue.city}</p>
+                            <div className="mt-1 flex gap-3 text-xs text-slate-500">
+                              {venue.capacity && <span>Cap: {venue.capacity}</span>}
+                              {venue.courts && <span>Terrains: {venue.courts}</span>}
                             </div>
-                            <div className="flex gap-2">
-                              <button
-                                type="button"
-                                onClick={() => handleEditVenue(venue)}
-                                className="rounded-full border border-white/20 px-3 py-1 text-xs uppercase tracking-wider text-white hover:bg-white/10"
-                              >
-                                Edit
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteVenue(venue)}
-                                className="rounded-full border border-rose-500/40 px-3 py-1 text-xs uppercase tracking-wider text-rose-200 hover:bg-rose-500/10"
-                              >
-                                Delete
-                              </button>
-                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleEditVenue(venue)}
+                              className="flex-1 rounded-lg bg-emerald-600/20 px-2 py-1.5 text-xs font-medium text-emerald-300 hover:bg-emerald-600/30 whitespace-nowrap"
+                            >
+                              Modif.
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteVenue(venue)}
+                              className="flex-1 rounded-lg bg-rose-600/20 px-2 py-1.5 text-xs font-medium text-rose-300 hover:bg-rose-600/30 whitespace-nowrap"
+                            >
+                              Suppr.
+                            </button>
                           </div>
                         </div>
                       ))
                     ) : (
-                      <p className="text-sm text-slate-400">No venues added yet.</p>
+                      <p className="py-6 text-center text-slate-500">Aucune salle ajoutée.</p>
                     )}
                   </div>
                 </section>
 
+                {/* PARTNERS SECTION - Logo Grid View */}
                 <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl">
-                  <h3 className="mb-6 text-xl font-semibold text-white">Partners</h3>
-                  
-                  {!partnerFormVisible && (
+                  <div className="mb-4 flex items-center justify-between">
+                    <h3 className="text-lg font-semibold text-white">Partenaires</h3>
                     <button
                       type="button"
                       onClick={() => {
                         setPartnerForm({ name: "", logo: "" });
                         setPartnerLogoFile(null);
                         setPartnerLogoPreview("");
-                        setPartnerFormVisible(true);
+                        setPartnerFormVisible(!partnerFormVisible);
                       }}
-                      className="mb-4 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white hover:bg-white/20"
+                      className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-500"
                     >
-                      + Add Partner
+                      {partnerFormVisible ? "− Annuler" : "+ Ajouter"}
                     </button>
-                  )}
+                  </div>
 
                   {partnerFormVisible && (
-                    <form onSubmit={handleSubmitPartner} className="mb-6 space-y-4 rounded-2xl border border-white/10 bg-black/30 p-4">
-                      <h4 className="text-sm font-semibold text-white">{partnerForm.id ? "Edit Partner" : "Add Partner"}</h4>
-                      <div className="space-y-3">
-                        <label className="space-y-1 text-xs text-slate-300">
-                          Partner Name *
-                          <input
-                            type="text"
-                            required
-                            value={partnerForm.name}
-                            onChange={(e) => setPartnerForm({ ...partnerForm, name: e.target.value })}
-                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
+                    <form onSubmit={handleSubmitPartner} className="mb-6 space-y-3 rounded-xl border border-white/10 bg-black/30 p-4">
+                      <input
+                        type="text"
+                        required
+                        placeholder="Nom du partenaire *"
+                        value={partnerForm.name}
+                        onChange={(e) => setPartnerForm({ ...partnerForm, name: e.target.value })}
+                        className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-amber-500 focus:outline-none"
+                      />
+                      <input
+                        type="file"
+                        accept="image/*"
+                        required={!partnerForm.id}
+                        onChange={handlePartnerLogoChange}
+                        className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white file:mr-2 file:rounded file:border-0 file:bg-amber-600 file:px-2 file:py-1 file:text-xs file:text-white focus:outline-none"
+                      />
+                      {partnerLogoPreview && (
+                        <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 p-2">
+                          <Image
+                            src={partnerLogoPreview}
+                            alt="Preview"
+                            width={64}
+                            height={64}
+                            className="h-16 w-16 rounded-lg border border-white/10 object-contain"
+                            unoptimized
                           />
-                        </label>
-                        <label className="space-y-1 text-xs text-slate-300">
-                          Partner Logo *
-                          <input
-                            type="file"
-                            accept="image/*"
-                            required={!partnerForm.id}
-                            onChange={handlePartnerLogoChange}
-                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
-                          />
-                        </label>
-                        {partnerLogoPreview && (
-                          <div className="relative h-32 w-32 overflow-hidden rounded-lg border border-white/10">
-                            <Image
-                              src={partnerLogoPreview}
-                              alt="Partner logo preview"
-                              fill
-                              className="object-contain"
-                              unoptimized
-                            />
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex gap-3">
-                        <button
-                          type="submit"
-                          disabled={partnerSubmitting}
-                          className="rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white hover:bg-white/20 disabled:opacity-40"
-                        >
-                          {partnerSubmitting ? "Saving..." : partnerForm.id ? "Update Partner" : "Add Partner"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setPartnerForm({ name: "", logo: "" });
-                            setPartnerLogoFile(null);
-                            setPartnerLogoPreview("");
-                            setPartnerFormVisible(false);
-                          }}
-                          className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white hover:bg-white/10"
-                        >
-                          Cancel
-                        </button>
-                      </div>
+                          <span className="text-xs text-slate-400">Logo aperçu</span>
+                        </div>
+                      )}
+                      <button
+                        type="submit"
+                        disabled={partnerSubmitting}
+                        className="w-full rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-500 disabled:opacity-50"
+                      >
+                        {partnerSubmitting ? "..." : partnerForm.id ? "Modifier" : "Ajouter"}
+                      </button>
                     </form>
                   )}
 
-                  <div className="space-y-3">
-                    {partners.length > 0 ? (
-                      partners.map((partner) => (
-                        <div key={partner.id} className="rounded-xl border border-white/10 bg-black/20 p-4">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-4">
-                              {partner.logo && (
-                                <div className="relative h-16 w-16 overflow-hidden rounded-lg border border-white/10">
-                                  <Image
-                                    src={partner.logo}
-                                    alt={partner.name}
-                                    fill
-                                    className="object-contain"
-                                    unoptimized
-                                  />
-                                </div>
-                              )}
-                              <p className="text-sm font-semibold text-white">{partner.name}</p>
-                            </div>
-                            <div className="flex gap-2">
-                              <button
-                                type="button"
-                                onClick={() => handleEditPartner(partner)}
-                                className="rounded-full border border-white/20 px-3 py-1 text-xs uppercase tracking-wider text-white hover:bg-white/10"
-                              >
-                                Edit
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleDeletePartner(partner)}
-                                className="rounded-full border border-rose-500/40 px-3 py-1 text-xs uppercase tracking-wider text-rose-200 hover:bg-rose-500/10"
-                              >
-                                Delete
-                              </button>
-                            </div>
+                  {partners.length > 0 ? (
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                      {partners.map((partner) => (
+                        <div key={partner.id} className="group relative overflow-hidden rounded-xl border border-white/10 bg-gradient-to-br from-amber-600/10 to-orange-600/10 p-3 transition hover:border-white/30">
+                          <div className="flex flex-col items-center gap-2">
+                            {partner.logo && (
+                              <div className="relative h-16 w-16 overflow-hidden rounded-lg border border-white/10 bg-white/5">
+                                <Image
+                                  src={partner.logo}
+                                  alt={partner.name}
+                                  fill
+                                  className="object-contain p-1.5"
+                                  unoptimized
+                                />
+                              </div>
+                            )}
+                            <p className="text-center text-xs font-semibold text-white line-clamp-2">{partner.name}</p>
+                          </div>
+                          <div className="mt-2 flex gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleEditPartner(partner)}
+                              className="flex-1 rounded-lg bg-white/5 px-1.5 py-1.5 text-xs font-medium text-white hover:bg-white/10 whitespace-nowrap"
+                            >
+                              Modif.
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeletePartner(partner)}
+                              className="flex-1 rounded-lg bg-rose-600/20 px-1.5 py-1.5 text-xs font-medium text-rose-200 hover:bg-rose-600/30 whitespace-nowrap"
+                            >
+                              Suppr.
+                            </button>
                           </div>
                         </div>
-                      ))
-                    ) : (
-                      <p className="text-sm text-slate-400">No partners added yet.</p>
-                    )}
-                  </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="py-8 text-center text-sm text-slate-500">
+                      Aucun partenaire ajouté.
+                    </div>
+                  )}
                 </section>
               </div>
             )}
+            </>
+            )}
+
+            {/* ADMINS TAB CONTENT */}
+            {activeTab === 'admins' && currentAdminUser?.permissions.canManageAdmins && (
+            <>
+              <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl">
+                <div className="mb-6">
+                  <h2 className="text-2xl font-semibold text-white">{t.adminUserManagement}</h2>
+                  <p className="mt-2 text-sm text-slate-400">
+                    {t.createAdminAccounts}
+                  </p>
+                </div>
+
+                {adminStatus && (
+                  <div className={`mb-4 rounded-xl border p-3 text-xs ${
+                    adminStatus.type === 'success' ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200' :
+                    adminStatus.type === 'error' ? 'border-rose-500/40 bg-rose-500/10 text-rose-200' :
+                    'border-blue-500/40 bg-blue-500/10 text-blue-200'
+                  }`}>
+                    {adminStatus.message}
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAdminFormVisible(!adminFormVisible);
+                    setNewAdminEmail("");
+                    setNewAdminRoles([]);
+                  }}
+                  className="mb-4 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white hover:bg-white/20"
+                >
+                  {adminFormVisible ? 'Cancel' : '+ Create New Admin'}
+                </button>
+
+                {adminFormVisible && (
+                  <form
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      if (!user) return;
+                      
+                      setAdminSubmitting(true);
+                      setAdminStatus(null);
+                      
+                      try {
+                        const result = await createAdminAccount(newAdminEmail, newAdminName, newAdminPassword, newAdminRoles, user.uid);
+                        
+                        if (result.success) {
+                          setAdminStatus({ 
+                            type: 'success', 
+                            message: `✅ Admin account created for ${newAdminEmail}! They can now log in with the password you provided.` 
+                          });
+                          setNewAdminEmail("");
+                          setNewAdminName("");
+                          setNewAdminPassword("");
+                          setNewAdminRoles([]);
+                          setAdminFormVisible(false);
+                          
+                          // Refresh admin users list
+                          const users = await getAllAdminUsers();
+                          setAdminUsers(users);
+                        } else {
+                          setAdminStatus({ 
+                            type: 'error', 
+                            message: result.error || 'Failed to create admin account' 
+                          });
+                        }
+                      } catch (error) {
+                        setAdminStatus({ 
+                          type: 'error', 
+                          message: 'An unexpected error occurred' 
+                        });
+                      } finally {
+                        setAdminSubmitting(false);
+                      }
+                    }}
+                    className="mb-6 space-y-4 rounded-xl border border-white/10 bg-black/20 p-4"
+                  >
+                    <label className="space-y-1 text-xs text-slate-300">
+                      Email Address *
+                      <input
+                        type="email"
+                        value={newAdminEmail}
+                        onChange={(e) => setNewAdminEmail(e.target.value)}
+                        required
+                        placeholder="admin@example.com"
+                        className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
+                      />
+                    </label>
+
+                    <label className="space-y-1 text-xs text-slate-300">
+                      Display Name *
+                      <input
+                        type="text"
+                        value={newAdminName}
+                        onChange={(e) => setNewAdminName(e.target.value)}
+                        required
+                        placeholder="John Doe"
+                        className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
+                      />
+                    </label>
+
+                    <label className="space-y-1 text-xs text-slate-300">
+                      Password *
+                      <input
+                        type="password"
+                        value={newAdminPassword}
+                        onChange={(e) => setNewAdminPassword(e.target.value)}
+                        required
+                        placeholder="Minimum 6 characters"
+                        minLength={6}
+                        className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
+                      />
+                      <p className="text-[10px] text-slate-400">They can change this after logging in</p>
+                    </label>
+
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold text-slate-300">Assign Roles *</p>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {[
+                          { role: 'master' as AdminRole, label: '👑 Master (Full Access)', desc: 'Complete control including admin management' },
+                          { role: 'news_editor' as AdminRole, label: '📰 News Editor', desc: 'Manage news and stories' },
+                          { role: 'game_scheduler' as AdminRole, label: '📅 Game Scheduler', desc: 'Create and manage games' },
+                          { role: 'team_manager' as AdminRole, label: '👥 Team Manager', desc: 'Manage teams and players' },
+                          { role: 'referee_manager' as AdminRole, label: '🔵 Referee Manager', desc: 'Manage referees' },
+                          { role: 'venue_manager' as AdminRole, label: '🏟️ Venue Manager', desc: 'Manage venues' },
+                          { role: 'partner_manager' as AdminRole, label: '🤝 Partner Manager', desc: 'Manage partners and committee' },
+                        ].map(({ role, label, desc }) => (
+                          <label key={role} className="flex items-start gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={newAdminRoles.includes(role)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setNewAdminRoles([...newAdminRoles, role]);
+                                } else {
+                                  setNewAdminRoles(newAdminRoles.filter(r => r !== role));
+                                }
+                              }}
+                              className="mt-1"
+                            />
+                            <div className="flex-1">
+                              <p className="text-xs font-medium text-white">{label}</p>
+                              <p className="text-[10px] text-slate-400">{desc}</p>
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex gap-3 pt-2">
+                      <button
+                        type="submit"
+                        disabled={adminSubmitting || !newAdminEmail.trim() || !newAdminName.trim() || newAdminPassword.length < 6 || newAdminRoles.length === 0}
+                        className="rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white hover:bg-white/20 disabled:opacity-40"
+                      >
+                        {adminSubmitting ? 'Creating...' : 'Create Admin Account'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAdminFormVisible(false);
+                          setNewAdminEmail("");
+                          setNewAdminName("");
+                          setNewAdminPassword("");
+                          setNewAdminRoles([]);
+                        }}
+                        className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white hover:bg-white/10"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                <div className="space-y-3">
+                  <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-400">All Admin Users</h3>
+                  {adminUsers.length > 0 ? (
+                    adminUsers.map((admin) => (
+                      <div key={admin.id} className="rounded-xl border border-white/10 bg-black/20 p-4">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-semibold text-white">{admin.displayName || admin.email}</p>
+                              {!admin.isActive && (
+                                <span className="rounded-full bg-rose-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-rose-200">
+                                  Inactive
+                                </span>
+                              )}
+                              {admin.roles.includes('master') && (
+                                <span className="rounded-full bg-orange-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-orange-200">
+                                  Master
+                                </span>
+                              )}
+                            </div>
+                            <p className="mt-1 text-xs text-slate-400">{admin.email}</p>
+                            
+                            {editingAdminId === admin.id ? (
+                              <div className="mt-3 space-y-2 rounded-lg border border-white/10 bg-slate-900/40 p-3">
+                                <p className="text-xs font-semibold text-slate-300">Edit Roles:</p>
+                                <div className="space-y-1">
+                                  {[
+                                    { role: 'master' as AdminRole, label: '👑 Master' },
+                                    { role: 'news_editor' as AdminRole, label: '📰 News Editor' },
+                                    { role: 'game_scheduler' as AdminRole, label: '📅 Game Scheduler' },
+                                    { role: 'team_manager' as AdminRole, label: '👥 Team Manager' },
+                                    { role: 'referee_manager' as AdminRole, label: '🔵 Referee Manager' },
+                                    { role: 'venue_manager' as AdminRole, label: '🏟️ Venue Manager' },
+                                    { role: 'partner_manager' as AdminRole, label: '🤝 Partner Manager' },
+                                  ].map(({ role, label }) => (
+                                    <label key={role} className="flex items-center gap-2 cursor-pointer">
+                                      <input
+                                        type="checkbox"
+                                        checked={editingAdminRoles.includes(role)}
+                                        onChange={(e) => {
+                                          if (e.target.checked) {
+                                            setEditingAdminRoles([...editingAdminRoles, role]);
+                                          } else {
+                                            setEditingAdminRoles(editingAdminRoles.filter(r => r !== role));
+                                          }
+                                        }}
+                                      />
+                                      <span className="text-xs text-white">{label}</span>
+                                    </label>
+                                  ))}
+                                </div>
+                                <div className="flex gap-2 pt-2">
+                                  <button
+                                    onClick={async () => {
+                                      setAdminSubmitting(true);
+                                      const result = await updateAdminRoles(admin.id, editingAdminRoles);
+                                      if (result.success) {
+                                        setAdminStatus({ type: 'success', message: 'Roles updated successfully' });
+                                        const users = await getAllAdminUsers();
+                                        setAdminUsers(users);
+                                        setEditingAdminId(null);
+                                      } else {
+                                        setAdminStatus({ type: 'error', message: result.error || 'Failed to update roles' });
+                                      }
+                                      setAdminSubmitting(false);
+                                    }}
+                                    disabled={adminSubmitting}
+                                    className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs uppercase tracking-wider text-white hover:bg-white/20 disabled:opacity-40"
+                                  >
+                                    Save
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingAdminId(null)}
+                                    className="rounded-full border border-white/20 px-3 py-1 text-xs uppercase tracking-wider text-white hover:bg-white/10"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="mt-2 flex flex-wrap gap-1">
+                                {admin.roles.map((role) => (
+                                  <span
+                                    key={role}
+                                    className="rounded-full border border-white/20 bg-white/5 px-2 py-0.5 text-[10px] text-slate-300"
+                                  >
+                                    {role.replace('_', ' ')}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            
+                            <div className="mt-2 text-[10px] text-slate-500">
+                              Last login: {admin.lastLogin ? new Date(admin.lastLogin).toLocaleDateString() : 'Never'}
+                            </div>
+                          </div>
+                          
+                          <div className="flex flex-col gap-2">
+                            {editingAdminId !== admin.id && (
+                              <>
+                                <button
+                                  onClick={() => {
+                                    setEditingAdminId(admin.id);
+                                    setEditingAdminRoles(admin.roles);
+                                  }}
+                                  className="rounded-full border border-blue-500/40 px-3 py-1 text-xs uppercase tracking-wider text-blue-200 hover:bg-blue-500/10"
+                                >
+                                  Edit Roles
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    if (admin.id === user?.uid) {
+                                      setAdminStatus({ type: 'error', message: 'You cannot deactivate yourself' });
+                                      return;
+                                    }
+                                    setAdminSubmitting(true);
+                                    const result = admin.isActive 
+                                      ? await deactivateAdminUser(admin.id)
+                                      : await reactivateAdminUser(admin.id);
+                                    if (result.success) {
+                                      setAdminStatus({ 
+                                        type: 'success', 
+                                        message: admin.isActive ? 'User deactivated' : 'User reactivated' 
+                                      });
+                                      const users = await getAllAdminUsers();
+                                      setAdminUsers(users);
+                                    } else {
+                                      setAdminStatus({ type: 'error', message: result.error || 'Operation failed' });
+                                    }
+                                    setAdminSubmitting(false);
+                                  }}
+                                  disabled={adminSubmitting}
+                                  className={`rounded-full border px-3 py-1 text-xs uppercase tracking-wider hover:opacity-80 disabled:opacity-40 ${ 
+                                    admin.isActive
+                                      ? 'border-rose-500/40 text-rose-200 hover:bg-rose-500/10'
+                                      : 'border-emerald-500/40 text-emerald-200 hover:bg-emerald-500/10'
+                                  }`}
+                                >
+                                  {admin.isActive ? 'Deactivate' : 'Reactivate'}
+                                </button>
+                                {!admin.roles.includes('master') && (
+                                  <button
+                                    onClick={async () => {
+                                      if (admin.id === user?.uid) {
+                                        setAdminStatus({ type: 'error', message: 'You cannot delete yourself' });
+                                        return;
+                                      }
+                                      if (!confirm(`Are you sure you want to permanently delete ${admin.displayName || admin.email}? This action cannot be undone.`)) {
+                                        return;
+                                      }
+                                      setAdminSubmitting(true);
+                                      const result = await deleteAdminUser(admin.id, user?.uid || '');
+                                      if (result.success) {
+                                        setAdminStatus({ 
+                                          type: 'success', 
+                                          message: 'Admin user deleted permanently' 
+                                        });
+                                        const users = await getAllAdminUsers();
+                                        setAdminUsers(users);
+                                      } else {
+                                        setAdminStatus({ type: 'error', message: result.error || 'Delete failed' });
+                                      }
+                                      setAdminSubmitting(false);
+                                    }}
+                                    disabled={adminSubmitting}
+                                    className="rounded-full border border-red-600/40 px-3 py-1 text-xs uppercase tracking-wider text-red-300 hover:bg-red-600/10 disabled:opacity-40"
+                                  >
+                                    Delete
+                                  </button>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-slate-400">No admin users found.</p>
+                  )}
+                </div>
+              </section>
             </>
             )}
 
@@ -6138,6 +6747,215 @@ export default function AdminPage() {
             </div>
           </div>
         </main>
+      )}
+
+      {/* Password Change Modal */}
+      {showPasswordChange && user && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-900 p-6 shadow-2xl">
+            <div className="mb-4">
+              <h2 className="text-xl font-bold text-white">Change Password</h2>
+              <p className="text-xs text-slate-400 mt-1">Enter your new password below</p>
+            </div>
+
+            {passwordChangeStatus && (
+              <div className={`mb-4 rounded-lg border p-3 text-sm ${
+                passwordChangeStatus.type === 'success' 
+                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200' 
+                  : 'border-rose-500/30 bg-rose-500/10 text-rose-200'
+              }`}>
+                {passwordChangeStatus.message}
+              </div>
+            )}
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                setPasswordChangeStatus(null);
+
+                if (newPassword.length < 6) {
+                  setPasswordChangeStatus({ type: 'error', message: 'Password must be at least 6 characters' });
+                  return;
+                }
+
+                if (newPassword !== confirmPassword) {
+                  setPasswordChangeStatus({ type: 'error', message: 'Passwords do not match' });
+                  return;
+                }
+
+                setAdminSubmitting(true);
+
+                try {
+                  const response = await fetch('/api/admin/change-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ uid: user.uid, newPassword }),
+                  });
+
+                  const data = await response.json();
+
+                  if (data.success) {
+                    setPasswordChangeStatus({ type: 'success', message: '✅ Password changed successfully!' });
+                    setTimeout(() => {
+                      setShowPasswordChange(false);
+                      setNewPassword('');
+                      setConfirmPassword('');
+                      setPasswordChangeStatus(null);
+                    }, 2000);
+                  } else {
+                    setPasswordChangeStatus({ type: 'error', message: data.error || 'Failed to change password' });
+                  }
+                } catch (error) {
+                  setPasswordChangeStatus({ type: 'error', message: 'Network error. Please try again.' });
+                }
+
+                setAdminSubmitting(false);
+              }}
+              className="space-y-4"
+            >
+              <label className="block space-y-1 text-xs text-slate-300">
+                New Password *
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  required
+                  minLength={6}
+                  placeholder="Minimum 6 characters"
+                  className="w-full rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-white"
+                />
+              </label>
+
+              <label className="block space-y-1 text-xs text-slate-300">
+                Confirm Password *
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  minLength={6}
+                  placeholder="Re-enter password"
+                  className="w-full rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-white"
+                />
+              </label>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="submit"
+                  disabled={adminSubmitting}
+                  className="flex-1 rounded-lg border border-white/20 bg-orange-500 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white transition hover:bg-orange-600 disabled:opacity-50"
+                >
+                  {adminSubmitting ? 'Changing...' : 'Change Password'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPasswordChange(false);
+                    setNewPassword('');
+                    setConfirmPassword('');
+                    setPasswordChangeStatus(null);
+                  }}
+                  className="rounded-lg border border-white/20 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white hover:bg-white/10"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Story Preview Modal */}
+      {showStoryPreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm overflow-y-auto">
+          <div className="w-full max-w-4xl rounded-2xl border border-white/10 bg-slate-950 shadow-2xl my-8">
+            {/* Preview Header */}
+            <div className="border-b border-white/10 p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-bold text-white">{t.previewStory}</h2>
+                  <p className="text-xs text-slate-400 mt-1">{t.previewDescription}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowStoryPreview(false)}
+                  className="text-slate-400 hover:text-white"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Preview Content - Matches main page story card design */}
+            <div className="p-6">
+              <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900 to-slate-800 overflow-hidden">
+                {/* Story Image */}
+                {(imagePreview || form.imageUrl) && (
+                  <div className="relative h-64 w-full">
+                    <Image
+                      src={imagePreview || form.imageUrl || ''}
+                      alt={form.title}
+                      fill
+                      className="object-cover"
+                      sizes="(max-width: 768px) 100vw, 800px"
+                      unoptimized
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/50 to-transparent" />
+                    
+                    {/* Category Badge */}
+                    {form.category && (
+                      <div className="absolute top-4 left-4">
+                        <span className="rounded-full bg-orange-500 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-white">
+                          {form.category}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Story Content */}
+                <div className="p-6">
+                  <h3 className="text-2xl font-bold text-white mb-2">
+                    {form.title}
+                  </h3>
+                  <p className="text-sm text-orange-400 font-medium mb-3">
+                    {form.headline}
+                  </p>
+                  <p className="text-slate-300 leading-relaxed">
+                    {form.summary}
+                  </p>
+                  <div className="mt-4 flex items-center gap-2 text-xs text-slate-500">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>{t.justNow}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Preview Actions */}
+            <div className="border-t border-white/10 p-4 flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => setShowStoryPreview(false)}
+                className="rounded-lg border border-white/20 px-4 py-2 text-sm font-semibold text-slate-300 hover:bg-white/5"
+              >
+                {t.editStory}
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmPublish}
+                disabled={submitting}
+                className="rounded-lg bg-orange-500 px-6 py-2 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-50"
+              >
+                {submitting ? t.publishing : form.id ? t.confirmUpdate : t.confirmPublish}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

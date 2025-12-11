@@ -3321,7 +3321,24 @@ export default function AdminPage() {
                     <h1 className="text-xl font-bold text-white">{t.adminDashboard}</h1>
                     <p className="text-xs text-slate-400">{t.contentManagement}</p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3">
+                    {/* Current User Info */}
+                    <div className="flex items-center gap-2 rounded-lg border border-white/20 bg-white/5 px-3 py-2">
+                      <div className="relative">
+                        <div className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]" />
+                        <div className="absolute inset-0 h-2 w-2 animate-ping rounded-full bg-emerald-400 opacity-75" />
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-xs font-semibold text-white">
+                          {currentAdminUser.displayName || currentAdminUser.email}
+                        </span>
+                        {currentAdminUser.roles.includes('master') && (
+                          <span className="text-[10px] font-semibold uppercase tracking-wider text-orange-400">
+                            Master Admin
+                          </span>
+                        )}
+                      </div>
+                    </div>
                     {/* Language Toggle */}
                     <div className="flex rounded-lg border border-white/20 bg-white/5 overflow-hidden">
                       <button

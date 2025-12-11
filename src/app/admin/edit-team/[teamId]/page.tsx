@@ -34,6 +34,24 @@ type Player = {
   };
 };
 
+type CoachStaffRole = "head_coach" | "assistant_coach" | "staff";
+
+type CoachStaff = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  role: CoachStaffRole;
+  headshot?: string;
+};
+
+type CoachStaffFormState = {
+  id?: string;
+  firstName: string;
+  lastName: string;
+  role: CoachStaffRole;
+  headshot: string;
+};
+
 type Team = {
   id: string;
   name: string;
@@ -68,6 +86,14 @@ export default function EditTeamPage() {
   const [transferPlayerName, setTransferPlayerName] = useState<string>("");
   const [transferTargetTeamId, setTransferTargetTeamId] = useState<string>("");
   const [transferSubmitting, setTransferSubmitting] = useState(false);
+  const [activeTab, setActiveTab] = useState<'roster' | 'staff'>('roster');
+  const [rosterExpanded, setRosterExpanded] = useState(false);
+  const [coachStaffList, setCoachStaffList] = useState<CoachStaff[]>([]);
+  const [coachStaffForm, setCoachStaffForm] = useState<CoachStaffFormState | null>(null);
+  const [coachStaffFormVisible, setCoachStaffFormVisible] = useState(false);
+  const [coachHeadshotFile, setCoachHeadshotFile] = useState<File | null>(null);
+  const [coachHeadshotPreview, setCoachHeadshotPreview] = useState<string>("");
+  const [coachStaffSubmitting, setCoachStaffSubmitting] = useState(false);
 
   const [teamForm, setTeamForm] = useState({
     name: "",
@@ -179,6 +205,25 @@ export default function EditTeamPage() {
         ...doc.data(),
       })) as Player[];
       setPlayers(playersData.sort((a, b) => a.number - b.number));
+
+      // Load coaching staff for this team
+      const coachStaffQuery = query(
+        collection(firebaseDB, "teams", teamId as string, "coachStaff")
+      );
+      const coachStaffSnapshot = await getDocs(coachStaffQuery);
+      const coachStaffData = coachStaffSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        firstName: doc.data()?.firstName ?? "",
+        lastName: doc.data()?.lastName ?? "",
+        role: doc.data()?.role ?? "staff",
+        headshot: doc.data()?.headshot ?? "",
+      })) as CoachStaff[];
+      // Sort: head_coach first, then assistant_coach, then staff
+      coachStaffData.sort((a, b) => {
+        const order: Record<CoachStaffRole, number> = { head_coach: 0, assistant_coach: 1, staff: 2 };
+        return (order[a.role as CoachStaffRole] ?? 3) - (order[b.role as CoachStaffRole] ?? 3);
+      });
+      setCoachStaffList(coachStaffData);
     } catch (error) {
       console.error("Error loading data:", error);
     } finally {
@@ -442,6 +487,119 @@ export default function EditTeamPage() {
     setTransferTargetTeamId("");
   };
 
+  // Coaching Staff handlers
+  const handleCoachHeadshotChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setCoachHeadshotFile(file);
+      setCoachHeadshotPreview(URL.createObjectURL(file));
+    }
+  };
+
+  const resetCoachStaffForm = () => {
+    setCoachStaffForm(null);
+    setCoachStaffFormVisible(false);
+    setCoachHeadshotFile(null);
+    setCoachHeadshotPreview("");
+  };
+
+  const handleAddCoachStaff = (role: CoachStaffRole) => {
+    // Check if head coach already exists
+    if (role === "head_coach" && coachStaffList.some((c) => c.role === "head_coach")) {
+      alert("Team already has a head coach");
+      return;
+    }
+    // Check if team already has 2 assistant coaches
+    if (role === "assistant_coach" && coachStaffList.filter((c) => c.role === "assistant_coach").length >= 2) {
+      alert("Team already has 2 assistant coaches");
+      return;
+    }
+
+    setCoachStaffForm({
+      firstName: "",
+      lastName: "",
+      role,
+      headshot: "",
+    });
+    setCoachStaffFormVisible(true);
+  };
+
+  const handleSubmitCoachStaff = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!user || !team) return;
+    if (!coachStaffForm) return;
+
+    const firstName = coachStaffForm.firstName.trim();
+    const lastName = coachStaffForm.lastName.trim();
+    let headshot = coachStaffForm.headshot.trim();
+
+    if (!firstName || !lastName) {
+      alert("First and last name are required");
+      return;
+    }
+
+    setCoachStaffSubmitting(true);
+
+    try {
+      if (coachHeadshotFile) {
+        const path = `coach-headshots/${Date.now()}-${coachHeadshotFile.name}`;
+        const storageRefInstance = ref(firebaseStorage, path);
+        const uploadSnapshot = await uploadBytes(storageRefInstance, coachHeadshotFile);
+        headshot = await getDownloadURL(uploadSnapshot.ref);
+      }
+
+      const payload = {
+        firstName,
+        lastName,
+        role: coachStaffForm.role,
+        headshot,
+      };
+
+      const coachStaffCollectionRef = collection(firebaseDB, "teams", team.id, "coachStaff");
+      if (coachStaffForm.id) {
+        await updateDoc(doc(firebaseDB, "teams", team.id, "coachStaff", coachStaffForm.id), payload);
+      } else {
+        await addDoc(coachStaffCollectionRef, payload);
+      }
+
+      resetCoachStaffForm();
+      await loadData();
+    } catch (error) {
+      console.error(error);
+      alert("Unable to save staff member");
+    } finally {
+      setCoachStaffSubmitting(false);
+    }
+  };
+
+  const handleEditCoachStaff = (member: CoachStaff) => {
+    setCoachStaffForm({
+      id: member.id,
+      firstName: member.firstName,
+      lastName: member.lastName,
+      role: member.role,
+      headshot: member.headshot ?? "",
+    });
+    setCoachHeadshotPreview(member.headshot ?? "");
+    setCoachStaffFormVisible(true);
+  };
+
+  const handleDeleteCoachStaff = async (member: CoachStaff) => {
+    if (!user || !team) return;
+    if (!window.confirm(`Remove ${member.firstName} ${member.lastName}?`)) return;
+
+    try {
+      await deleteDoc(doc(firebaseDB, "teams", team.id, "coachStaff", member.id));
+      await loadData();
+      if (coachStaffForm?.id === member.id) {
+        resetCoachStaffForm();
+      }
+    } catch (error) {
+      console.error(error);
+      alert("Unable to delete staff member");
+    }
+  };
+
   const navigateToTeam = (direction: "prev" | "next") => {
     const currentIndex = allTeams.findIndex((t) => t.id === teamId);
     let nextIndex = direction === "next" ? currentIndex + 1 : currentIndex - 1;
@@ -673,24 +831,57 @@ export default function EditTeamPage() {
           )}
         </div>
 
-        {/* Players Section */}
-        <div className="rounded-xl border border-white/10 bg-slate-900/50 p-6">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-xl font-bold text-white">
-              Roster ({players.length} Players)
-            </h2>
-            {!addingPlayer && (
-              <button
-                onClick={() => setAddingPlayer(true)}
-                className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-300 transition hover:bg-emerald-500/20"
-              >
-                + Add Player
-              </button>
-            )}
+        {/* Tabs: Roster and Coaching Staff */}
+        <div className="rounded-xl border border-white/10 bg-slate-900/50 overflow-hidden">
+          {/* Tab Headers */}
+          <div className="flex border-b border-white/10 bg-slate-900/80">
+            <button
+              onClick={() => setActiveTab('roster')}
+              className={`flex-1 px-6 py-4 text-sm font-semibold uppercase tracking-wider transition ${
+                activeTab === 'roster'
+                  ? 'bg-slate-800 text-white border-b-2 border-emerald-500'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+              }`}
+            >
+              Roster ({players.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('staff')}
+              className={`flex-1 px-6 py-4 text-sm font-semibold uppercase tracking-wider transition ${
+                activeTab === 'staff'
+                  ? 'bg-slate-800 text-white border-b-2 border-emerald-500'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+              }`}
+            >
+              Coaching Staff ({coachStaffList.length})
+            </button>
           </div>
 
-          {/* Add Player Form */}
-          {addingPlayer && (
+          {/* Roster Tab Content */}
+          {activeTab === 'roster' && (
+            <div className="p-6">
+              <div className="mb-4 flex items-center justify-between">
+                <button
+                  onClick={() => setRosterExpanded(!rosterExpanded)}
+                  className="flex items-center gap-2 text-lg font-bold text-white hover:text-emerald-400 transition"
+                >
+                  <span>{rosterExpanded ? '−' : '+'}</span>
+                  <span>Players ({players.length})</span>
+                </button>
+                {rosterExpanded && !addingPlayer && (
+                  <button
+                    onClick={() => setAddingPlayer(true)}
+                    className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-300 transition hover:bg-emerald-500/20"
+                  >
+                    + Add Player
+                  </button>
+                )}
+              </div>
+
+              {rosterExpanded && (
+                <>
+                  {/* Add Player Form */}
+                  {addingPlayer && (
             <form onSubmit={handleAddPlayer} className="mb-6 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4">
               <div className="mb-4 flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-white">Add New Player</h3>
@@ -861,10 +1052,10 @@ export default function EditTeamPage() {
                 </button>
               </div>
             </form>
-          )}
+                  )}
 
-          <div className="space-y-2">
-            {players.map((player) => {
+                  <div className="space-y-2">
+                    {players.map((player) => {
               const isEditing = editingPlayerId === player.id;
               
               return (
@@ -955,15 +1146,190 @@ export default function EditTeamPage() {
                     />
                   )}
                 </div>
-              );
-            })}
+                    );
+                    })}
 
-            {players.length === 0 && (
-              <div className="py-12 text-center text-slate-400">
-                No players found for this team
+                    {players.length === 0 && (
+                      <div className="py-12 text-center text-slate-400">
+                        No players found for this team
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+        {/* Coaching Staff Tab Content */}
+          {activeTab === 'staff' && (
+            <div className="p-6">
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-white">Coaching Staff</h3>
+                {!coachStaffFormVisible && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleAddCoachStaff('head_coach')}
+                      disabled={coachStaffList.some((c) => c.role === 'head_coach')}
+                      className="rounded-lg border border-orange-500/30 bg-orange-500/10 px-3 py-1 text-xs font-medium text-orange-300 transition hover:bg-orange-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      + Head Coach
+                    </button>
+                    <button
+                      onClick={() => handleAddCoachStaff('assistant_coach')}
+                      disabled={coachStaffList.filter((c) => c.role === 'assistant_coach').length >= 2}
+                      className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-medium text-blue-300 transition hover:bg-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      + Assistant Coach
+                    </button>
+                    <button
+                      onClick={() => handleAddCoachStaff('staff')}
+                      className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-300 transition hover:bg-emerald-500/20"
+                    >
+                      + Staff Member
+                    </button>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+
+              {coachStaffFormVisible && coachStaffForm && (
+                <form onSubmit={handleSubmitCoachStaff} className="mb-6 space-y-3 rounded-2xl border border-white/10 bg-slate-900/60 p-4">
+                  <div className="flex items-center justify-between">
+                    <h5 className="text-xs uppercase tracking-wider text-slate-400">
+                      {coachStaffForm.id ? "Edit" : "Add"} {coachStaffForm.role === "head_coach" ? "Head Coach" : coachStaffForm.role === "assistant_coach" ? "Assistant Coach" : "Staff Member"}
+                    </h5>
+                    <button
+                      type="button"
+                      onClick={resetCoachStaffForm}
+                      className="text-xs text-slate-400 hover:text-white"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                  
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="space-y-1 text-xs text-slate-300">
+                      First name
+                      <input
+                        className="w-full rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
+                        value={coachStaffForm.firstName}
+                        onChange={(e) => setCoachStaffForm({ ...coachStaffForm, firstName: e.target.value })}
+                        required
+                      />
+                    </label>
+                    <label className="space-y-1 text-xs text-slate-300">
+                      Last name
+                      <input
+                        className="w-full rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
+                        value={coachStaffForm.lastName}
+                        onChange={(e) => setCoachStaffForm({ ...coachStaffForm, lastName: e.target.value })}
+                        required
+                      />
+                    </label>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-slate-300 mb-1">Headshot (optional)</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleCoachHeadshotChange}
+                      className="w-full text-xs text-slate-300"
+                    />
+                    {coachHeadshotPreview && (
+                      <div className="mt-2 relative h-24 w-24 rounded-lg overflow-hidden border border-white/10">
+                        <Image src={coachHeadshotPreview} alt="Preview" fill className="object-cover" unoptimized />
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={coachStaffSubmitting}
+                    className="w-full rounded-full bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.4em] text-black transition hover:bg-slate-200 disabled:opacity-50"
+                  >
+                    {coachStaffSubmitting ? "Saving..." : coachStaffForm.id ? "Update" : "Add"}
+                  </button>
+                </form>
+              )}
+
+              <div className="space-y-2">
+                {coachStaffList.length > 0 ? (
+                  coachStaffList.map((member) => (
+                    <div 
+                      key={member.id} 
+                      className={`rounded-xl border p-3 ${
+                        member.role === 'head_coach' 
+                          ? 'border-orange-500/40 bg-orange-500/10' 
+                          : 'border-white/10 bg-slate-900/40'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          {member.headshot ? (
+                            <div className={`relative h-12 w-12 rounded-full overflow-hidden border-2 ${
+                              member.role === 'head_coach' ? 'border-orange-500/60' : 'border-white/10'
+                            }`}>
+                              <Image src={member.headshot} alt={member.firstName} fill className="object-cover" unoptimized />
+                            </div>
+                          ) : (
+                            <div className={`h-12 w-12 rounded-full border-2 flex items-center justify-center text-sm font-bold ${
+                              member.role === 'head_coach' 
+                                ? 'border-orange-500/60 bg-orange-500/20 text-orange-300' 
+                                : 'border-white/10 bg-slate-800 text-slate-400'
+                            }`}>
+                              {member.firstName[0]}{member.lastName[0]}
+                            </div>
+                          )}
+                          <div>
+                            <div className="flex items-center gap-2">
+                              {member.role === 'head_coach' && (
+                                <span className="text-xs">👑</span>
+                              )}
+                              <p className={`text-sm font-semibold ${
+                                member.role === 'head_coach' ? 'text-orange-200' : 'text-white'
+                              }`}>
+                                {member.firstName} {member.lastName}
+                              </p>
+                            </div>
+                            <p className={`text-[10px] font-semibold uppercase tracking-wider ${
+                              member.role === 'head_coach' ? 'text-orange-400' : 'text-slate-400'
+                            }`}>
+                              {member.role === "head_coach" ? "Head Coach" : member.role === "assistant_coach" ? "Assistant Coach" : "Staff"}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleEditCoachStaff(member)}
+                            className="rounded-full border border-white/20 px-3 py-1 text-[10px] uppercase tracking-wider text-white hover:border-white/40 hover:bg-white/10"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteCoachStaff(member)}
+                            className="rounded-full border border-rose-500/40 px-3 py-1 text-[10px] uppercase tracking-wider text-rose-200 hover:border-rose-400 hover:bg-rose-500/10"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-xl border border-dashed border-white/20 bg-slate-900/30 p-4">
+                    <p className="text-xs text-slate-400 text-center mb-2">
+                      No coaching staff added yet.
+                    </p>
+                    <p className="text-[10px] text-slate-500 text-center">
+                      Start by adding a head coach first
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

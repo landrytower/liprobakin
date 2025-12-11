@@ -3,6 +3,7 @@
 import type { FormEvent, ChangeEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { firebaseAuth, firebaseDB, firebaseStorage } from "@/lib/firebase";
 import { franchises as menFranchises, franchisesWomen, type GenderKey } from "@/data/febaco";
 import { countries, flagFromCode } from "@/data/countries";
@@ -513,6 +514,7 @@ const formatAdminPublishedLabel = (date: Date | null) => {
 };
  
 export default function AdminPage() {
+  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [authForm, setAuthForm] = useState({ email: "", password: "" });
@@ -1297,20 +1299,7 @@ export default function AdminPage() {
   };
 
   const handleEditTeam = (team: AdminTeam) => {
-    setTeamFormExpanded(true);
-    setTeamForm({
-      id: team.id,
-      name: team.name,
-      city: team.city,
-      gender: team.gender,
-      colorsInput: team.colors.join(", "),
-      logo: team.logo,
-      nationality: team.nationality || "DRC",
-      nationality2: team.nationality2 || "",
-    });
-    setTeamLogoFile(null);
-    updateTeamLogoPreview(team.logo ?? "");
-    setTeamStatus({ type: "info", message: `Editing ${team.name}.` });
+    router.push(`/admin/edit-team/${team.id}`);
   };
 
   const handleSelectTeam = (teamId: string) => {

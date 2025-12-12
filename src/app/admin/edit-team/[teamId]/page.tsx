@@ -1170,7 +1170,7 @@ export default function EditTeamPage() {
                           <div className="text-xs text-slate-400">Nationality</div>
                           <div className="text-white flex items-center gap-1">
                             <span className="text-lg">{flagFromCode(player.nationality)}</span>
-                            <span>{player.nationality}</span>
+                            <span>{nameForCountryCode(player.nationality) || player.nationality}</span>
                           </div>
                         </div>
                       </div>

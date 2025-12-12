@@ -9,7 +9,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { getAdminUser } from "@/lib/adminAuth";
 import type { AdminUser } from "@/types/admin";
 import Image from "next/image";
-import { countries, flagFromCode } from "@/data/countries";
+import { countries, flagFromCode, nameForCountryCode } from "@/data/countries";
 
 type Player = {
   id: string;
@@ -976,17 +976,25 @@ export default function EditTeamPage() {
                 <div className="relative">
                   <label className="block text-xs text-slate-300 mb-1">Nationality</label>
                   <div className="relative">
-                    <input
-                      type="text"
-                      value={nationalitySearch || newPlayerForm.nationality}
-                      onChange={(e) => {
-                        setNationalitySearch(e.target.value);
-                        setShowNationalityDropdown(true);
-                      }}
-                      onFocus={() => setShowNationalityDropdown(true)}
-                      className="w-full rounded border border-white/20 bg-white/5 px-3 py-2 text-white text-sm"
-                      placeholder="Search country..."
-                    />
+                    <div className="flex items-center gap-2 w-full rounded border border-white/20 bg-white/5 px-3 py-2">
+                      {!nationalitySearch && newPlayerForm.nationality && (
+                        <span className="text-lg">{flagFromCode(newPlayerForm.nationality)}</span>
+                      )}
+                      <input
+                        type="text"
+                        value={nationalitySearch || (newPlayerForm.nationality ? nameForCountryCode(newPlayerForm.nationality) || newPlayerForm.nationality : "")}
+                        onChange={(e) => {
+                          setNationalitySearch(e.target.value);
+                          setShowNationalityDropdown(true);
+                        }}
+                        onFocus={() => setShowNationalityDropdown(true)}
+                        onBlur={() => {
+                          setTimeout(() => setShowNationalityDropdown(false), 200);
+                        }}
+                        className="flex-1 bg-transparent text-white text-sm outline-none"
+                        placeholder="Search country..."
+                      />
+                    </div>
                     {showNationalityDropdown && (
                       <div className="absolute z-10 mt-1 w-full max-h-60 overflow-auto rounded border border-white/20 bg-slate-800 shadow-lg">
                         {countries
@@ -1016,17 +1024,25 @@ export default function EditTeamPage() {
                 <div className="relative">
                   <label className="block text-xs text-slate-300 mb-1">Second Nationality</label>
                   <div className="relative">
-                    <input
-                      type="text"
-                      value={nationality2Search || newPlayerForm.nationality2}
-                      onChange={(e) => {
-                        setNationality2Search(e.target.value);
-                        setShowNationality2Dropdown(true);
-                      }}
-                      onFocus={() => setShowNationality2Dropdown(true)}
-                      className="w-full rounded border border-white/20 bg-white/5 px-3 py-2 text-white text-sm"
-                      placeholder="Optional"
-                    />
+                    <div className="flex items-center gap-2 w-full rounded border border-white/20 bg-white/5 px-3 py-2">
+                      {!nationality2Search && newPlayerForm.nationality2 && (
+                        <span className="text-lg">{flagFromCode(newPlayerForm.nationality2)}</span>
+                      )}
+                      <input
+                        type="text"
+                        value={nationality2Search || (newPlayerForm.nationality2 ? nameForCountryCode(newPlayerForm.nationality2) || newPlayerForm.nationality2 : "")}
+                        onChange={(e) => {
+                          setNationality2Search(e.target.value);
+                          setShowNationality2Dropdown(true);
+                        }}
+                        onFocus={() => setShowNationality2Dropdown(true)}
+                        onBlur={() => {
+                          setTimeout(() => setShowNationality2Dropdown(false), 200);
+                        }}
+                        className="flex-1 bg-transparent text-white text-sm outline-none"
+                        placeholder="Optional"
+                      />
+                    </div>
                     {showNationality2Dropdown && (
                       <div className="absolute z-10 mt-1 w-full max-h-60 overflow-auto rounded border border-white/20 bg-slate-800 shadow-lg">
                         {countries

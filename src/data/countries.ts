@@ -252,3 +252,8 @@ export const codeForCountryName = (name: string): string | undefined => {
   );
   return country?.code;
 };
+
+export const nameForCountryCode = (code: string): string | undefined => {
+  const country = countries.find((c) => c.code === code);
+  return country?.name;
+};

@@ -126,10 +126,21 @@ export default function EditTeamPage() {
     headshot: "",
   });
 
+  const [heightCm, setHeightCm] = useState(185); // Default height in cm
+  const [showHeightPicker, setShowHeightPicker] = useState(false);
+
   const [nationalitySearch, setNationalitySearch] = useState("");
   const [showNationalityDropdown, setShowNationalityDropdown] = useState(false);
   const [nationality2Search, setNationality2Search] = useState("");
   const [showNationality2Dropdown, setShowNationality2Dropdown] = useState(false);
+
+  // Convert cm to feet and inches
+  const cmToFeetInches = (cm: number) => {
+    const totalInches = cm / 2.54;
+    const feet = Math.floor(totalInches / 12);
+    const inches = Math.round(totalInches % 12);
+    return { feet, inches };
+  };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(firebaseAuth, async (user) => {
@@ -954,15 +965,55 @@ export default function EditTeamPage() {
                     <option value="Center">Center</option>
                   </select>
                 </div>
-                <div>
+                <div className="relative">
                   <label className="block text-xs text-slate-300 mb-1">Height</label>
-                  <input
-                    type="text"
-                    value={newPlayerForm.height}
-                    onChange={(e) => setNewPlayerForm({ ...newPlayerForm, height: e.target.value })}
-                    className="w-full rounded border border-white/20 bg-white/5 px-3 py-2 text-white text-sm"
-                    placeholder="6'2&quot;"
-                  />
+                  <div
+                    onClick={() => setShowHeightPicker(!showHeightPicker)}
+                    className="w-full rounded border border-white/20 bg-white/5 px-3 py-2 text-white text-sm cursor-pointer flex justify-between items-center"
+                  >
+                    <span>{heightCm} cm</span>
+                    <span className="text-slate-400">
+                      {cmToFeetInches(heightCm).feet}'{cmToFeetInches(heightCm).inches}"
+                    </span>
+                  </div>
+                  
+                  {showHeightPicker && (
+                    <div className="absolute z-10 mt-1 w-full rounded border border-white/20 bg-slate-800 shadow-lg">
+                      <div className="p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-white font-semibold">Select Height</span>
+                          <button
+                            type="button"
+                            onClick={() => setShowHeightPicker(false)}
+                            className="text-slate-400 hover:text-white"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                        <div className="h-48 overflow-y-scroll border border-white/10 rounded bg-white/5 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-transparent">
+                          {Array.from({ length: 101 }, (_, i) => 150 + i).map((cm) => {
+                            const { feet, inches } = cmToFeetInches(cm);
+                            return (
+                              <button
+                                key={cm}
+                                type="button"
+                                onClick={() => {
+                                  setHeightCm(cm);
+                                  setNewPlayerForm({ ...newPlayerForm, height: `${feet}'${inches}"` });
+                                }}
+                                className={`w-full px-4 py-2 text-left hover:bg-white/10 flex justify-between items-center ${
+                                  heightCm === cm ? 'bg-white/20 text-white font-semibold' : 'text-slate-300'
+                                }`}
+                              >
+                                <span>{cm} cm</span>
+                                <span className="text-slate-400">{feet}'{inches}"</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs text-slate-300 mb-1">Date of Birth</label>

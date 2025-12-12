@@ -128,6 +128,7 @@ export default function EditTeamPage() {
 
   const [heightCm, setHeightCm] = useState(185); // Default height in cm
   const [showHeightPicker, setShowHeightPicker] = useState(false);
+  const [showSecondNationality, setShowSecondNationality] = useState(false);
 
   const [nationalitySearch, setNationalitySearch] = useState("");
   const [showNationalityDropdown, setShowNationalityDropdown] = useState(false);
@@ -969,6 +970,10 @@ export default function EditTeamPage() {
                   <label className="block text-xs text-slate-300 mb-1">Height</label>
                   <div
                     onClick={() => setShowHeightPicker(!showHeightPicker)}
+                    onBlur={() => {
+                      setTimeout(() => setShowHeightPicker(false), 200);
+                    }}
+                    tabIndex={0}
                     className="w-full rounded border border-white/20 bg-white/5 px-3 py-2 text-white text-sm cursor-pointer flex justify-between items-center"
                   >
                     <span>{heightCm} cm</span>
@@ -1000,6 +1005,7 @@ export default function EditTeamPage() {
                                 onClick={() => {
                                   setHeightCm(cm);
                                   setNewPlayerForm({ ...newPlayerForm, height: `${feet}'${inches}"` });
+                                  setShowHeightPicker(false);
                                 }}
                                 className={`w-full px-4 py-2 text-left hover:bg-white/10 flex justify-between items-center ${
                                   heightCm === cm ? 'bg-white/20 text-white font-semibold' : 'text-slate-300'
@@ -1072,54 +1078,77 @@ export default function EditTeamPage() {
                     )}
                   </div>
                 </div>
-                <div className="relative">
-                  <label className="block text-xs text-slate-300 mb-1">Second Nationality</label>
-                  <div className="relative">
-                    <div className="flex items-center gap-2 w-full rounded border border-white/20 bg-white/5 px-3 py-2">
-                      {!nationality2Search && newPlayerForm.nationality2 && (
-                        <span className="text-lg">{flagFromCode(newPlayerForm.nationality2)}</span>
-                      )}
-                      <input
-                        type="text"
-                        value={nationality2Search || (newPlayerForm.nationality2 ? nameForCountryCode(newPlayerForm.nationality2) || newPlayerForm.nationality2 : "")}
-                        onChange={(e) => {
-                          setNationality2Search(e.target.value);
-                          setShowNationality2Dropdown(true);
-                        }}
-                        onFocus={() => setShowNationality2Dropdown(true)}
-                        onBlur={() => {
-                          setTimeout(() => setShowNationality2Dropdown(false), 200);
-                        }}
-                        className="flex-1 bg-transparent text-white text-sm outline-none"
-                        placeholder="Optional"
-                      />
-                    </div>
-                    {showNationality2Dropdown && (
-                      <div className="absolute z-10 mt-1 w-full max-h-60 overflow-auto rounded border border-white/20 bg-slate-800 shadow-lg">
-                        {countries
-                          .filter((c) =>
-                            c.name.toLowerCase().includes((nationality2Search || "").toLowerCase()) ||
-                            c.code.toLowerCase().includes((nationality2Search || "").toLowerCase())
-                          )
-                          .map((country) => (
-                            <button
-                              key={country.code}
-                              type="button"
-                              onClick={() => {
-                                setNewPlayerForm({ ...newPlayerForm, nationality2: country.code });
-                                setNationality2Search("");
-                                setShowNationality2Dropdown(false);
-                              }}
-                              className="w-full px-3 py-2 text-left text-sm text-white hover:bg-white/10 flex items-center gap-2"
-                            >
-                              <span className="text-xl">{flagFromCode(country.code)}</span>
-                              <span>{country.name} ({country.code})</span>
-                            </button>
-                          ))}
-                      </div>
-                    )}
+                {!showSecondNationality ? (
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => setShowSecondNationality(true)}
+                      className="w-full rounded border border-dashed border-white/20 bg-white/5 px-3 py-2 text-slate-400 text-sm hover:border-white/40 hover:text-white transition-colors"
+                    >
+                      + Add Second Nationality
+                    </button>
                   </div>
-                </div>
+                ) : (
+                  <div className="relative">
+                    <label className="block text-xs text-slate-300 mb-1">Second Nationality</label>
+                    <div className="relative">
+                      <div className="flex items-center gap-2 w-full rounded border border-white/20 bg-white/5 px-3 py-2">
+                        {!nationality2Search && newPlayerForm.nationality2 && (
+                          <span className="text-lg">{flagFromCode(newPlayerForm.nationality2)}</span>
+                        )}
+                        <input
+                          type="text"
+                          value={nationality2Search || (newPlayerForm.nationality2 ? nameForCountryCode(newPlayerForm.nationality2) || newPlayerForm.nationality2 : "")}
+                          onChange={(e) => {
+                            setNationality2Search(e.target.value);
+                            setShowNationality2Dropdown(true);
+                          }}
+                          onFocus={() => setShowNationality2Dropdown(true)}
+                          onBlur={() => {
+                            setTimeout(() => setShowNationality2Dropdown(false), 200);
+                          }}
+                          className="flex-1 bg-transparent text-white text-sm outline-none"
+                          placeholder="Optional"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowSecondNationality(false);
+                            setNewPlayerForm({ ...newPlayerForm, nationality2: "" });
+                            setNationality2Search("");
+                          }}
+                          className="text-slate-400 hover:text-red-400 text-lg"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                      {showNationality2Dropdown && (
+                        <div className="absolute z-10 mt-1 w-full max-h-60 overflow-auto rounded border border-white/20 bg-slate-800 shadow-lg">
+                          {countries
+                            .filter((c) =>
+                              c.name.toLowerCase().includes((nationality2Search || "").toLowerCase()) ||
+                              c.code.toLowerCase().includes((nationality2Search || "").toLowerCase())
+                            )
+                            .map((country) => (
+                              <button
+                                key={country.code}
+                                type="button"
+                                onClick={() => {
+                                  setNewPlayerForm({ ...newPlayerForm, nationality2: country.code });
+                                  setNationality2Search("");
+                                  setShowNationality2Dropdown(false);
+                                }}
+                                className="w-full px-3 py-2 text-left text-sm text-white hover:bg-white/10 flex items-center gap-2"
+                              >
+                                <span className="text-xl">{flagFromCode(country.code)}</span>
+                                <span>{country.name} ({country.code})</span>
+                              </button>
+                            ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
                 <div>
                   <label className="block text-xs text-slate-300 mb-1">Player License</label>
                   <input
@@ -1133,15 +1162,23 @@ export default function EditTeamPage() {
               </div>
 
               <div className="mb-4">
-                <label className="block text-xs text-slate-300 mb-1">Headshot Photo</label>
+                <label className="block text-xs text-slate-300 mb-2">Headshot Photo</label>
                 <input
                   type="file"
+                  id="headshot-upload"
                   accept="image/*"
                   onChange={(e) => setPlayerHeadshotFile(e.target.files?.[0] || null)}
-                  className="w-full rounded border border-dashed border-white/20 bg-white/5 px-3 py-2 text-slate-300 text-xs"
+                  className="hidden"
                 />
+                <label
+                  htmlFor="headshot-upload"
+                  className="w-32 h-32 flex flex-col items-center justify-center border-2 border-dashed border-white/20 bg-white/5 rounded cursor-pointer hover:border-white/40 hover:bg-white/10 transition-colors"
+                >
+                  <span className="text-4xl mb-2">📷</span>
+                  <span className="text-xs text-slate-400">Upload Photo</span>
+                </label>
                 {playerHeadshotFile && (
-                  <p className="mt-1 text-xs text-emerald-400">✓ {playerHeadshotFile.name}</p>
+                  <p className="mt-2 text-xs text-emerald-400">✓ {playerHeadshotFile.name}</p>
                 )}
               </div>
 

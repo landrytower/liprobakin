@@ -2,6 +2,33 @@ import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { firebaseDB } from "./firebase";
 import type { AuditAction } from "@/types/auditLog";
 
+// Generate unique session ID
+export const generateSessionId = (): string => {
+  return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+};
+
+// Get comprehensive device and browser information
+const getDeviceInfo = () => {
+  const ua = navigator.userAgent;
+  let browser = "Unknown";
+  
+  if (ua.includes("Chrome") && !ua.includes("Edge")) browser = "Chrome";
+  else if (ua.includes("Firefox")) browser = "Firefox";
+  else if (ua.includes("Safari") && !ua.includes("Chrome")) browser = "Safari";
+  else if (ua.includes("Edg")) browser = "Edge";
+  else if (ua.includes("Opera") || ua.includes("OPR")) browser = "Opera";
+
+  return {
+    userAgent: ua,
+    platform: navigator.platform,
+    browser: browser,
+    isMobile: /Mobile|Android|iPhone|iPad/i.test(ua),
+    screenResolution: `${window.screen.width}x${window.screen.height}`,
+    language: navigator.language,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  };
+};
+
 export async function logAuditAction(
   action: AuditAction,
   userId: string,
@@ -12,6 +39,8 @@ export async function logAuditAction(
   details?: Record<string, any>
 ): Promise<void> {
   try {
+    const sessionId = sessionStorage.getItem('sessionId') || generateSessionId();
+    
     await addDoc(collection(firebaseDB, "auditLogs"), {
       action,
       userId,
@@ -20,11 +49,82 @@ export async function logAuditAction(
       targetId: targetId || null,
       targetName: targetName || null,
       details: details || {},
+      sessionId,
+      deviceInfo: getDeviceInfo(),
       timestamp: serverTimestamp(),
     });
   } catch (error) {
     console.error("Failed to log audit action:", error);
     // Don't throw - audit logging should not break the main flow
+  }
+}
+
+// Log user session start
+export async function logSessionStart(userId: string, userEmail: string): Promise<string> {
+  try {
+    const sessionId = generateSessionId();
+    sessionStorage.setItem('sessionId', sessionId);
+    sessionStorage.setItem('sessionStartTime', Date.now().toString());
+    
+    await addDoc(collection(firebaseDB, "userSessions"), {
+      userId,
+      userEmail,
+      sessionId,
+      action: "login",
+      deviceInfo: getDeviceInfo(),
+      startTime: serverTimestamp(),
+      lastActivity: serverTimestamp(),
+      active: true,
+    });
+
+    return sessionId;
+  } catch (error) {
+    console.error("Failed to log session start:", error);
+    return generateSessionId();
+  }
+}
+
+// Log session activity (heartbeat every few minutes)
+export async function logSessionActivity(userId: string, userEmail: string, sessionId: string): Promise<void> {
+  try {
+    const startTime = parseInt(sessionStorage.getItem('sessionStartTime') || Date.now().toString());
+    const sessionDuration = Math.floor((Date.now() - startTime) / 1000); // seconds
+    
+    await addDoc(collection(firebaseDB, "sessionActivity"), {
+      userId,
+      userEmail,
+      sessionId,
+      sessionDuration,
+      deviceInfo: getDeviceInfo(),
+      timestamp: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error("Failed to log session activity:", error);
+  }
+}
+
+// Log session end
+export async function logSessionEnd(userId: string, userEmail: string, sessionId: string): Promise<void> {
+  try {
+    const startTime = parseInt(sessionStorage.getItem('sessionStartTime') || Date.now().toString());
+    const sessionDuration = Math.floor((Date.now() - startTime) / 1000);
+    
+    await addDoc(collection(firebaseDB, "userSessions"), {
+      userId,
+      userEmail,
+      sessionId,
+      action: "logout",
+      deviceInfo: getDeviceInfo(),
+      endTime: serverTimestamp(),
+      sessionDuration: sessionDuration,
+      sessionDurationFormatted: `${Math.floor(sessionDuration / 60)} minutes ${sessionDuration % 60} seconds`,
+      active: false,
+    });
+
+    sessionStorage.removeItem('sessionId');
+    sessionStorage.removeItem('sessionStartTime');
+  } catch (error) {
+    console.error("Failed to log session end:", error);
   }
 }
 

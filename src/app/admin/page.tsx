@@ -41,7 +41,7 @@ import {
   updateAdminProfile,
   updateLastActivity
 } from "@/lib/adminAuth";
-import { logAuditAction, formatAuditLogDisplay } from "@/lib/auditLog";
+import { logAuditAction, formatAuditLogDisplay, logSessionStart, logSessionEnd, logSessionActivity, generateSessionId } from "@/lib/auditLog";
 
 type AdminNewsArticle = {
   id: string;
@@ -862,6 +862,24 @@ export default function AdminPage() {
     return () => unsubscribe();
   }, [currentAdminUser]);
 
+  // Track session activity every 5 minutes
+  useEffect(() => {
+    if (!currentAdminUser) return;
+
+    const sessionId = sessionStorage.getItem('sessionId');
+    if (!sessionId) return;
+
+    // Log activity immediately
+    logSessionActivity(currentAdminUser.id, currentAdminUser.email, sessionId);
+
+    // Set up interval to log activity every 5 minutes
+    const interval = setInterval(() => {
+      logSessionActivity(currentAdminUser.id, currentAdminUser.email, sessionId);
+    }, 5 * 60 * 1000); // 5 minutes
+
+    return () => clearInterval(interval);
+  }, [currentAdminUser]);
+
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -1143,7 +1161,15 @@ export default function AdminPage() {
     setAuthSubmitting(true);
     setAuthError(null);
     try {
-      await signInWithEmailAndPassword(firebaseAuth, authForm.email, authForm.password);
+      const userCredential = await signInWithEmailAndPassword(firebaseAuth, authForm.email, authForm.password);
+      const user = userCredential.user;
+      
+      // Start tracking user session
+      const sessionId = await logSessionStart(user.uid, user.email || authForm.email);
+      console.log("Session started:", sessionId);
+      
+      // Log the login action
+      await logAuditAction("user_login", user.uid, user.email || authForm.email, "admin");
     } catch (error) {
       console.error(error);
       setAuthError("Unable to sign in. Double-check the credentials.");
@@ -1154,6 +1180,17 @@ export default function AdminPage() {
 
   const handleSignOut = async () => {
     try {
+      const user = firebaseAuth.currentUser;
+      if (user) {
+        const sessionId = sessionStorage.getItem('sessionId') || 'unknown';
+        
+        // Log session end
+        await logSessionEnd(user.uid, user.email || '', sessionId);
+        
+        // Log the logout action
+        await logAuditAction("user_logout", user.uid, user.email || '', "admin");
+      }
+      
       await signOut(firebaseAuth);
       setStatus({ type: "info", message: "Signed out. Come back soon." });
     } catch (error) {
@@ -4830,13 +4867,35 @@ export default function AdminPage() {
             </button>
 
             {trafficModuleOpen && (
-              <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl">
+              <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl space-y-6">
+                {/* Session Summary Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4">
+                    <p className="text-xs uppercase tracking-wider text-emerald-400">Active Admins</p>
+                    <p className="text-3xl font-bold text-white mt-2">{adminUsers.filter(u => u.isActive).length}</p>
+                    <p className="text-xs text-slate-400 mt-1">Enabled accounts</p>
+                  </div>
+                  <div className="rounded-xl border border-sky-500/20 bg-sky-500/10 p-4">
+                    <p className="text-xs uppercase tracking-wider text-sky-400">Total Logs</p>
+                    <p className="text-3xl font-bold text-white mt-2">{auditLogs.length}</p>
+                    <p className="text-xs text-slate-400 mt-1">All-time actions</p>
+                  </div>
+                  <div className="rounded-xl border border-purple-500/20 bg-purple-500/10 p-4">
+                    <p className="text-xs uppercase tracking-wider text-purple-400">Device Types</p>
+                    <p className="text-3xl font-bold text-white mt-2">
+                      {auditLogs.filter(l => l.details?.deviceInfo?.isMobile).length}
+                    </p>
+                    <p className="text-xs text-slate-400 mt-1">Mobile sessions</p>
+                  </div>
+                </div>
+
+                {/* Audit Log Section */}
                 <div className="mb-6 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Audit Log</p>
+                    <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Complete Audit Trail</p>
                     <h2 className="text-2xl font-semibold">Admin Activity Monitor</h2>
                     <p className="mt-2 text-sm text-slate-400">
-                      Complete audit trail of all admin actions: teams, players, coaches, games, news, and more.
+                      Every login, modification, deletion, and action tracked with device info, session duration, and timestamps
                     </p>
                   </div>
                   <span className="text-xs uppercase tracking-[0.4em] text-slate-500">
@@ -4848,29 +4907,64 @@ export default function AdminPage() {
                 ) : (
                   <div className="space-y-2 max-h-[600px] overflow-y-auto">
                     {auditLogs.map((log) => {
-                      const actionColor = log.action.includes("deleted") ? "text-rose-400" 
-                        : log.action.includes("created") || log.action.includes("added") ? "text-emerald-400"
+                      const actionColor = log.action.includes("deleted") || log.action.includes("logout") ? "text-rose-400" 
+                        : log.action.includes("created") || log.action.includes("added") || log.action.includes("login") ? "text-emerald-400"
                         : "text-sky-400";
-                      const bgColor = log.action.includes("deleted") ? "bg-rose-500/10 border-rose-500/20" 
-                        : log.action.includes("created") || log.action.includes("added") ? "bg-emerald-500/10 border-emerald-500/20"
+                      const bgColor = log.action.includes("deleted") || log.action.includes("logout") ? "bg-rose-500/10 border-rose-500/20" 
+                        : log.action.includes("created") || log.action.includes("added") || log.action.includes("login") ? "bg-emerald-500/10 border-emerald-500/20"
                         : "bg-sky-500/10 border-sky-500/20";
+                      
+                      const deviceInfo = log.details?.deviceInfo;
+                      const sessionId = log.details?.sessionId;
                       
                       return (
                         <div
                           key={log.id}
-                          className={`flex items-start justify-between gap-3 rounded-lg border ${bgColor} p-3 text-sm`}
+                          className={`flex flex-col gap-2 rounded-lg border ${bgColor} p-3 text-sm`}
                         >
-                          <div className="flex-1 min-w-0">
-                            <p className={`font-medium ${actionColor}`}>
-                              {formatAuditLogDisplay(log)}
-                            </p>
-                            <p className="text-xs text-slate-500 mt-1">
-                              by {log.userEmail.split('@')[0]} · {log.timestamp.toLocaleString()}
-                            </p>
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex-1 min-w-0">
+                              <p className={`font-medium ${actionColor}`}>
+                                {formatAuditLogDisplay(log)}
+                              </p>
+                              <p className="text-xs text-slate-500 mt-1">
+                                by {log.userEmail.split('@')[0]} · {log.timestamp.toLocaleString()}
+                              </p>
+                            </div>
+                            <span className="text-[10px] uppercase tracking-wider text-slate-600 flex-shrink-0">
+                              {log.targetType}
+                            </span>
                           </div>
-                          <span className="text-[10px] uppercase tracking-wider text-slate-600 flex-shrink-0">
-                            {log.targetType}
-                          </span>
+                          
+                          {/* Device and Session Info */}
+                          {deviceInfo && (
+                            <div className="flex flex-wrap gap-2 text-[10px] text-slate-500 pt-2 border-t border-white/5">
+                              <span className="px-2 py-0.5 rounded bg-white/5">
+                                {deviceInfo.browser || 'Unknown Browser'}
+                              </span>
+                              <span className="px-2 py-0.5 rounded bg-white/5">
+                                {deviceInfo.platform || 'Unknown OS'}
+                              </span>
+                              <span className="px-2 py-0.5 rounded bg-white/5">
+                                {deviceInfo.isMobile ? '📱 Mobile' : '💻 Desktop'}
+                              </span>
+                              {deviceInfo.screenResolution && (
+                                <span className="px-2 py-0.5 rounded bg-white/5">
+                                  {deviceInfo.screenResolution}
+                                </span>
+                              )}
+                              {deviceInfo.timezone && (
+                                <span className="px-2 py-0.5 rounded bg-white/5">
+                                  🌍 {deviceInfo.timezone}
+                                </span>
+                              )}
+                              {sessionId && (
+                                <span className="px-2 py-0.5 rounded bg-white/5 font-mono">
+                                  Session: {sessionId.slice(-8)}
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       );
                     })}

@@ -1,4 +1,6 @@
 export type AuditAction =
+  | "user_login"
+  | "user_logout"
   | "team_created"
   | "team_updated"
   | "team_deleted"
@@ -32,7 +34,9 @@ export type AuditAction =
   | "admin_roles_updated"
   | "admin_user_deactivated"
   | "admin_user_reactivated"
-  | "admin_user_deleted";
+  | "admin_user_deleted"
+  | "stats_reset"
+  | "data_exported";
 
 export type AuditLog = {
   id: string;

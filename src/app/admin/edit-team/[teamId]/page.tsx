@@ -1039,9 +1039,13 @@ export default function EditTeamPage() {
                       )}
                       <input
                         type="text"
-                        value={nationalitySearch || (newPlayerForm.nationality ? nameForCountryCode(newPlayerForm.nationality) || newPlayerForm.nationality : "")}
+                        value={nationalitySearch !== "" ? nationalitySearch : (newPlayerForm.nationality ? nameForCountryCode(newPlayerForm.nationality) || newPlayerForm.nationality : "")}
                         onChange={(e) => {
-                          setNationalitySearch(e.target.value);
+                          const value = e.target.value;
+                          setNationalitySearch(value);
+                          if (value === "") {
+                            setNewPlayerForm({ ...newPlayerForm, nationality: "" });
+                          }
                           setShowNationalityDropdown(true);
                         }}
                         onFocus={() => setShowNationalityDropdown(true)}
@@ -1059,6 +1063,12 @@ export default function EditTeamPage() {
                             c.name.toLowerCase().includes((nationalitySearch || "").toLowerCase()) ||
                             c.code.toLowerCase().includes((nationalitySearch || "").toLowerCase())
                           )
+                          .sort((a, b) => {
+                            // Put DRC on top
+                            if (a.code === "CD") return -1;
+                            if (b.code === "CD") return 1;
+                            return 0;
+                          })
                           .map((country) => (
                             <button
                               key={country.code}
@@ -1079,14 +1089,17 @@ export default function EditTeamPage() {
                   </div>
                 </div>
                 {!showSecondNationality ? (
-                  <div>
+                  <div className="flex items-center gap-2">
                     <button
                       type="button"
                       onClick={() => setShowSecondNationality(true)}
-                      className="w-full rounded border border-dashed border-white/20 bg-white/5 px-3 py-2 text-slate-400 text-sm hover:border-white/40 hover:text-white transition-colors"
+                      className="w-5 h-5 rounded border-2 border-white/20 bg-white/5 hover:border-white/40 hover:bg-white/10 transition-colors flex items-center justify-center"
                     >
-                      + Add Second Nationality
+                      <span className="text-xs text-slate-400">+</span>
                     </button>
+                    <label className="text-xs text-slate-400 cursor-pointer" onClick={() => setShowSecondNationality(true)}>
+                      Second Nationality
+                    </label>
                   </div>
                 ) : (
                   <div className="relative">
@@ -1129,6 +1142,12 @@ export default function EditTeamPage() {
                               c.name.toLowerCase().includes((nationality2Search || "").toLowerCase()) ||
                               c.code.toLowerCase().includes((nationality2Search || "").toLowerCase())
                             )
+                            .sort((a, b) => {
+                              // Put DRC on top
+                              if (a.code === "CD") return -1;
+                              if (b.code === "CD") return 1;
+                              return 0;
+                            })
                             .map((country) => (
                               <button
                                 key={country.code}

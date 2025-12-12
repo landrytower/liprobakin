@@ -746,6 +746,21 @@ export default function AdminPage() {
     newPassword: language === 'fr' ? 'Nouveau mot de passe' : 'New Password',
     confirmPassword: language === 'fr' ? 'Confirmer le mot de passe' : 'Confirm Password',
     changing: language === 'fr' ? 'Modification...' : 'Changing...',
+    prev: language === 'fr' ? '← Préc' : '← Prev',
+    next: language === 'fr' ? 'Suiv →' : 'Next →',
+    module: language === 'fr' ? 'MODULE' : 'MODULE',
+    teamAssistant: language === 'fr' ? 'Gestion des équipes' : 'Team Management',
+    teamAssistantDesc: language === 'fr' ? 'Créer des équipes, importer des logos, gérer les effectifs et organiser le répertoire des franchises.' : 'Create teams, upload logos, manage rosters, and organize franchise directory.',
+    teamAssistantUpper: language === 'fr' ? 'GESTION DES ÉQUIPES' : 'TEAM MANAGEMENT',
+    manageFranchises: language === 'fr' ? 'Gérer les équipes et les effectifs' : 'Manage franchises & rosters',
+    manageFranchisesDesc: language === 'fr' ? 'Créez de nouveaux clubs, mettez à jour leur image de marque et gérez les fiches d\'effectifs.' : 'Create new clubs, update their branding, and curate roster cards. Changes sync live in Firestore so the site can pull updated data in real time.',
+    teamFieldsHidden: language === 'fr' ? 'Les champs de création d\'équipe restent masqués jusqu\'à ce que vous choisissiez d\'ajouter une équipe.' : 'Team creation fields stay hidden until you choose to add a franchise.',
+    addTeam: language === 'fr' ? 'AJOUTER UNE ÉQUIPE' : 'ADD TEAM',
+    teamManagement: language === 'fr' ? 'GESTION D\'ÉQUIPE' : 'TEAM MANAGEMENT',
+    teamsSaved: language === 'fr' ? 'sauvegardées · Cliquez sur une équipe pour ouvrir l\'éditeur' : 'saved · Click any team to open the editor',
+    resetAllStatsUpper: language === 'fr' ? '⚠️ RÉINITIALISER TOUTES LES STATS' : '⚠️ RESET ALL STATS',
+    men: language === 'fr' ? 'HOMMES' : 'MEN',
+    women: language === 'fr' ? 'FEMMES' : 'WOMEN',
   };
 
   useEffect(() => {
@@ -3875,10 +3890,10 @@ export default function AdminPage() {
               >
                 <div className="relative z-10 flex items-center justify-between">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Module</p>
-                    <h2 className="mt-2 text-3xl font-bold text-white">Team Assistant</h2>
+                    <p className="text-xs uppercase tracking-[0.4em] text-slate-400">{t.module}</p>
+                    <h2 className="mt-2 text-3xl font-bold text-white">{t.teamAssistant}</h2>
                     <p className="mt-3 text-sm text-slate-300">
-                      Create teams, upload logos, manage rosters, and organize franchise directory.
+                      {t.teamAssistantDesc}
                     </p>
                   </div>
                   <span className="text-2xl text-white">{teamAssistantOpen ? '−' : '+'}</span>
@@ -3903,11 +3918,10 @@ export default function AdminPage() {
 
             <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl">
               <div className="mb-6">
-                <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Team assistant</p>
-                <h2 className="text-2xl font-semibold">Manage franchises & rosters</h2>
+                <p className="text-xs uppercase tracking-[0.4em] text-slate-400">{t.teamAssistantUpper}</p>
+                <h2 className="text-2xl font-semibold">{t.manageFranchises}</h2>
                 <p className="mt-2 text-sm text-slate-400">
-                  Create new clubs, update their branding, and curate roster cards. Changes sync live in Firestore so the site can
-                  pull updated data in real time.
+                  {t.manageFranchisesDesc}
                 </p>
               </div>
               <div className="grid gap-6">
@@ -4075,13 +4089,13 @@ export default function AdminPage() {
                     </form>
                   ) : (
                     <div className="rounded-2xl border border-dashed border-white/10 bg-slate-900/40 p-6 text-center">
-                      <p className="text-sm text-slate-400">Team creation fields stay hidden until you choose to add a franchise.</p>
+                      <p className="text-sm text-slate-400">{t.teamFieldsHidden}</p>
                       <button
                         type="button"
                         onClick={() => setTeamFormExpanded(true)}
                         className="mt-4 rounded-full border border-white/20 px-5 py-2 text-xs uppercase tracking-[0.4em] text-white"
                       >
-                        Add team
+                        {t.addTeam}
                       </button>
                     </div>
                   )}
@@ -4090,21 +4104,23 @@ export default function AdminPage() {
                     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <h3 className="text-sm font-semibold uppercase tracking-[0.3em] text-slate-300">
-                          Team Management
+                          {t.teamManagement}
                         </h3>
                         <p className="text-xs text-slate-500">
-                          {teams.length} saved · Click any team to open the editor
+                          {teams.length} {t.teamsSaved}
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={handleResetAllStats}
-                          disabled={resetSubmitting}
-                          className="rounded-full border border-rose-400/40 bg-rose-500/10 px-3 py-1 text-[10px] uppercase tracking-[0.4em] text-rose-200 transition hover:border-rose-400/60 hover:bg-rose-500/20 disabled:opacity-50"
-                        >
-                          {resetSubmitting ? "Resetting..." : "⚠️ Reset All Stats"}
-                        </button>
+                        {currentAdminUser?.roles.includes('master') && (
+                          <button
+                            type="button"
+                            onClick={handleResetAllStats}
+                            disabled={resetSubmitting}
+                            className="rounded-full border border-rose-400/40 bg-rose-500/10 px-3 py-1 text-[10px] uppercase tracking-[0.4em] text-rose-200 transition hover:border-rose-400/60 hover:bg-rose-500/20 disabled:opacity-50"
+                          >
+                            {resetSubmitting ? t.resetting : t.resetAllStatsUpper}
+                          </button>
+                        )}
                         <button
                           type="button"
                           className={`rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.4em] transition ${teamGenderFilter === "men" ? "bg-white text-black" : "border border-white/30 text-white hover:border-white/60"}`}
@@ -4113,7 +4129,7 @@ export default function AdminPage() {
                             localStorage.setItem('adminTeamGenderFilter', 'men');
                           }}
                         >
-                          Men
+                          {t.men}
                         </button>
                         <button
                           type="button"
@@ -4123,7 +4139,7 @@ export default function AdminPage() {
                             localStorage.setItem('adminTeamGenderFilter', 'women');
                           }}
                         >
-                          Women
+                          {t.women}
                         </button>
                       </div>
                     </div>
@@ -4221,16 +4237,6 @@ export default function AdminPage() {
                                       type="button"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        handleEditTeam(team);
-                                      }}
-                                      className="rounded-full border border-white/20 px-3 py-1 text-[10px] uppercase tracking-[0.4em] text-white hover:border-white/40"
-                                    >
-                                      Edit
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
                                         handleDeleteTeam(team);
                                       }}
                                       className="rounded-full border border-rose-500/40 px-3 py-1 text-[10px] uppercase tracking-[0.4em] text-rose-200 hover:border-rose-400"
@@ -4258,7 +4264,7 @@ export default function AdminPage() {
                               disabled={teamCurrentPage === 1}
                               className="rounded-full border border-white/20 px-4 py-2 text-xs uppercase tracking-wider text-white transition hover:border-white/40 disabled:opacity-30 disabled:cursor-not-allowed"
                             >
-                              ← Prev
+                              {t.prev}
                             </button>
                             <button
                               type="button"
@@ -4266,7 +4272,7 @@ export default function AdminPage() {
                               disabled={teamCurrentPage === totalTeamPages}
                               className="rounded-full border border-white/20 px-4 py-2 text-xs uppercase tracking-wider text-white transition hover:border-white/40 disabled:opacity-30 disabled:cursor-not-allowed"
                             >
-                              Next →
+                              {t.next}
                             </button>
                           </div>
                         </div>

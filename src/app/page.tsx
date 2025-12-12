@@ -228,13 +228,13 @@ const translations = {
       },
       partners: {
         eyebrow: "Partenaires",
-        title: "Partenaires de la Ligue",
-        description: "Organisations soutenant la croissance de Liprobakin.",
+        title: "Partenaires",
+        description: "",
       },
       committee: {
         eyebrow: "Comité",
-        title: "Comité de la Ligue",
-        description: "Leadership guidant l'avenir de Liprobakin.",
+        title: "Comité",
+        description: "",
       },
     },
     metricLabels: {

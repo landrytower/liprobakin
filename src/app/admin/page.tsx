@@ -5160,14 +5160,19 @@ export default function AdminPage() {
                         </label>
                         <label className="space-y-1 text-sm text-slate-300">
                           Venue
-                          <input
-                            type="text"
+                          <select
                             value={gameForm.venue}
                             onChange={(e) => setGameForm((prev) => ({ ...prev, venue: e.target.value }))}
-                            placeholder="Arena name"
-                            className="w-full max-w-full rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-white"
+                            className="w-full max-w-full rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
                             required
-                          />
+                          >
+                            <option value="">-- Select Venue --</option>
+                            {venues.map((venue) => (
+                              <option key={venue.id} value={venue.name}>
+                                {venue.name} ({venue.city})
+                              </option>
+                            ))}
+                          </select>
                         </label>
                       </div>
 

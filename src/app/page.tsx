@@ -1013,7 +1013,7 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [dynamicCommittee]);
 
-  // Auto-rotate news grid on mobile only every 6 seconds
+  // Auto-rotate news grid on mobile only every 15 seconds
   useEffect(() => {
     if (newsArticles.length <= 2) return;
     
@@ -1024,7 +1024,7 @@ export default function Home() {
       if (checkMobile()) {
         setNewsGridStartIndex((prev) => (prev + 1) % newsArticles.length);
       }
-    }, 6000);
+    }, 15000);
     
     return () => clearInterval(interval);
   }, [newsArticles]);

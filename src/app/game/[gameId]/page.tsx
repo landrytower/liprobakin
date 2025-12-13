@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import Image from "next/image";
 import { doc, getDoc } from "firebase/firestore";
 import { firebaseDB } from "@/lib/firebase";
@@ -247,13 +248,13 @@ export default function GameDetailPage() {
             </div>
 
             {/* Score */}
-            <div className="text-center px-6">
-              <div className="flex items-center gap-3">
-                <span className={`text-5xl font-bold ${awayWon ? "text-white" : "text-slate-500"}`}>
+            <div className="text-center px-2 sm:px-6">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <span className={`text-3xl sm:text-5xl font-bold ${awayWon ? "text-white" : "text-slate-500"}`}>
                   {awayScore ?? 0}
                 </span>
-                <span className="text-3xl text-slate-600">-</span>
-                <span className={`text-5xl font-bold ${homeWon ? "text-white" : "text-slate-500"}`}>
+                <span className="text-xl sm:text-3xl text-slate-600">-</span>
+                <span className={`text-3xl sm:text-5xl font-bold ${homeWon ? "text-white" : "text-slate-500"}`}>
                   {homeScore ?? 0}
                 </span>
               </div>
@@ -375,7 +376,25 @@ export default function GameDetailPage() {
                     {awayStats.length > 0 ? (
                       awayStats.map((stat, idx) => (
                         <tr key={idx} className="border-b border-white/5 hover:bg-slate-800/30 transition">
-                          <td className="py-3 px-4 font-medium">{stat.playerName || "Unknown"}</td>
+                          <td className="py-3 px-4 font-medium">
+                            {(() => {
+                              const teamName = stat.teamName || game.awayTeamName;
+                              const playerNumber = stat.jerseyNumber || (stat as any).number || (stat as any).playerNumber;
+                              const playerName = stat.playerName || "Unknown";
+                              
+                              if (teamName && playerNumber) {
+                                return (
+                                  <Link
+                                    href={`/player/${encodeURIComponent(teamName)}/${playerNumber}`}
+                                    className="hover:text-orange-500 transition-colors cursor-pointer"
+                                  >
+                                    {playerName}
+                                  </Link>
+                                );
+                              }
+                              return playerName;
+                            })()}
+                          </td>
                           <td className="text-center py-3 px-3">{stat.pts ?? 0}</td>
                           <td className="text-center py-3 px-3">{stat.reb ?? 0}</td>
                           <td className="text-center py-3 px-3">{stat.ast ?? 0}</td>
@@ -429,7 +448,25 @@ export default function GameDetailPage() {
                     {homeStats.length > 0 ? (
                       homeStats.map((stat, idx) => (
                         <tr key={idx} className="border-b border-white/5 hover:bg-slate-800/30 transition">
-                          <td className="py-3 px-4 font-medium">{stat.playerName || "Unknown"}</td>
+                          <td className="py-3 px-4 font-medium">
+                            {(() => {
+                              const teamName = stat.teamName || game.homeTeamName;
+                              const playerNumber = stat.jerseyNumber || (stat as any).number || (stat as any).playerNumber;
+                              const playerName = stat.playerName || "Unknown";
+                              
+                              if (teamName && playerNumber) {
+                                return (
+                                  <Link
+                                    href={`/player/${encodeURIComponent(teamName)}/${playerNumber}`}
+                                    className="hover:text-orange-500 transition-colors cursor-pointer"
+                                  >
+                                    {playerName}
+                                  </Link>
+                                );
+                              }
+                              return playerName;
+                            })()}
+                          </td>
                           <td className="text-center py-3 px-3">{stat.pts ?? 0}</td>
                           <td className="text-center py-3 px-3">{stat.reb ?? 0}</td>
                           <td className="text-center py-3 px-3">{stat.ast ?? 0}</td>

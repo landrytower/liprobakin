@@ -307,9 +307,11 @@ export default function PlayerProfilePage() {
                   {player.nationality && (
                     <div className="flex-1 min-w-[110px] rounded-xl border border-white/20 bg-black/20 p-2.5 sm:p-4">
                       <p className="mb-1 text-[10px] uppercase tracking-wider text-blue-200 sm:text-xs">Nationality</p>
-                      <p className="text-xs font-semibold text-white sm:text-base truncate flex items-center gap-1.5">
-                        <span className="text-base sm:text-xl">{flagFromCode(player.nationality)}</span>
-                        {nameForCountryCode(player.nationality) || player.nationality}
+                      <p className="text-xs font-semibold text-white sm:text-base flex items-center gap-2">
+                        <span className="text-2xl sm:text-3xl flex-shrink-0" style={{ fontFamily: 'Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif' }}>
+                          {flagFromCode(player.nationality)}
+                        </span>
+                        <span className="truncate">{nameForCountryCode(player.nationality) || player.nationality}</span>
                       </p>
                     </div>
                   )}

@@ -345,7 +345,7 @@ const MatchupTeam = ({ team, record, logo, allFranchises }: { team: string; reco
     .toUpperCase();
 
   return (
-    <div className="flex flex-col items-center gap-1 md:gap-2 text-center min-w-0">
+    <Link href={`/team/${encodeURIComponent(displayName)}`} className="flex flex-col items-center gap-1 md:gap-2 text-center min-w-0 transition hover:opacity-80">
       {teamLogo ? (
         <Image
           src={teamLogo}
@@ -360,15 +360,10 @@ const MatchupTeam = ({ team, record, logo, allFranchises }: { team: string; reco
         </span>
       )}
       <div className="min-w-0 w-full">
-        <p className="text-[10px] md:text-sm font-semibold text-white truncate">{displayName}</p>
+        <p className="text-xs md:text-base font-semibold text-white truncate">{displayName}</p>
         <p className="text-[8px] md:text-[10px] text-slate-400">{record}</p>
       </div>
-      <div className="flex w-10 md:w-16 gap-1 flex-shrink-0">
-        {colors.map((color) => (
-          <span key={`${team}-${color}`} className="h-0.5 flex-1 rounded-full" style={{ backgroundColor: color }} />
-        ))}
-      </div>
-    </div>
+    </Link>
   );
 };
 
@@ -636,6 +631,7 @@ export default function Home() {
   const [featuredArticleId, setFeaturedArticleId] = useState<string | null>(null);
   const [expandedArticleId, setExpandedArticleId] = useState<string | null>(null);
   const [newsGridStartIndex, setNewsGridStartIndex] = useState(0);
+  const [isArticleChanging, setIsArticleChanging] = useState(false);
   const [dynamicStandings, setDynamicStandings] = useState<any[]>([]);
   const [currentPartnerIndex, setCurrentPartnerIndex] = useState(0);
   const [currentCommitteeIndex, setCurrentCommitteeIndex] = useState(0);
@@ -908,17 +904,24 @@ export default function Home() {
       setNewsArticles(prev => {
         if (prev.length === 0) return prev;
         
+        // Trigger fade out
+        setIsArticleChanging(true);
+        
         // Find current featured index
         const currentIndex = prev.findIndex(article => article.id === featuredArticleId);
         // Get next article (wrap around to start)
         const nextIndex = (currentIndex + 1) % prev.length;
         
-        // Set next article as featured
-        setFeaturedArticleId(prev[nextIndex].id);
+        // Wait for fade out, then change article
+        setTimeout(() => {
+          setFeaturedArticleId(prev[nextIndex].id);
+          // Fade back in
+          setTimeout(() => setIsArticleChanging(false), 50);
+        }, 300);
         
         return prev;
       });
-    }, 10000); // 10 seconds
+    }, 15000); // 15 seconds
     
     return () => clearInterval(interval);
   }, [newsArticles, featuredArticleId, expandedArticleId]);
@@ -945,12 +948,17 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [dynamicCommittee]);
 
-  // Auto-rotate news grid on mobile every 6 seconds
+  // Auto-rotate news grid on mobile only every 6 seconds
   useEffect(() => {
     if (newsArticles.length <= 2) return;
     
+    // Only rotate on mobile (< 640px)
+    const checkMobile = () => window.innerWidth < 640;
+    
     const interval = setInterval(() => {
-      setNewsGridStartIndex((prev) => (prev + 1) % newsArticles.length);
+      if (checkMobile()) {
+        setNewsGridStartIndex((prev) => (prev + 1) % newsArticles.length);
+      }
     }, 6000);
     
     return () => clearInterval(interval);
@@ -1393,7 +1401,7 @@ export default function Home() {
 
       {/* News Section */}
       {newsArticles.length > 0 && featuredArticleId && (
-        <section className="mx-auto max-w-7xl px-4 md:px-8">
+        <section className="w-full">
           {(() => {
             const featured = newsArticles.find((article) => article.id === featuredArticleId);
             if (!featured) return null;
@@ -1403,7 +1411,7 @@ export default function Home() {
             return (
               <div className="space-y-8">
                 {/* Featured Article */}
-                <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900/80 to-slate-950/90">
+                <div className={`relative overflow-hidden border-y border-white/10 bg-gradient-to-br from-slate-900/80 to-slate-950/90 transition-opacity duration-300 ${isArticleChanging ? 'opacity-0' : 'opacity-100'}`}>
                   {featured.imageUrl && (
                     <div className={`relative overflow-hidden transition-all duration-500 ${isExpanded ? 'min-h-[600px]' : 'h-[600px]'}`}>
                       <Image
@@ -1415,73 +1423,51 @@ export default function Home() {
                       />
                       <div className="absolute inset-0 bg-gradient-to-b from-slate-950/80 via-slate-950/40 to-slate-950" />
                       
-                      {/* Title and Headline on top of image */}
-                      <div className={`absolute inset-0 flex flex-col p-8 md:p-16 ${isExpanded ? 'relative' : 'justify-between'}`}>
-                        <div>
-                          <span className="mb-2 inline-block w-fit rounded-full bg-orange-600 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-white">
-                            {featured.category}
-                          </span>
-                          
-                          <h1 className="mb-2 text-2xl font-bold leading-tight text-white md:text-3xl lg:text-4xl max-w-4xl">
-                            {featured.title}
-                          </h1>
-                          
-                          <p className="mb-2 text-sm md:text-base text-slate-200 max-w-3xl">
-                            {featured.headline}
-                          </p>
-                          
-                          {featured.createdAt && (
-                            <p className="mb-4 text-xs text-slate-300">
-                              {formatTimeAgo(featured.createdAt)}
-                            </p>
-                          )}
-                          
-                          <button
-                            onClick={() => setExpandedArticleId(isExpanded ? null : featured.id)}
-                            className="flex items-center gap-2 rounded-xl border border-white/20 bg-white/5 px-6 py-3 text-sm font-semibold uppercase tracking-wider text-white transition hover:border-orange-500 hover:bg-orange-600 w-fit"
-                          >
-                            {isExpanded ? "Fermer" : "Voir l'article »"}
-                          </button>
-                          
-                          {/* Expandable Article Content - Below button with slide up animation */}
-                          <div
-                            className={`transition-all duration-500 ease-in-out -mx-8 md:-mx-16 overflow-visible ${
-                              isExpanded ? "max-h-[3000px] opacity-100 mt-6" : "max-h-0 opacity-0 mt-0"
-                            }`}
-                          >
-                            <div className="bg-slate-950/95 backdrop-blur-sm p-6 md:p-8 border-y border-white/10 w-full">
-                              <p className="text-base leading-relaxed text-slate-200 whitespace-pre-line">
-                                {featured.summary}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                        
-                        {/* Article Grid - Below button, hidden when expanded */}
-                        {newsArticles.length > 0 && !isExpanded && (
-                          <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 pb-16 mt-6 max-w-4xl mx-auto">
+                      {/* Article Grid - Fixed position above title */}
+                      {newsArticles.length > 0 && !isExpanded && (
+                        <div className="absolute left-0 right-0 px-8 md:px-16 z-30" style={{bottom: 'calc(1.25rem - 3%)'}}>
+
+
+                          <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 max-w-4xl mx-auto">
                             {(() => {
                               // On mobile (< 640px): show 2 articles with rotation
-                              // On larger screens: show 3 articles
+                              // On desktop (>= 640px): show first 3 articles, no rotation
+                              const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
                               const articlesToShow = 3;
                               const gridArticles = [];
                               
-                              for (let i = 0; i < articlesToShow; i++) {
-                                const index = (newsGridStartIndex + i) % newsArticles.length;
-                                gridArticles.push(newsArticles[index]);
+                              if (isMobile) {
+                                // Mobile: rotate through articles
+                                for (let i = 0; i < articlesToShow; i++) {
+                                  const index = (newsGridStartIndex + i) % newsArticles.length;
+                                  gridArticles.push(newsArticles[index]);
+                                }
+                              } else {
+                                // Desktop: always show first 3 articles
+                                for (let i = 0; i < Math.min(articlesToShow, newsArticles.length); i++) {
+                                  gridArticles.push(newsArticles[i]);
+                                }
                               }
                               
                               return gridArticles.map((article, index) => (
                                 <button
-                                  key={`${article.id}-${index}`}
+                                  key={article.id}
                                   onClick={() => {
-                                    setFeaturedArticleId(article.id);
-                                    setExpandedArticleId(null);
-                                    window.scrollTo({ top: 0, behavior: "smooth" });
+                                    setIsArticleChanging(true);
+                                    setTimeout(() => {
+                                      setFeaturedArticleId(article.id);
+                                      setExpandedArticleId(null);
+                                      setIsArticleChanging(false);
+                                      // Scroll to news section
+                                      const newsSection = document.querySelector('section');
+                                      if (newsSection) {
+                                        newsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                      }
+                                    }, 300);
                                   }}
-                                  className={`group relative overflow-hidden rounded-xl border text-left transition hover:border-orange-500 hover:bg-slate-900/80 ${
+                                  className={`group relative overflow-hidden rounded-xl border text-left transition-all duration-300 hover:border-orange-500 hover:bg-slate-900/80 ${
                                     article.id === featured.id 
-                                      ? 'border-orange-500 bg-slate-900/80' 
+                                      ? 'border-orange-500 bg-slate-900/80 ring-2 ring-orange-500/50' 
                                       : 'border-white/10 bg-slate-900/60'
                                   } ${index === 2 ? 'hidden sm:block' : ''}`}
                               >
@@ -1523,7 +1509,62 @@ export default function Home() {
                               ));
                             })()}
                           </div>
-                        )}
+                        </div>
+                      )}
+
+                      {/* Title and Headline on top of image */}
+                      <div className={`absolute inset-0 flex flex-col p-8 md:p-16 ${isExpanded ? 'relative' : 'justify-start'} z-10 pointer-events-none`}>
+                        <div className="pointer-events-auto">
+                        <div>
+                          <span className="mb-2 inline-block w-fit rounded-full bg-orange-600 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-white">
+                            {featured.category}
+                          </span>
+                          
+                          <h1 className="mb-2 text-2xl font-bold leading-tight text-white md:text-3xl lg:text-4xl max-w-4xl line-clamp-2">
+                            {featured.title}
+                          </h1>
+                          
+                          <p className="mb-2 text-sm md:text-base text-slate-200 max-w-3xl line-clamp-2">
+                            {featured.headline}
+                          </p>
+                          
+                          {featured.createdAt && (
+                            <p className="mb-4 text-xs text-slate-300">
+                              {formatTimeAgo(featured.createdAt)}
+                            </p>
+                          )}
+                          
+                          <button
+                            onClick={() => setExpandedArticleId(isExpanded ? null : featured.id)}
+                            className="flex items-center gap-2 rounded-xl border border-white/20 bg-white/5 px-6 py-3 text-sm font-semibold uppercase tracking-wider text-white transition hover:border-orange-500 hover:bg-orange-600 w-fit"
+                          >
+                            {isExpanded ? "Fermer" : "Voir l'article »"}
+                          </button>
+                        </div>
+                          
+                          {/* Expandable Article Content - Below button with slide up animation */}
+                          <div
+                            className={`transition-all duration-500 ease-in-out -mx-10 md:-mx-20 overflow-visible ${
+                              isExpanded ? "max-h-[3150px] opacity-100 mt-6" : "max-h-0 opacity-0 mt-0"
+                            }`}
+                          >
+                            <div className="bg-slate-950/95 backdrop-blur-sm p-6 md:p-8 border-y border-white/10 w-full">
+                              <p className="text-base leading-relaxed text-slate-200 whitespace-pre-line">
+                                {featured.summary}
+                              </p>
+                            </div>
+                            {isExpanded && (
+                              <div className="flex justify-center mt-4">
+                                <button
+                                  onClick={() => setExpandedArticleId(null)}
+                                  className="rounded-xl border border-white/20 bg-white/5 px-6 py-3 text-sm font-semibold uppercase tracking-wider text-white transition hover:border-orange-500 hover:bg-orange-600"
+                                >
+                                  Fermer
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -1560,12 +1601,12 @@ export default function Home() {
                       allFranchises={allFranchises}
                     />
                     <div className="flex flex-col items-center justify-center gap-1.5 md:gap-2 text-center min-w-0 px-1">
-                      <span className="rounded-full border border-white/15 px-2 md:px-3 py-0.5 text-[10px] md:text-xs font-semibold uppercase tracking-[0.2em] md:tracking-[0.3em] text-slate-300 whitespace-nowrap">
+                      <span className="rounded-full border border-white/15 px-2 md:px-2.5 py-0.5 text-[9px] md:text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-300 whitespace-nowrap">
                         {matchup.gender === "men" ? "Men" : matchup.gender === "women" ? "Women" : matchup.status}
                       </span>
                       <div className="min-w-0 w-full">
-                        <p className="text-sm md:text-base font-semibold text-white truncate">{matchup.tipoff}</p>
-                        <p className="text-xs md:text-sm text-slate-300 truncate">{matchup.venue}</p>
+                        <p className="text-xs md:text-sm font-semibold text-white truncate">{matchup.tipoff}</p>
+                        <p className="text-[10px] md:text-xs text-slate-300 truncate">{matchup.venue}</p>
                         {(matchup.refereeHomeTeam1 || matchup.refereeHomeTeam2 || matchup.refereeAwayTeam) && (
                           <p className="mt-0.5 md:mt-1 text-[10px] md:text-xs text-slate-400 truncate">
                             Refs: {[matchup.refereeHomeTeam1, matchup.refereeHomeTeam2, matchup.refereeAwayTeam].filter(Boolean).join(", ")}
@@ -1789,7 +1830,7 @@ export default function Home() {
             eyebrow={sectionCopy.players.eyebrow}
             title={sectionCopy.players.title}
           />
-          <div className="rounded-3xl border border-white/10 bg-slate-950/80 p-6">
+          <div className="rounded-3xl border border-white/10 bg-slate-950/80 p-6 overflow-hidden">
             <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
               <p className="text-xs uppercase tracking-[0.4em] text-slate-400">League Leaderboard</p>
               <div className="flex flex-wrap gap-2">
@@ -1809,7 +1850,7 @@ export default function Home() {
                 ))}
               </div>
             </div>
-            <div className="mt-6 space-y-3">
+            <div className="mt-6 flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
               {[...leagueTopPlayers]
                 .sort((a, b) => {
                   const statA = playerMetric === "pts" ? a.stats.pts
@@ -1824,9 +1865,8 @@ export default function Home() {
                     : b.stats.stl;
                   return statB - statA;
                 })
-                .slice(0, leagueLeadersExpanded ? 10 : 3)
+                .slice(0, leagueLeadersExpanded ? 10 : 10)
                 .map((player, index) => {
-                const isLeader = index === 0;
                 const playerName = `${player.firstName} ${player.lastName}`.trim();
                 const playerImage = player.headshot || player.teamLogo || "/logos/liprobakin.png";
                 const statValue = playerMetric === "pts" ? player.stats.pts
@@ -1835,61 +1875,51 @@ export default function Home() {
                   : playerMetric === "blk" ? player.stats.blk
                   : player.stats.stl;
                 return (
-                  <button
+                  <div
                     key={`${player.id}-${playerMetric}`}
-                    type="button"
-                    onClick={() => {}}
-                    className={`flex w-full flex-col gap-3 rounded-3xl border text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 sm:flex-row sm:items-center sm:justify-between overflow-hidden ${
-                      isLeader
-                        ? "border-white/40 bg-gradient-to-r from-sky-500/20 to-indigo-500/10 px-7 py-5 shadow-lg shadow-sky-500/20"
-                        : "border-white/10 bg-slate-900/60 px-5 py-3 hover:border-white/50"
-                    }`}
+                    className="flex-shrink-0 w-[280px] snap-start rounded-3xl border border-white/10 bg-slate-900/60 overflow-hidden hover:border-white/30 transition"
                   >
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <span className={`font-semibold flex-shrink-0 ${isLeader ? "text-base text-white" : "text-sm text-slate-400"}`}>
-                        {String(index + 1).padStart(2, "0")}
+                    <div className="p-6 flex flex-col items-center text-center">
+                      <span className="text-lg font-bold text-slate-300 mb-3">
+                        #{String(index + 1).padStart(2, "0")}
                       </span>
-                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                        <Image
-                          src={playerImage}
-                          alt={`${player.name} portrait`}
-                          width={isLeader ? 61 : 48}
-                          height={isLeader ? 61 : 48}
-                          className="rounded-full border border-white/10 object-cover flex-shrink-0"
-                          style={{
-                            width: isLeader ? 61 : 48,
-                            height: isLeader ? 61 : 48,
-                          }}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs uppercase tracking-[0.3em] text-slate-400 truncate">
-                            #{player.number} · {player.teamName}
-                          </p>
-                          <p className={`${isLeader ? "text-xl" : "text-base"} font-semibold text-white truncate`}>
-                            {playerName}
-                          </p>
+                      <Image
+                        src={playerImage}
+                        alt={`${player.name} portrait`}
+                        width={180}
+                        height={180}
+                        className="rounded-full border-4 border-white/10 object-cover mb-4"
+                        style={{
+                          width: 180,
+                          height: 180,
+                        }}
+                      />
+                      <p className="text-xs uppercase tracking-[0.3em] text-slate-400 mb-1">
+                        #{player.number} · {player.teamName}
+                      </p>
+                      <p className="text-xl font-bold text-white mb-4">
+                        {playerName}
+                      </p>
+                      <div className="grid grid-cols-4 gap-3 w-full">
+                        <div>
+                          <p className="text-[10px] uppercase text-slate-400">PTS</p>
+                          <p className="text-lg font-bold text-white">{player.stats.pts}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] uppercase text-slate-400">REB</p>
+                          <p className="text-lg font-bold text-white">{player.stats.reb}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] uppercase text-slate-400">AST</p>
+                          <p className="text-lg font-bold text-white">{player.stats.ast}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] uppercase text-slate-400">BLK</p>
+                          <p className="text-lg font-bold text-white">{player.stats.blk}</p>
                         </div>
                       </div>
                     </div>
-                    <div className="flex gap-2 sm:gap-3 flex-shrink-0">
-                      <div className="text-center min-w-[40px]">
-                        <p className="text-xs text-slate-400">PTS</p>
-                        <p className={`${isLeader ? "text-xl" : "text-base"} font-bold text-white`}>{player.stats.pts}</p>
-                      </div>
-                      <div className="text-center min-w-[40px]">
-                        <p className="text-xs text-slate-400">REB</p>
-                        <p className={`${isLeader ? "text-xl" : "text-base"} font-bold text-white`}>{player.stats.reb}</p>
-                      </div>
-                      <div className="text-center min-w-[40px]">
-                        <p className="text-xs text-slate-400">AST</p>
-                        <p className={`${isLeader ? "text-xl" : "text-base"} font-bold text-white`}>{player.stats.ast}</p>
-                      </div>
-                      <div className="text-center min-w-[40px]">
-                        <p className="text-xs text-slate-400">BLK</p>
-                        <p className={`${isLeader ? "text-xl" : "text-base"} font-bold text-white`}>{player.stats.blk}</p>
-                      </div>
-                    </div>
-                  </button>
+                  </div>
                 );
               })}
             </div>
@@ -1914,9 +1944,9 @@ export default function Home() {
             title={sectionCopy.standings.title}
           />
           <div className="overflow-hidden rounded-2xl border border-white/5">
-            <div className="max-sm:overflow-x-auto max-h-[320px] overflow-y-auto">
-            <table className="w-full border-collapse text-left text-xs">
-              <thead className="sticky top-0 bg-slate-950 text-xs uppercase tracking-[0.3em] text-slate-300 border-b border-white/5">
+            <div className="max-sm:overflow-x-auto max-h-[280px] overflow-y-auto">
+            <table className="w-full border-collapse text-left text-sm">
+              <thead className="sticky top-0 bg-slate-950 text-sm uppercase tracking-[0.3em] text-slate-300 border-b border-white/5">
                 <tr>
                   <th className="px-3 py-2">Seed</th>
                   <th className="px-3 py-2">Team</th>

@@ -321,9 +321,9 @@ const LeaderRow = ({ leader, allFranchises }: { leader: FeaturedMatchup["leaders
           </span>
         )}
         <div className="min-w-0 overflow-hidden">
-          <p className="text-[9px] uppercase tracking-[0.3em] text-slate-400 truncate">{leader.team}</p>
-          <p className="text-xs font-semibold text-white truncate">{displayName}</p>
-          <p className="text-[9px] text-slate-400 truncate">{leader.stats}</p>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-slate-400 truncate">{leader.team}</p>
+          <p className="text-sm font-semibold text-white truncate">{displayName}</p>
+          <p className="text-[10px] text-slate-400 truncate">{leader.stats}</p>
         </div>
       </div>
     </div>
@@ -1118,10 +1118,14 @@ export default function Home() {
               });
               
               if (topPlayer) {
+                const pts = topPlayer.stats?.pts || 0;
+                const reb = topPlayer.stats?.reb || 0;
+                const ast = topPlayer.stats?.ast || 0;
+                const secondStat = reb >= ast ? `${reb} REB` : `${ast} AST`;
                 return {
                   player: `${topPlayer.firstName || ""} ${topPlayer.lastName || ""}`.trim() || "Unknown",
                   team: teamName,
-                  stats: `${topPlayer.stats?.pts || 0} PTS · ${topPlayer.stats?.reb || 0} REB · ${topPlayer.stats?.stl || 0} STL`,
+                  stats: `${pts} PTS · ${secondStat}`,
                 };
               }
             } else {
@@ -1134,10 +1138,14 @@ export default function Home() {
               
               if (sortedPlayers.length > 0) {
                 const firstPlayer = sortedPlayers[0];
+                const pts = firstPlayer.stats?.pts || 0;
+                const reb = firstPlayer.stats?.reb || 0;
+                const ast = firstPlayer.stats?.ast || 0;
+                const secondStat = reb >= ast ? `${reb} REB` : `${ast} AST`;
                 return {
                   player: `${firstPlayer.firstName || ""} ${firstPlayer.lastName || ""}`.trim() || "Unknown",
                   team: teamName,
-                  stats: `${firstPlayer.stats?.pts || 0} PTS · ${firstPlayer.stats?.reb || 0} REB · ${firstPlayer.stats?.stl || 0} STL`,
+                  stats: `${pts} PTS · ${secondStat}`,
                 };
               }
             }
@@ -1552,14 +1560,14 @@ export default function Home() {
                       allFranchises={allFranchises}
                     />
                     <div className="flex flex-col items-center justify-center gap-1.5 md:gap-2 text-center min-w-0 px-1">
-                      <span className="rounded-full border border-white/15 px-2 md:px-3 py-0.5 text-[9px] md:text-[10px] font-semibold uppercase tracking-[0.2em] md:tracking-[0.3em] text-slate-300 whitespace-nowrap">
+                      <span className="rounded-full border border-white/15 px-2 md:px-3 py-0.5 text-[10px] md:text-xs font-semibold uppercase tracking-[0.2em] md:tracking-[0.3em] text-slate-300 whitespace-nowrap">
                         {matchup.gender === "men" ? "Men" : matchup.gender === "women" ? "Women" : matchup.status}
                       </span>
                       <div className="min-w-0 w-full">
-                        <p className="text-xs md:text-sm font-semibold text-white truncate">{matchup.tipoff}</p>
-                        <p className="text-[10px] md:text-xs text-slate-300 truncate">{matchup.venue}</p>
+                        <p className="text-sm md:text-base font-semibold text-white truncate">{matchup.tipoff}</p>
+                        <p className="text-xs md:text-sm text-slate-300 truncate">{matchup.venue}</p>
                         {(matchup.refereeHomeTeam1 || matchup.refereeHomeTeam2 || matchup.refereeAwayTeam) && (
-                          <p className="mt-0.5 md:mt-1 text-[9px] md:text-[10px] text-slate-400 truncate">
+                          <p className="mt-0.5 md:mt-1 text-[10px] md:text-xs text-slate-400 truncate">
                             Refs: {[matchup.refereeHomeTeam1, matchup.refereeHomeTeam2, matchup.refereeAwayTeam].filter(Boolean).join(", ")}
                           </p>
                         )}

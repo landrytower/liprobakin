@@ -211,6 +211,7 @@ export default function EditTeamPage() {
             color1: teamData.colors?.[0] || "",
             color2: teamData.colors?.[1] || "",
             logo: teamData.logo || "",
+            venue: teamData.venue || "",
           });
         }
       }

@@ -1,0 +1,86 @@
+[debug] [2025-12-13T16:29:33.974Z] ----------------------------------------------------------------------
+[debug] [2025-12-13T16:29:33.976Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\bobiy\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js deploy --only hosting
+[debug] [2025-12-13T16:29:33.977Z] CLI Version:   14.27.0
+[debug] [2025-12-13T16:29:33.977Z] Platform:      win32
+[debug] [2025-12-13T16:29:33.977Z] Node Version:  v22.15.0
+[debug] [2025-12-13T16:29:33.977Z] Time:          Sat Dec 13 2025 11:29:33 GMT-0500 (Eastern Standard Time)
+[debug] [2025-12-13T16:29:33.977Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2025-12-13T16:29:34.171Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2025-12-13T16:29:34.171Z] > authorizing via signed-in user (bobiyatch@gmail.com)
+[debug] [2025-12-13T16:29:34.171Z] [iam] checking project ppop-35930 for permissions ["firebase.projects.get","firebasehosting.sites.update"]
+[debug] [2025-12-13T16:29:34.172Z] Checked if tokens are valid: false, expires at: 1765642579599
+[debug] [2025-12-13T16:29:34.172Z] Checked if tokens are valid: false, expires at: 1765642579599
+[debug] [2025-12-13T16:29:34.173Z] > refreshing access token with scopes: []
+[debug] [2025-12-13T16:29:34.174Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2025-12-13T16:29:34.174Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2025-12-13T16:29:34.394Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
+[debug] [2025-12-13T16:29:34.394Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2025-12-13T16:29:34.401Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/ppop-35930:testIamPermissions [none]
+[debug] [2025-12-13T16:29:34.401Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/ppop-35930:testIamPermissions x-goog-quota-user=projects/ppop-35930
+[debug] [2025-12-13T16:29:34.401Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/ppop-35930:testIamPermissions {"permissions":["firebase.projects.get","firebasehosting.sites.update"]}
+[debug] [2025-12-13T16:29:34.656Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/ppop-35930:testIamPermissions 200
+[debug] [2025-12-13T16:29:34.656Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/ppop-35930:testIamPermissions {"permissions":["firebase.projects.get","firebasehosting.sites.update"]}
+[debug] [2025-12-13T16:29:34.657Z] Checked if tokens are valid: true, expires at: 1765646973394
+[debug] [2025-12-13T16:29:34.657Z] Checked if tokens are valid: true, expires at: 1765646973394
+[debug] [2025-12-13T16:29:34.657Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/ppop-35930 [none]
+[debug] [2025-12-13T16:29:35.035Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/ppop-35930 200
+[debug] [2025-12-13T16:29:35.035Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/ppop-35930 {"projectId":"ppop-35930","projectNumber":"478592036466","displayName":"liprobakin1","name":"projects/ppop-35930","resources":{"hostingSite":"ppop-35930","realtimeDatabaseInstance":"ppop-35930-default-rtdb"},"state":"ACTIVE","etag":"1_5f0f7dae-5922-423d-a863-7cf260725e03"}
+[debug] [2025-12-13T16:29:37.667Z] defaultcredentials: writing to file C:\Users\bobiy\AppData\Roaming\firebase\bobiyatch_gmail_com_application_default_credentials.json
+[debug] [2025-12-13T16:29:37.668Z] Checked if tokens are valid: true, expires at: 1765646973394
+[debug] [2025-12-13T16:29:37.668Z] Checked if tokens are valid: true, expires at: 1765646973394
+[debug] [2025-12-13T16:29:37.668Z] >>> [apiv2][query] GET https://firebasehosting.googleapis.com/v1beta1/projects/ppop-35930/sites pageToken=&pageSize=10
+[debug] [2025-12-13T16:29:38.141Z] <<< [apiv2][status] GET https://firebasehosting.googleapis.com/v1beta1/projects/ppop-35930/sites 200
+[debug] [2025-12-13T16:29:38.142Z] <<< [apiv2][body] GET https://firebasehosting.googleapis.com/v1beta1/projects/ppop-35930/sites {"sites":[{"name":"projects/ppop-35930/sites/ppop-35930","defaultUrl":"https://ppop-35930.web.app","appId":"1:478592036466:web:f149e594436026717adceb","type":"DEFAULT_SITE"}]}
+[debug] [2025-12-13T16:29:38.143Z] Checked if tokens are valid: true, expires at: 1765646973394
+[debug] [2025-12-13T16:29:38.143Z] Checked if tokens are valid: true, expires at: 1765646973394
+[debug] [2025-12-13T16:29:38.143Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/-/webApps/1:478592036466:web:f149e594436026717adceb/config [none]
+[debug] [2025-12-13T16:29:38.566Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/-/webApps/1:478592036466:web:f149e594436026717adceb/config 200
+[debug] [2025-12-13T16:29:38.566Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/-/webApps/1:478592036466:web:f149e594436026717adceb/config {"projectId":"ppop-35930","appId":"1:478592036466:web:f149e594436026717adceb","databaseURL":"https://ppop-35930-default-rtdb.firebaseio.com","storageBucket":"ppop-35930.firebasestorage.app","apiKey":"AIzaSyApCmWDWPfmBwVAOvNAu3_CSVCqGycN5OE","authDomain":"ppop-35930.firebaseapp.com","messagingSenderId":"478592036466","measurementId":"G-YJY5T6TD8E","projectNumber":"478592036466","version":"2"}
+[info] 
+   Thank you for trying our early preview of Next.js support on Firebase Hosting.
+   During the preview, support is best-effort and breaking changes can be expected. Proceed with caution.
+   The integration is known to work with Next.js version 12 - 15.0. You may encounter errors.
+
+   Documentation: https://firebase.google.com/docs/hosting/frameworks/nextjs
+   File a bug: https://github.com/firebase/firebase-tools/issues/new?template=bug_report.md
+   Submit a feature request: https://github.com/firebase/firebase-tools/issues/new?template=feature_request.md
+
+   We'd love to learn from you. Express your interest in helping us shape the future of Firebase Hosting: https://goo.gle/41enW5X
+
+[debug] [2025-12-13T16:29:45.208Z] Checked if tokens are valid: true, expires at: 1765646973394
+[debug] [2025-12-13T16:29:45.208Z] Checked if tokens are valid: true, expires at: 1765646973394
+[debug] [2025-12-13T16:29:45.208Z] >>> [apiv2][query] GET https://firebasehosting.googleapis.com/v1beta1/projects/ppop-35930/sites/ppop-35930 [none]
+[debug] [2025-12-13T16:29:45.638Z] <<< [apiv2][status] GET https://firebasehosting.googleapis.com/v1beta1/projects/ppop-35930/sites/ppop-35930 200
+[debug] [2025-12-13T16:29:45.638Z] <<< [apiv2][body] GET https://firebasehosting.googleapis.com/v1beta1/projects/ppop-35930/sites/ppop-35930 {"name":"projects/ppop-35930/sites/ppop-35930","defaultUrl":"https://ppop-35930.web.app","appId":"1:478592036466:web:f149e594436026717adceb","type":"DEFAULT_SITE"}
+[info]    ▲ Next.js 16.0.8 (Turbopack)
+
+[info]    - Environments: .env.local
+
+
+[info]    Creating an optimized production build ...
+
+[info]  ✓ Compiled successfully in 6.9s
+
+[info]    Running TypeScript ...
+
+[info] Failed to compile.
+
+
+[info] ./src/app/admin/edit-team/[teamId]/page.tsx:207:23
+Type error: Argument of type '{ name: string; city: string; gender: string; color1: string; color2: string; logo: string; }' is not assignable to parameter of type 'SetStateAction<{ name: string; city: string; gender: string; color1: string; color2: string; logo: string; venue: string; }>'.
+  Property 'venue' is missing in type '{ name: string; city: string; gender: string; color1: string; color2: string; logo: string; }' but required in type '{ name: string; city: string; gender: string; color1: string; color2: string; logo: string; venue: string; }'.
+
+  205 |         } else {
+  206 |           // Load fresh data from database
+> 207 |           setTeamForm({
+      |                       ^
+  208 |             name: teamData.name || "",
+  209 |             city: teamData.city || "",
+  210 |             gender: teamData.gender || "",
+
+[info] Next.js build worker exited with code: 1 and signal: null
+
+[debug] [2025-12-13T16:30:02.270Z] Error: ENOENT: no such file or directory, open 'C:\Users\bobiy\OneDrive\Documents\Bio\febakin\.next\export-marker.json'
+[error] 
+[error] Error: An unexpected error has occurred.

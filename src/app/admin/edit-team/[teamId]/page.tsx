@@ -63,6 +63,7 @@ type Team = {
   wins: number;
   losses: number;
   totalPoints: number;
+  venue?: string;
 };
 
 export default function EditTeamPage() {
@@ -103,6 +104,7 @@ export default function EditTeamPage() {
     color1: "",
     color2: "",
     logo: "",
+    venue: "",
   });
 
   // Persist teamForm changes to sessionStorage
@@ -262,6 +264,7 @@ export default function EditTeamPage() {
       color1: team.colors?.[0] || "",
       color2: team.colors?.[1] || "",
       logo: team.logo || "",
+      venue: team.venue || "",
     });
     setTeamLogoFile(null);
     setEditingTeam(false);
@@ -314,6 +317,7 @@ export default function EditTeamPage() {
         gender: teamForm.gender,
         colors: [teamForm.color1, teamForm.color2],
         logo: logoUrl,
+        venue: teamForm.venue,
       });
       
       // If team name changed, update all references
@@ -724,6 +728,25 @@ export default function EditTeamPage() {
                 />
               </div>
               <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">City</label>
+                <input
+                  type="text"
+                  value={teamForm.city}
+                  onChange={(e) => setTeamForm({ ...teamForm, city: e.target.value })}
+                  className="w-full rounded-lg border border-white/20 bg-white/5 px-4 py-2 text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">Home Venue</label>
+                <input
+                  type="text"
+                  value={teamForm.venue}
+                  onChange={(e) => setTeamForm({ ...teamForm, venue: e.target.value })}
+                  placeholder="e.g., Stades des Martyrs"
+                  className="w-full rounded-lg border border-white/20 bg-white/5 px-4 py-2 text-white"
+                />
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2">Gender</label>
                 <select
                   value={teamForm.gender}
@@ -812,7 +835,15 @@ export default function EditTeamPage() {
               </div>
             </div>
           ) : (
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-4">
+              <div>
+                <div className="text-xs text-slate-400">City</div>
+                <div className="text-white">{team.city || "—"}</div>
+              </div>
+              <div>
+                <div className="text-xs text-slate-400">Home Venue</div>
+                <div className="text-white">{team.venue || "—"}</div>
+              </div>
               <div>
                 <div className="text-xs text-slate-400">Gender</div>
                 <div className="text-white">{team.gender}</div>

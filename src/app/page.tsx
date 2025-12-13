@@ -87,6 +87,58 @@ const formatTimeAgo = (date: Date): string => {
   }
 };
 
+const formatGameDateTime = (dateTimeStr: string, language: Locale): string => {
+  // Parse the datetime string - handle both "·" and other separators
+  const parts = dateTimeStr.split(/\s*[·•]\s*/);
+  if (parts.length < 2) return dateTimeStr;
+  
+  const datePart = parts[0]; // e.g., "Dec 13" or "déc. 13"
+  let timePart = parts[1]; // e.g., "3:45 PM" or "15:45"
+  
+  // Convert month to number
+  const monthMap: {[key: string]: string} = {
+    'Jan': '1', 'Feb': '2', 'Mar': '3', 'Apr': '4',
+    'May': '5', 'Jun': '6', 'Jul': '7', 'Aug': '8',
+    'Sep': '9', 'Oct': '10', 'Nov': '11', 'Dec': '12',
+    'jan': '1', 'fév': '2', 'mar': '3', 'avr': '4',
+    'mai': '5', 'juin': '6', 'juil': '7', 'août': '8',
+    'sep': '9', 'oct': '10', 'nov': '11', 'déc': '12',
+    'janv.': '1', 'févr.': '2', 'mars': '3', 'avr.': '4',
+    'juin': '6', 'juil.': '7', 'sept.': '9', 'oct.': '10', 'nov.': '11', 'déc.': '12'
+  };
+  
+  const dateMatch = datePart.match(/([A-Za-zé\.]+)\s+(\d+)/);
+  if (!dateMatch) return dateTimeStr;
+  
+  const monthKey = dateMatch[1].toLowerCase().replace(/\./g, '');
+  const month = monthMap[monthKey] || monthMap[dateMatch[1]] || dateMatch[1];
+  const day = dateMatch[2];
+  
+  // Convert time to 24-hour for French
+  let formattedTime = timePart.trim();
+  if (language === 'fr') {
+    // Check if time has AM/PM
+    const timeMatchAMPM = formattedTime.match(/(\d+):(\d+)\s*(AM|PM)/i);
+    if (timeMatchAMPM) {
+      let hours = parseInt(timeMatchAMPM[1]);
+      const minutes = timeMatchAMPM[2];
+      const period = timeMatchAMPM[3].toUpperCase();
+      
+      if (period === 'PM' && hours !== 12) hours += 12;
+      if (period === 'AM' && hours === 12) hours = 0;
+      
+      formattedTime = `${hours.toString().padStart(2, '0')}:${minutes}`;
+    }
+    // If time is like "15 h 45", convert to "15:45"
+    const timeMatchHFormat = formattedTime.match(/(\d+)\s*h\s*(\d+)/);
+    if (timeMatchHFormat) {
+      formattedTime = `${timeMatchHFormat[1].padStart(2, '0')}:${timeMatchHFormat[2]}`;
+    }
+  }
+  
+  return `${month}/${day}, ${formattedTime}`;
+};
+
 const translations = {
   en: {
     brand: "LIPROBAKIN",
@@ -168,6 +220,13 @@ const translations = {
     },
     footerTagline: "Liprobakin League",
     languageLabel: "Language",
+    standingsTable: {
+      seed: "Seed",
+      team: "Team",
+      wins: "W",
+      losses: "L",
+      totalPoints: "Tot Points",
+    },
   },
   fr: {
     brand: "LIPROBAKIN",
@@ -249,6 +308,13 @@ const translations = {
     },
     footerTagline: "Ligue Liprobakin",
     languageLabel: "Langue",
+    standingsTable: {
+      seed: "N°",
+      team: "Équipe",
+      wins: "V",
+      losses: "D",
+      totalPoints: "Pts totaux",
+    },
   },
 } as const;
 
@@ -986,6 +1052,7 @@ export default function Home() {
                 lastName: playerData.lastName || "",
                 number: playerData.number || "00",
                 teamName: teamData.name || "Unknown",
+                teamGender: teamData.gender || "men",
                 teamLogo: teamData.logo || "/logos/liprobakin.png",
                 headshot: playerData.headshot,
                 stats: {
@@ -1165,12 +1232,23 @@ export default function Home() {
         
         const formatGameData = async (game: typeof allGames[0]): Promise<EnhancedMatchup> => {
           const formatTipoff = (dateObj: Date) => {
-            return new Intl.DateTimeFormat("en-US", {
-              month: "short",
-              day: "numeric",
-              hour: "numeric",
-              minute: "2-digit",
-            }).format(dateObj);
+            const day = dateObj.getDate();
+            const month = dateObj.getMonth() + 1;
+            const hours = dateObj.getHours();
+            const minutes = dateObj.getMinutes();
+            
+            let timeStr;
+            if (language === 'fr') {
+              // 24-hour format for French
+              timeStr = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+            } else {
+              // 12-hour format for English
+              const period = hours >= 12 ? 'PM' : 'AM';
+              const hours12 = hours % 12 || 12;
+              timeStr = `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
+            }
+            
+            return `${day}/${month} · ${timeStr}`;
           };
           
           const homeTeam = teamsMap.get(game.data.homeTeamId) || { wins: 0, losses: 0 };
@@ -1334,7 +1412,7 @@ export default function Home() {
         aria-hidden
       />
 
-      <nav className="sticky top-0 z-30 border-b border-white/10 bg-black/30 backdrop-blur-xl">
+      <nav className="sticky top-0 z-50 border-b border-white/10 bg-black/30 backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 md:px-8">
           <Link href="/" className="flex items-center gap-3 text-xl font-semibold tracking-[0.3em]">
             <Image
@@ -1605,7 +1683,7 @@ export default function Home() {
                         {matchup.gender === "men" ? "Men" : matchup.gender === "women" ? "Women" : matchup.status}
                       </span>
                       <div className="min-w-0 w-full">
-                        <p className="text-xs md:text-sm font-semibold text-white truncate">{matchup.tipoff}</p>
+                        <p className="text-xs md:text-sm font-semibold text-white truncate">{formatGameDateTime(matchup.tipoff, language)}</p>
                         <p className="text-[10px] md:text-xs text-slate-300 truncate">{matchup.venue}</p>
                         {(matchup.refereeHomeTeam1 || matchup.refereeHomeTeam2 || matchup.refereeAwayTeam) && (
                           <p className="mt-0.5 md:mt-1 text-[10px] md:text-xs text-slate-400 truncate">
@@ -1622,7 +1700,6 @@ export default function Home() {
                     />
                   </div>
                   <div className="space-y-2 rounded-xl border border-white/5 bg-black/30 p-3 overflow-hidden flex flex-col items-center justify-center">
-                    <p className="text-[10px] uppercase tracking-[0.3em] text-slate-400">Leaders</p>
                     <div className="grid grid-cols-2 gap-3 min-w-0 w-full">
                       {matchup.leaders.map((leader) => (
                         <LeaderRow key={`${matchup.id}-${leader.player}`} leader={leader} allFranchises={allFranchises} />
@@ -1653,62 +1730,55 @@ export default function Home() {
                     key={game.id}
                     className="rounded-2xl border border-white/5 bg-black/30 p-3 sm:p-4"
                   >
-                    {/* Mobile: Vertical Stack, Desktop: Horizontal */}
-                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-4">
-                      {/* Date/Time */}
-                      <div className="flex items-center justify-between md:flex-col md:items-start md:min-w-[80px] md:flex-shrink-0">
-                        <p className="text-sm font-semibold text-white">{game.tipoff.split(" · ")[0]}</p>
-                        {game.tipoff.split(" · ")[1] && (
-                          <p className="text-xs text-slate-400">{game.tipoff.split(" · ")[1]}</p>
-                        )}
+                    {/* Compact layout for mobile and desktop */}
+                    <div className="space-y-2">
+                      {/* Top Row: Date/Time on left, Venue & Gender on right (mobile) */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-xs md:text-sm font-semibold text-white flex-shrink-0">
+                          {formatGameDateTime(game.tipoff, language)}
+                        </div>
+                        
+                        {/* Venue & Gender - Horizontal on mobile, vertical on desktop */}
+                        <div className="flex items-center gap-2 md:flex-col md:items-end md:gap-0.5 min-w-0">
+                          <span className="text-[10px] md:text-xs text-slate-300 truncate">{game.venue}</span>
+                          <span className="text-[9px] md:text-[10px] text-slate-500 uppercase tracking-wider whitespace-nowrap flex-shrink-0">
+                            {game.gender === "men" ? "M" : game.gender === "women" ? "W" : ""}
+                          </span>
+                        </div>
                       </div>
                       
-                      {/* Teams Section - Horizontal on desktop, vertical on mobile */}
-                      <div className="flex flex-col gap-2 flex-1 md:flex-row md:items-center md:justify-center md:gap-4">
+                      {/* Bottom Row: Teams Section - Compact horizontal layout */}
+                      <div className="flex items-center gap-2">
                         {/* Away Team */}
-                        <div className="flex items-center gap-2 md:flex-1 md:justify-end">
+                        <div className="flex items-center gap-1.5 flex-1 min-w-0">
                           {game.awayTeamLogo && (
                             <Image
                               src={game.awayTeamLogo}
                               alt={game.away.team}
-                              width={28}
-                              height={28}
-                              className="h-7 w-7 rounded-full border border-white/10 object-cover flex-shrink-0"
+                              width={24}
+                              height={24}
+                              className="h-6 w-6 rounded-full border border-white/10 object-cover flex-shrink-0"
                             />
                           )}
-                          <div className="flex items-baseline gap-2 min-w-0 flex-1 md:flex-initial">
-                            <span className="text-sm font-medium text-white truncate">{game.away.team}</span>
-                            <span className="text-xs text-slate-400 flex-shrink-0">({game.away.record})</span>
-                          </div>
+                          <span className="text-xs md:text-sm font-medium text-white truncate">{game.away.team}</span>
                         </div>
                         
-                        {/* VS Divider - hidden on mobile, shown on desktop */}
-                        <span className="hidden md:inline text-xs uppercase tracking-wider text-slate-500 flex-shrink-0">vs</span>
+                        {/* VS Divider */}
+                        <span className="text-[10px] uppercase tracking-wider text-slate-500 flex-shrink-0 px-1">vs</span>
                         
                         {/* Home Team */}
-                        <div className="flex items-center gap-2 md:flex-1">
+                        <div className="flex items-center gap-1.5 flex-1 min-w-0">
                           {game.homeTeamLogo && (
                             <Image
                               src={game.homeTeamLogo}
                               alt={game.home.team}
-                              width={28}
-                              height={28}
-                              className="h-7 w-7 rounded-full border border-white/10 object-cover flex-shrink-0"
+                              width={24}
+                              height={24}
+                              className="h-6 w-6 rounded-full border border-white/10 object-cover flex-shrink-0"
                             />
                           )}
-                          <div className="flex items-baseline gap-2 min-w-0 flex-1 md:flex-initial">
-                            <span className="text-sm font-medium text-white truncate">{game.home.team}</span>
-                            <span className="text-xs text-slate-400 flex-shrink-0">({game.home.record})</span>
-                          </div>
+                          <span className="text-xs md:text-sm font-medium text-white truncate">{game.home.team}</span>
                         </div>
-                      </div>
-                      
-                      {/* Venue & Gender */}
-                      <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/5 md:flex-col md:items-end md:border-t-0 md:pt-0 md:min-w-[100px] md:flex-shrink-0">
-                        <span className="text-xs text-slate-300 truncate">{game.venue}</span>
-                        <span className="text-[10px] text-slate-500 uppercase tracking-wider whitespace-nowrap">
-                          {game.gender === "men" ? "MEN'S" : game.gender === "women" ? "WOMEN'S" : ""}
-                        </span>
                       </div>
                     </div>
                   </div>
@@ -1746,9 +1816,14 @@ export default function Home() {
                       className="block rounded-2xl border border-white/5 bg-slate-900/70 p-3 sm:p-4 overflow-hidden transition-all hover:border-orange-500 hover:bg-slate-900/80 cursor-pointer"
                     >
                       <div className="flex items-center justify-between mb-2 sm:mb-3">
-                        <span className="rounded-full border border-white/15 px-1.5 py-0.5 sm:px-2 text-[8px] sm:text-[9px] font-semibold uppercase tracking-[0.2em] text-slate-300">
-                          FINAL
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="rounded-full border border-white/15 px-1.5 py-0.5 sm:px-2 text-[8px] sm:text-[9px] font-semibold uppercase tracking-[0.2em] text-slate-300">
+                            FINAL
+                          </span>
+                          <span className="text-[8px] sm:text-[9px] text-slate-500 uppercase tracking-wider">
+                            {game.gender === "men" ? "M" : game.gender === "women" ? "W" : ""}
+                          </span>
+                        </div>
                         <div className="text-right">
                           <p className="text-[10px] sm:text-xs text-slate-400">
                             {game.dateObj ? new Intl.DateTimeFormat("en-US", {
@@ -1810,12 +1885,6 @@ export default function Home() {
                           </span>
                         </div>
                       </div>
-                      
-                      {/* Venue and Gender */}
-                      <div className="mt-2 pt-2 sm:mt-3 sm:pt-3 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-xs">
-                        <span className="text-slate-400 truncate">{game.venue || ""}</span>
-                        <span className="text-slate-500 uppercase tracking-wider ml-2">{game.gender === "men" ? "MEN'S" : game.gender === "women" ? "WOMEN'S" : ""}</span>
-                      </div>
                     </Link>
                   );
                 })}
@@ -1852,6 +1921,7 @@ export default function Home() {
             </div>
             <div className="mt-6 flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
               {[...leagueTopPlayers]
+                .filter((player) => player.teamGender === gender)
                 .sort((a, b) => {
                   const statA = playerMetric === "pts" ? a.stats.pts
                     : playerMetric === "reb" ? a.stats.reb
@@ -1948,11 +2018,11 @@ export default function Home() {
             <table className="w-full border-collapse text-left text-sm">
               <thead className="sticky top-0 bg-slate-950 text-sm uppercase tracking-[0.3em] text-slate-300 border-b border-white/5">
                 <tr>
-                  <th className="px-3 py-2">Seed</th>
-                  <th className="px-3 py-2">Team</th>
-                  <th className="px-3 py-2">W</th>
-                  <th className="px-3 py-2">L</th>
-                  <th className="px-3 py-2">Tot Points</th>
+                  <th className="px-3 py-2">{copy.standingsTable.seed}</th>
+                  <th className="px-3 py-2">{copy.standingsTable.team}</th>
+                  <th className="px-3 py-2">{copy.standingsTable.wins}</th>
+                  <th className="px-3 py-2">{copy.standingsTable.losses}</th>
+                  <th className="px-3 py-2">{copy.standingsTable.totalPoints}</th>
                 </tr>
               </thead>
               <tbody>

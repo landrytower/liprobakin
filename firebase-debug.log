@@ -164,3 +164,83 @@ Type error: An object literal cannot have multiple properties with the same name
 [debug] [2025-12-13T16:31:18.803Z] Error: ENOENT: no such file or directory, open 'C:\Users\bobiy\OneDrive\Documents\Bio\febakin\.next\export-marker.json'
 [error] 
 [error] Error: An unexpected error has occurred.
+[debug] [2025-12-13T16:31:57.027Z] ----------------------------------------------------------------------
+[debug] [2025-12-13T16:31:57.029Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\bobiy\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js deploy --only hosting
+[debug] [2025-12-13T16:31:57.029Z] CLI Version:   14.27.0
+[debug] [2025-12-13T16:31:57.029Z] Platform:      win32
+[debug] [2025-12-13T16:31:57.029Z] Node Version:  v22.15.0
+[debug] [2025-12-13T16:31:57.030Z] Time:          Sat Dec 13 2025 11:31:57 GMT-0500 (Eastern Standard Time)
+[debug] [2025-12-13T16:31:57.030Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2025-12-13T16:31:57.224Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2025-12-13T16:31:57.224Z] > authorizing via signed-in user (bobiyatch@gmail.com)
+[debug] [2025-12-13T16:31:57.224Z] [iam] checking project ppop-35930 for permissions ["firebase.projects.get","firebasehosting.sites.update"]
+[debug] [2025-12-13T16:31:57.225Z] Checked if tokens are valid: true, expires at: 1765646973394
+[debug] [2025-12-13T16:31:57.226Z] Checked if tokens are valid: true, expires at: 1765646973394
+[debug] [2025-12-13T16:31:57.226Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/ppop-35930:testIamPermissions [none]
+[debug] [2025-12-13T16:31:57.226Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/ppop-35930:testIamPermissions x-goog-quota-user=projects/ppop-35930
+[debug] [2025-12-13T16:31:57.227Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/ppop-35930:testIamPermissions {"permissions":["firebase.projects.get","firebasehosting.sites.update"]}
+[debug] [2025-12-13T16:31:57.503Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/ppop-35930:testIamPermissions 200
+[debug] [2025-12-13T16:31:57.504Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/ppop-35930:testIamPermissions {"permissions":["firebase.projects.get","firebasehosting.sites.update"]}
+[debug] [2025-12-13T16:31:57.505Z] Checked if tokens are valid: true, expires at: 1765646973394
+[debug] [2025-12-13T16:31:57.505Z] Checked if tokens are valid: true, expires at: 1765646973394
+[debug] [2025-12-13T16:31:57.506Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/ppop-35930 [none]
+[debug] [2025-12-13T16:31:57.764Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/ppop-35930 200
+[debug] [2025-12-13T16:31:57.764Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/ppop-35930 {"projectId":"ppop-35930","projectNumber":"478592036466","displayName":"liprobakin1","name":"projects/ppop-35930","resources":{"hostingSite":"ppop-35930","realtimeDatabaseInstance":"ppop-35930-default-rtdb"},"state":"ACTIVE","etag":"1_5f0f7dae-5922-423d-a863-7cf260725e03"}
+[debug] [2025-12-13T16:32:00.348Z] defaultcredentials: writing to file C:\Users\bobiy\AppData\Roaming\firebase\bobiyatch_gmail_com_application_default_credentials.json
+[debug] [2025-12-13T16:32:00.349Z] Checked if tokens are valid: true, expires at: 1765646973394
+[debug] [2025-12-13T16:32:00.349Z] Checked if tokens are valid: true, expires at: 1765646973394
+[debug] [2025-12-13T16:32:00.350Z] >>> [apiv2][query] GET https://firebasehosting.googleapis.com/v1beta1/projects/ppop-35930/sites pageToken=&pageSize=10
+[debug] [2025-12-13T16:32:00.728Z] <<< [apiv2][status] GET https://firebasehosting.googleapis.com/v1beta1/projects/ppop-35930/sites 200
+[debug] [2025-12-13T16:32:00.728Z] <<< [apiv2][body] GET https://firebasehosting.googleapis.com/v1beta1/projects/ppop-35930/sites {"sites":[{"name":"projects/ppop-35930/sites/ppop-35930","defaultUrl":"https://ppop-35930.web.app","appId":"1:478592036466:web:f149e594436026717adceb","type":"DEFAULT_SITE"}]}
+[debug] [2025-12-13T16:32:00.728Z] Checked if tokens are valid: true, expires at: 1765646973394
+[debug] [2025-12-13T16:32:00.728Z] Checked if tokens are valid: true, expires at: 1765646973394
+[debug] [2025-12-13T16:32:00.728Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/-/webApps/1:478592036466:web:f149e594436026717adceb/config [none]
+[debug] [2025-12-13T16:32:01.218Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/-/webApps/1:478592036466:web:f149e594436026717adceb/config 200
+[debug] [2025-12-13T16:32:01.218Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/-/webApps/1:478592036466:web:f149e594436026717adceb/config {"projectId":"ppop-35930","appId":"1:478592036466:web:f149e594436026717adceb","databaseURL":"https://ppop-35930-default-rtdb.firebaseio.com","storageBucket":"ppop-35930.firebasestorage.app","apiKey":"AIzaSyApCmWDWPfmBwVAOvNAu3_CSVCqGycN5OE","authDomain":"ppop-35930.firebaseapp.com","messagingSenderId":"478592036466","measurementId":"G-YJY5T6TD8E","projectNumber":"478592036466","version":"2"}
+[info] 
+   Thank you for trying our early preview of Next.js support on Firebase Hosting.
+   During the preview, support is best-effort and breaking changes can be expected. Proceed with caution.
+   The integration is known to work with Next.js version 12 - 15.0. You may encounter errors.
+
+   Documentation: https://firebase.google.com/docs/hosting/frameworks/nextjs
+   File a bug: https://github.com/firebase/firebase-tools/issues/new?template=bug_report.md
+   Submit a feature request: https://github.com/firebase/firebase-tools/issues/new?template=feature_request.md
+
+   We'd love to learn from you. Express your interest in helping us shape the future of Firebase Hosting: https://goo.gle/41enW5X
+
+[debug] [2025-12-13T16:32:08.534Z] Checked if tokens are valid: true, expires at: 1765646973394
+[debug] [2025-12-13T16:32:08.535Z] Checked if tokens are valid: true, expires at: 1765646973394
+[debug] [2025-12-13T16:32:08.535Z] >>> [apiv2][query] GET https://firebasehosting.googleapis.com/v1beta1/projects/ppop-35930/sites/ppop-35930 [none]
+[debug] [2025-12-13T16:32:08.925Z] <<< [apiv2][status] GET https://firebasehosting.googleapis.com/v1beta1/projects/ppop-35930/sites/ppop-35930 200
+[debug] [2025-12-13T16:32:08.925Z] <<< [apiv2][body] GET https://firebasehosting.googleapis.com/v1beta1/projects/ppop-35930/sites/ppop-35930 {"name":"projects/ppop-35930/sites/ppop-35930","defaultUrl":"https://ppop-35930.web.app","appId":"1:478592036466:web:f149e594436026717adceb","type":"DEFAULT_SITE"}
+[info]    ▲ Next.js 16.0.8 (Turbopack)
+
+[info]    - Environments: .env.local
+
+
+[info]    Creating an optimized production build ...
+
+[info]  ✓ Compiled successfully in 7.6s
+
+[info]    Running TypeScript ...
+
+[info] Failed to compile.
+
+
+[info] ./src/app/page.tsx:106:44
+Type error: An object literal cannot have multiple properties with the same name.
+
+  104 |     'mai': '5', 'juin': '6', 'juil': '7', 'août': '8',
+  105 |     'sep': '9', 'oct': '10', 'nov': '11', 'déc': '12',
+> 106 |     'janv': '1', 'févr': '2', 'mars': '3', 'mai': '5',
+      |                                            ^
+  107 |     'sept': '9'
+  108 |   };
+  109 |   
+
+[info] Next.js build worker exited with code: 1 and signal: null
+
+[debug] [2025-12-13T16:32:26.077Z] Error: ENOENT: no such file or directory, open 'C:\Users\bobiy\OneDrive\Documents\Bio\febakin\.next\export-marker.json'
+[error] 
+[error] Error: An unexpected error has occurred.

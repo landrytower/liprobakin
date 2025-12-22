@@ -32,6 +32,7 @@ export type AdminUser = {
   lastLogin: Date | null;
   lastActivity?: Date | null;
   isActive: boolean;
+  status?: "active" | "inactive";
 };
 
 export const ROLE_PERMISSIONS: Record<AdminRole, AdminPermissions> = {

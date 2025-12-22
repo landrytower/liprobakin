@@ -159,6 +159,7 @@ type CoachStaffFormState = {
 type AdminGame = {
   id: string;
   gender: "men" | "women";
+  week?: number;
   homeTeamId: string;
   homeTeamName: string;
   homeTeamLogo: string;
@@ -2810,6 +2811,7 @@ export default function AdminPage() {
     setGameForm({
       id: game.id,
       gender: game.gender,
+      week: game.week || 1,
       homeTeamId: game.homeTeamId,
       awayTeamId: game.awayTeamId,
       date: game.date,
@@ -3655,7 +3657,13 @@ export default function AdminPage() {
                       const now = Date.now();
                       
                       // Categorize admins into online and recently disconnected
-                      const categorizedAdmins = adminUsers.reduce((acc, admin) => {
+                      type OnlineAdmin = Omit<AdminUser, 'status'> & { status: 'online' };
+                      type DisconnectedAdmin = Omit<AdminUser, 'status'> & { status: 'disconnected', disconnectedAt: number };
+                      
+                      const categorizedAdmins = adminUsers.reduce<{ 
+                        online: OnlineAdmin[], 
+                        disconnected: DisconnectedAdmin[] 
+                      }>((acc, admin) => {
                         if (admin.id === user?.uid) return acc; // Exclude current user
                         
                         const lastActivity = admin.lastActivity ? new Date(admin.lastActivity).getTime() : 0;
@@ -3663,17 +3671,17 @@ export default function AdminPage() {
                         
                         if (admin.isActive && lastActivity > 0 && timeSinceActivity < 5 * 60 * 1000) {
                           // Online (within 5 minutes)
-                          acc.online.push({ ...admin, status: 'online' as const });
+                          acc.online.push({ ...admin, status: 'online' });
                         } else if (lastActivity > 0 && timeSinceActivity >= 5 * 60 * 1000) {
                           // Check if they just went offline
                           const disconnectedTime = disconnectedAdmins.get(admin.id);
                           if (!disconnectedTime) {
                             // First time seeing them as disconnected, track it
                             setDisconnectedAdmins(prev => new Map(prev).set(admin.id, now));
-                            acc.disconnected.push({ ...admin, status: 'disconnected' as const, disconnectedAt: now });
+                            acc.disconnected.push({ ...admin, status: 'disconnected', disconnectedAt: now });
                           } else if (now - disconnectedTime < 10000) {
                             // Still within 10-second grace period
-                            acc.disconnected.push({ ...admin, status: 'disconnected' as const, disconnectedAt: disconnectedTime });
+                            acc.disconnected.push({ ...admin, status: 'disconnected', disconnectedAt: disconnectedTime });
                           } else {
                             // Grace period expired, remove from tracking
                             setDisconnectedAdmins(prev => {
@@ -3685,7 +3693,7 @@ export default function AdminPage() {
                         }
                         
                         return acc;
-                      }, { online: [] as Array<AdminUser & { status: 'online' }>, disconnected: [] as Array<AdminUser & { status: 'disconnected', disconnectedAt: number }> });
+                      }, { online: [], disconnected: [] });
                       
                       const allVisibleAdmins = [...categorizedAdmins.online, ...categorizedAdmins.disconnected];
                       const onlineCount = categorizedAdmins.online.length;
@@ -6411,9 +6419,12 @@ export default function AdminPage() {
 
                         {/* Week Navigation */}
                         {(() => {
-                          const filteredGames = archivedGames.filter(g => 
-                            archiveGenderFilter === 'all' || g.gender === archiveGenderFilter
-                          );
+                          const filteredGames = archivedGames.filter(g => {
+                            if (archiveGenderFilter === 'all') return true;
+                            if (archiveGenderFilter === 'gentlemen') return g.gender === 'men';
+                            if (archiveGenderFilter === 'ladies') return g.gender === 'women';
+                            return false;
+                          });
                           
                           // Group games by week
                           const gamesByWeek = filteredGames.reduce((acc, game) => {

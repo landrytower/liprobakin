@@ -338,6 +338,7 @@ const playerHeadshots: Record<string, string> = {
 };
 
 type Locale = keyof typeof translations;
+type Language = Locale; // Alias for clarity
 type Gender = "men" | "women";
 type SelectedTeamState = { label: string; gender: Gender } | null;
 
@@ -1422,13 +1423,21 @@ export default function Home() {
             const data = doc.data();
             return {
               id: doc.id,
+              home: data.homeTeam || data.team1 || data.homeTeamName || "",
+              away: data.awayTeam || data.team2 || data.awayTeamName || "",
               homeTeam: data.homeTeam || data.team1 || data.homeTeamName || "",
               awayTeam: data.awayTeam || data.team2 || data.awayTeamName || "",
               dateTime: `${data.date || ""}T${data.time || "00:00"}`,
               homeTeamLogo: data.homeTeamLogo || data.team1Logo,
               awayTeamLogo: data.awayTeamLogo || data.team2Logo,
               gender: data.gender as "men" | "women",
-              location: data.location || "",
+              location: data.venue || data.location || "",
+              status: "live" as const,
+              tipoff: `${data.date || ""} · ${data.time || "00:00"}`,
+              venue: data.venue || data.location || "",
+              network: "",
+              broadcast: data.broadcast || "",
+              leaders: [],
             };
           });
         
@@ -2151,7 +2160,7 @@ export default function Home() {
                         <div className="relative h-10 w-10 flex-shrink-0 rounded-full overflow-hidden bg-slate-800">
                           <Image
                             src={game.homeTeamLogo}
-                            alt={game.homeTeam}
+                            alt={game.homeTeam || "Home Team"}
                             fill
                             className="object-contain"
                             unoptimized
@@ -2177,9 +2186,9 @@ export default function Home() {
                       <span className="text-[10px] uppercase tracking-wider text-slate-400">
                         {game.gender === "men" ? "MEN" : "WOMEN"}
                       </span>
-                      {game.location && (
+                      {game.venue && (
                         <span className="text-[10px] text-slate-500 text-center">
-                          {game.location}
+                          {game.venue}
                         </span>
                       )}
                     </div>
@@ -2193,7 +2202,7 @@ export default function Home() {
                         <div className="relative h-10 w-10 flex-shrink-0 rounded-full overflow-hidden bg-slate-800">
                           <Image
                             src={game.awayTeamLogo}
-                            alt={game.awayTeam}
+                            alt={game.awayTeam || "Away Team"}
                             fill
                             className="object-contain"
                             unoptimized

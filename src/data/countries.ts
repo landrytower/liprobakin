@@ -37,7 +37,7 @@ export const countries = [
   { code: "CN", name: "China" },
   { code: "CO", name: "Colombia" },
   { code: "KM", name: "Comoros" },
-  { code: "CD", name: "Congo (Democratic Republic of the)" },
+  { code: "CD", name: "Congo COD" },
   { code: "CG", name: "Congo (Republic of the)" },
   { code: "CR", name: "Costa Rica" },
   { code: "CI", name: "Côte d'Ivoire (Ivory Coast)" },

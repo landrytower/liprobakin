@@ -6,6 +6,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { collection, query, orderBy, limit, getDocs } from "firebase/firestore";
 import { firebaseDB } from "@/lib/firebase";
+import { useAuth } from "@/contexts/AuthContext";
+import AuthModal from "@/components/AuthModal";
+import PlayerProfilePopup from "@/components/PlayerProfilePopup";
 
 import {
   conferenceStandings,
@@ -22,10 +25,13 @@ import type { FeaturedMatchup, Franchise, RosterPlayer, SpotlightPlayer } from "
 type EnhancedMatchup = FeaturedMatchup & {
   homeTeamLogo?: string;
   awayTeamLogo?: string;
+  homeTeam?: string;
+  awayTeam?: string;
   gender?: "men" | "women";
   refereeHomeTeam1?: string;
   refereeHomeTeam2?: string;
   refereeAwayTeam?: string;
+  dateTime?: string;
 };
 
 type NewsArticle = {
@@ -252,7 +258,7 @@ const translations = {
     sections: {
       games: {
         eyebrow: "Matchs",
-        title: "Dernier buzzer",
+        title: "Match terminé",
         description: "Instantanés du tableau d'affichage de ce soir.",
       },
       schedule: {
@@ -280,7 +286,7 @@ const translations = {
         description: "",
       },
       teams: {
-        eyebrow: "Équipes",
+        eyebrow: "Franchises",
         title: "Franchises",
         description: "",
       },
@@ -352,7 +358,7 @@ const parseTipoffToDate = (tipoff: string) => {
 
 const LeaderRow = ({ leader, allFranchises }: { leader: FeaturedMatchup["leaders"][number]; allFranchises: Franchise[] }) => {
   const franchise = findFranchiseByName(leader.team, allFranchises);
-  const headshot = playerHeadshots[leader.player];
+  const headshot = leader.headshot || playerHeadshots[leader.player];
   const initials = leader.player
     .split(" ")
     .map((word) => word[0])
@@ -514,12 +520,12 @@ const ScheduleTeam = ({ team, label, allFranchises }: { team: string; label: str
   );
 };
 
-const GenderToggle = ({ value, onChange }: { value: Gender; onChange: (value: Gender) => void }) => (
-  <div className="inline-flex overflow-hidden rounded-full border border-white/20 bg-white/5 text-[10px] font-semibold uppercase tracking-[0.3em]" role="group" aria-label="Gender filter">
+const GenderToggle = ({ value, onChange, language }: { value: Gender; onChange: (value: Gender) => void; language: Language }) => (
+  <div className="inline-flex overflow-hidden rounded-full border border-white/20 bg-white/5 text-[11px] font-semibold uppercase tracking-[0.25em]" role="group" aria-label="Gender filter">
     {(
       [
-        { key: "men" as Gender, label: "Gentlemen", short: "G" },
-        { key: "women" as Gender, label: "Ladies", short: "L" },
+        { key: "men" as Gender, label: language === 'fr' ? "Messieurs" : "Gentlemen", short: "G" },
+        { key: "women" as Gender, label: language === 'fr' ? "Dames" : "Ladies", short: "L" },
       ]
     ).map((option) => {
       const isActive = value === option.key;
@@ -528,7 +534,7 @@ const GenderToggle = ({ value, onChange }: { value: Gender; onChange: (value: Ge
           key={option.key}
           type="button"
           onClick={() => onChange(option.key)}
-          className={`relative px-2 py-1 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300 sm:px-4 ${
+          className={`relative px-3 py-2 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300 sm:px-6 sm:py-2 ${
             isActive ? "bg-white text-slate-900" : "text-slate-300 hover:text-white"
           }`}
           aria-pressed={isActive}
@@ -555,8 +561,74 @@ const playerMetricFilters: { key: PlayerMetric; label: string }[] = [
   { key: "blk", label: "BLK" },
 ];
 
-  const RosterModal = ({ teamName, roster, onClose, allFranchises }: { teamName: string; roster: RosterPlayer[]; onClose: () => void; allFranchises: Franchise[] }) => {
+  const RosterModal = ({ teamName, onClose, allFranchises }: { teamName: string; onClose: () => void; allFranchises: Franchise[] }) => {
     const franchise = findFranchiseByName(teamName, allFranchises);
+    const [roster, setRoster] = useState<RosterPlayer[]>([]);
+    const [loading, setLoading] = useState(true);
+    
+    useEffect(() => {
+      const fetchRoster = async () => {
+        try {
+          setLoading(true);
+          
+          // Find the team in Firestore
+          const teamsRef = collection(firebaseDB, "teams");
+          const teamsSnapshot = await getDocs(teamsRef);
+          
+          let targetTeamId: string | null = null;
+          
+          for (const teamDoc of teamsSnapshot.docs) {
+            const teamData = teamDoc.data();
+            const teamDocName = teamData.name ?? "";
+            const teamDocCity = teamData.city ?? "";
+            const fullTeamName = teamDocCity ? `${teamDocCity} ${teamDocName}` : teamDocName;
+            
+            if (fullTeamName === teamName || teamDocName === teamName) {
+              targetTeamId = teamDoc.id;
+              break;
+            }
+          }
+          
+          if (!targetTeamId) {
+            console.log("Team not found in Firestore:", teamName);
+            setRoster([]);
+            setLoading(false);
+            return;
+          }
+          
+          // Fetch roster from Firestore
+          const rosterRef = collection(firebaseDB, `teams/${targetTeamId}/roster`);
+          const rosterSnapshot = await getDocs(rosterRef);
+          
+          const players: RosterPlayer[] = rosterSnapshot.docs.map((playerDoc) => {
+            const playerData = playerDoc.data();
+            return {
+              name: `${playerData.firstName || ""} ${playerData.lastName || ""}`.trim(),
+              number: playerData.number ?? 0,
+              height: playerData.height ?? "",
+              headshot: playerData.headshot ?? "/players/default-avatar.png",
+              position: playerData.position ?? "",
+              stats: {
+                pts: playerData.stats?.pts ?? "0.0",
+                reb: playerData.stats?.reb ?? "0.0",
+                ast: playerData.stats?.ast ?? "0.0",
+                blk: playerData.stats?.blk ?? "0.0",
+                stl: playerData.stats?.stl ?? "0.0"
+              }
+            };
+          }).sort((a, b) => a.number - b.number);
+          
+          setRoster(players);
+          setLoading(false);
+        } catch (error) {
+          console.error("Error fetching roster:", error);
+          setRoster([]);
+          setLoading(false);
+        }
+      };
+      
+      fetchRoster();
+    }, [teamName]);
     
     useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -602,23 +674,29 @@ const playerMetricFilters: { key: PlayerMetric; label: string }[] = [
           </button>
         </div>
         <div className="mt-6 space-y-3">
-          {roster.map((player) => (
-            <div
-              key={`${teamName}-${player.number}`}
-              className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-white/5 bg-gradient-to-r from-slate-900/70 to-slate-900/30 p-4"
-            >
-              <div>
-                <p className="text-sm uppercase tracking-[0.3em] text-slate-400">#{player.number}</p>
-                <p className="text-lg font-semibold text-white">{player.name}</p>
-                <p className="text-sm text-slate-300">{player.height}</p>
+          {loading ? (
+            <div className="flex justify-center py-12 text-slate-400">Loading roster...</div>
+          ) : roster.length === 0 ? (
+            <div className="text-center py-12 text-slate-400">No players registered for this team yet.</div>
+          ) : (
+            roster.map((player) => (
+              <div
+                key={`${teamName}-${player.number}`}
+                className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-white/5 bg-gradient-to-r from-slate-900/70 to-slate-900/30 p-4"
+              >
+                <div>
+                  <p className="text-sm uppercase tracking-[0.3em] text-slate-400">#{player.number}</p>
+                  <p className="text-lg font-semibold text-white">{player.name}</p>
+                  <p className="text-sm text-slate-300">{player.height}</p>
+                </div>
+                <div className="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-200">
+                  <span className="rounded-full border border-white/10 px-3 py-1">PTS {player.stats.pts}</span>
+                  <span className="rounded-full border border-white/10 px-3 py-1">REB {player.stats.reb}</span>
+                  <span className="rounded-full border border-white/10 px-3 py-1">STL {player.stats.stl}</span>
+                </div>
               </div>
-              <div className="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-200">
-                <span className="rounded-full border border-white/10 px-3 py-1">PTS {player.stats.pts}</span>
-                <span className="rounded-full border border-white/10 px-3 py-1">REB {player.stats.reb}</span>
-                <span className="rounded-full border border-white/10 px-3 py-1">STL {player.stats.stl}</span>
-              </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
     </div>
@@ -679,12 +757,14 @@ const PlayerStatsModal = ({ player, onClose }: { player: SpotlightPlayer; onClos
 };
 
 export default function Home() {
+  const { user, userProfile, signOut: handleSignOut } = useAuth();
   const [language, setLanguage] = useState<Locale>("fr");
   const [selectedTeam, setSelectedTeam] = useState<SelectedTeamState>(null);
   const [selectedPlayer, setSelectedPlayer] = useState<SpotlightPlayer | null>(null);
   const [playerMetric, setPlayerMetric] = useState<PlayerMetric>("pts");
   const [gender, setGender] = useState<Gender>("men");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
   const [dynamicSpotlightGames, setDynamicSpotlightGames] = useState<EnhancedMatchup[]>([]);
   const [weeklyScheduleGames, setWeeklyScheduleGames] = useState<EnhancedMatchup[]>([]);
   const [completedGames, setCompletedGames] = useState<any[]>([]);
@@ -701,7 +781,14 @@ export default function Home() {
   const [currentPartnerIndex, setCurrentPartnerIndex] = useState(0);
   const [currentCommitteeIndex, setCurrentCommitteeIndex] = useState(0);
   const [dynamicPartners, setDynamicPartners] = useState<any[]>([]);
+  const [visiblePartners, setVisiblePartners] = useState<number[]>([0, 1, 2, 3]);
+  const [partnerAnimating, setPartnerAnimating] = useState<number | null>(null);
   const [dynamicCommittee, setDynamicCommittee] = useState<any[]>([]);
+  const [playerCardExpanded, setPlayerCardExpanded] = useState(true);
+  const [playerData, setPlayerData] = useState<RosterPlayer | null>(null);
+  const [nextGame, setNextGame] = useState<EnhancedMatchup | null>(null);
+  const [liveGames, setLiveGames] = useState<EnhancedMatchup[]>([]);
+  const [showProfilePopup, setShowProfilePopup] = useState(false);
   const copy = translations[language];
   const sectionCopy = copy.sections;
   const languageOptions: Locale[] = ["en", "fr"];
@@ -711,11 +798,7 @@ export default function Home() {
     "Standings",
     "Teams",
   ];
-  const selectedRoster = selectedTeam
-    ? selectedTeam.gender === "men"
-      ? teamRosters[selectedTeam.label]
-      : teamRosters[`women:${selectedTeam.label}`]
-    : undefined;
+  // Removed static roster - RosterModal now fetches from Firestore
   const genderPlayers = gender === "men" ? spotlightPlayers : spotlightPlayersWomen;
   // Always use dynamic standings calculated from games - no fallback to static data
   const genderStandings = dynamicStandings.filter(s => s.gender === gender);
@@ -725,6 +808,64 @@ export default function Home() {
     (a, b) => b.leaderboard[playerMetric] - a.leaderboard[playerMetric]
   );
   const spotlightGames = dynamicSpotlightGames;
+
+  // Load gender selection from sessionStorage on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = sessionStorage.getItem('selectedGender');
+      if (saved === 'men' || saved === 'women') {
+        setGender(saved);
+      }
+    }
+  }, []);
+
+  // Save gender selection to sessionStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('selectedGender', gender);
+    }
+  }, [gender]);
+
+  // Save scroll position before navigating away
+  useEffect(() => {
+    const saveScrollPosition = () => {
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('scrollPosition', window.scrollY.toString());
+      }
+    };
+
+    window.addEventListener('beforeunload', saveScrollPosition);
+    
+    // Save on navigation
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const link = target.closest('a');
+      if (link && link.href && !link.href.includes('#')) {
+        saveScrollPosition();
+      }
+    };
+    
+    document.addEventListener('click', handleClick);
+
+    return () => {
+      window.removeEventListener('beforeunload', saveScrollPosition);
+      document.removeEventListener('click', handleClick);
+    };
+  }, []);
+
+  // Restore scroll position on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedPosition = sessionStorage.getItem('scrollPosition');
+      if (savedPosition) {
+        // Use setTimeout to ensure DOM is ready
+        setTimeout(() => {
+          window.scrollTo(0, parseInt(savedPosition, 10));
+          sessionStorage.removeItem('scrollPosition');
+        }, 100);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     const fetchTeams = async () => {
@@ -823,6 +964,142 @@ export default function Home() {
     
     fetchPartners();
   }, []);
+
+  useEffect(() => {
+    // Fetch player profile data from Firestore if user is a verified player
+    const fetchPlayerData = async () => {
+      if (!userProfile?.role || !userProfile?.verificationStatus || !userProfile?.teamName) {
+        setPlayerData(null);
+        setNextGame(null);
+        return;
+      }
+
+      if (userProfile.role === "player" && userProfile.verificationStatus === "approved" && userProfile.teamName) {
+        try {
+          // Find the team in Firestore
+          const teamsRef = collection(firebaseDB, "teams");
+          const teamsSnapshot = await getDocs(teamsRef);
+          
+          let targetTeamId: string | null = null;
+          
+          // Find the team document that matches the user's teamName
+          for (const teamDoc of teamsSnapshot.docs) {
+            const teamData = teamDoc.data();
+            const teamDocName = teamData.name ?? "";
+            const teamDocCity = teamData.city ?? "";
+            const fullTeamName = teamDocCity ? `${teamDocCity} ${teamDocName}` : teamDocName;
+            
+            if (fullTeamName === userProfile.teamName || teamDocName === userProfile.teamName) {
+              targetTeamId = teamDoc.id;
+              break;
+            }
+          }
+          
+          if (!targetTeamId) {
+            console.log("Team not found in Firestore:", userProfile.teamName);
+            setPlayerData(null);
+            setNextGame(null);
+            return;
+          }
+          
+          // Fetch roster from Firestore
+          const rosterRef = collection(firebaseDB, `teams/${targetTeamId}/roster`);
+          const rosterSnapshot = await getDocs(rosterRef);
+          
+          if (rosterSnapshot.empty) {
+            console.log("No roster found for team:", userProfile.teamName);
+            setPlayerData(null);
+            setNextGame(null);
+            return;
+          }
+          
+          // Find the specific player by linkedPlayerId (preferred) or player number (fallback)
+          let foundPlayer: RosterPlayer | null = null;
+          
+          // First try to find by linkedPlayerId (set during verification approval)
+          if (userProfile.linkedPlayerId) {
+            const playerDoc = rosterSnapshot.docs.find(doc => doc.id === userProfile.linkedPlayerId);
+            if (playerDoc) {
+              const playerData = playerDoc.data();
+              foundPlayer = {
+                name: `${playerData.firstName || ""} ${playerData.lastName || ""}`.trim(),
+                number: playerData.number ?? 0,
+                height: playerData.height ?? "",
+                headshot: playerData.headshot ?? "/players/default-avatar.png",
+                position: playerData.position ?? "",
+                stats: {
+                  pts: playerData.stats?.pts ?? "0.0",
+                  reb: playerData.stats?.reb ?? "0.0",
+                  ast: playerData.stats?.ast ?? "0.0",
+                  blk: playerData.stats?.blk ?? "0.0",
+                  stl: playerData.stats?.stl ?? "0.0"
+                }
+              };
+            }
+          }
+          
+          // Fallback: find by player number if linkedPlayerId not available
+          if (!foundPlayer && userProfile.playerNumber) {
+            for (const playerDoc of rosterSnapshot.docs) {
+              const playerData = playerDoc.data();
+              if (playerData.number?.toString() === userProfile.playerNumber.toString()) {
+                foundPlayer = {
+                  name: `${playerData.firstName || ""} ${playerData.lastName || ""}`.trim(),
+                  number: playerData.number ?? 0,
+                  height: playerData.height ?? "",
+                  headshot: playerData.headshot ?? "/players/default-avatar.png",
+                  position: playerData.position ?? "",
+                  stats: {
+                    pts: playerData.stats?.pts ?? "0.0",
+                    reb: playerData.stats?.reb ?? "0.0",
+                    ast: playerData.stats?.ast ?? "0.0",
+                    blk: playerData.stats?.blk ?? "0.0",
+                    stl: playerData.stats?.stl ?? "0.0"
+                  }
+                };
+                break;
+              }
+            }
+          }
+          
+          if (foundPlayer) {
+            setPlayerData(foundPlayer);
+            
+            // Find next game for this player's team
+            const upcomingGames = dynamicSpotlightGames.filter(game => {
+              if (!game.dateTime) return false;
+              const now = new Date();
+              const gameDate = new Date(game.dateTime);
+              return gameDate > now && (game.homeTeam === userProfile.teamName || game.awayTeam === userProfile.teamName);
+            }).sort((a, b) => {
+              const dateA = a.dateTime ? new Date(a.dateTime).getTime() : 0;
+              const dateB = b.dateTime ? new Date(b.dateTime).getTime() : 0;
+              return dateA - dateB;
+            });
+            
+            if (upcomingGames.length > 0) {
+              setNextGame(upcomingGames[0]);
+            } else {
+              setNextGame(null);
+            }
+          } else {
+            console.log("Player not found in team roster");
+            setPlayerData(null);
+            setNextGame(null);
+          }
+        } catch (error) {
+          console.error("Error fetching player data from Firestore:", error);
+          setPlayerData(null);
+          setNextGame(null);
+        }
+      } else {
+        setPlayerData(null);
+        setNextGame(null);
+      }
+    };
+    
+    fetchPlayerData();
+  }, [userProfile, dynamicSpotlightGames]);
 
   useEffect(() => {
     const fetchCommittee = async () => {
@@ -991,13 +1268,33 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [newsArticles, featuredArticleId, expandedArticleId]);
 
-  // Auto-rotate partners every 5 seconds
+  // Auto-rotate partners - individual random rotation
   useEffect(() => {
-    if (dynamicPartners.length <= 1) return;
+    if (dynamicPartners.length <= 4) return;
     
     const interval = setInterval(() => {
-      setCurrentPartnerIndex((prev) => (prev + 1) % dynamicPartners.length);
-    }, 5000);
+      // Pick a random position (0-3) to replace
+      const positionToReplace = Math.floor(Math.random() * 4);
+      
+      // Trigger animation
+      setPartnerAnimating(positionToReplace);
+      
+      // After animation, replace with new partner
+      setTimeout(() => {
+        setVisiblePartners((prev) => {
+          const newVisible = [...prev];
+          // Find a partner not currently visible
+          let newPartnerIndex;
+          do {
+            newPartnerIndex = Math.floor(Math.random() * dynamicPartners.length);
+          } while (prev.includes(newPartnerIndex));
+          
+          newVisible[positionToReplace] = newPartnerIndex;
+          return newVisible;
+        });
+        setPartnerAnimating(null);
+      }, 300);
+    }, 3000);
     
     return () => clearInterval(interval);
   }, [dynamicPartners]);
@@ -1085,6 +1382,70 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    const fetchLiveGames = async () => {
+      try {
+        const gamesRef = collection(firebaseDB, "games");
+        const gamesQuery = query(gamesRef, orderBy("date", "asc"));
+        const snapshot = await getDocs(gamesQuery);
+        
+        const now = new Date();
+        const twoAndHalfHoursInMs = 2.5 * 60 * 60 * 1000; // 2 hours and 30 minutes
+        
+        console.log("Checking for live games at:", now.toLocaleString());
+        console.log("Total games found:", snapshot.docs.length);
+        
+        const live = snapshot.docs
+          .filter((doc) => {
+            const data = doc.data();
+            console.log("Checking game - ALL FIELDS:", doc.id, data);
+            
+            if (data.completed === true) {
+              console.log("Game is completed, skipping");
+              return false;
+            }
+            
+            const dateStr = data.date || "";
+            const timeStr = data.time || "00:00";
+            const gameStartTime = new Date(`${dateStr}T${timeStr}`);
+            const timeSinceStart = now.getTime() - gameStartTime.getTime();
+            
+            console.log("Game start time:", gameStartTime.toLocaleString());
+            console.log("Time since start (ms):", timeSinceStart);
+            console.log("Time since start (hours):", timeSinceStart / (1000 * 60 * 60));
+            
+            // Show if game has started and less than 2.5 hours have passed
+            const shouldShow = timeSinceStart >= 0 && timeSinceStart < twoAndHalfHoursInMs;
+            console.log("Should show as live:", shouldShow);
+            return shouldShow;
+          })
+          .map((doc) => {
+            const data = doc.data();
+            return {
+              id: doc.id,
+              homeTeam: data.homeTeam || data.team1 || data.homeTeamName || "",
+              awayTeam: data.awayTeam || data.team2 || data.awayTeamName || "",
+              dateTime: `${data.date || ""}T${data.time || "00:00"}`,
+              homeTeamLogo: data.homeTeamLogo || data.team1Logo,
+              awayTeamLogo: data.awayTeamLogo || data.team2Logo,
+              gender: data.gender as "men" | "women",
+              location: data.location || "",
+            };
+          });
+        
+        console.log("Live games to display:", live.length);
+        setLiveGames(live);
+      } catch (error) {
+        console.error("Error fetching live games:", error);
+      }
+    };
+    
+    fetchLiveGames();
+    // Refresh every 30 seconds for faster updates
+    const interval = setInterval(fetchLiveGames, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
     const fetchGames = async () => {
       try {
         const gamesRef = collection(firebaseDB, "games");
@@ -1154,9 +1515,8 @@ export default function Home() {
             // Check if game is within current week
             const gameInCurrentWeek = game.dateObj >= startOfWeek && game.dateObj <= endOfWeek;
             
-            // Hide game 1 minute after start time
-            const oneMinuteAfterStart = new Date(game.dateObj.getTime() + 60000);
-            const gameNotStarted = now < oneMinuteAfterStart;
+            // Hide game at exact start time
+            const gameNotStarted = now < game.dateObj;
             
             return gameInCurrentWeek && gameNotStarted;
           })
@@ -1200,6 +1560,7 @@ export default function Home() {
                   player: `${topPlayer.firstName || ""} ${topPlayer.lastName || ""}`.trim() || "Unknown",
                   team: teamName,
                   stats: `${pts} PTS · ${secondStat}`,
+                  headshot: topPlayer.headshot || undefined,
                 };
               }
             } else {
@@ -1220,6 +1581,7 @@ export default function Home() {
                   player: `${firstPlayer.firstName || ""} ${firstPlayer.lastName || ""}`.trim() || "Unknown",
                   team: teamName,
                   stats: `${pts} PTS · ${secondStat}`,
+                  headshot: firstPlayer.headshot || undefined,
                 };
               }
             }
@@ -1287,9 +1649,12 @@ export default function Home() {
               team: game.data.awayTeamName || "Away",
               record: `${awayTeam.wins}-${awayTeam.losses}`,
             },
+            homeTeam: game.data.homeTeamName || "Home",
+            awayTeam: game.data.awayTeamName || "Away",
             homeTeamLogo: game.data.homeTeamLogo,
             awayTeamLogo: game.data.awayTeamLogo,
             gender: game.data.gender,
+            dateTime: game.dateObj ? game.dateObj.toISOString() : "",
             refereeHomeTeam1: getRefereeLastName(game.data.refereeHomeTeam1),
             refereeHomeTeam2: getRefereeLastName(game.data.refereeHomeTeam2),
             refereeAwayTeam: getRefereeLastName(game.data.refereeAwayTeam),
@@ -1310,6 +1675,13 @@ export default function Home() {
           limit(10)
         );
         const completedSnapshot = await getDocs(completedGamesQuery);
+        
+        // Get current date
+        const now = new Date();
+        const fourDaysAgo = new Date(now);
+        fourDaysAgo.setDate(now.getDate() - 4);
+        fourDaysAgo.setHours(0, 0, 0, 0);
+        
         const completedGamesData = completedSnapshot.docs
           .map((doc) => {
             const data = doc.data();
@@ -1319,7 +1691,12 @@ export default function Home() {
               dateObj: data.date ? new Date(data.date) : null,
             };
           })
-          .filter((game: any) => game.completed === true)
+          .filter((game: any) => {
+            // Only show completed games from the last 4 days
+            if (game.completed !== true) return false;
+            if (!game.dateObj) return false;
+            return game.dateObj >= fourDaysAgo;
+          })
           .sort((a: any, b: any) => (b.dateObj?.getTime() || 0) - (a.dateObj?.getTime() || 0))
           .slice(0, 7);
         
@@ -1334,6 +1711,9 @@ export default function Home() {
     };
 
     fetchGames();
+    // Auto-refresh every 30 seconds to show new games without page refresh
+    const interval = setInterval(fetchGames, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -1348,6 +1728,16 @@ export default function Home() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [mobileNavOpen]);
+
+  // Show profile popup for verified players after login
+  useEffect(() => {
+    if (user && userProfile && userProfile.verificationStatus === "approved") {
+      const timer = setTimeout(() => {
+        setShowProfilePopup(true);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [user, userProfile]);
 
   // Auto-scroll for teams section
   useEffect(() => {
@@ -1412,7 +1802,7 @@ export default function Home() {
       />
 
       <nav className="sticky top-0 z-50 border-b border-white/10 bg-black/30 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 md:px-8">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-8 px-6 py-5 md:px-12 md:pl-16">
           <Link href="/" className="flex items-center gap-3 text-xl font-semibold tracking-[0.3em]">
             <Image
               src="/logos/liprobakin.png"
@@ -1440,18 +1830,62 @@ export default function Home() {
                 className={`block h-0.5 w-6 bg-current transition ${mobileNavOpen ? "-translate-y-1 -rotate-45" : "mt-1"}`}
               />
             </button>
-            <div className="hidden gap-6 text-xs font-medium uppercase tracking-[0.3em] text-slate-300 lg:flex">
+            <div className="hidden gap-8 text-xs font-medium uppercase tracking-[0.3em] text-slate-300 lg:flex">
               {navSections.map((section) => (
-                <Link
+                <a
                   key={section}
                   href={`#${slug(section)}`}
-                  className="transition hover:text-white"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    const element = document.getElementById(slug(section));
+                    if (element) {
+                      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                  }}
+                  className="transition hover:text-white hover:scale-105 whitespace-nowrap cursor-pointer"
                 >
                   {copy.nav[slug(section) as keyof typeof copy.nav] ?? section}
-                </Link>
+                </a>
                 ))}
             </div>
-            <GenderToggle value={gender} onChange={setGender} />
+            {user ? (
+              <div className="hidden items-center gap-3 lg:flex">
+                <Link
+                  href="/account"
+                  className="group relative rounded-xl border border-white/20 bg-gradient-to-br from-white/10 to-white/5 p-3 backdrop-blur-xl transition-all duration-300 hover:scale-110 hover:border-white/40 hover:shadow-lg hover:shadow-blue-500/20"
+                  aria-label="Account settings"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white transition-transform group-hover:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </Link>
+                <button
+                  onClick={handleSignOut}
+                  className="group relative rounded-xl border border-white/20 bg-gradient-to-br from-red-500/20 to-red-600/10 p-3 backdrop-blur-xl transition-all duration-300 hover:scale-110 hover:border-red-400/40 hover:shadow-lg hover:shadow-red-500/20"
+                  type="button"
+                  aria-label="Sign out"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-red-400 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setAuthModalOpen(true)}
+                className="group relative hidden h-11 w-11 items-center justify-center overflow-hidden rounded-xl border border-white/20 bg-white/5 shadow-lg backdrop-blur-xl transition-all duration-300 hover:scale-110 hover:border-white/40 hover:bg-white/10"
+                type="button"
+                aria-label="Log In / Sign Up"
+                style={{ display: 'none' }}
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100 animate-shimmer" />
+                <svg className="relative z-10 h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              </button>
+            )}
+            <GenderToggle value={gender} onChange={setGender} language={language} />
           </div>
         </div>
       </nav>
@@ -1463,14 +1897,21 @@ export default function Home() {
         >
           <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-4 md:px-8">
             {mobileNavSections.map((section) => (
-              <Link
+              <a
                 key={section}
                 href={`#${slug(section)}`}
-                onClick={() => setMobileNavOpen(false)}
-                className="rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-sm font-semibold uppercase tracking-[0.3em] text-slate-200 transition hover:border-white/40 hover:text-white"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setMobileNavOpen(false);
+                  const element = document.getElementById(slug(section));
+                  if (element) {
+                    element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }
+                }}
+                className="rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-sm font-semibold uppercase tracking-[0.3em] text-slate-200 transition hover:border-white/40 hover:text-white cursor-pointer"
               >
                 {copy.nav[slug(section) as keyof typeof copy.nav] ?? section}
-              </Link>
+              </a>
             ))}
           </div>
         </div>
@@ -1542,12 +1983,27 @@ export default function Home() {
                                       }
                                     }, 300);
                                   }}
-                                  className={`group relative overflow-hidden rounded-xl border text-left transition-all duration-300 hover:border-orange-500 hover:bg-slate-900/80 ${
+                                  className={`group relative overflow-hidden rounded-xl border text-left transition-all duration-300 backdrop-blur-md ${
                                     article.id === featured.id 
-                                      ? 'border-orange-500 bg-slate-900/80 ring-2 ring-orange-500/50' 
-                                      : 'border-white/10 bg-slate-900/60'
+                                      ? 'border-white/30 bg-white/10' 
+                                      : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10'
                                   } ${index === 2 ? 'hidden sm:block' : ''}`}
                               >
+                                {/* Glassy Progress Bar - Only show on active featured article */}
+                                {article.id === featured.id && !expandedArticleId && (
+                                  <div className="absolute top-0 left-0 right-0 h-1 bg-white/5 overflow-hidden z-20">
+                                    <div 
+                                      className="h-full bg-white/40 backdrop-blur-md relative"
+                                      style={{
+                                        animation: 'progressBar 15s linear infinite'
+                                      }}
+                                    >
+                                      {/* Subtle shimmer */}
+                                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer" />
+                                    </div>
+                                  </div>
+                                )}
+                                
                                 {article.imageUrl && (
                                   <div className="relative h-20 md:h-28 overflow-hidden">
                                     <Image
@@ -1590,7 +2046,7 @@ export default function Home() {
                       )}
 
                       {/* Title and Headline on top of image */}
-                      <div className={`absolute inset-0 flex flex-col p-8 md:p-16 ${isExpanded ? 'relative' : 'justify-start'} z-10 pointer-events-none`}>
+                      <div className={`absolute inset-0 flex flex-col p-8 md:p-16 ${isExpanded ? 'relative' : 'justify-start'} z-10`}>
                         <div className="pointer-events-auto">
                         <div>
                           <span className="mb-2 inline-block w-fit rounded-full bg-orange-600 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-white">
@@ -1612,34 +2068,60 @@ export default function Home() {
                           )}
                           
                           <button
-                            onClick={() => setExpandedArticleId(isExpanded ? null : featured.id)}
-                            className="flex items-center gap-2 rounded-xl border border-white/20 bg-white/5 px-6 py-3 text-sm font-semibold uppercase tracking-wider text-white transition hover:border-orange-500 hover:bg-orange-600 w-fit"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setExpandedArticleId(isExpanded ? null : featured.id);
+                            }}
+                            type="button"
+                            className="flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 backdrop-blur-md px-6 py-3 text-sm font-semibold uppercase tracking-wider text-white transition hover:border-white/40 hover:bg-white/20 active:scale-95 w-fit cursor-pointer"
                           >
                             {isExpanded ? "Fermer" : "Voir l'article »"}
                           </button>
                         </div>
                           
-                          {/* Expandable Article Content - Below button with slide up animation */}
-                          <div
-                            className={`transition-all duration-500 ease-in-out -mx-10 md:-mx-20 overflow-visible ${
-                              isExpanded ? "max-h-[3150px] opacity-100 mt-6" : "max-h-0 opacity-0 mt-0"
+                          {/* Expandable Article Content - Modern slide-in overlay with animations */}
+                          <div 
+                            className={`overflow-hidden transition-all duration-500 ease-out ${
+                              isExpanded 
+                                ? 'max-h-[800px] opacity-100 mt-8' 
+                                : 'max-h-0 opacity-0 mt-0'
                             }`}
                           >
-                            <div className="bg-slate-950/95 backdrop-blur-sm p-6 md:p-8 border-y border-white/10 w-full">
-                              <p className="text-base leading-relaxed text-slate-200 whitespace-pre-line">
-                                {featured.summary}
-                              </p>
-                            </div>
-                            {isExpanded && (
-                              <div className="flex justify-center mt-4">
+                            <div className={`transform transition-all duration-500 ease-out ${
+                              isExpanded 
+                                ? 'translate-y-0 scale-100' 
+                                : 'translate-y-4 scale-95'
+                            }`}>
+                              <div className="relative rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/95 via-slate-950/95 to-black/95 backdrop-blur-xl p-6 md:p-8 shadow-2xl">
+                                {/* Close button - top right */}
                                 <button
-                                  onClick={() => setExpandedArticleId(null)}
-                                  className="rounded-xl border border-white/20 bg-white/5 px-6 py-3 text-sm font-semibold uppercase tracking-wider text-white transition hover:border-orange-500 hover:bg-orange-600"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setExpandedArticleId(null);
+                                  }}
+                                  className="absolute top-4 right-4 flex items-center justify-center w-8 h-8 rounded-full border border-white/20 bg-white/10 backdrop-blur-md text-white transition hover:border-white/40 hover:bg-white/20 hover:rotate-90 active:scale-95 cursor-pointer z-50"
+                                  type="button"
+                                  aria-label="Close article"
                                 >
-                                  Fermer
+                                  <span className="text-xl leading-none">×</span>
                                 </button>
+
+                                {/* Decorative gradient line */}
+                                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-t-2xl" />
+
+                                {/* Article content with custom scrollbar */}
+                                <div className="max-h-[500px] overflow-y-auto pr-4 custom-scrollbar">
+                                  <p className="text-sm md:text-base leading-relaxed text-slate-200 whitespace-pre-line">
+                                    {featured.summary}
+                                  </p>
+                                </div>
+
+                                {/* Gradient fade at bottom */}
+                                <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-slate-950 to-transparent pointer-events-none rounded-b-2xl" />
                               </div>
-                            )}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1652,6 +2134,191 @@ export default function Home() {
         </section>
       )}
 
+      {/* Live Games Section - No label */}
+      {liveGames.length > 0 && (
+        <section className="mx-auto max-w-6xl px-4 md:px-8">
+          <div className={`flex flex-wrap gap-4 ${liveGames.length === 1 ? 'justify-center' : liveGames.length === 2 ? 'justify-center' : 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3'}`}>
+            {liveGames.map((game) => {
+              return (
+                <div
+                  key={game.id}
+                  className={`relative overflow-hidden rounded-b-2xl border border-white/10 bg-gradient-to-br from-slate-900/80 to-slate-950/90 backdrop-blur-sm transition-all duration-300 hover:border-white/20 hover:shadow-xl ${liveGames.length < 3 ? 'w-full md:w-[calc(50%-0.5rem)] lg:w-[400px]' : ''}`}
+                >
+                  <div className="flex items-center justify-between p-3">
+                    {/* Home Team */}
+                    <div className="flex flex-1 items-center gap-2">
+                      {game.homeTeamLogo && (
+                        <div className="relative h-10 w-10 flex-shrink-0 rounded-full overflow-hidden bg-slate-800">
+                          <Image
+                            src={game.homeTeamLogo}
+                            alt={game.homeTeam}
+                            fill
+                            className="object-contain"
+                            unoptimized
+                          />
+                        </div>
+                      )}
+                      <div className="flex-1">
+                        <h3 className="text-sm font-bold text-white">{game.homeTeam}</h3>
+                      </div>
+                    </div>
+
+                    {/* Live Indicator */}
+                    <div className="flex flex-col items-center gap-1 px-4">
+                      <div className="relative flex items-center gap-1">
+                        <div className="relative">
+                          <div className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+                          <div className="absolute inset-0 h-2 w-2 rounded-full bg-red-500 animate-ping" />
+                        </div>
+                        <span className="text-xs font-bold uppercase tracking-wider text-red-500 animate-pulse">
+                          LIVE
+                        </span>
+                      </div>
+                      <span className="text-[10px] uppercase tracking-wider text-slate-400">
+                        {game.gender === "men" ? "MEN" : "WOMEN"}
+                      </span>
+                      {game.location && (
+                        <span className="text-[10px] text-slate-500 text-center">
+                          {game.location}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Away Team */}
+                    <div className="flex flex-1 items-center justify-end gap-2">
+                      <div className="flex-1 text-right">
+                        <h3 className="text-sm font-bold text-white">{game.awayTeam}</h3>
+                      </div>
+                      {game.awayTeamLogo && (
+                        <div className="relative h-10 w-10 flex-shrink-0 rounded-full overflow-hidden bg-slate-800">
+                          <Image
+                            src={game.awayTeamLogo}
+                            alt={game.awayTeam}
+                            fill
+                            className="object-contain"
+                            unoptimized
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* Player Profile Card - Only for verified players */}
+      {userProfile?.role === "player" && userProfile?.verificationStatus === "approved" && userProfile?.teamName && playerData && (
+        <section className="mx-auto max-w-6xl px-4 pt-8 md:px-8">
+          <div 
+            className={`relative rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950/90 shadow-2xl transition-all duration-500 overflow-hidden ${
+              playerCardExpanded ? 'p-6' : 'cursor-pointer hover:border-white/30'
+            }`}
+            onClick={() => !playerCardExpanded && setPlayerCardExpanded(true)}
+          >
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setPlayerCardExpanded(!playerCardExpanded);
+              }}
+              className="absolute right-4 top-4 z-10 text-slate-400 transition hover:text-white hover:scale-110"
+              type="button"
+              aria-label={playerCardExpanded ? "Collapse player card" : "Expand player card"}
+            >
+              {playerCardExpanded ? (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                </svg>
+              )}
+            </button>
+            
+            {/* Collapsed View */}
+            {!playerCardExpanded && (
+              <div className="flex items-center gap-3 p-3">
+                <div className="relative h-12 w-12 flex-shrink-0">
+                  <Image
+                    src={playerData.headshot || '/logos/liprobakin.png'}
+                    alt={playerData.name}
+                    fill
+                    className="rounded-full border-2 border-white/20 object-cover"
+                  />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-base font-bold text-white">{playerData.name}</h3>
+                </div>
+              </div>
+            )}
+            
+            {/* Expanded View */}
+            {playerCardExpanded && (
+              <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
+                {/* Player Profile Pic */}
+                <div className="relative h-32 w-32 flex-shrink-0">
+                  <Image
+                    src={playerData.headshot || '/logos/liprobakin.png'}
+                    alt={playerData.name}
+                    fill
+                    className="rounded-full border-4 border-white/20 object-cover"
+                  />
+                </div>
+                
+                {/* Player Stats */}
+                <div className="flex-1 space-y-4">
+                  <div className="border-b border-white/10 pb-3">
+                    <h3 className="text-2xl font-bold text-white">{playerData.name}</h3>
+                    <p className="text-sm text-slate-400">#{playerData.number} • {userProfile.teamName}</p>
+                  </div>
+                  
+                  <div className="grid grid-cols-4 gap-4 text-center">
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wider text-slate-400">PTS</p>
+                      <p className="text-2xl font-bold text-white">{playerData.stats.pts}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wider text-slate-400">REB</p>
+                      <p className="text-2xl font-bold text-white">{playerData.stats.reb}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wider text-slate-400">AST</p>
+                      <p className="text-2xl font-bold text-white">{playerData.stats.pts ? Math.floor(Number(playerData.stats.pts) * 0.3) : '0'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wider text-slate-400">BLK</p>
+                      <p className="text-2xl font-bold text-white">{playerData.stats.stl}</p>
+                    </div>
+                  </div>
+                  
+                  {/* Next Game */}
+                  {nextGame && (
+                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Next Game</p>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <span className="text-lg font-bold text-white">vs</span>
+                          <span className="text-lg font-semibold text-white">
+                            {nextGame.homeTeam === userProfile.teamName ? nextGame.awayTeam : nextGame.homeTeam}
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-medium text-white">{nextGame.dateTime ? formatGameDateTime(nextGame.dateTime, language) : "TBD"}</p>
+                          <p className="text-xs text-slate-400">{nextGame.venue}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
       <main className="mx-auto max-w-6xl space-y-20 px-4 pb-20 pt-12 md:px-8">
         <section id="stats" className="space-y-8">
           <SectionHeader
@@ -1661,8 +2328,8 @@ export default function Home() {
           <div className="space-y-4">
             {spotlightGames.length === 0 ? (
               <div className="rounded-3xl border border-white/5 bg-slate-900/70 p-12 text-center">
-                <p className="text-lg text-slate-400">No upcoming games scheduled yet.</p>
-                <p className="mt-2 text-sm text-slate-500">Check back soon for the latest matchups!</p>
+                <p className="text-lg text-slate-400">{language === 'fr' ? "Aucun match n'est encore prévu." : "No upcoming games scheduled yet."}</p>
+                <p className="mt-2 text-sm text-slate-500">{language === 'fr' ? "Revenez bientôt pour découvrir les prochaines rencontres !" : "Check back soon for the latest matchups!"}</p>
               </div>
             ) : (
               spotlightGames.map((matchup) => (
@@ -1721,7 +2388,7 @@ export default function Home() {
             <div className="space-y-4">
               {weeklyScheduleGames.length === 0 ? (
                 <div className="py-8 text-center">
-                  <p className="text-slate-400">No games scheduled yet.</p>
+                  <p className="text-slate-400">{language === 'fr' ? "Aucun match n'est encore prévu." : "No games scheduled yet."}</p>
                 </div>
               ) : (
                 weeklyScheduleGames.slice(0, 5).map((game) => (
@@ -1791,8 +2458,8 @@ export default function Home() {
         <section id="final-buzzer" className="space-y-8">
           <SectionHeader
             id="final-buzzer"
-            eyebrow="GAMES"
-            title="Final Buzzer"
+            eyebrow={sectionCopy.games.eyebrow}
+            title={sectionCopy.games.title}
           />
           <div className="space-y-4">
             {completedGames.length === 0 ? (
@@ -1997,9 +2664,27 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={() => setLeagueLeadersExpanded(!leagueLeadersExpanded)}
-                  className="rounded-full border border-white/30 bg-white/5 px-6 py-2.5 text-sm font-semibold uppercase tracking-[0.3em] text-white transition hover:border-white hover:bg-white/10"
+                  className="group relative overflow-hidden rounded-xl border border-white/20 bg-white/5 backdrop-blur-md px-5 py-2.5 text-sm font-medium text-white transition-all hover:border-white/40 hover:bg-white/10 active:scale-95"
                 >
-                  {leagueLeadersExpanded ? "Show Less" : "Show Top 10"}
+                  <span className="relative z-10 flex items-center gap-2">
+                    {leagueLeadersExpanded ? (
+                      <>
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+                        </svg>
+                        Show Less
+                      </>
+                    ) : (
+                      <>
+                        Show Top 10
+                        <svg className="h-4 w-4 transition-transform group-hover:translate-x-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </>
+                    )}
+                  </span>
+                  {/* Subtle shimmer on hover */}
+                  <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/10 to-transparent transition-transform duration-1000 group-hover:translate-x-full" />
                 </button>
               </div>
             )}
@@ -2165,44 +2850,49 @@ export default function Home() {
               title={sectionCopy.partners.title}
               description={sectionCopy.partners.description}
             />
-            <div className="relative aspect-[4/3] overflow-hidden rounded-xl border border-white/10 bg-slate-900/70 p-4 md:p-8">
+            <div className="relative aspect-[4/3] overflow-hidden rounded-xl border border-white/10 bg-slate-900/70 p-2">
               {dynamicPartners.length > 0 ? (
-                <div className="flex h-full items-center justify-center">
-                  {dynamicPartners[currentPartnerIndex].logo ? (
-                    <Image
-                      src={dynamicPartners[currentPartnerIndex].logo}
-                      alt={dynamicPartners[currentPartnerIndex].name}
-                      width={400}
-                      height={300}
-                      className="h-auto max-h-full w-auto max-w-full object-contain"
-                    />
-                  ) : (
-                    <div className="text-center">
-                      <p className="text-sm md:text-2xl font-semibold text-white">
-                        {dynamicPartners[currentPartnerIndex].name}
-                      </p>
-                    </div>
-                  )}
+                <div className="grid grid-cols-2 gap-1.5 h-full">
+                  {visiblePartners.map((partnerIndex, position) => {
+                    const partner = dynamicPartners[partnerIndex];
+                    if (!partner) return null;
+                    
+                    return (
+                      <div
+                        key={`${position}-${partnerIndex}`}
+                         className={`relative flex items-center justify-center rounded-lg border overflow-hidden transition-all duration-500 ${
+                          partnerAnimating === position
+                            ? 'border-white/20 bg-black scale-95 brightness-50'
+                            : 'border-white/5 bg-slate-950/50 scale-100 brightness-100'
+                        }`}
+                      >
+                        <div className={`relative w-full h-full p-2 transition-all duration-500 ${
+                          partnerAnimating === position
+                            ? 'opacity-0 blur-sm'
+                            : 'opacity-100 blur-0'
+                        }`}>
+                          {partner.logo ? (
+                            <div className="relative w-full h-full">
+                              <Image
+                                src={partner.logo}
+                                alt={partner.name}
+                                fill
+                                className="object-contain"
+                              />
+                            </div>
+                          ) : (
+                            <p className="text-xs md:text-sm font-semibold text-white text-center h-full flex items-center justify-center">
+                              {partner.name}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="flex h-full items-center justify-center text-slate-400">
                   <p className="text-xs md:text-base">No partners yet</p>
-                </div>
-              )}
-              {dynamicPartners.length > 1 && (
-                <div className="absolute bottom-2 md:bottom-4 left-1/2 flex -translate-x-1/2 gap-1.5 md:gap-2">
-                  {dynamicPartners.map((_, index) => (
-                    <button
-                      key={index}
-                      onClick={() => setCurrentPartnerIndex(index)}
-                      className={`h-1.5 w-1.5 md:h-2 md:w-2 rounded-full transition ${
-                        index === currentPartnerIndex
-                          ? "bg-orange-500"
-                          : "bg-white/30 hover:bg-white/50"
-                      }`}
-                      aria-label={`Go to partner ${index + 1}`}
-                    />
-                  ))}
                 </div>
               )}
             </div>
@@ -2303,11 +2993,18 @@ export default function Home() {
           </div>
         </div>
       </footer>
-      {selectedTeam && selectedRoster ? (
-        <RosterModal teamName={selectedTeam.label} roster={selectedRoster} onClose={() => setSelectedTeam(null)} allFranchises={allFranchises} />
+      {selectedTeam ? (
+        <RosterModal teamName={selectedTeam.label} onClose={() => setSelectedTeam(null)} allFranchises={allFranchises} />
       ) : null}
       {selectedPlayer ? (
         <PlayerStatsModal player={selectedPlayer} onClose={() => setSelectedPlayer(null)} />
+      ) : null}
+      <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} />
+      {showProfilePopup && userProfile ? (
+        <PlayerProfilePopup 
+          userProfile={userProfile} 
+          onClose={() => setShowProfilePopup(false)} 
+        />
       ) : null}
     </div>
   );

@@ -14,6 +14,7 @@ type FirestoreTimestamp = {
 type FirestoreGameDoc = {
   id?: string;
   gender?: string;
+  week?: number; // Journée/Week number
   homeTeamId?: string;
   homeTeamName?: string;
   homeTeamLogo?: string;
@@ -190,6 +191,7 @@ const sortByDateAsc = (a?: Date, b?: Date) => (a?.getTime() ?? 0) - (b?.getTime(
 
 type EnrichedGame = {
   id: string;
+  week?: number; // Journée/Week number
   homeTeamId?: string;
   awayTeamId?: string;
   homeTeamName: string;
@@ -282,6 +284,7 @@ const enrichedGames: EnrichedGame[] = firestoreGames.map((game) => {
 
   return {
     id,
+    week: game.week, // Journée/Week number
     homeTeamId: game.homeTeamId,
     awayTeamId: game.awayTeamId,
     homeTeamName: getTeamDisplayName(game.homeTeamId, game.homeTeamName ?? "Home"),
@@ -340,6 +343,7 @@ const mergeStandingsWithTeams = (standings: FirestoreStandingDoc[], teams: Fires
         (row.teamName && team.name && row.teamName.toLowerCase() === team.name.toLowerCase())
     );
 
+  // Add ALL teams, even those without any games/records
   teams.forEach((team) => {
     if (!hasTeam(team)) {
       combined.push({
@@ -348,7 +352,7 @@ const mergeStandingsWithTeams = (standings: FirestoreStandingDoc[], teams: Fires
         gender: team.gender ?? "men",
         wins: team.wins ?? 0,
         losses: team.losses ?? 0,
-        totalPoints: team.totalPoints,
+        totalPoints: team.totalPoints ?? 0, // Default to 0 if no points yet
       });
     }
   });
@@ -356,10 +360,14 @@ const mergeStandingsWithTeams = (standings: FirestoreStandingDoc[], teams: Fires
   return combined.sort(sortStandings);
 };
 
+const combinedMenStandings = mergeStandingsWithTeams(menStandingsDocs, menTeams);
+const combinedWomenStandings = mergeStandingsWithTeams(womenStandingsDocs, womenTeams);
+
 const recordByTeamId = new Map<string, string>();
 const recordByTeamName = new Map<string, string>();
 
-menStandingsDocs.concat(womenStandingsDocs).forEach((standing) => {
+// Build record map from combined standings (includes all teams)
+combinedMenStandings.concat(combinedWomenStandings).forEach((standing) => {
   const wins = standing.wins ?? 0;
   const losses = standing.losses ?? 0;
   const record = `${wins}-${losses}`;
@@ -380,9 +388,6 @@ const getRecordForTeam = (teamId?: string, teamName?: string) => {
   }
   return "0-0";
 };
-
-const combinedMenStandings = mergeStandingsWithTeams(menStandingsDocs, menTeams);
-const combinedWomenStandings = mergeStandingsWithTeams(womenStandingsDocs, womenTeams);
 
 const derivedMenStandings: StandingRow[] = combinedMenStandings.map((standing, index) => ({
   seed: index + 1,
@@ -546,7 +551,7 @@ type PlayerAggregate = {
   games: number;
 };
 
-const playerAggregates = new Map<string, PlayerAggregate>();
+const playerAggregates = new Map<string, PlayerAggregate & { gender?: string }>();
 
 enrichedGames.forEach((game) => {
   if (!game.completed) {
@@ -556,6 +561,12 @@ enrichedGames.forEach((game) => {
   if (!original) {
     return;
   }
+  
+  // Determine game gender from team
+  const gameGender = (game.homeTeamId && teamById.has(game.homeTeamId)) 
+    ? (teamById.get(game.homeTeamId)?.gender ?? "men")
+    : "men";
+  
   asArray<FirestorePlayerStat>(original.playerStats).forEach((entry) => {
     if (!entry.playerName) {
       return;
@@ -571,6 +582,7 @@ enrichedGames.forEach((game) => {
         teamName: entry.teamName ?? getTeamDisplayName(entry.teamId, "Team"),
         headshot: entry.headshot,
         position: entry.position,
+        gender: gameGender,
         pts: 0,
         ast: 0,
         reb: 0,
@@ -586,6 +598,9 @@ enrichedGames.forEach((game) => {
     if (!aggregate.position && entry.position) {
       aggregate.position = entry.position;
     }
+    if (!aggregate.gender) {
+      aggregate.gender = gameGender;
+    }
     aggregate.pts += typeof entry.pts === "number" ? entry.pts : 0;
     aggregate.ast += typeof entry.ast === "number" ? entry.ast : 0;
     aggregate.reb += typeof entry.reb === "number" ? entry.reb : 0;
@@ -598,46 +613,53 @@ enrichedGames.forEach((game) => {
   });
 });
 
-const derivedSpotlightPlayers: SpotlightPlayer[] = Array.from(playerAggregates.values())
-  .map((player) => {
-    const gamesPlayed = Math.max(player.games, 1);
-    const avgPts = player.pts / gamesPlayed;
-    const avgAst = player.ast / gamesPlayed;
-    const avgReb = player.reb / gamesPlayed;
-    const avgBlk = player.blk / gamesPlayed;
-    const avgStl = player.stl / gamesPlayed;
-    const rating = avgPts + avgAst * 0.75 + avgReb * 0.6 + avgStl * 0.8 + avgBlk * 0.5;
+// Helper function to create spotlight players from aggregates
+const createSpotlightPlayers = (gender: string): SpotlightPlayer[] => {
+  return Array.from(playerAggregates.values())
+    .filter((player) => (player.gender ?? "men") === gender)
+    .map((player) => {
+      const gamesPlayed = Math.max(player.games, 1);
+      const avgPts = player.pts / gamesPlayed;
+      const avgAst = player.ast / gamesPlayed;
+      const avgReb = player.reb / gamesPlayed;
+      const avgBlk = player.blk / gamesPlayed;
+      const avgStl = player.stl / gamesPlayed;
+      const rating = avgPts + avgAst * 0.75 + avgReb * 0.6 + avgStl * 0.8 + avgBlk * 0.5;
 
-    const statLines = [
-      { label: "Points", value: avgPts.toFixed(1) },
-      { label: "Assists", value: avgAst.toFixed(1) },
-      { label: "Rebounds", value: avgReb.toFixed(1) },
-      { label: "Steals", value: avgStl.toFixed(1) },
-      { label: "Blocks", value: avgBlk.toFixed(1) },
-    ];
+      const statLines = [
+        { label: "Points", value: avgPts.toFixed(1) },
+        { label: "Assists", value: avgAst.toFixed(1) },
+        { label: "Rebounds", value: avgReb.toFixed(1) },
+        { label: "Steals", value: avgStl.toFixed(1) },
+        { label: "Blocks", value: avgBlk.toFixed(1) },
+      ];
 
-    return {
-      name: player.name,
-      position: player.position ?? "G",
-      team: player.teamName,
-      stats: `${avgPts.toFixed(1)} PPG | ${avgAst.toFixed(1)} AST | ${avgReb.toFixed(1)} REB`,
-      efficiency: `+${(rating).toFixed(1)}`,
-      blurb: `${player.teamName} standout fueling the Liprobakin slate.`,
-      number: jerseyByPlayerName.get(player.name) ?? 0,
-      statLines,
-      leaderboard: {
-        pts: Number(avgPts.toFixed(1)),
-        ast: Number(avgAst.toFixed(1)),
-        reb: Number(avgReb.toFixed(1)),
-        blk: Number(avgBlk.toFixed(1)),
-        stl: Number(avgStl.toFixed(1)),
-      },
-      photo: player.headshot ?? "/players/default.svg",
-      rating,
-    };
-  })
-  .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
-  .slice(0, 5);
+      return {
+        name: player.name,
+        position: player.position ?? "G",
+        team: player.teamName,
+        stats: `${avgPts.toFixed(1)} PPG | ${avgAst.toFixed(1)} AST | ${avgReb.toFixed(1)} REB`,
+        efficiency: `+${(rating).toFixed(1)}`,
+        blurb: `${player.teamName} standout fueling the Liprobakin slate.`,
+        number: jerseyByPlayerName.get(player.name) ?? 0,
+        statLines,
+        leaderboard: {
+          pts: Number(avgPts.toFixed(1)),
+          ast: Number(avgAst.toFixed(1)),
+          reb: Number(avgReb.toFixed(1)),
+          blk: Number(avgBlk.toFixed(1)),
+          stl: Number(avgStl.toFixed(1)),
+        },
+        photo: player.headshot ?? "/players/default.svg",
+        rating,
+      };
+    })
+    .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
+    .slice(0, 5);
+};
+
+const derivedSpotlightPlayers: SpotlightPlayer[] = createSpotlightPlayers("men");
+const derivedSpotlightPlayersWomen: SpotlightPlayer[] = createSpotlightPlayers("women");
 
 const fallbackSpotlightPlayers: SpotlightPlayer[] = [
   {
@@ -813,6 +835,8 @@ export type RosterPlayer = {
   stats: {
     pts: string;
     reb: string;
+    ast?: string;
+    blk?: string;
     stl: string;
   };
 };
@@ -835,13 +859,13 @@ export type FeaturedMatchup = {
     player: string;
     team: string;
     stats: string;
+    headshot?: string;
   }[];
 };
 
 export const navSections = [
   "Schedule",
   "Players",
-  "News",
   "Standings",
   "Teams",
 ];
@@ -882,7 +906,7 @@ export const featuredMatchups: FeaturedMatchup[] = derivedFeaturedMatchups.lengt
   ? derivedFeaturedMatchups
   : fallbackFeaturedMatchups;
 
-export const spotlightPlayersWomen: SpotlightPlayer[] = [
+const fallbackSpotlightPlayersWomen: SpotlightPlayer[] = [
   {
     name: "Amina Ngalula",
     position: "G",
@@ -976,6 +1000,11 @@ export const spotlightPlayersWomen: SpotlightPlayer[] = [
     photo: "/players/sandrine-ilondo.svg",
   },
 ];
+
+// Export women's spotlight players (use derived if available, fallback otherwise)
+export const spotlightPlayersWomen: SpotlightPlayer[] = derivedSpotlightPlayersWomen.length
+  ? derivedSpotlightPlayersWomen
+  : fallbackSpotlightPlayersWomen;
 
 const fallbackLatestGames: GameResult[] = [
   {
@@ -1191,254 +1220,29 @@ export const franchisesWomen: Franchise[] = womenFranchises.length
   ? womenFranchises
   : fallbackWomenFranchises;
 
-export const teamRosters: Record<string, RosterPlayer[]> = {
-  "New Gen": [
-    { name: "Glory Mukendi", number: 15, height: "6'5\"", stats: { pts: "12.4", reb: "4.8", stl: "1.3" } },
-    { name: "Cam Porter", number: 3, height: "6'4\"", stats: { pts: "27.8", reb: "4.3", stl: "1.7" } },
-    { name: "Seyi Bongo", number: 8, height: "6'9\"", stats: { pts: "16.1", reb: "9.0", stl: "1.1" } },
-    { name: "Drew Nsimba", number: 12, height: "6'6\"", stats: { pts: "11.4", reb: "5.8", stl: "1.4" } },
-    { name: "Langston Mbaye", number: 1, height: "6'1\"", stats: { pts: "8.9", reb: "2.1", stl: "2.3" } },
-  ],
-  "Terreur": [
-    { name: "Beny Bulambu", number: 18, height: "6'7\"", stats: { pts: "14.6", reb: "6.3", stl: "1.2" } },
-    { name: "Omar Greer", number: 14, height: "6'11\"", stats: { pts: "18.7", reb: "10.2", stl: "0.8" } },
-    { name: "Nikita Eloko", number: 5, height: "6'5\"", stats: { pts: "13.9", reb: "3.4", stl: "1.6" } },
-    { name: "Bryce Tuta", number: 22, height: "6'8\"", stats: { pts: "9.8", reb: "7.1", stl: "1.0" } },
-    { name: "Ian Kabasele", number: 2, height: "6'2\"", stats: { pts: "7.6", reb: "2.5", stl: "2.4" } },
-  ],
-  "SCTP": [
-    { name: "David Mubenga", number: 23, height: "6'8\"", stats: { pts: "11.6", reb: "7.1", stl: "0.9" } },
-    { name: "Jaylen Muamba", number: 6, height: "6'6\"", stats: { pts: "17.0", reb: "6.0", stl: "1.2" } },
-    { name: "Theo Kiala", number: 0, height: "6'3\"", stats: { pts: "12.3", reb: "3.0", stl: "1.9" } },
-    { name: "Patrick Olonga", number: 34, height: "6'10\"", stats: { pts: "8.7", reb: "8.1", stl: "0.6" } },
-    { name: "Frank Dondo", number: 11, height: "6'4\"", stats: { pts: "10.1", reb: "4.2", stl: "1.5" } },
-  ],
-  "Molokai": [
-    { name: "Eli Lufuma", number: 21, height: "6'7\"", stats: { pts: "15.6", reb: "7.3", stl: "1.0" } },
-    { name: "Chris Moke", number: 4, height: "6'2\"", stats: { pts: "11.9", reb: "3.1", stl: "1.8" } },
-    { name: "Ralph Kianza", number: 17, height: "6'10\"", stats: { pts: "9.2", reb: "9.0", stl: "0.5" } },
-    { name: "Zeke Wema", number: 30, height: "6'5\"", stats: { pts: "7.4", reb: "4.1", stl: "1.3" } },
-  ],
-  "Ballers": [
-    { name: "Abel Boteya", number: 9, height: "6'6\"", stats: { pts: "22.1", reb: "6.4", stl: "1.8" } },
-    { name: "Jordan Mavungu", number: 45, height: "6'10\"", stats: { pts: "13.0", reb: "9.4", stl: "0.7" } },
-    { name: "Kyle Mbuyi", number: 7, height: "6'5\"", stats: { pts: "12.7", reb: "5.0", stl: "1.4" } },
-    { name: "Ovie Bukasa", number: 14, height: "6'1\"", stats: { pts: "6.8", reb: "2.3", stl: "1.9" } },
-    { name: "Tyrell Kapinga", number: 3, height: "6'4\"", stats: { pts: "11.1", reb: "3.8", stl: "1.6" } },
-  ],
-  "Espoir Fukash": [
-    { name: "Malik Kasongo", number: 32, height: "6'8\"", stats: { pts: "20.5", reb: "8.1", stl: "1.5" } },
-    { name: "Yannick Ilunga", number: 10, height: "6'4\"", stats: { pts: "11.4", reb: "3.7", stl: "2.1" } },
-    { name: "Joel Kazadi", number: 50, height: "6'11\"", stats: { pts: "9.9", reb: "9.8", stl: "0.9" } },
-    { name: "Marcel Onana", number: 6, height: "6'2\"", stats: { pts: "7.2", reb: "2.6", stl: "2.5" } },
-  ],
-  "City Kauka": [
-    { name: "Serge Mapendo", number: 42, height: "6'11\"", stats: { pts: "13.4", reb: "10.7", stl: "0.6" } },
-    { name: "Jeff Kafuti", number: 13, height: "6'6\"", stats: { pts: "12.2", reb: "6.2", stl: "1.1" } },
-    { name: "Mark-Ony Kanza", number: 2, height: "6'1\"", stats: { pts: "8.3", reb: "3.0", stl: "2.0" } },
-    { name: "Isaac Banza", number: 24, height: "6'8\"", stats: { pts: "9.6", reb: "7.5", stl: "0.9" } },
-  ],
-  "Don Bosco": [
-    { name: "Jonas Beya", number: 2, height: "6'2\"", stats: { pts: "16.2", reb: "5.0", stl: "1.7" } },
-    { name: "Ricky Kanku", number: 44, height: "6'9\"", stats: { pts: "12.1", reb: "8.6", stl: "0.8" } },
-    { name: "Steph Kanga", number: 11, height: "6'4\"", stats: { pts: "10.0", reb: "3.8", stl: "1.9" } },
-    { name: "Herve Lungwana", number: 7, height: "6'6\"", stats: { pts: "8.4", reb: "4.5", stl: "1.3" } },
-  ],
-  "One Team": [
-    { name: "Caleb Ilunga", number: 5, height: "6'5\"", stats: { pts: "15.2", reb: "6.2", stl: "1.4" } },
-    { name: "Merveille Ngandu", number: 9, height: "6'8\"", stats: { pts: "12.8", reb: "8.5", stl: "0.9" } },
-    { name: "Junior Kabuya", number: 21, height: "6'2\"", stats: { pts: "9.6", reb: "3.1", stl: "1.8" } },
-    { name: "Patrick Mukenzi", number: 13, height: "6'10\"", stats: { pts: "7.9", reb: "9.4", stl: "0.7" } },
-  ],
-  Ngaliema: [
-    { name: "Kevin Banza", number: 4, height: "6'4\"", stats: { pts: "14.4", reb: "5.3", stl: "1.2" } },
-    { name: "Hope Malemba", number: 12, height: "6'7\"", stats: { pts: "11.2", reb: "7.9", stl: "1.1" } },
-    { name: "Rickson Kangulu", number: 33, height: "6'9\"", stats: { pts: "10.6", reb: "8.1", stl: "0.8" } },
-    { name: "Cedric Kafubu", number: 2, height: "6'1\"", stats: { pts: "8.8", reb: "2.4", stl: "2.0" } },
-  ],
-  Opportunidade: [
-    { name: "Andre Panzu", number: 11, height: "6'6\"", stats: { pts: "15.9", reb: "6.0", stl: "1.0" } },
-    { name: "Wilfried Senga", number: 24, height: "6'8\"", stats: { pts: "12.1", reb: "9.2", stl: "0.6" } },
-    { name: "Christ Yanonge", number: 7, height: "6'3\"", stats: { pts: "9.4", reb: "3.7", stl: "1.5" } },
-    { name: "Victor Ngimbi", number: 18, height: "6'10\"", stats: { pts: "8.6", reb: "8.8", stl: "0.7" } },
-  ],
-  "J&A": [
-    { name: "Lionel Bote", number: 8, height: "6'5\"", stats: { pts: "13.7", reb: "5.9", stl: "1.1" } },
-    { name: "Cedrick Moke", number: 16, height: "6'9\"", stats: { pts: "11.5", reb: "9.0", stl: "0.9" } },
-    { name: "Tresor Luyeye", number: 3, height: "6'0\"", stats: { pts: "10.2", reb: "2.8", stl: "2.4" } },
-    { name: "Blaise Kaputu", number: 44, height: "6'7\"", stats: { pts: "7.1", reb: "6.3", stl: "1.0" } },
-  ],
-  Raphael: [
-    { name: "Ruben Malu", number: 1, height: "6'2\"", stats: { pts: "14.9", reb: "4.1", stl: "1.9" } },
-    { name: "Diego Lombi", number: 20, height: "6'8\"", stats: { pts: "12.5", reb: "7.8", stl: "0.8" } },
-    { name: "Prince Ngwala", number: 15, height: "6'6\"", stats: { pts: "10.7", reb: "6.4", stl: "1.1" } },
-    { name: "Kevin Mulunda", number: 32, height: "6'10\"", stats: { pts: "8.2", reb: "8.9", stl: "0.6" } },
-  ],
-  "Bana Lingwala": [
-    { name: "Jacques Kaba", number: 6, height: "6'4\"", stats: { pts: "13.1", reb: "5.0", stl: "1.6" } },
-    { name: "Hugo Mukanya", number: 13, height: "6'7\"", stats: { pts: "11.3", reb: "7.2", stl: "1.0" } },
-    { name: "Fabrice Kitoko", number: 23, height: "6'3\"", stats: { pts: "9.0", reb: "3.6", stl: "2.1" } },
-    { name: "Ralph Bokele", number: 50, height: "6'9\"", stats: { pts: "8.4", reb: "8.5", stl: "0.7" } },
-  ],
-  "Binza City": [
-    { name: "Ashley Pasi", number: 4, height: "6'2\"", stats: { pts: "15.0", reb: "4.6", stl: "1.3" } },
-    { name: "Boris Ilumbe", number: 31, height: "6'8\"", stats: { pts: "12.0", reb: "8.3", stl: "0.9" } },
-    { name: "Kelvin Samba", number: 11, height: "6'5\"", stats: { pts: "9.5", reb: "5.2", stl: "1.4" } },
-    { name: "Oscar Tumba", number: 19, height: "6'10\"", stats: { pts: "7.7", reb: "9.1", stl: "0.6" } },
-  ],
-  NMG: [
-    { name: "Tracy Mavinga", number: 0, height: "6'1\"", stats: { pts: "16.4", reb: "4.0", stl: "2.2" } },
-    { name: "Jordan Kitenge", number: 28, height: "6'8\"", stats: { pts: "11.6", reb: "8.7", stl: "0.8" } },
-    { name: "Ulrich Sanda", number: 9, height: "6'5\"", stats: { pts: "10.9", reb: "5.6", stl: "1.1" } },
-    { name: "Yves Biyombo", number: 17, height: "6'10\"", stats: { pts: "8.1", reb: "9.9", stl: "0.5" } },
-  ],
-  Rich: [
-    { name: "Didier Kenga", number: 2, height: "6'3\"", stats: { pts: "15.7", reb: "4.9", stl: "1.5" } },
-    { name: "Michel Lobo", number: 14, height: "6'7\"", stats: { pts: "11.9", reb: "7.6", stl: "0.9" } },
-    { name: "Samuel Kikuni", number: 25, height: "6'5\"", stats: { pts: "9.7", reb: "5.5", stl: "1.2" } },
-    { name: "Glen Mavinga", number: 45, height: "6'9\"", stats: { pts: "7.5", reb: "8.7", stl: "0.6" } },
-  ],
-  Heritage: [
-    { name: "Marcel Idengo", number: 10, height: "6'4\"", stats: { pts: "14.8", reb: "5.2", stl: "1.7" } },
-    { name: "Noel Sikobe", number: 34, height: "6'8\"", stats: { pts: "12.4", reb: "8.0", stl: "0.9" } },
-    { name: "Pierre Lolemba", number: 6, height: "6'2\"", stats: { pts: "9.9", reb: "3.3", stl: "1.5" } },
-    { name: "Stephane Bobo", number: 55, height: "6'9\"", stats: { pts: "7.0", reb: "9.5", stl: "0.7" } },
-  ],
-  Figuier: [
-    { name: "David Mukeba", number: 31, height: "6'6\"", stats: { pts: "13.2", reb: "6.7", stl: "1.1" } },
-    { name: "Louis Mpasi", number: 5, height: "6'4\"", stats: { pts: "11.5", reb: "4.9", stl: "1.3" } },
-    { name: "Albert Kabeya", number: 42, height: "6'9\"", stats: { pts: "9.3", reb: "8.8", stl: "0.8" } },
-    { name: "Patrice Louya", number: 14, height: "6'2\"", stats: { pts: "8.4", reb: "3.1", stl: "1.9" } },
-  ],
-  Masano: [
-    { name: "Yannick Maseka", number: 19, height: "6'5\"", stats: { pts: "14.0", reb: "6.0", stl: "1.2" } },
-    { name: "Herve Kiboko", number: 33, height: "6'8\"", stats: { pts: "11.1", reb: "7.5", stl: "0.9" } },
-    { name: "Rudy Kalonji", number: 4, height: "6'2\"", stats: { pts: "9.8", reb: "3.4", stl: "1.6" } },
-    { name: "Seth Mputu", number: 27, height: "6'9\"", stats: { pts: "7.6", reb: "8.9", stl: "0.6" } },
-  ],
-  "Marche de la Liberte": [
-    { name: "Jonah Wema", number: 12, height: "6'3\"", stats: { pts: "15.3", reb: "4.8", stl: "1.8" } },
-    { name: "Hector Mudi", number: 40, height: "6'9\"", stats: { pts: "12.0", reb: "9.6", stl: "0.7" } },
-    { name: "Osée Bikuku", number: 6, height: "6'5\"", stats: { pts: "10.2", reb: "5.5", stl: "1.2" } },
-    { name: "Lucien Kumbo", number: 3, height: "6'1\"", stats: { pts: "8.3", reb: "2.8", stl: "2.3" } },
-  ],
-  CSM: [
-    { name: "Ethan Tati", number: 14, height: "6'6\"", stats: { pts: "13.6", reb: "6.4", stl: "1.1" } },
-    { name: "Prince Nzuzi", number: 8, height: "6'3\"", stats: { pts: "11.0", reb: "4.2", stl: "1.7" } },
-    { name: "Joel Bidi", number: 24, height: "6'9\"", stats: { pts: "9.1", reb: "8.7", stl: "0.6" } },
-    { name: "Marlon Nono", number: 2, height: "6'1\"", stats: { pts: "7.8", reb: "2.5", stl: "2.0" } },
-  ],
-  "Ngaba Bagait Center": [
-    { name: "Chris Kazanga", number: 30, height: "6'7\"", stats: { pts: "14.1", reb: "7.4", stl: "1.0" } },
-    { name: "Junior Pangi", number: 17, height: "6'9\"", stats: { pts: "11.7", reb: "9.3", stl: "0.8" } },
-    { name: "Larry Mobutu", number: 10, height: "6'2\"", stats: { pts: "9.9", reb: "3.2", stl: "1.5" } },
-    { name: "Claude Tumba", number: 5, height: "6'5\"", stats: { pts: "8.5", reb: "5.8", stl: "1.1" } },
-  ],
-  "Jourdain": [
-    { name: "Ricky Tshanda", number: 1, height: "6'4\"", stats: { pts: "15.5", reb: "5.0", stl: "1.9" } },
-    { name: "Eben Kanku", number: 11, height: "6'7\"", stats: { pts: "12.2", reb: "7.4", stl: "1.0" } },
-    { name: "Ozias Mulonda", number: 20, height: "6'5\"", stats: { pts: "10.4", reb: "5.7", stl: "1.3" } },
-    { name: "Terry Mputu", number: 34, height: "6'9\"", stats: { pts: "8.0", reb: "8.6", stl: "0.7" } },
-  ],
-  "women:CNSS": [
-    { name: "Amina Ngalula", number: 5, height: "5'10\"", stats: { pts: "18.3", reb: "4.2", stl: "2.4" } },
-    { name: "Dora Kalala", number: 11, height: "6'1\"", stats: { pts: "14.0", reb: "7.3", stl: "1.1" } },
-    { name: "Ketsia Lumbwe", number: 22, height: "6'2\"", stats: { pts: "10.6", reb: "8.5", stl: "0.9" } },
-    { name: "Naomi Kaba", number: 2, height: "5'7\"", stats: { pts: "8.4", reb: "3.2", stl: "2.1" } },
-  ],
-  "women:Tourbillon": [
-    { name: "Ruth Mbuyi", number: 11, height: "6'1\"", stats: { pts: "16.1", reb: "9.0", stl: "1.3" } },
-    { name: "Micheline Kanza", number: 3, height: "5'9\"", stats: { pts: "12.0", reb: "5.1", stl: "1.4" } },
-    { name: "Sabine Konda", number: 15, height: "6'0\"", stats: { pts: "9.4", reb: "6.8", stl: "1.0" } },
-    { name: "Ida Mbayo", number: 1, height: "5'6\"", stats: { pts: "7.5", reb: "2.7", stl: "2.2" } },
-  ],
-  "women:Hatari": [
-    { name: "Flora Mabanza", number: 10, height: "5'11\"", stats: { pts: "15.0", reb: "7.0", stl: "1.5" } },
-    { name: "Celine Moke", number: 20, height: "6'2\"", stats: { pts: "11.0", reb: "8.4", stl: "0.8" } },
-    { name: "Kelly Ntaba", number: 4, height: "5'8\"", stats: { pts: "8.8", reb: "4.0", stl: "2.1" } },
-    { name: "Bella Toya", number: 33, height: "6'0\"", stats: { pts: "7.1", reb: "6.1", stl: "1.0" } },
-  ],
-  "women:Vita Club": [
-    { name: "Lila Katembo", number: 3, height: "5'9\"", stats: { pts: "14.8", reb: "3.6", stl: "2.8" } },
-    { name: "Sandra Nsimba", number: 25, height: "6'0\"", stats: { pts: "12.6", reb: "6.9", stl: "1.0" } },
-    { name: "Tania Bokele", number: 8, height: "5'10\"", stats: { pts: "9.1", reb: "5.2", stl: "1.7" } },
-    { name: "Christelle Moke", number: 14, height: "6'2\"", stats: { pts: "8.3", reb: "7.8", stl: "0.9" } },
-  ],
-  "women:OGKS": [
-    { name: "Sandrine Ilondo", number: 24, height: "6'3\"", stats: { pts: "12.4", reb: "10.5", stl: "0.8" } },
-    { name: "Faith Bijou", number: 9, height: "5'11\"", stats: { pts: "11.3", reb: "7.1", stl: "1.1" } },
-    { name: "Marlyne Kapinga", number: 5, height: "5'8\"", stats: { pts: "9.2", reb: "4.9", stl: "1.6" } },
-    { name: "Olive Mbaki", number: 17, height: "6'0\"", stats: { pts: "7.0", reb: "6.2", stl: "0.9" } },
-  ],
-  "women:Saint Hilaire": [
-    { name: "Josée Lukusa", number: 6, height: "5'10\"", stats: { pts: "13.3", reb: "6.1", stl: "1.4" } },
-    { name: "Imelda Sakina", number: 2, height: "5'7\"", stats: { pts: "11.0", reb: "3.5", stl: "2.0" } },
-    { name: "Rachel Diangi", number: 18, height: "6'1\"", stats: { pts: "9.6", reb: "7.4", stl: "0.7" } },
-    { name: "Anita Mboyo", number: 12, height: "5'9\"", stats: { pts: "7.8", reb: "4.8", stl: "1.1" } },
-  ],
-  "women:Raphael": [
-    { name: "Kendra Batubenga", number: 1, height: "5'9\"", stats: { pts: "14.5", reb: "5.0", stl: "2.2" } },
-    { name: "Sylvie Kanda", number: 11, height: "6'0\"", stats: { pts: "11.7", reb: "7.0", stl: "0.9" } },
-    { name: "Dalia Mweni", number: 7, height: "5'8\"", stats: { pts: "9.3", reb: "4.2", stl: "1.5" } },
-    { name: "Edith Masala", number: 20, height: "6'1\"", stats: { pts: "8.0", reb: "6.3", stl: "0.8" } },
-  ],
-  "women:Mboka Mboka": [
-    { name: "Prisca Ngoyi", number: 22, height: "5'11\"", stats: { pts: "13.0", reb: "7.2", stl: "1.2" } },
-    { name: "Delphine Tshika", number: 4, height: "5'8\"", stats: { pts: "10.9", reb: "4.3", stl: "1.8" } },
-    { name: "Debora Malu", number: 15, height: "6'2\"", stats: { pts: "9.7", reb: "8.0", stl: "0.9" } },
-    { name: "Yvette Menga", number: 9, height: "5'9\"", stats: { pts: "7.5", reb: "5.1", stl: "1.3" } },
-  ],
-  "women:Heritage": [
-    { name: "Loane Kimona", number: 8, height: "5'9\"", stats: { pts: "12.9", reb: "5.8", stl: "1.6" } },
-    { name: "Merveille Keta", number: 21, height: "6'0\"", stats: { pts: "11.2", reb: "7.6", stl: "0.8" } },
-    { name: "Ophelie Ngalula", number: 5, height: "5'7\"", stats: { pts: "9.0", reb: "3.6", stl: "2.0" } },
-    { name: "Prisca Obala", number: 13, height: "5'11\"", stats: { pts: "7.8", reb: "6.1", stl: "1.0" } },
-  ],
-  "women:Jourdain": [
-    { name: "Linda Mpawe", number: 3, height: "5'10\"", stats: { pts: "14.1", reb: "6.3", stl: "1.5" } },
-    { name: "Betty Nkusu", number: 16, height: "6'0\"", stats: { pts: "11.4", reb: "7.0", stl: "0.9" } },
-    { name: "Joelle Tondi", number: 6, height: "5'8\"", stats: { pts: "9.1", reb: "4.4", stl: "1.8" } },
-    { name: "Sandra Kazumba", number: 24, height: "6'1\"", stats: { pts: "7.4", reb: "6.8", stl: "0.8" } },
-  ],
-  "women:INRI": [
-    { name: "Mimi Kabasele", number: 12, height: "5'9\"", stats: { pts: "13.4", reb: "5.5", stl: "1.7" } },
-    { name: "Odile Kanza", number: 30, height: "6'1\"", stats: { pts: "10.2", reb: "7.8", stl: "0.8" } },
-    { name: "Regina Kololo", number: 2, height: "5'6\"", stats: { pts: "8.9", reb: "3.1", stl: "2.3" } },
-    { name: "Alice Bute", number: 18, height: "6'0\"", stats: { pts: "7.2", reb: "6.4", stl: "0.9" } },
-  ],
-  "women:Ngaba": [
-    { name: "Sonia Manzedi", number: 14, height: "5'8\"", stats: { pts: "12.6", reb: "5.0", stl: "1.9" } },
-    { name: "Nina Ondo", number: 34, height: "6'1\"", stats: { pts: "10.8", reb: "7.2", stl: "0.7" } },
-    { name: "Gloria Imani", number: 7, height: "5'7\"", stats: { pts: "9.2", reb: "3.8", stl: "1.6" } },
-    { name: "Kelly Louya", number: 22, height: "5'11\"", stats: { pts: "7.0", reb: "6.0", stl: "0.9" } },
-  ],
-  "women:Yolo": [
-    { name: "Trixie Mukandu", number: 1, height: "5'9\"", stats: { pts: "13.1", reb: "4.9", stl: "2.1" } },
-    { name: "Rita Maku", number: 19, height: "6'0\"", stats: { pts: "11.5", reb: "6.8", stl: "0.8" } },
-    { name: "Nadine Biyela", number: 9, height: "5'7\"", stats: { pts: "8.7", reb: "3.6", stl: "1.7" } },
-    { name: "Hope Sangwa", number: 4, height: "5'10\"", stats: { pts: "7.6", reb: "5.9", stl: "1.0" } },
-  ],
-  "women:Yellow Center": [
-    { name: "Dolly Maza", number: 23, height: "6'0\"", stats: { pts: "12.3", reb: "7.1", stl: "1.0" } },
-    { name: "Irene Tshi", number: 8, height: "5'8\"", stats: { pts: "10.6", reb: "4.3", stl: "1.6" } },
-    { name: "Lydia Sefu", number: 3, height: "5'9\"", stats: { pts: "9.1", reb: "5.4", stl: "1.2" } },
-    { name: "Rachel Balu", number: 12, height: "6'1\"", stats: { pts: "7.4", reb: "6.5", stl: "0.9" } },
-  ],
-  "women:Ajakin": [
-    { name: "Joy Mfwamba", number: 30, height: "5'10\"", stats: { pts: "12.8", reb: "6.0", stl: "1.3" } },
-    { name: "Nadine Salumu", number: 6, height: "5'7\"", stats: { pts: "10.5", reb: "4.4", stl: "1.9" } },
-    { name: "Clarisse Mayele", number: 18, height: "6'1\"", stats: { pts: "8.9", reb: "7.1", stl: "0.8" } },
-    { name: "Belinda Ndundu", number: 11, height: "5'11\"", stats: { pts: "7.2", reb: "6.2", stl: "1.0" } },
-  ],
-  "women:Maison des Jeunes": [
-    { name: "Gina Kaswera", number: 5, height: "5'9\"", stats: { pts: "13.0", reb: "5.5", stl: "1.8" } },
-    { name: "Hawa Makanzu", number: 15, height: "6'0\"", stats: { pts: "10.7", reb: "6.9", stl: "0.9" } },
-    { name: "Sabine Tuluka", number: 2, height: "5'7\"", stats: { pts: "8.6", reb: "3.7", stl: "1.5" } },
-    { name: "Michelle Kiyombo", number: 24, height: "6'2\"", stats: { pts: "7.1", reb: "6.8", stl: "0.8" } },
-  ],
-};
+// Removed all static team rosters - players now loaded dynamically from Firestore
+// Players are registered through account creation where they select their team and player number
+export const teamRosters: Record<string, RosterPlayer[]> = {};
 
 export const allTeamsByGender = {
   male: menFranchises.length ? menFranchises : fallbackMenFranchises,
   female: womenFranchises.length ? womenFranchises : fallbackWomenFranchises,
 };
+
+// Helper function to group games by week
+export const getGamesByWeek = (games: EnrichedGame[]): Map<number, EnrichedGame[]> => {
+  const gamesByWeek = new Map<number, EnrichedGame[]>();
+  
+  games.forEach(game => {
+    const week = game.week ?? 0; // Default to 0 if no week assigned
+    if (!gamesByWeek.has(week)) {
+      gamesByWeek.set(week, []);
+    }
+    gamesByWeek.get(week)!.push(game);
+  });
+  
+  return gamesByWeek;
+};
+
+// Export games grouped by week for easy access
+export const gamesByWeek = getGamesByWeek(enrichedGames);

@@ -438,14 +438,32 @@ export default function EditTeamPage() {
     }
   };
 
-  const handleSavePlayer = async (player: Player) => {
+  const handleSavePlayer = async (player: Player, headshotFile?: File | null) => {
     if (!team) return;
     try {
-      await updateDoc(doc(firebaseDB, "teams", team.id, "roster", player.id), player);
+      setSaving(true);
+      
+      let headshotUrl = player.headshot;
+      
+      // Upload new headshot if file is provided
+      if (headshotFile) {
+        const storageRef = ref(firebaseStorage, `players/${Date.now()}_${headshotFile.name}`);
+        await uploadBytes(storageRef, headshotFile);
+        headshotUrl = await getDownloadURL(storageRef);
+      }
+      
+      await updateDoc(doc(firebaseDB, "teams", team.id, "roster", player.id), {
+        ...player,
+        headshot: headshotUrl,
+      });
+      
       await loadData();
       setEditingPlayerId(null);
     } catch (error) {
       console.error("Error saving player:", error);
+      alert("Error saving player");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -987,15 +1005,20 @@ export default function EditTeamPage() {
                   <select
                     value={newPlayerForm.position}
                     onChange={(e) => setNewPlayerForm({ ...newPlayerForm, position: e.target.value })}
-                    className="w-full rounded border border-white/20 bg-white/5 px-3 py-2 text-white text-sm"
+                    className="w-full rounded border border-white/20 bg-slate-800 px-3 py-2 text-white text-sm cursor-pointer hover:border-white/40 focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 focus:outline-none transition-colors appearance-none bg-no-repeat bg-right pr-10"
+                    style={{
+                      backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='rgba(255,255,255,0.4)'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
+                      backgroundSize: '1.5rem',
+                      backgroundPosition: 'right 0.5rem center'
+                    }}
                     required
                   >
-                    <option value="">Select position</option>
-                    <option value="Point Guard">Point Guard</option>
-                    <option value="Shooting Guard">Shooting Guard</option>
-                    <option value="Small Forward">Small Forward</option>
-                    <option value="Power Forward">Power Forward</option>
-                    <option value="Center">Center</option>
+                    <option value="" className="bg-slate-800 text-slate-400">Select position</option>
+                    <option value="Point Guard" className="bg-slate-800 text-white">Point Guard</option>
+                    <option value="Shooting Guard" className="bg-slate-800 text-white">Shooting Guard</option>
+                    <option value="Small Forward" className="bg-slate-800 text-white">Small Forward</option>
+                    <option value="Power Forward" className="bg-slate-800 text-white">Power Forward</option>
+                    <option value="Center" className="bg-slate-800 text-white">Center</option>
                   </select>
                 </div>
                 <div className="relative">
@@ -1221,15 +1244,32 @@ export default function EditTeamPage() {
                   onChange={(e) => setPlayerHeadshotFile(e.target.files?.[0] || null)}
                   className="hidden"
                 />
-                <label
-                  htmlFor="headshot-upload"
-                  className="w-32 h-32 flex flex-col items-center justify-center border-2 border-dashed border-white/20 bg-white/5 rounded cursor-pointer hover:border-white/40 hover:bg-white/10 transition-colors"
-                >
-                  <span className="text-4xl mb-2">📷</span>
-                  <span className="text-xs text-slate-400">Upload Photo</span>
-                </label>
-                {playerHeadshotFile && (
-                  <p className="mt-2 text-xs text-emerald-400">✓ {playerHeadshotFile.name}</p>
+                {playerHeadshotFile ? (
+                  <div className="space-y-2">
+                    <div className="relative w-32 h-32 rounded-lg overflow-hidden border-2 border-white/20 bg-white/5">
+                      <Image
+                        src={URL.createObjectURL(playerHeadshotFile)}
+                        alt="Preview"
+                        fill
+                        className="object-cover"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setPlayerHeadshotFile(null)}
+                      className="text-xs text-red-400 hover:text-red-300 transition-colors"
+                    >
+                      Remove photo
+                    </button>
+                  </div>
+                ) : (
+                  <label
+                    htmlFor="headshot-upload"
+                    className="w-32 h-32 flex flex-col items-center justify-center border-2 border-dashed border-white/20 bg-white/5 rounded cursor-pointer hover:border-white/40 hover:bg-white/10 transition-colors"
+                  >
+                    <span className="text-4xl mb-2">📷</span>
+                    <span className="text-xs text-slate-400">Upload Photo</span>
+                  </label>
                 )}
               </div>
 
@@ -1307,33 +1347,24 @@ export default function EditTeamPage() {
                         </div>
                         <div>
                           <div className="text-xs text-slate-400">Nationality</div>
-                          <div className="text-white flex items-center gap-1">
-                            <span className="text-lg">{flagFromCode(player.nationality)}</span>
-                            <span>{nameForCountryCode(player.nationality) || player.nationality}</span>
+                          <div className="text-white flex items-center gap-2">
+                            {player.nationality && (
+                              <>
+                                <img
+                                  src={`https://flagcdn.com/w40/${player.nationality.toLowerCase()}.png`}
+                                  alt={nameForCountryCode(player.nationality) || "Flag"}
+                                  width={32}
+                                  height={24}
+                                  className="rounded shadow-sm"
+                                  onError={(e) => {
+                                    const target = e.target as HTMLImageElement;
+                                    target.style.display = 'none';
+                                  }}
+                                />
+                                <span>{nameForCountryCode(player.nationality) || player.nationality}</span>
+                              </>
+                            )}
                           </div>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-5 gap-2 text-center">
-                        <div>
-                          <div className="text-xs text-slate-400">PPG</div>
-                          <div className="text-white font-medium">{player.stats.pts}</div>
-                        </div>
-                        <div>
-                          <div className="text-xs text-slate-400">RPG</div>
-                          <div className="text-white font-medium">{player.stats.reb}</div>
-                        </div>
-                        <div>
-                          <div className="text-xs text-slate-400">APG</div>
-                          <div className="text-white font-medium">{player.stats.ast}</div>
-                        </div>
-                        <div>
-                          <div className="text-xs text-slate-400">SPG</div>
-                          <div className="text-white font-medium">{player.stats.stl}</div>
-                        </div>
-                        <div>
-                          <div className="text-xs text-slate-400">BPG</div>
-                          <div className="text-white font-medium">{player.stats.blk}</div>
                         </div>
                       </div>
 
@@ -1607,10 +1638,25 @@ function PlayerEditForm({
   onCancel,
 }: {
   player: Player;
-  onSave: (player: Player) => void;
+  onSave: (player: Player, headshotFile?: File | null) => void;
   onCancel: () => void;
 }) {
   const [form, setForm] = useState(player);
+  const [headshotFile, setHeadshotFile] = useState<File | null>(null);
+  const [headshotPreview, setHeadshotPreview] = useState<string>("");
+  const [editNationalitySearch, setEditNationalitySearch] = useState("");
+  const [showEditNationalityDropdown, setShowEditNationalityDropdown] = useState(false);
+  const [showEditSecondNationality, setShowEditSecondNationality] = useState(!!player.nationality2);
+  const [editNationality2Search, setEditNationality2Search] = useState("");
+  const [showEditNationality2Dropdown, setShowEditNationality2Dropdown] = useState(false);
+
+  const handleHeadshotChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setHeadshotFile(file);
+      setHeadshotPreview(URL.createObjectURL(file));
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -1669,23 +1715,209 @@ function PlayerEditForm({
             className="w-full rounded border border-white/20 bg-white/5 px-3 py-2 text-white text-sm"
           />
         </div>
-        <div>
+        <div className="relative">
           <label className="block text-xs text-slate-400 mb-1">Nationality</label>
-          <input
-            type="text"
-            value={form.nationality}
-            onChange={(e) => setForm({ ...form, nationality: e.target.value })}
-            className="w-full rounded border border-white/20 bg-white/5 px-3 py-2 text-white text-sm"
-          />
+          <div className="relative">
+            <div className="flex items-center gap-2 w-full rounded border border-white/20 bg-white/5 px-3 py-2">
+              {!editNationalitySearch && form.nationality && (
+                <img
+                  src={`https://flagcdn.com/w40/${form.nationality.toLowerCase()}.png`}
+                  alt={nameForCountryCode(form.nationality) || "Flag"}
+                  width={24}
+                  height={18}
+                  className="rounded shadow-sm"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                  }}
+                />
+              )}
+              <input
+                type="text"
+                value={editNationalitySearch !== "" ? editNationalitySearch : (form.nationality ? nameForCountryCode(form.nationality) || form.nationality : "")}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setEditNationalitySearch(value);
+                  if (value === "") {
+                    setForm({ ...form, nationality: "" });
+                  }
+                  setShowEditNationalityDropdown(true);
+                }}
+                onFocus={() => setShowEditNationalityDropdown(true)}
+                onBlur={() => {
+                  setTimeout(() => setShowEditNationalityDropdown(false), 200);
+                }}
+                className="flex-1 bg-transparent text-white text-sm outline-none"
+                placeholder="Search country..."
+              />
+            </div>
+            {showEditNationalityDropdown && (
+              <div className="absolute z-10 mt-1 w-full max-h-60 overflow-auto rounded border border-white/20 bg-slate-800 shadow-lg">
+                {countries
+                  .filter((c) =>
+                    c.name.toLowerCase().includes((editNationalitySearch || "").toLowerCase()) ||
+                    c.code.toLowerCase().includes((editNationalitySearch || "").toLowerCase())
+                  )
+                  .sort((a, b) => {
+                    // Put DRC on top
+                    if (a.code === "CD") return -1;
+                    if (b.code === "CD") return 1;
+                    return 0;
+                  })
+                  .map((country) => (
+                    <button
+                      key={country.code}
+                      type="button"
+                      onClick={() => {
+                        setForm({ ...form, nationality: country.code });
+                        setEditNationalitySearch("");
+                        setShowEditNationalityDropdown(false);
+                      }}
+                      className="w-full px-3 py-2 text-left text-sm text-white hover:bg-white/10 flex items-center gap-2"
+                    >
+                      <img
+                        src={`https://flagcdn.com/w40/${country.code.toLowerCase()}.png`}
+                        alt={country.name}
+                        width={24}
+                        height={18}
+                        className="rounded shadow-sm"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                        }}
+                      />
+                      <span>{country.name} ({country.code})</span>
+                    </button>
+                  ))}
+              </div>
+            )}
+          </div>
         </div>
-        <div>
-          <label className="block text-xs text-slate-400 mb-1">Headshot URL</label>
-          <input
-            type="text"
-            value={form.headshot}
-            onChange={(e) => setForm({ ...form, headshot: e.target.value })}
-            className="w-full rounded border border-white/20 bg-white/5 px-3 py-2 text-white text-sm"
-          />
+        {!showEditSecondNationality ? (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowEditSecondNationality(true)}
+              className="w-5 h-5 rounded border-2 border-white/20 bg-white/5 hover:border-white/40 hover:bg-white/10 transition-colors flex items-center justify-center"
+            >
+              <span className="text-xs text-slate-400">+</span>
+            </button>
+            <label className="text-xs text-slate-400 cursor-pointer" onClick={() => setShowEditSecondNationality(true)}>
+              Second Nationality?
+            </label>
+          </div>
+        ) : (
+          <div className="relative">
+            <label className="block text-xs text-slate-400 mb-1">Second Nationality</label>
+            <div className="relative">
+              <div className="flex items-center gap-2 w-full rounded border border-white/20 bg-white/5 px-3 py-2">
+                {!editNationality2Search && form.nationality2 && (
+                  <img
+                    src={`https://flagcdn.com/w40/${form.nationality2.toLowerCase()}.png`}
+                    alt={nameForCountryCode(form.nationality2) || "Flag"}
+                    width={24}
+                    height={18}
+                    className="rounded shadow-sm"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.style.display = 'none';
+                    }}
+                  />
+                )}
+                <input
+                  type="text"
+                  value={editNationality2Search || (form.nationality2 ? nameForCountryCode(form.nationality2) || form.nationality2 : "")}
+                  onChange={(e) => {
+                    setEditNationality2Search(e.target.value);
+                    setShowEditNationality2Dropdown(true);
+                  }}
+                  onFocus={() => setShowEditNationality2Dropdown(true)}
+                  onBlur={() => {
+                    setTimeout(() => setShowEditNationality2Dropdown(false), 200);
+                  }}
+                  className="flex-1 bg-transparent text-white text-sm outline-none"
+                  placeholder="Optional"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEditSecondNationality(false);
+                    setForm({ ...form, nationality2: "" });
+                    setEditNationality2Search("");
+                  }}
+                  className="text-slate-400 hover:text-red-400 text-lg"
+                >
+                  ✕
+                </button>
+              </div>
+              {showEditNationality2Dropdown && (
+                <div className="absolute z-10 mt-1 w-full max-h-60 overflow-auto rounded border border-white/20 bg-slate-800 shadow-lg">
+                  {countries
+                    .filter((c) =>
+                      c.name.toLowerCase().includes((editNationality2Search || "").toLowerCase()) ||
+                      c.code.toLowerCase().includes((editNationality2Search || "").toLowerCase())
+                    )
+                    .sort((a, b) => {
+                      if (a.code === "CD") return -1;
+                      if (b.code === "CD") return 1;
+                      return 0;
+                    })
+                    .map((country) => (
+                      <button
+                        key={country.code}
+                        type="button"
+                        onClick={() => {
+                          setForm({ ...form, nationality2: country.code });
+                          setEditNationality2Search("");
+                          setShowEditNationality2Dropdown(false);
+                        }}
+                        className="w-full px-3 py-2 text-left text-sm text-white hover:bg-white/10 flex items-center gap-2"
+                      >
+                        <img
+                          src={`https://flagcdn.com/w40/${country.code.toLowerCase()}.png`}
+                          alt={country.name}
+                          width={24}
+                          height={18}
+                          className="rounded shadow-sm"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                          }}
+                        />
+                        <span>{country.name} ({country.code})</span>
+                      </button>
+                    ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Headshot Upload */}
+      <div>
+        <label className="block text-xs text-slate-400 mb-2">Player Headshot</label>
+        <div className="flex items-center gap-4">
+          {(headshotPreview || form.headshot) && (
+            <div className="relative h-20 w-20 rounded-full overflow-hidden bg-slate-800 flex-shrink-0">
+              <Image
+                src={headshotPreview || form.headshot}
+                alt="Player headshot"
+                fill
+                className="object-cover"
+                unoptimized
+              />
+            </div>
+          )}
+          <div className="flex-1">
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleHeadshotChange}
+              className="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-500/10 file:text-blue-300 hover:file:bg-blue-500/20 file:cursor-pointer"
+            />
+            <p className="mt-1 text-xs text-slate-500">Upload a new headshot image (JPG, PNG)</p>
+          </div>
         </div>
       </div>
 
@@ -1754,7 +1986,7 @@ function PlayerEditForm({
           Cancel
         </button>
         <button
-          onClick={() => onSave(form)}
+          onClick={() => onSave(form, headshotFile)}
           className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-6 py-2 text-sm font-medium text-emerald-300 transition hover:bg-emerald-500/20"
         >
           Save Player

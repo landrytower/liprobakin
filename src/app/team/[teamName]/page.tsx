@@ -7,6 +7,7 @@ import Link from "next/link";
 import { collection, getDocs, query, where, doc, getDoc } from "firebase/firestore";
 import { firebaseDB } from "@/lib/firebase";
 import type { RosterPlayer } from "@/data/febaco";
+import { flagFromCode } from "@/data/countries";
 
 type TeamData = {
   id: string;
@@ -49,6 +50,7 @@ export default function TeamPage() {
   const [roster, setRoster] = useState<EnhancedRosterPlayer[]>([]);
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 
   useEffect(() => {
     const fetchTeamData = async () => {
@@ -194,7 +196,7 @@ export default function TeamPage() {
     return (
       <div className="min-h-screen bg-gradient-to-b from-[#050816] via-[#050816] to-[#020407] text-white flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
           <p className="text-slate-400">Loading team data...</p>
         </div>
       </div>
@@ -209,7 +211,7 @@ export default function TeamPage() {
           <p className="text-slate-400 mb-8">The team "{teamName}" could not be found.</p>
           <Link 
             href="/"
-            className="inline-block px-6 py-3 bg-orange-600 hover:bg-orange-500 rounded-lg transition-colors"
+            className="inline-block px-6 py-3 bg-gradient-to-br from-blue-500/30 to-purple-500/30 hover:from-blue-500/40 hover:to-purple-500/40 border border-white/30 backdrop-blur-xl rounded-lg transition-all shadow-lg"
           >
             Back to Home
           </Link>
@@ -227,18 +229,30 @@ export default function TeamPage() {
       <header className="sticky top-0 z-50 border-b border-white/10 bg-slate-950/80 backdrop-blur-md">
         <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
-            <Link href="/" className="text-2xl font-bold text-orange-500 hover:text-orange-400 transition-colors">
+            <Link href="/" className="text-2xl font-bold text-white hover:text-slate-200 transition-colors">
               LIPROBAKIN
             </Link>
-            <button
-              onClick={() => router.back()}
-              className="flex items-center gap-2 rounded-lg border border-white/10 bg-slate-900/60 px-4 py-2 text-sm hover:border-white/30 transition-colors"
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-              </svg>
-              Back
-            </button>
+            <div className="flex items-center gap-3">
+              <Link
+                href="/"
+                className="group relative h-11 w-11 flex items-center justify-center overflow-hidden rounded-xl border border-white/20 bg-white/5 shadow-lg backdrop-blur-xl transition-all duration-300 hover:scale-110 hover:border-white/40 hover:bg-white/10"
+                aria-label="Home"
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100 animate-shimmer" />
+                <svg className="relative z-10 h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                </svg>
+              </Link>
+              <button
+                onClick={() => router.back()}
+                className="flex items-center gap-2 rounded-lg border border-white/10 bg-slate-900/60 px-4 py-2 text-sm hover:border-white/30 transition-colors"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                Back
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -285,13 +299,49 @@ export default function TeamPage() {
 
       {/* Roster */}
       <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-        <h2 className="text-3xl font-bold mb-8">Roster</h2>
+        <div className="flex items-center justify-between mb-8">
+          <h2 className="text-3xl font-bold">Roster</h2>
+          
+          {/* Grid/List Toggle */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => setViewMode("grid")}
+              className={`group relative flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all overflow-hidden ${
+                viewMode === "grid"
+                  ? "bg-gradient-to-br from-blue-500/30 via-purple-500/20 to-pink-500/20 border border-white/40 text-white shadow-lg backdrop-blur-xl"
+                  : "border border-white/20 bg-gradient-to-br from-white/10 to-white/5 text-slate-300 hover:border-white/40 backdrop-blur-xl"
+              }`}
+              type="button"
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-0 group-hover:opacity-100 animate-shimmer" />
+              <svg className="relative z-10 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+              </svg>
+              <span className="relative z-10">Grid</span>
+            </button>
+            <button
+              onClick={() => setViewMode("list")}
+              className={`group relative flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all overflow-hidden ${
+                viewMode === "list"
+                  ? "bg-gradient-to-br from-blue-500/30 via-purple-500/20 to-pink-500/20 border border-white/40 text-white shadow-lg backdrop-blur-xl"
+                  : "border border-white/20 bg-gradient-to-br from-white/10 to-white/5 text-slate-300 hover:border-white/40 backdrop-blur-xl"
+              }`}
+              type="button"
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-0 group-hover:opacity-100 animate-shimmer" />
+              <svg className="relative z-10 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+              <span className="relative z-10">List</span>
+            </button>
+          </div>
+        </div>
         
         {roster.length === 0 ? (
           <div className="text-center py-12 text-slate-400">
             <p>No roster data available for this team.</p>
           </div>
-        ) : (
+        ) : viewMode === "grid" ? (
           <div className="grid gap-2 grid-cols-4">
             {roster.map((player) => {
               const playerImage = player.headshot || "/players/default-avatar.png";
@@ -313,8 +363,8 @@ export default function TeamPage() {
                     <div className="absolute bottom-0 left-0 right-0 p-1.5">
                       <div className="flex items-end justify-between">
                         <div className="flex-1">
-                          <span className="text-xl font-bold text-orange-500 block">#{player.number}</span>
-                          <h3 className="text-xs font-semibold text-white group-hover:text-orange-500 transition-colors leading-tight">
+                          <span className="text-xl font-bold text-blue-400 block">#{player.number}</span>
+                          <h3 className="text-xs font-semibold text-white group-hover:text-blue-400 transition-colors leading-tight">
                             {player.name}
                           </h3>
                         </div>
@@ -324,6 +374,53 @@ export default function TeamPage() {
                 </Link>
               );
             })}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {roster.map((player) => (
+              <Link
+                key={player.id}
+                href={`/player/${encodeURIComponent(fullTeamName)}/${player.number}`}
+                className="group flex items-center gap-4 rounded-lg border border-white/10 bg-slate-900/60 px-6 py-4 transition hover:border-white/30 hover:bg-slate-900/80"
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-baseline gap-3">
+                    <span className="text-2xl font-bold text-blue-400">#{player.number}</span>
+                    <h3 className="text-lg font-semibold text-white group-hover:text-blue-400 transition-colors">
+                      {player.name}
+                    </h3>
+                  </div>
+                </div>
+                <div className="flex gap-8 text-sm">
+                  <div>
+                    <span className="text-slate-400 block text-xs">Height</span>
+                    <span className="text-white">{player.height || "N/A"}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-xs">Nationality</span>
+                    {player.nationality && player.nationality !== "N/A" ? (
+                      <img
+                        src={`https://flagcdn.com/w40/${player.nationality.toLowerCase()}.png`}
+                        alt={player.nationality}
+                        width={24}
+                        height={16}
+                        className="rounded"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      <span className="text-white">N/A</span>
+                    )}
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-xs">DOB</span>
+                    <span className="text-white">{player.dateOfBirth || "N/A"}</span>
+                  </div>
+                </div>
+              </Link>
+            ))}
           </div>
         )}
       </div>
@@ -370,7 +467,7 @@ export default function TeamPage() {
                     )}
                     <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent"></div>
                     <div className="absolute bottom-0 left-0 right-0 p-2 sm:p-1.5">
-                      <p className="text-xs sm:text-[10px] uppercase tracking-wide text-orange-500 font-semibold mb-0.5">
+                      <p className="text-xs sm:text-[10px] uppercase tracking-wide text-blue-400 font-semibold mb-0.5">
                         {roleDisplay}
                       </p>
                       <h3 className="text-sm sm:text-xs font-semibold text-white leading-tight">

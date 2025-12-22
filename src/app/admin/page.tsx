@@ -22,6 +22,7 @@ import {
   serverTimestamp,
   setDoc,
   updateDoc,
+  where,
   writeBatch,
 } from "firebase/firestore";
 import type { DocumentData, DocumentSnapshot } from "firebase/firestore";
@@ -177,6 +178,7 @@ type AdminGame = {
 type GameFormState = {
   id?: string;
   gender: "men" | "women";
+  week: number; // Journée/Week number
   homeTeamId: string;
   awayTeamId: string;
   date: string;
@@ -387,6 +389,7 @@ const initialCoachStaffFormState: CoachStaffFormState = {
 
 const initialGameFormState: GameFormState = {
   gender: "men",
+  week: 1, // Default to Week/Journée 1
   homeTeamId: "",
   awayTeamId: "",
   date: "",
@@ -512,6 +515,111 @@ const formatAdminPublishedLabel = (date: Date | null) => {
     timeStyle: "short",
   }).format(date);
 };
+
+// TeamTypeahead Component
+type TeamTypeaheadProps = {
+  label: string;
+  selectedTeamId: string;
+  teams: AdminTeam[];
+  onSelect: (teamId: string) => void;
+  placeholder: string;
+};
+
+function TeamTypeahead({ label, selectedTeamId, teams, onSelect, placeholder }: TeamTypeaheadProps) {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  const selectedTeam = teams.find((t) => t.id === selectedTeamId);
+
+  const filteredTeams = useMemo(() => {
+    if (!searchTerm.trim()) return teams;
+    const search = searchTerm.toLowerCase();
+    return teams.filter(
+      (t) => t.name.toLowerCase().includes(search) || t.city.toLowerCase().includes(search)
+    );
+  }, [teams, searchTerm]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleSelect = (teamId: string) => {
+    onSelect(teamId);
+    setSearchTerm("");
+    setIsOpen(false);
+  };
+
+  return (
+    <div ref={wrapperRef} className="relative block">
+      <label className="block">
+        <span className="text-sm font-medium text-slate-300 mb-2 block">{label}</span>
+        <div className="relative">
+          <input
+            type="text"
+            value={selectedTeam ? `${selectedTeam.name} - ${selectedTeam.city}` : searchTerm}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setIsOpen(true);
+              if (selectedTeam) onSelect("");
+            }}
+            onFocus={() => setIsOpen(true)}
+            placeholder={placeholder}
+            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-4 py-3 text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition pr-12"
+            required
+          />
+          {selectedTeam && selectedTeam.logo && (
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full overflow-hidden bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center">
+              <Image
+                src={selectedTeam.logo}
+                alt={selectedTeam.name}
+                width={32}
+                height={32}
+                className="object-contain"
+              />
+            </div>
+          )}
+        </div>
+
+        {isOpen && !selectedTeam && filteredTeams.length > 0 && (
+          <div className="absolute z-50 mt-2 w-full max-h-60 overflow-y-auto rounded-lg border border-white/10 bg-slate-900/95 backdrop-blur-xl shadow-2xl">
+            {filteredTeams.map((team) => (
+              <button
+                key={team.id}
+                type="button"
+                onClick={() => handleSelect(team.id)}
+                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-white/10 transition border-b border-white/5 last:border-0"
+              >
+                {team.logo && (
+                  <div className="w-8 h-8 rounded-full overflow-hidden bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center flex-shrink-0">
+                    <Image
+                      src={team.logo}
+                      alt={team.name}
+                      width={32}
+                      height={32}
+                      className="object-contain"
+                    />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="text-white font-medium">{team.name}</div>
+                  <div className="text-slate-400 text-sm">{team.city}</div>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </label>
+    </div>
+  );
+}
  
 export default function AdminPage() {
   const router = useRouter();
@@ -564,7 +672,7 @@ export default function AdminPage() {
   const [coachHeadshotPreview, setCoachHeadshotPreview] = useState<string>("");
   const [coachStaffSubmitting, setCoachStaffSubmitting] = useState(false);
   const coachHeadshotPreviewBlobRef = useRef<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'stories' | 'teams' | 'traffic' | 'games' | 'stats' | 'league' | 'admins'>('stories');
+  const [activeTab, setActiveTab] = useState<'stories' | 'teams' | 'traffic' | 'accounts' | 'games' | 'stats' | 'league' | 'admins'>('stories');
   const [language, setLanguage] = useState<'en' | 'fr'>('fr');
   const [currentAdminUser, setCurrentAdminUser] = useState<AdminUser | null>(null);
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
@@ -588,7 +696,16 @@ export default function AdminPage() {
   const [teamAssistantOpen, setTeamAssistantOpen] = useState(false);
   const [trafficModuleOpen, setTrafficModuleOpen] = useState(false);
   const [gamePlannerOpen, setGamePlannerOpen] = useState(false);
+  const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [pendingVerifications, setPendingVerifications] = useState<any[]>([]);
+  const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [verificationNotes, setVerificationNotes] = useState("");
+  const [processingVerification, setProcessingVerification] = useState(false);
   const [gameStatsAssistantOpen, setGameStatsAssistantOpen] = useState(false);
+  const [showArchiveView, setShowArchiveView] = useState(false);
+  const [selectedArchiveWeek, setSelectedArchiveWeek] = useState<number>(1);
+  const [archiveGenderFilter, setArchiveGenderFilter] = useState<'all' | 'gentlemen' | 'ladies'>('all');
+  const [archivedGames, setArchivedGames] = useState<CompletedGame[]>([]);
   const [leagueGestionOpen, setLeagueGestionOpen] = useState(false);
   const [playerHeadshotFile, setPlayerHeadshotFile] = useState<File | null>(null);
   const [playerHeadshotPreview, setPlayerHeadshotPreview] = useState<string>("");
@@ -988,6 +1105,43 @@ export default function AdminPage() {
     return () => unsubscribe();
   }, []);
 
+  // Fetch all users and pending verifications
+  useEffect(() => {
+    const fetchUsersAndVerifications = async () => {
+      try {
+        // Fetch all users
+        const usersSnapshot = await getDocs(collection(firebaseDB, "users"));
+        const usersData = usersSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          createdAt: doc.data().createdAt?.toDate() || new Date(),
+        }));
+        setAllUsers(usersData);
+
+        // Fetch pending verifications
+        const verificationsQuery = query(
+          collection(firebaseDB, "verificationRequests"),
+          where("status", "==", "pending")
+        );
+        const verificationsSnapshot = await getDocs(verificationsQuery);
+        const verificationsData = verificationsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          submittedAt: doc.data().submittedAt?.toDate() || new Date(),
+        }));
+        setPendingVerifications(verificationsData);
+      } catch (error) {
+        console.error("Error fetching users/verifications:", error);
+      }
+    };
+
+    fetchUsersAndVerifications();
+    
+    // Refresh every 30 seconds
+    const interval = setInterval(fetchUsersAndVerifications, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
   useEffect(() => {
     const refereesQuery = query(collection(firebaseDB, "referees"), orderBy("lastName", "asc"));
     const unsubscribe = onSnapshot(refereesQuery, (snapshot) => {
@@ -1036,7 +1190,7 @@ export default function AdminPage() {
     return () => unsubscribe();
   }, []);
 
-  // Sync completed games (started more than 45 minutes ago, within last week)
+  // Sync completed games (started more than 45 minutes ago, within last week) and archived games
   useEffect(() => {
     const gamesQuery = query(collection(firebaseDB, "games"), orderBy("date", "desc"));
     const unsubscribe = onSnapshot(gamesQuery, (snapshot) => {
@@ -1044,27 +1198,29 @@ export default function AdminPage() {
       const fortyFiveMinutesAgo = new Date(now.getTime() - 45 * 60 * 1000);
       const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
       
-      const completed = snapshot.docs
-        .map((doc) => {
-          const data = doc.data();
-          const gameDateTime = new Date(`${data.date}T${data.time}`);
-          return {
-            ...mapSnapshotToGame(doc),
-            gameDateTime,
-            winnerTeamId: data.winnerTeamId,
-            winnerScore: data.winnerScore,
-            loserTeamId: data.loserTeamId,
-            loserScore: data.loserScore,
-            playerStats: data.playerStats ?? [],
-            completed: !!data.winnerTeamId && !!data.winnerScore,
-          };
-        })
-        .filter((game) => 
-          game.gameDateTime <= fortyFiveMinutesAgo && 
-          game.gameDateTime >= oneWeekAgo
-        );
+      const allGames = snapshot.docs.map((doc) => {
+        const data = doc.data();
+        const gameDateTime = new Date(`${data.date}T${data.time}`);
+        return {
+          ...mapSnapshotToGame(doc),
+          gameDateTime,
+          winnerTeamId: data.winnerTeamId,
+          winnerScore: data.winnerScore,
+          loserTeamId: data.loserTeamId,
+          loserScore: data.loserScore,
+          playerStats: data.playerStats ?? [],
+          completed: !!data.winnerTeamId && !!data.winnerScore,
+        };
+      }).filter((game) => game.gameDateTime <= fortyFiveMinutesAgo);
+      
+      // Active games (within last week)
+      const completed = allGames.filter((game) => game.gameDateTime >= oneWeekAgo);
+      
+      // Archived games (older than a week)
+      const archived = allGames.filter((game) => game.gameDateTime < oneWeekAgo);
       
       setCompletedGames(completed);
+      setArchivedGames(archived);
     });
     return () => unsubscribe();
   }, []);
@@ -1163,6 +1319,27 @@ export default function AdminPage() {
     try {
       const userCredential = await signInWithEmailAndPassword(firebaseAuth, authForm.email, authForm.password);
       const user = userCredential.user;
+      
+      // CRITICAL: Check if user exists in adminUsers collection (NOT users collection)
+      const adminDocRef = doc(firebaseDB, "adminUsers", user.uid);
+      const adminDocSnap = await getDoc(adminDocRef);
+      
+      if (!adminDocSnap.exists()) {
+        // This is NOT an admin user - sign them out immediately
+        await signOut(firebaseAuth);
+        setAuthError("Access denied. This login is for administrators only. Please use the top login for regular users.");
+        setAuthSubmitting(false);
+        return;
+      }
+      
+      // Check if admin is active
+      const adminData = adminDocSnap.data() as AdminUser;
+      if (adminData.status === "inactive") {
+        await signOut(firebaseAuth);
+        setAuthError("Your admin account has been deactivated. Contact the system administrator.");
+        setAuthSubmitting(false);
+        return;
+      }
       
       // Start tracking user session
       const sessionId = await logSessionStart(user.uid, user.email || authForm.email);
@@ -2099,29 +2276,34 @@ export default function AdminPage() {
     setLeagueGestionStatus({ type: "info", message: "Saving referee..." });
 
     try {
-      const refereeData = {
+      const baseRefereeData = {
         firstName,
         lastName,
         phone: refereeForm.phone.trim() || null,
         certificationLevel: refereeForm.certificationLevel.trim() || null,
-        createdAt: refereeForm.id ? undefined : serverTimestamp(),
       };
 
       if (refereeForm.id) {
-        await updateDoc(doc(firebaseDB, "referees", refereeForm.id), refereeData);
+        // Update existing referee - don't modify createdAt
+        await updateDoc(doc(firebaseDB, "referees", refereeForm.id), baseRefereeData);
         await logAuditAction("referee_updated", user.uid, user.email || "unknown", "referee", refereeForm.id, `${firstName} ${lastName}`);
-        setLeagueGestionStatus({ type: "success", message: "Referee updated." });
+        setLeagueGestionStatus({ type: "success", message: `Referee ${firstName} ${lastName} updated successfully.` });
       } else {
-        const newRefereeRef = await addDoc(collection(firebaseDB, "referees"), refereeData);
+        // Add new referee - include createdAt
+        const newRefereeRef = await addDoc(collection(firebaseDB, "referees"), {
+          ...baseRefereeData,
+          createdAt: serverTimestamp(),
+        });
         await logAuditAction("referee_added", user.uid, user.email || "unknown", "referee", newRefereeRef.id, `${firstName} ${lastName}`);
-        setLeagueGestionStatus({ type: "success", message: "Referee added." });
+        setLeagueGestionStatus({ type: "success", message: `Referee ${firstName} ${lastName} added successfully.` });
       }
 
       setRefereeForm({ firstName: "", lastName: "", phone: "", certificationLevel: "" });
       setRefereeFormVisible(false);
     } catch (error) {
-      console.error(error);
-      setLeagueGestionStatus({ type: "error", message: "Failed to save referee." });
+      console.error("Error saving referee:", error);
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      setLeagueGestionStatus({ type: "error", message: `Failed to save referee: ${errorMessage}` });
     } finally {
       setRefereeSubmitting(false);
     }
@@ -2151,10 +2333,11 @@ export default function AdminPage() {
     try {
       await deleteDoc(doc(firebaseDB, "referees", referee.id));
       await logAuditAction("referee_deleted", user.uid, user.email || "unknown", "referee", referee.id, `${referee.firstName} ${referee.lastName}`);
-      setLeagueGestionStatus({ type: "success", message: "Referee deleted." });
+      setLeagueGestionStatus({ type: "success", message: `Referee ${referee.firstName} ${referee.lastName} deleted successfully.` });
     } catch (error) {
-      console.error(error);
-      setLeagueGestionStatus({ type: "error", message: "Failed to delete referee." });
+      console.error("Error deleting referee:", error);
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      setLeagueGestionStatus({ type: "error", message: `Failed to delete referee: ${errorMessage}` });
     }
   };
 
@@ -2676,6 +2859,7 @@ export default function AdminPage() {
 
       const payload = {
         gender: gameForm.gender,
+        week: gameForm.week, // Journée/Week number
         homeTeamId: homeTeam.id,
         homeTeamName: homeTeam.name,
         homeTeamLogo: homeTeam.logo,
@@ -2749,6 +2933,14 @@ export default function AdminPage() {
       loserScore: game.loserScore?.toString() || "",
     });
     
+    // Scroll to stats form after state updates
+    setTimeout(() => {
+      const statsForm = document.querySelector('[data-stats-form]');
+      if (statsForm) {
+        statsForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 100);
+    
     // Fetch roster for winner team if winner is selected
     if (game.winnerTeamId) {
       const winnerTeam = teams.find(t => t.id === game.winnerTeamId);
@@ -2759,6 +2951,7 @@ export default function AdminPage() {
         );
         const snapshot = await getDocs(rosterQuery);
         const rosterPlayers = snapshot.docs.map(mapSnapshotToRosterPlayer);
+        console.log(`[Stats Collection] Winner roster loaded: ${rosterPlayers.length} players for ${winnerTeam.name}`);
         setWinnerRoster(rosterPlayers);
         
         // Initialize player stats map if exists
@@ -2796,7 +2989,9 @@ export default function AdminPage() {
         orderBy("number", "asc")
       );
       const loserSnapshot = await getDocs(loserRosterQuery);
-      setLoserRoster(loserSnapshot.docs.map(mapSnapshotToRosterPlayer));
+      const loserRosterPlayers = loserSnapshot.docs.map(mapSnapshotToRosterPlayer);
+      console.log(`[Stats Collection] Loser roster loaded: ${loserRosterPlayers.length} players`);
+      setLoserRoster(loserRosterPlayers);
     }
   };
 
@@ -2884,14 +3079,22 @@ export default function AdminPage() {
         const ft_a = parseInt(stats.ft_a) || 0;
         // Calculate PTS: (2PM × 2) + (3PM × 3) + (FTM × 1)
         const pts = (two_pm * 2) + (three_pm * 3) + (ft_m * 1);
+        
+        // Calculate total rebounds
+        const oreb = parseInt(stats.oreb) || 0;
+        const dreb = parseInt(stats.dreb) || 0;
+        const reb = oreb + dreb;
+        
         return {
           playerId,
           playerName: player ? `${player.firstName} ${player.lastName}` : "",
           firstName: player?.firstName || "",
           lastName: player?.lastName || "",
+          jerseyNumber: player?.number || 0,
           number: player?.number || 0,
           headshot: player?.headshot || "",
           teamId: gameStatsForm.winnerTeamId,
+          teamName: selectedCompletedGame.homeTeamId === gameStatsForm.winnerTeamId ? selectedCompletedGame.homeTeamName : selectedCompletedGame.awayTeamName,
           two_pm,
           two_pa,
           three_pm,
@@ -2900,16 +3103,22 @@ export default function AdminPage() {
           ft_a,
           pts,
           ast: parseInt(stats.ast) || 0,
-          oreb: parseInt(stats.oreb) || 0,
-          dreb: parseInt(stats.dreb) || 0,
-          reb: parseInt(stats.reb) || 0,
+          oreb,
+          dreb,
+          reb,
           stl: parseInt(stats.stl) || 0,
           blk: parseInt(stats.blk) || 0,
           min: parseInt(stats.min) || 0,
           pf: parseInt(stats.pf) || 0,
           to: parseInt(stats.to) || 0,
         };
-      }).filter(stat => stat.pts > 0 || stat.ast > 0 || stat.reb > 0 || stat.stl > 0 || stat.blk > 0 || stat.two_pm > 0 || stat.three_pm > 0 || stat.ft_m > 0 || stat.oreb > 0 || stat.dreb > 0 || stat.min > 0 || stat.pf > 0 || stat.to > 0);
+      }).filter(stat => {
+        // Only include players who have ANY stat entered (not all zeros)
+        return stat.pts > 0 || stat.ast > 0 || stat.reb > 0 || stat.stl > 0 || stat.blk > 0 || 
+               stat.two_pm > 0 || stat.two_pa > 0 || stat.three_pm > 0 || stat.three_pa > 0 || 
+               stat.ft_m > 0 || stat.ft_a > 0 || stat.oreb > 0 || stat.dreb > 0 || 
+               stat.min > 0 || stat.pf > 0 || stat.to > 0;
+      });
 
       // Add loser team stats
       const loserPlayerStats = Object.entries(loserStatsMap).map(([playerId, stats]) => {
@@ -2922,14 +3131,22 @@ export default function AdminPage() {
         const ft_a = parseInt(stats.ft_a) || 0;
         // Calculate PTS: (2PM × 2) + (3PM × 3) + (FTM × 1)
         const pts = (two_pm * 2) + (three_pm * 3) + (ft_m * 1);
+        
+        // Calculate total rebounds
+        const oreb = parseInt(stats.oreb) || 0;
+        const dreb = parseInt(stats.dreb) || 0;
+        const reb = oreb + dreb;
+        
         return {
           playerId,
           playerName: player ? `${player.firstName} ${player.lastName}` : "",
           firstName: player?.firstName || "",
           lastName: player?.lastName || "",
+          jerseyNumber: player?.number || 0,
           number: player?.number || 0,
           headshot: player?.headshot || "",
           teamId: loserTeamId,
+          teamName: selectedCompletedGame.homeTeamId === loserTeamId ? selectedCompletedGame.homeTeamName : selectedCompletedGame.awayTeamName,
           two_pm,
           two_pa,
           three_pm,
@@ -2938,18 +3155,27 @@ export default function AdminPage() {
           ft_a,
           pts,
           ast: parseInt(stats.ast) || 0,
-          oreb: parseInt(stats.oreb) || 0,
-          dreb: parseInt(stats.dreb) || 0,
-          reb: parseInt(stats.reb) || 0,
+          oreb,
+          dreb,
+          reb,
           stl: parseInt(stats.stl) || 0,
           blk: parseInt(stats.blk) || 0,
           min: parseInt(stats.min) || 0,
           pf: parseInt(stats.pf) || 0,
           to: parseInt(stats.to) || 0,
         };
-      }).filter(stat => stat.pts > 0 || stat.ast > 0 || stat.reb > 0 || stat.stl > 0 || stat.blk > 0 || stat.two_pm > 0 || stat.three_pm > 0 || stat.ft_m > 0 || stat.oreb > 0 || stat.dreb > 0 || stat.min > 0 || stat.pf > 0 || stat.to > 0);
+      }).filter(stat => {
+        // Only include players who have ANY stat entered (not all zeros)
+        return stat.pts > 0 || stat.ast > 0 || stat.reb > 0 || stat.stl > 0 || stat.blk > 0 || 
+               stat.two_pm > 0 || stat.two_pa > 0 || stat.three_pm > 0 || stat.three_pa > 0 || 
+               stat.ft_m > 0 || stat.ft_a > 0 || stat.oreb > 0 || stat.dreb > 0 || 
+               stat.min > 0 || stat.pf > 0 || stat.to > 0;
+      });
 
       const allPlayerStats = [...playerStats, ...loserPlayerStats];
+      
+      console.log(`[Stats Save] Saving stats for ${allPlayerStats.length} players (${playerStats.length} winner, ${loserPlayerStats.length} loser)`);
+      console.log('[Stats Save] Player stats:', allPlayerStats.map(p => `${p.playerName} (${p.pts} pts)`).join(', '));
 
       await updateDoc(doc(firebaseDB, "games", selectedCompletedGame.id), {
         winnerTeamId: gameStatsForm.winnerTeamId,
@@ -3660,6 +3886,23 @@ export default function AdminPage() {
                     }`}
                   >
                     🔄 {t.traffic}
+                  </button>
+                )}
+                {currentAdminUser?.permissions.canManageTeams && (
+                  <button
+                    onClick={() => setActiveTab('accounts')}
+                    className={`relative whitespace-nowrap border-b-2 px-4 py-3 text-xs font-semibold uppercase tracking-wider transition ${
+                      activeTab === 'accounts'
+                        ? 'border-orange-500 text-orange-400'
+                        : 'border-transparent text-slate-400 hover:text-slate-300'
+                    }`}
+                  >
+                    👥 Accounts
+                    {pendingVerifications.length > 0 && (
+                      <span className="ml-2 inline-flex items-center justify-center rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white">
+                        +{pendingVerifications.length}
+                      </span>
+                    )}
                   </button>
                 )}
                 {currentAdminUser?.permissions.canManageGames && (
@@ -4975,6 +5218,377 @@ export default function AdminPage() {
             </>
             )}
 
+            {/* Accounts Management Tab Content */}
+            {activeTab === 'accounts' && currentAdminUser?.permissions.canManageTeams && (
+            <>
+            {/* ACCOUNT MANAGEMENT MODULE */}
+            <div className="space-y-6">
+              <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900 to-slate-950 p-8">
+                <div className="mb-6">
+                  <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Module</p>
+                  <h2 className="mt-2 text-3xl font-bold text-white">👥 Account Management</h2>
+                  <p className="mt-3 text-sm text-slate-300">
+                    Manage all user accounts (players, fans, coaches) and validate identity verification requests.
+                  </p>
+                </div>
+
+                {/* Statistics Cards */}
+                <div className="grid gap-4 sm:grid-cols-3 mb-8">
+                  <div className="rounded-xl border border-white/10 bg-blue-500/10 p-4">
+                    <div className="text-sm text-slate-400">Total Utilisateurs</div>
+                    <div className="mt-2 text-3xl font-bold text-blue-400">{allUsers.length}</div>
+                  </div>
+                  <div className="rounded-xl border border-white/10 bg-green-500/10 p-4">
+                    <div className="text-sm text-slate-400">Joueurs/Coachs</div>
+                    <div className="mt-2 text-3xl font-bold text-green-400">
+                      {allUsers.filter(u => u.role === 'player' || u.role === 'coach' || u.role === 'staff').length}
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-white/10 bg-orange-500/10 p-4">
+                    <div className="text-sm text-slate-400">Fans</div>
+                    <div className="mt-2 text-3xl font-bold text-orange-400">
+                      {allUsers.filter(u => u.role === 'fan').length}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Pending Verifications Section */}
+                {pendingVerifications.length > 0 && (
+                  <div className="mb-8 rounded-2xl border border-red-500/30 bg-red-500/5 p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-red-500 text-white text-sm font-bold">
+                          {pendingVerifications.length}
+                        </span>
+                        Vérifications en attente
+                      </h3>
+                    </div>
+                    <div className="space-y-3">
+                      {pendingVerifications.map((verification: any) => (
+                        <div
+                          key={verification.id}
+                          className="rounded-xl border border-white/20 bg-slate-900/50 p-4 transition hover:bg-slate-900/70 cursor-pointer"
+                          onClick={() => setSelectedUser(verification)}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <h4 className="font-semibold text-white">
+                                {verification.userFirstName} {verification.userLastName}
+                              </h4>
+                              <p className="text-sm text-slate-400 capitalize">{verification.role}</p>
+                              <p className="text-sm text-slate-500">{verification.teamName}</p>
+                            </div>
+                            <div className="text-right">
+                              <span className="rounded-full bg-yellow-500/20 px-3 py-1 text-xs font-semibold text-yellow-400">
+                                En attente
+                              </span>
+                              <p className="mt-2 text-xs text-slate-500">
+                                {verification.submittedAt?.toLocaleDateString('fr-FR')}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* All Users List */}
+                <div className="rounded-2xl border border-white/10 bg-slate-900/30 p-6">
+                  <h3 className="text-lg font-bold text-white mb-4">Tous les utilisateurs</h3>
+                  <div className="space-y-2">
+                    {allUsers.length === 0 ? (
+                      <p className="text-center text-slate-400 py-8">Aucun utilisateur enregistré</p>
+                    ) : (
+                      allUsers.map((user: any) => (
+                        <div
+                          key={user.id}
+                          className="rounded-lg border border-white/10 bg-slate-800/30 p-4 transition hover:bg-slate-800/50"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-3">
+                                <h4 className="font-semibold text-white">
+                                  {user.firstName} {user.lastName}
+                                </h4>
+                                {user.role && (
+                                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                                    user.role === 'player' ? 'bg-blue-500/20 text-blue-400' :
+                                    user.role === 'coach' || user.role === 'staff' ? 'bg-purple-500/20 text-purple-400' :
+                                    'bg-green-500/20 text-green-400'
+                                  }`}>
+                                    {user.role}
+                                  </span>
+                                )}
+                                {user.verificationStatus && (
+                                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                                    user.verificationStatus === 'approved' ? 'bg-green-500/20 text-green-400' :
+                                    user.verificationStatus === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
+                                    'bg-red-500/20 text-red-400'
+                                  }`}>
+                                    {user.verificationStatus === 'approved' ? '✓ Vérifié' :
+                                     user.verificationStatus === 'pending' ? '⏳ En attente' :
+                                     '✗ Rejeté'}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="mt-1 flex items-center gap-4 text-sm text-slate-400">
+                                <span>📧 {user.email || 'N/A'}</span>
+                                <span>📱 {user.phoneNumber}</span>
+                                {user.teamName && <span>🏀 {user.teamName}</span>}
+                              </div>
+                              {user.favoriteTeamName && (
+                                <div className="mt-1 text-xs text-slate-500">
+                                  ⭐ Équipe favorite: {user.favoriteTeamName}
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <div className="text-right text-xs text-slate-500">
+                                <div>Créé le</div>
+                                <div>{user.createdAt?.toLocaleDateString('fr-FR')}</div>
+                              </div>
+                              <button
+                                onClick={async () => {
+                                  if (window.confirm(`Are you sure you want to delete ${user.firstName} ${user.lastName}? This action cannot be undone.`)) {
+                                    try {
+                                      // Delete user document
+                                      await deleteDoc(doc(firebaseDB, "users", user.id));
+                                      
+                                      // Delete verification request if exists
+                                      const verificationQuery = query(
+                                        collection(firebaseDB, "verificationRequests"),
+                                        where("userId", "==", user.id)
+                                      );
+                                      const verificationSnapshot = await getDocs(verificationQuery);
+                                      verificationSnapshot.docs.forEach(async (docSnapshot) => {
+                                        await deleteDoc(doc(firebaseDB, "verificationRequests", docSnapshot.id));
+                                      });
+                                      
+                                      // Refresh user list
+                                      const usersSnapshot = await getDocs(collection(firebaseDB, "users"));
+                                      setAllUsers(usersSnapshot.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate() || new Date() })));
+                                      
+                                      // Refresh verifications
+                                      const verificationsQuery = query(collection(firebaseDB, "verificationRequests"), where("status", "==", "pending"));
+                                      const verificationsSnapshot = await getDocs(verificationsQuery);
+                                      setPendingVerifications(verificationsSnapshot.docs.map(d => ({ id: d.id, ...d.data(), submittedAt: d.data().submittedAt?.toDate() || new Date() })));
+                                      
+                                      alert("User deleted successfully");
+                                    } catch (error) {
+                                      console.error("Error deleting user:", error);
+                                      alert("Error deleting user. Please try again.");
+                                    }
+                                  }
+                                }}
+                                className="rounded-lg bg-red-600/20 px-3 py-1.5 text-xs font-semibold text-red-400 transition hover:bg-red-600/30"
+                                type="button"
+                              >
+                                🗑️ Delete
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Verification Review Modal */}
+            {selectedUser && (
+              <div
+                className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+                onClick={() => setSelectedUser(null)}
+              >
+                <div
+                  className="relative w-full max-w-3xl rounded-2xl border border-white/20 bg-gradient-to-br from-slate-900 to-slate-950 shadow-2xl overflow-hidden"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <button
+                    onClick={() => setSelectedUser(null)}
+                    className="absolute right-4 top-4 z-10 text-slate-400 transition hover:text-white"
+                    type="button"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+
+                  <div className="p-8 pb-4">
+                    <h2 className="mb-6 text-2xl font-bold text-white">Verification Review</h2>
+
+                    <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <label className="text-sm font-medium text-slate-400">Nom</label>
+                        <p className="text-white">{selectedUser.userFirstName} {selectedUser.userLastName}</p>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-slate-400">Téléphone</label>
+                        <p className="text-white">{selectedUser.userPhone}</p>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-slate-400">Rôle</label>
+                        <p className="text-white capitalize">{selectedUser.role}</p>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-slate-400">Équipe</label>
+                        <p className="text-white">{selectedUser.teamName}</p>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-sm font-medium text-slate-400">Personne sélectionnée</label>
+                      <p className="text-white">{selectedUser.selectedPersonName}</p>
+                    </div>
+
+                    <div>
+                      <label className="text-sm font-medium text-slate-400 block mb-2">Document d'identité</label>
+                      <div className="rounded-lg border border-white/20 bg-black/30 p-2">
+                        <img
+                          src={selectedUser.idImageUrl}
+                          alt="ID de vérification"
+                          className="w-full rounded object-contain"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-slate-400 mb-1">Review Notes (Optional)</label>
+                      <textarea
+                        value={verificationNotes}
+                        onChange={(e) => setVerificationNotes(e.target.value)}
+                        className="w-full rounded-lg border border-white/20 bg-white/5 px-4 py-2 text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                        rows={3}
+                        placeholder="Add notes about this verification..."
+                      />
+                    </div>
+                  </div>
+                  </div>
+
+                  {/* Action Area */}
+                  <div className="bg-slate-800/80 backdrop-blur border-t-2 border-slate-700 p-6">
+                    <div className="flex gap-4">
+                      <button
+                        onClick={async () => {
+                          setProcessingVerification(true);
+                          try {
+                            await updateDoc(doc(firebaseDB, "verificationRequests", selectedUser.id), {
+                              status: "approved",
+                              reviewedAt: serverTimestamp(),
+                              reviewedBy: currentAdminUser?.email,
+                              notes: verificationNotes,
+                            });
+                            await updateDoc(doc(firebaseDB, "users", selectedUser.userId), {
+                              verificationStatus: "approved",
+                              verificationReviewedAt: serverTimestamp(),
+                              verificationReviewedBy: currentAdminUser?.email,
+                              verificationNotes: verificationNotes,
+                              updatedAt: serverTimestamp(),
+                            });
+                            
+                            // Refresh data
+                            const usersSnapshot = await getDocs(collection(firebaseDB, "users"));
+                            setAllUsers(usersSnapshot.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate() || new Date() })));
+                            const verificationsQuery = query(collection(firebaseDB, "verificationRequests"), where("status", "==", "pending"));
+                            const verificationsSnapshot = await getDocs(verificationsQuery);
+                            setPendingVerifications(verificationsSnapshot.docs.map(d => ({ id: d.id, ...d.data(), submittedAt: d.data().submittedAt?.toDate() || new Date() })));
+                            
+                            setSelectedUser(null);
+                            setVerificationNotes("");
+                          } catch (error) {
+                            console.error("Error approving verification:", error);
+                            alert("Error approving verification");
+                          } finally {
+                            setProcessingVerification(false);
+                          }
+                        }}
+                        disabled={processingVerification}
+                        className="flex-1 rounded-xl bg-green-600 hover:bg-green-500 px-8 py-5 text-xl font-bold text-white shadow-2xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed border-2 border-green-400 hover:scale-105 active:scale-95 flex items-center justify-center gap-3"
+                        type="button"
+                      >
+                        {processingVerification ? (
+                          <>
+                            <svg className="animate-spin h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <span>Processing...</span>
+                          </>
+                        ) : (
+                          <>
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                            </svg>
+                            <span>APPROVE</span>
+                          </>
+                        )}
+                      </button>
+                      <button
+                        onClick={async () => {
+                          setProcessingVerification(true);
+                          try {
+                            await updateDoc(doc(firebaseDB, "verificationRequests", selectedUser.id), {
+                              status: "rejected",
+                              reviewedAt: serverTimestamp(),
+                              reviewedBy: currentAdminUser?.email,
+                              notes: verificationNotes,
+                            });
+                            await updateDoc(doc(firebaseDB, "users", selectedUser.userId), {
+                              verificationStatus: "rejected",
+                              verificationReviewedAt: serverTimestamp(),
+                              verificationReviewedBy: currentAdminUser?.email,
+                              verificationNotes: verificationNotes,
+                              updatedAt: serverTimestamp(),
+                            });
+                            
+                            // Refresh data
+                            const usersSnapshot = await getDocs(collection(firebaseDB, "users"));
+                            setAllUsers(usersSnapshot.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate() || new Date() })));
+                            const verificationsQuery = query(collection(firebaseDB, "verificationRequests"), where("status", "==", "pending"));
+                            const verificationsSnapshot = await getDocs(verificationsQuery);
+                            setPendingVerifications(verificationsSnapshot.docs.map(d => ({ id: d.id, ...d.data(), submittedAt: d.data().submittedAt?.toDate() || new Date() })));
+                            
+                            setSelectedUser(null);
+                            setVerificationNotes("");
+                          } catch (error) {
+                            console.error("Error rejecting verification:", error);
+                            alert("Error rejecting verification");
+                          } finally {
+                            setProcessingVerification(false);
+                          }
+                        }}
+                        disabled={processingVerification}
+                        className="flex-1 rounded-xl bg-red-600 hover:bg-red-500 px-8 py-5 text-xl font-bold text-white shadow-2xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed border-2 border-red-400 hover:scale-105 active:scale-95 flex items-center justify-center gap-3"
+                        type="button"
+                      >
+                        {processingVerification ? (
+                          <>
+                            <svg className="animate-spin h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <span>Processing...</span>
+                          </>
+                        ) : (
+                          <>
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                            <span>REJECT</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            </>
+            )}
+
             {/* Games Tab Content */}
             {activeTab === 'games' && currentAdminUser?.permissions.canManageGames && (
             <>
@@ -5020,207 +5634,129 @@ export default function AdminPage() {
                     </button>
                   ) : (
                     <form onSubmit={handleSubmitGame} className="space-y-6">
-                      {/* Gender Selection */}
-                      <div className="space-y-2">
-                        <label className="block text-sm font-medium text-slate-300">League</label>
-                        <div className="flex gap-3">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setGameForm((prev) => ({ ...prev, gender: "men", homeTeamId: "", awayTeamId: "" }));
-                              setGameTeamSearch("");
-                            }}
-                            className={`flex-1 rounded-xl border px-4 py-3 text-sm font-medium transition ${
-                              gameForm.gender === "men"
-                                ? "border-blue-500 bg-blue-500/20 text-blue-100"
-                                : "border-white/10 bg-slate-900/60 text-slate-300 hover:border-white/20"
-                            }`}
-                            >
-                            Men&apos;s League
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setGameForm((prev) => ({ ...prev, gender: "women", homeTeamId: "", awayTeamId: "" }));
-                              setGameTeamSearch("");
-                            }}
-                            className={`flex-1 rounded-xl border px-4 py-3 text-sm font-medium transition ${
-                              gameForm.gender === "women"
-                                ? "border-pink-500 bg-pink-500/20 text-pink-100"
-                                : "border-white/10 bg-slate-900/60 text-slate-300 hover:border-white/20"
-                            }`}
-                          >
-                            Women&apos;s League
-                          </button>
-                        </div>
+                      {/* League Selection - Simplified Tabs */}
+                      <div className="flex gap-2 p-1 rounded-xl bg-slate-950/60 border border-white/10">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setGameForm((prev) => ({ ...prev, gender: "men", homeTeamId: "", awayTeamId: "" }));
+                            setGameTeamSearch("");
+                          }}
+                          className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all ${
+                            gameForm.gender === "men"
+                              ? "bg-blue-500 text-white shadow-lg"
+                              : "text-slate-400 hover:text-white"
+                          }`}
+                        >
+                          Men&apos;s
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setGameForm((prev) => ({ ...prev, gender: "women", homeTeamId: "", awayTeamId: "" }));
+                            setGameTeamSearch("");
+                          }}
+                          className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all ${
+                            gameForm.gender === "women"
+                              ? "bg-pink-500 text-white shadow-lg"
+                              : "text-slate-400 hover:text-white"
+                          }`}
+                        >
+                          Women&apos;s
+                        </button>
                       </div>
 
-                      {/* Team Search */}
-                      <div className="space-y-2">
-                        <label className="block text-sm font-medium text-slate-300">Search Teams</label>
-                        <input
-                          type="text"
-                          value={gameTeamSearch}
-                          onChange={(e) => setGameTeamSearch(e.target.value)}
-                          placeholder="Search by team name or city..."
-                          className="w-full rounded-xl border border-white/10 bg-slate-900/60 px-4 py-2 text-white placeholder-slate-500 focus:border-white/30"
-                        />
-                      </div>
-
-                      {/* Team Selection Grid */}
-                      <div className="grid gap-6 md:grid-cols-2">
-                        {/* Home Team */}
-                        <div className="space-y-2">
-                          <label className="block text-sm font-medium text-slate-300">Home Team</label>
-                          <div className="max-h-64 space-y-2 overflow-y-auto rounded-xl border border-white/10 bg-slate-950/60 p-3">
-                            {filteredGameTeams.length > 0 ? (
-                              filteredGameTeams.map((team) => (
-                                <button
-                                  key={team.id}
-                                  type="button"
-                                  onClick={() => setGameForm((prev) => ({ ...prev, homeTeamId: team.id }))}
-                                  className={`flex w-full items-center gap-3 rounded-lg border p-2 text-left transition ${
-                                    gameForm.homeTeamId === team.id
-                                      ? "border-emerald-500 bg-emerald-500/20"
-                                      : "border-white/5 bg-slate-900/40 hover:border-white/20"
-                                  }`}
-                                >
-                                  {team.logo ? (
-                                    <Image src={team.logo} alt={team.name} width={32} height={32} className="h-8 w-8 rounded-full object-cover" unoptimized />
-                                  ) : (
-                                    <div className="h-8 w-8 rounded-full border border-dashed border-white/20 bg-slate-800"></div>
-                                  )}
-                                  <div className="flex-1">
-                                    <p className="text-sm font-semibold text-white">{team.name}</p>
-                                    <p className="text-xs text-slate-400">{team.city}</p>
-                                  </div>
-                                </button>
-                              ))
-                            ) : (
-                              <p className="text-center text-sm text-slate-500">No teams found</p>
-                            )}
+                      {/* Week/Journée Selection */}
+                      <div className="rounded-xl border border-white/10 bg-gradient-to-br from-indigo-500/10 to-purple-500/10 p-5">
+                        <label className="block">
+                          <div className="flex items-center gap-2 mb-3">
+                            <svg className="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            <span className="text-sm font-semibold text-white">Journée / Week</span>
                           </div>
-                        </div>
-
-                        {/* Away Team */}
-                        <div className="space-y-2">
-                          <label className="block text-sm font-medium text-slate-300">Away Team</label>
-                          <div className="max-h-64 space-y-2 overflow-y-auto rounded-xl border border-white/10 bg-slate-950/60 p-3">
-                            {filteredGameTeams.length > 0 ? (
-                              filteredGameTeams.map((team) => (
-                                <button
-                                  key={team.id}
-                                  type="button"
-                                  onClick={() => setGameForm((prev) => ({ ...prev, awayTeamId: team.id }))}
-                                  className={`flex w-full items-center gap-3 rounded-lg border p-2 text-left transition ${
-                                    gameForm.awayTeamId === team.id
-                                      ? "border-blue-500 bg-blue-500/20"
-                                      : "border-white/5 bg-slate-900/40 hover:border-white/20"
-                                  }`}
-                                >
-                                  {team.logo ? (
-                                    <Image src={team.logo} alt={team.name} width={32} height={32} className="h-8 w-8 rounded-full object-cover" unoptimized />
-                                  ) : (
-                                    <div className="h-8 w-8 rounded-full border border-dashed border-white/20 bg-slate-800"></div>
-                                  )}
-                                  <div className="flex-1">
-                                    <p className="text-sm font-semibold text-white">{team.name}</p>
-                                    <p className="text-xs text-slate-400">{team.city}</p>
-                                  </div>
-                                </button>
-                              ))
-                            ) : (
-                              <p className="text-center text-sm text-slate-500">No teams found</p>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Game Details */}
-                      <div className="grid gap-4 sm:grid-cols-3">
-                        <label className="space-y-1 text-sm text-slate-300">
-                          Date
-                          <input
-                            type="date"
-                            value={gameForm.date}
-                            onChange={(e) => setGameForm((prev) => ({ ...prev, date: e.target.value }))}
-                            className="w-full max-w-full rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
-                            required
-                          />
-                        </label>
-                        <label className="space-y-1 text-sm text-slate-300">
-                          Time
-                          <input
-                            type="time"
-                            value={gameForm.time}
-                            onChange={(e) => setGameForm((prev) => ({ ...prev, time: e.target.value }))}
-                            className="w-full max-w-full rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
-                            required
-                          />
-                        </label>
-                        <label className="space-y-1 text-sm text-slate-300">
-                          Venue
                           <select
-                            value={gameForm.venue}
-                            onChange={(e) => setGameForm((prev) => ({ ...prev, venue: e.target.value }))}
-                            className="w-full max-w-full rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
+                            value={gameForm.week}
+                            onChange={(e) => setGameForm((prev) => ({ ...prev, week: parseInt(e.target.value) }))}
+                            className="w-full rounded-lg border border-white/20 bg-slate-900/60 px-4 py-3 text-white font-medium focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition"
                             required
                           >
-                            <option value="">-- Select Venue --</option>
-                            {venues.map((venue) => (
-                              <option key={venue.id} value={venue.name}>
-                                {venue.name} ({venue.city})
+                            {Array.from({ length: 30 }, (_, i) => i + 1).map((week) => (
+                              <option key={week} value={week}>
+                                Journée {week} / Week {week}
                               </option>
                             ))}
                           </select>
+                          <p className="mt-2 text-xs text-slate-400">
+                            Games will be organized by week for easy archiving and viewing
+                          </p>
                         </label>
                       </div>
 
-                      {/* Referee Assignment */}
-                      <div className="space-y-3 rounded-xl border border-white/10 bg-slate-950/40 p-4">
-                        <h4 className="text-sm font-semibold text-white">Referee Assignment</h4>
-                        <div className="grid gap-4 sm:grid-cols-3">
-                          <label className="space-y-1 text-xs text-slate-300">
-                            Home Team Referee #1
-                            <select
-                              value={gameForm.refereeHomeTeam1}
-                              onChange={(e) => setGameForm((prev) => ({ ...prev, refereeHomeTeam1: e.target.value }))}
-                              className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
-                            >
-                              <option value="">-- Select Referee --</option>
-                              {referees.map((ref) => (
-                                <option key={ref.id} value={ref.id}>
-                                  {ref.firstName} {ref.lastName}
-                                </option>
-                              ))}
-                            </select>
+                      {/* Teams & Match Info - Single Clean Card */}
+                      <div className="rounded-xl border border-white/10 bg-slate-950/40 p-5 space-y-5">
+                        {/* Team Selection - Typeahead Style */}
+                        <div className="space-y-4">
+                          <TeamTypeahead
+                            label="Home Team"
+                            selectedTeamId={gameForm.homeTeamId}
+                            teams={filteredGameTeams}
+                            onSelect={(teamId) => setGameForm((prev) => ({ ...prev, homeTeamId: teamId }))}
+                            placeholder="Search for home team..."
+                          />
+
+                          {/* VS Divider */}
+                          <div className="flex items-center gap-3">
+                            <div className="flex-1 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
+                            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">VS</span>
+                            <div className="flex-1 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
+                          </div>
+
+                          <TeamTypeahead
+                            label="Away Team"
+                            selectedTeamId={gameForm.awayTeamId}
+                            teams={filteredGameTeams}
+                            onSelect={(teamId) => setGameForm((prev) => ({ ...prev, awayTeamId: teamId }))}
+                            placeholder="Search for away team..."
+                          />
+                        </div>
+
+                        <div className="h-px bg-white/5"></div>
+
+                        {/* Date, Time & Venue - Compact Grid */}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                          <label className="col-span-2 sm:col-span-1">
+                            <span className="text-xs font-medium text-slate-400 mb-1.5 block uppercase tracking-wider">Date</span>
+                            <input
+                              type="date"
+                              value={gameForm.date}
+                              onChange={(e) => setGameForm((prev) => ({ ...prev, date: e.target.value }))}
+                              className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2.5 text-sm text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                              required
+                            />
                           </label>
-                          <label className="space-y-1 text-xs text-slate-300">
-                            Home Team Referee #2
-                            <select
-                              value={gameForm.refereeHomeTeam2}
-                              onChange={(e) => setGameForm((prev) => ({ ...prev, refereeHomeTeam2: e.target.value }))}
-                              className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
-                            >
-                              <option value="">-- Select Referee --</option>
-                              {referees.map((ref) => (
-                                <option key={ref.id} value={ref.id}>
-                                  {ref.firstName} {ref.lastName}
-                                </option>
-                              ))}
-                            </select>
+                          <label>
+                            <span className="text-xs font-medium text-slate-400 mb-1.5 block uppercase tracking-wider">Time</span>
+                            <input
+                              type="time"
+                              value={gameForm.time}
+                              onChange={(e) => setGameForm((prev) => ({ ...prev, time: e.target.value }))}
+                              className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2.5 text-sm text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                              required
+                            />
                           </label>
-                          <label className="space-y-1 text-xs text-slate-300">
-                            Away Team Referee
+                          <label className="col-span-2 sm:col-span-1">
+                            <span className="text-xs font-medium text-slate-400 mb-1.5 block uppercase tracking-wider">Venue</span>
                             <select
-                              value={gameForm.refereeAwayTeam}
-                              onChange={(e) => setGameForm((prev) => ({ ...prev, refereeAwayTeam: e.target.value }))}
-                              className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
+                              value={gameForm.venue}
+                              onChange={(e) => setGameForm((prev) => ({ ...prev, venue: e.target.value }))}
+                              className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2.5 text-sm text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                              required
                             >
-                              <option value="">-- Select Referee --</option>
-                              {referees.map((ref) => (
-                                <option key={ref.id} value={ref.id}>
-                                  {ref.firstName} {ref.lastName}
+                              <option value="">Select venue</option>
+                              {venues.map((venue) => (
+                                <option key={venue.id} value={venue.name}>
+                                  {venue.name} ({venue.city})
                                 </option>
                               ))}
                             </select>
@@ -5228,23 +5764,84 @@ export default function AdminPage() {
                         </div>
                       </div>
 
-                      {/* Submit Buttons */}
-                      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+                      {/* Referees - Collapsible Optional Section */}
+                      <details className="group rounded-xl border border-white/5 bg-slate-950/20 overflow-hidden">
+                        <summary className="cursor-pointer px-4 py-3 flex items-center justify-between text-sm font-medium text-slate-300 hover:bg-slate-900/40 transition">
+                          <span className="flex items-center gap-2">
+                            <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                            </svg>
+                            Assign Referees
+                          </span>
+                          <span className="text-xs text-slate-500">(Optional)</span>
+                        </summary>
+                        <div className="px-4 pb-4 pt-2 space-y-3 bg-slate-900/20">
+                          <div className="grid gap-3 sm:grid-cols-3">
+                            <label className="space-y-1.5">
+                              <span className="text-xs text-slate-400">Home Referee #1</span>
+                              <select
+                                value={gameForm.refereeHomeTeam1}
+                                onChange={(e) => setGameForm((prev) => ({ ...prev, refereeHomeTeam1: e.target.value }))}
+                                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white"
+                              >
+                                <option value="">None</option>
+                                {referees.map((ref) => (
+                                  <option key={ref.id} value={ref.id}>
+                                    {ref.firstName} {ref.lastName}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="space-y-1.5">
+                              <span className="text-xs text-slate-400">Home Referee #2</span>
+                              <select
+                                value={gameForm.refereeHomeTeam2}
+                                onChange={(e) => setGameForm((prev) => ({ ...prev, refereeHomeTeam2: e.target.value }))}
+                                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white"
+                              >
+                                <option value="">None</option>
+                                {referees.map((ref) => (
+                                  <option key={ref.id} value={ref.id}>
+                                    {ref.firstName} {ref.lastName}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="space-y-1.5">
+                              <span className="text-xs text-slate-400">Away Referee</span>
+                              <select
+                                value={gameForm.refereeAwayTeam}
+                                onChange={(e) => setGameForm((prev) => ({ ...prev, refereeAwayTeam: e.target.value }))}
+                                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white"
+                              >
+                                <option value="">None</option>
+                                {referees.map((ref) => (
+                                  <option key={ref.id} value={ref.id}>
+                                    {ref.firstName} {ref.lastName}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          </div>
+                        </div>
+                      </details>
+
+                      {/* Action Buttons - Prominent */}
+                      <div className="flex gap-3 pt-2">
                         <button
                           type="submit"
                           disabled={gameSubmitting}
-                          className="w-full rounded-full border border-white/20 bg-white/10 px-5 py-3 text-sm font-semibold uppercase tracking-[0.4em] text-white transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:py-2 sm:text-xs"
+                          className="flex-1 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-3.5 text-sm font-semibold text-white shadow-lg transition hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          {gameSubmitting ? "Saving…" : gameForm.id ? "Update Game" : "Post Game"}
+                          {gameSubmitting ? "Scheduling..." : gameForm.id ? "Update Game" : "Schedule Game"}
                         </button>
                         <button
                           type="button"
                           onClick={resetGameForm}
-                          className="w-full rounded-full border border-white/10 px-4 py-3 text-sm uppercase tracking-[0.4em] text-slate-300 transition hover:border-white/20 sm:w-auto sm:py-2 sm:text-xs"
+                          className="px-6 py-3.5 rounded-lg border border-white/10 text-sm font-medium text-slate-300 hover:bg-slate-900/40 transition"
                         >
                           Cancel
                         </button>
-                        {gameForm.id ? <span className="text-xs text-slate-400">Editing game.</span> : null}
                       </div>
                     </form>
                   )}
@@ -5278,20 +5875,23 @@ export default function AdminPage() {
                           {/* Mobile-first layout */}
                           <div className="space-y-2">
                             {/* Badges Row */}
-                            {(game.spotlight || isCompleted) && (
-                              <div className="flex gap-1.5">
-                                {game.spotlight && !isCompleted && (
-                                  <span className="inline-block rounded-full bg-orange-500/20 px-1.5 py-0.5 text-[8px] sm:text-[9px] font-semibold uppercase tracking-wider text-orange-300">
-                                    Spotlight
-                                  </span>
-                                )}
-                                {isCompleted && (
-                                  <span className="inline-block rounded-full bg-slate-700/40 px-1.5 py-0.5 text-[8px] sm:text-[9px] font-semibold uppercase tracking-wider text-slate-400">
-                                    Completed
-                                  </span>
-                                )}
-                              </div>
-                            )}
+                            <div className="flex gap-1.5 flex-wrap">
+                              {(game as any).week && (
+                                <span className="inline-block rounded-full bg-indigo-500/20 px-1.5 py-0.5 text-[8px] sm:text-[9px] font-semibold uppercase tracking-wider text-indigo-300">
+                                  J{(game as any).week}
+                                </span>
+                              )}
+                              {game.spotlight && !isCompleted && (
+                                <span className="inline-block rounded-full bg-orange-500/20 px-1.5 py-0.5 text-[8px] sm:text-[9px] font-semibold uppercase tracking-wider text-orange-300">
+                                  Spotlight
+                                </span>
+                              )}
+                              {isCompleted && (
+                                <span className="inline-block rounded-full bg-slate-700/40 px-1.5 py-0.5 text-[8px] sm:text-[9px] font-semibold uppercase tracking-wider text-slate-400">
+                                  Completed
+                                </span>
+                              )}
+                            </div>
                             
                             {/* Teams Row */}
                             <div className="flex items-center justify-between gap-2">
@@ -5410,6 +6010,193 @@ export default function AdminPage() {
                 </section>
               </div>
             )}
+
+            {/* WEEK ARCHIVE MODULE */}
+            <button
+              type="button"
+              onClick={() => setShowArchiveView(!showArchiveView)}
+              className="group relative w-full overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-cyan-600/20 to-blue-600/20 p-8 text-left shadow-xl transition hover:border-white/30 hover:shadow-2xl"
+            >
+              <div className="relative z-10 flex items-center justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Archive</p>
+                  <h2 className="mt-2 text-3xl font-bold text-white">Week Archive</h2>
+                  <p className="mt-3 text-sm text-slate-300">
+                    Browse all games organized by week (Journée). View completed and upcoming games for each week.
+                  </p>
+                </div>
+                <span className="text-2xl text-white">{showArchiveView ? '−' : '+'}</span>
+              </div>
+              <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-blue-500/5 opacity-0 transition group-hover:opacity-100"></div>
+            </button>
+
+            {showArchiveView && (
+              <div className="space-y-6 rounded-3xl border border-white/10 bg-slate-900/60 p-6">
+                {/* Week Selector */}
+                <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-bold text-white">Select Week / Journée</h3>
+                    <p className="text-xs text-slate-400 mt-1">Choose a week to view all games</p>
+                  </div>
+                  <select
+                    value={selectedArchiveWeek}
+                    onChange={(e) => setSelectedArchiveWeek(parseInt(e.target.value))}
+                    className="rounded-lg border border-white/20 bg-slate-900/60 px-4 py-2.5 text-white font-medium focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition"
+                  >
+                    {Array.from({ length: 30 }, (_, i) => i + 1).map((week) => (
+                      <option key={week} value={week}>
+                        Journée {week} / Week {week}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Gender Filter */}
+                <div className="flex gap-2 p-1 rounded-xl bg-slate-950/60 border border-white/10">
+                  <button
+                    type="button"
+                    onClick={() => setArchiveGenderFilter('all')}
+                    className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all ${
+                      archiveGenderFilter === 'all'
+                        ? "bg-cyan-500 text-white shadow-lg"
+                        : "text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    All Games
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setArchiveGenderFilter('gentlemen')}
+                    className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all ${
+                      archiveGenderFilter === 'gentlemen'
+                        ? "bg-blue-500 text-white shadow-lg"
+                        : "text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    Men&apos;s
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setArchiveGenderFilter('ladies')}
+                    className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all ${
+                      archiveGenderFilter === 'ladies'
+                        ? "bg-pink-500 text-white shadow-lg"
+                        : "text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    Women&apos;s
+                  </button>
+                </div>
+
+                {/* Games List for Selected Week */}
+                <div className="space-y-3">
+                  {games
+                    .filter(game => {
+                      const matchesWeek = (game as any).week === selectedArchiveWeek;
+                      const matchesGender = archiveGenderFilter === 'all' || 
+                        (archiveGenderFilter === 'gentlemen' && game.gender === 'men') ||
+                        (archiveGenderFilter === 'ladies' && game.gender === 'women');
+                      return matchesWeek && matchesGender;
+                    })
+                    .sort((a, b) => {
+                      // Show completed games first, then by date
+                      if ((a as any).completed && !(b as any).completed) return -1;
+                      if (!(a as any).completed && (b as any).completed) return 1;
+                      return new Date(a.date).getTime() - new Date(b.date).getTime();
+                    })
+                    .map(game => {
+                      const isCompleted = (game as any).completed;
+                      return (
+                        <div
+                          key={game.id}
+                          className={`rounded-xl border p-4 transition-all ${
+                            isCompleted
+                              ? 'border-green-500/30 bg-green-500/5'
+                              : 'border-white/10 bg-slate-950/60'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-3 flex-1">
+                              {game.awayTeamLogo && (
+                                <Image src={game.awayTeamLogo} alt={game.awayTeamName} width={32} height={32} className="rounded-full" unoptimized />
+                              )}
+                              <div className="min-w-0">
+                                <div className="font-bold text-white truncate">{game.awayTeamName} @ {game.homeTeamName}</div>
+                                <div className="text-xs text-slate-400">{game.date} • {game.time} • {game.venue}</div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {isCompleted && (
+                                <span className="rounded-full bg-green-500/20 px-3 py-1 text-xs font-semibold text-green-300">
+                                  Completed
+                                </span>
+                              )}
+                              {!isCompleted && (
+                                <span className="rounded-full bg-blue-500/20 px-3 py-1 text-xs font-semibold text-blue-300">
+                                  Upcoming
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }).length > 0 ? (
+                      games
+                        .filter(game => {
+                          const matchesWeek = (game as any).week === selectedArchiveWeek;
+                          const matchesGender = archiveGenderFilter === 'all' || 
+                            (archiveGenderFilter === 'gentlemen' && game.gender === 'men') ||
+                            (archiveGenderFilter === 'ladies' && game.gender === 'women');
+                          return matchesWeek && matchesGender;
+                        })
+                        .map(game => {
+                          const isCompleted = (game as any).completed;
+                          return (
+                            <div
+                              key={game.id}
+                              className={`rounded-xl border p-4 transition-all ${
+                                isCompleted
+                                  ? 'border-green-500/30 bg-green-500/5'
+                                  : 'border-white/10 bg-slate-950/60'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-4">
+                                <div className="flex items-center gap-3 flex-1">
+                                  {game.awayTeamLogo && (
+                                    <Image src={game.awayTeamLogo} alt={game.awayTeamName} width={32} height={32} className="rounded-full" unoptimized />
+                                  )}
+                                  <div className="min-w-0">
+                                    <div className="font-bold text-white truncate">{game.awayTeamName} @ {game.homeTeamName}</div>
+                                    <div className="text-xs text-slate-400">{game.date} • {game.time} • {game.venue}</div>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  {isCompleted && (
+                                    <span className="rounded-full bg-green-500/20 px-3 py-1 text-xs font-semibold text-green-300">
+                                      Completed
+                                    </span>
+                                  )}
+                                  {!isCompleted && (
+                                    <span className="rounded-full bg-blue-500/20 px-3 py-1 text-xs font-semibold text-blue-300">
+                                      Upcoming
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })
+                    ) : (
+                      <div className="rounded-xl border border-dashed border-white/20 bg-slate-900/40 p-8 text-center">
+                        <svg className="w-12 h-12 text-slate-600 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                        </svg>
+                        <p className="text-slate-400">No games scheduled for Journée {selectedArchiveWeek}</p>
+                      </div>
+                    )}
+                </div>
+              </div>
+            )}
             </>
             )}
 
@@ -5420,17 +6207,28 @@ export default function AdminPage() {
             <button
               type="button"
               onClick={() => setGameStatsAssistantOpen(!gameStatsAssistantOpen)}
-              className="group relative w-full overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-emerald-600/20 to-cyan-600/20 p-8 text-left shadow-xl transition hover:border-white/30 hover:shadow-2xl"
+              className="group relative w-full overflow-hidden rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 to-cyan-500/5 p-6 text-left shadow-lg transition hover:border-emerald-500/50 hover:shadow-xl hover:bg-emerald-500/15"
             >
-              <div className="relative z-10 flex items-center justify-between">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Module</p>
-                  <h2 className="mt-2 text-3xl font-bold text-white">Game Stats Assistant</h2>
-                  <p className="mt-3 text-sm text-slate-300">
-                    Record final scores and player statistics for completed games (45+ minutes after start time).
-                  </p>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/20 text-2xl">
+                    📊
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-white">Game Stats Collection</h2>
+                    <p className="mt-1 text-xs text-slate-400">
+                      Record scores and player statistics
+                    </p>
+                  </div>
                 </div>
-                <span className="text-2xl text-white">{gameStatsAssistantOpen ? '−' : '+'}</span>
+                <div className="flex items-center gap-4">
+                  {completedGames.length > 0 && (
+                    <div className="rounded-full bg-emerald-500/20 px-3 py-1">
+                      <span className="text-sm font-semibold text-emerald-300">{completedGames.length} games</span>
+                    </div>
+                  )}
+                  <span className="text-2xl text-white transition-transform group-hover:scale-110">{gameStatsAssistantOpen ? '−' : '+'}</span>
+                </div>
               </div>
             </button>
 
@@ -5444,181 +6242,558 @@ export default function AdminPage() {
                 )}
 
                 {/* Completed Games List */}
-                <section className="rounded-3xl border border-white/10 bg-slate-900/60 p-6">
-                  <div className="space-y-1 mb-6">
-                    <p className="text-xs uppercase tracking-[0.4em] text-slate-500">Completed Games</p>
-                    <h3 className="text-lg font-semibold">Games Ready for Stats (Last 7 Days)</h3>
-                    <p className="text-xs text-slate-400">Games appear here 45 min after start and stay for 1 week. Stats are permanently saved.</p>
+                <section className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-lg font-bold text-white">Available Games</h3>
+                      <p className="text-xs text-slate-400 mt-1">Games ready for stats collection (last 7 days)</p>
+                    </div>
+                    {completedGames.length > 0 && (
+                      <div className="text-right">
+                        <div className="text-2xl font-bold text-white">{completedGames.length}</div>
+                        <div className="text-xs text-slate-400">games</div>
+                      </div>
+                    )}
                   </div>
 
-                  <div className="space-y-3">
+                  <div className="grid gap-4 md:grid-cols-2">
                     {completedGames.length > 0 ? (
                       completedGames.map((game) => (
                         <div
                           key={game.id}
-                          className={`rounded-xl border p-4 ${
-                            game.completed ? "border-emerald-500/40 bg-emerald-500/10" : "border-white/10 bg-slate-950/60"
+                          className={`group relative overflow-hidden rounded-xl border transition-all duration-300 ${
+                            game.completed 
+                              ? "border-emerald-500/40 bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 hover:border-emerald-500/60" 
+                              : "border-slate-700 bg-gradient-to-br from-slate-900 to-slate-800 hover:border-slate-600 hover:shadow-xl"
                           }`}
                         >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="flex-1">
-                              {game.completed && (
-                                <span className="mb-2 inline-block rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-300">
-                                  Stats Recorded
-                                </span>
-                              )}
-                              <div className="flex items-center gap-3">
-                                {game.awayTeamLogo && (
-                                  <Image src={game.awayTeamLogo} alt={game.awayTeamName} width={32} height={32} className="h-8 w-8 rounded-full" unoptimized />
-                                )}
-                                <span className="text-sm font-semibold text-white">{game.awayTeamName}</span>
-                                {game.completed && game.loserTeamId === game.awayTeamId && (
-                                  <span className="text-xs text-slate-400">{game.loserScore}</span>
-                                )}
-                                <span className="text-xs text-slate-400">@</span>
-                                {game.homeTeamLogo && (
-                                  <Image src={game.homeTeamLogo} alt={game.homeTeamName} width={32} height={32} className="h-8 w-8 rounded-full" unoptimized />
-                                )}
-                                <span className="text-sm font-semibold text-white">{game.homeTeamName}</span>
-                                {game.completed && game.loserTeamId === game.homeTeamId && (
-                                  <span className="text-xs text-slate-400">{game.loserScore}</span>
-                                )}
+                          {/* Status Badge */}
+                          {game.completed && (
+                            <div className="absolute top-3 right-3 z-10">
+                              <div className="flex items-center gap-1.5 rounded-full bg-emerald-500/20 px-2.5 py-1 backdrop-blur-sm">
+                                <div className="h-1.5 w-1.5 rounded-full bg-emerald-400"></div>
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-300">Complete</span>
                               </div>
-                              <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-400">
-                                <span>📅 {game.date}</span>
-                                <span>🕐 {game.time}</span>
-                                <span>📍 {game.venue}</span>
-                                <span className="uppercase text-slate-500">{game.gender + "'s"}</span>
-                              </div>
-                              {game.completed && game.winnerTeamId && (
-                                <div className="mt-2 text-xs text-emerald-400">
-                                  Winner: {game.winnerTeamId === game.homeTeamId ? game.homeTeamName : game.awayTeamName} ({game.winnerScore})
-                                </div>
-                              )}
                             </div>
+                          )}
+                          
+                          <div className="p-5">
+                            {/* Teams Matchup */}
+                            <div className="mb-4">
+                              <div className="flex items-center justify-between mb-3">
+                                <div className="flex items-center gap-3 flex-1">
+                                  {game.awayTeamLogo && (
+                                    <div className="relative h-12 w-12 rounded-full overflow-hidden bg-slate-800 ring-2 ring-slate-700">
+                                      <Image src={game.awayTeamLogo} alt={game.awayTeamName} fill className="object-cover" unoptimized />
+                                    </div>
+                                  )}
+                                  <div className="flex-1">
+                                    <div className="text-sm font-bold text-white">{game.awayTeamName}</div>
+                                    <div className="text-xs text-slate-400">Away</div>
+                                  </div>
+                                  {game.completed && (
+                                    <div className={`text-2xl font-bold tabular-nums ${game.winnerTeamId === game.awayTeamId ? 'text-emerald-400' : 'text-slate-500'}`}>
+                                      {game.winnerTeamId === game.awayTeamId ? game.winnerScore : game.loserScore}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              
+                              <div className="flex items-center justify-center my-2">
+                                <div className="h-px w-full bg-gradient-to-r from-transparent via-slate-600 to-transparent"></div>
+                                <div className="mx-3 text-xs font-semibold text-slate-500">VS</div>
+                                <div className="h-px w-full bg-gradient-to-r from-transparent via-slate-600 to-transparent"></div>
+                              </div>
+                              
+                              <div className="flex items-center justify-between mt-3">
+                                <div className="flex items-center gap-3 flex-1">
+                                  {game.homeTeamLogo && (
+                                    <div className="relative h-12 w-12 rounded-full overflow-hidden bg-slate-800 ring-2 ring-slate-700">
+                                      <Image src={game.homeTeamLogo} alt={game.homeTeamName} fill className="object-cover" unoptimized />
+                                    </div>
+                                  )}
+                                  <div className="flex-1">
+                                    <div className="text-sm font-bold text-white">{game.homeTeamName}</div>
+                                    <div className="text-xs text-slate-400">Home</div>
+                                  </div>
+                                  {game.completed && (
+                                    <div className={`text-2xl font-bold tabular-nums ${game.winnerTeamId === game.homeTeamId ? 'text-emerald-400' : 'text-slate-500'}`}>
+                                      {game.winnerTeamId === game.homeTeamId ? game.winnerScore : game.loserScore}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Game Details */}
+                            <div className="flex flex-wrap gap-2 mb-4 text-xs">
+                              <div className="flex items-center gap-1.5 rounded-lg bg-slate-800/50 px-2.5 py-1.5">
+                                <span className="text-slate-400">📅</span>
+                                <span className="text-slate-300">{game.date}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5 rounded-lg bg-slate-800/50 px-2.5 py-1.5">
+                                <span className="text-slate-400">🕐</span>
+                                <span className="text-slate-300">{game.time}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5 rounded-lg bg-slate-800/50 px-2.5 py-1.5">
+                                <span className="text-slate-400">📍</span>
+                                <span className="text-slate-300">{game.venue}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5 rounded-lg bg-slate-800/50 px-2.5 py-1.5">
+                                <span className="text-slate-300 uppercase font-semibold">{game.gender}'s</span>
+                              </div>
+                            </div>
+
+                            {/* Action Button */}
                             <button
                               type="button"
                               onClick={() => handleSelectCompletedGame(game)}
-                              className="rounded-full border border-white/20 px-3 py-1 text-xs uppercase tracking-[0.3em] text-white hover:border-white/40"
+                              className={`w-full rounded-lg px-4 py-3 text-sm font-semibold uppercase tracking-wider transition-all ${
+                                game.completed
+                                  ? "bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 border border-emerald-500/30"
+                                  : "bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 border border-blue-500/30 shadow-lg shadow-blue-500/10"
+                              }`}
                             >
-                              {game.completed ? "Edit Stats" : "Add Stats"}
+                              {game.completed ? "✏️ Edit Stats" : "📝 Collect Stats"}
                             </button>
                           </div>
                         </div>
                       ))
                     ) : (
-                      <p className="rounded-xl border border-dashed border-white/20 bg-slate-900/40 p-4 text-center text-sm text-slate-400">
-                        No games in the stats window. Games appear 45 minutes after start and remain for 7 days.
-                      </p>
+                      <div className="md:col-span-2 rounded-xl border border-dashed border-slate-700 bg-slate-900/40 p-12 text-center">
+                        <div className="text-4xl mb-4">📊</div>
+                        <p className="text-sm text-slate-400">No games available for stats collection</p>
+                        <p className="text-xs text-slate-500 mt-2">Games appear 45 minutes after start time</p>
+                      </div>
                     )}
                   </div>
                 </section>
 
-                {/* Stats Form */}
-                {selectedCompletedGame && gameStatsForm && (
-                  <section className="rounded-3xl border border-emerald-500/30 bg-gradient-to-br from-emerald-950/40 to-slate-950/60 p-6">
-                    <div className="space-y-1 mb-6">
-                      <p className="text-xs uppercase tracking-[0.4em] text-slate-500">Recording Stats</p>
-                      <h3 className="text-lg font-semibold">
-                        {selectedCompletedGame.awayTeamName} @ {selectedCompletedGame.homeTeamName}
-                      </h3>
-                      <p className="text-xs text-slate-400">
-                        {selectedCompletedGame.date} · {selectedCompletedGame.time} · {selectedCompletedGame.venue}
-                      </p>
+                {/* Archive Section */}
+                {archivedGames.length > 0 && (
+                  <section className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-lg font-bold text-white">Game Archives</h3>
+                        <p className="text-xs text-slate-400 mt-1">Games older than 7 days, organized by week</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowArchiveView(!showArchiveView)}
+                        className="rounded-lg bg-slate-700 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-600 transition"
+                      >
+                        {showArchiveView ? '✕ Close Archive' : `📂 View Archive (${archivedGames.length})`}
+                      </button>
                     </div>
 
-                    {/* Score Input */}
-                    <div className="space-y-4 mb-6">
-                      <h4 className="text-sm font-semibold uppercase tracking-[0.3em] text-slate-300">Game Result</h4>
-                      
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <label className="flex flex-col gap-2">
-                          <span className="text-xs uppercase tracking-[0.3em] text-slate-400">Winner</span>
-                          <select
-                            value={gameStatsForm.winnerTeamId}
-                            onChange={(e) => handleWinnerChange(e.target.value)}
-                            className="rounded-xl border border-white/10 bg-slate-900/60 px-4 py-3 text-base text-white focus:border-white sm:px-3 sm:py-2 sm:text-sm"
-                            required
-                          >
-                            <option value="">Select winner</option>
-                            <option value={selectedCompletedGame.homeTeamId}>{selectedCompletedGame.homeTeamName}</option>
-                            <option value={selectedCompletedGame.awayTeamId}>{selectedCompletedGame.awayTeamName}</option>
-                          </select>
-                        </label>
-
-                        <label className="flex flex-col gap-2">
-                          <span className="text-xs uppercase tracking-[0.3em] text-slate-400">Winner Score</span>
-                          <input
-                            type="number"
-                            value={gameStatsForm.winnerScore}
-                            onChange={(e) => setGameStatsForm({ ...gameStatsForm, winnerScore: e.target.value })}
-                            placeholder="0"
-                            min="0"
-                            className="rounded-xl border border-white/10 bg-slate-900/60 px-4 py-3 text-base text-white focus:border-white sm:px-3 sm:py-2 sm:text-sm"
-                            required
-                          />
-                        </label>
-
-                        <label className="flex flex-col gap-2">
-                          <span className="text-xs uppercase tracking-[0.3em] text-slate-400">Loser</span>
-                          <div className="rounded-xl border border-white/10 bg-slate-900/60 px-4 py-3 text-base text-slate-400 italic sm:px-3 sm:py-2 sm:text-sm">
-                            {gameStatsForm.loserTeamId 
-                              ? (gameStatsForm.loserTeamId === selectedCompletedGame.homeTeamId 
-                                  ? selectedCompletedGame.homeTeamName 
-                                  : selectedCompletedGame.awayTeamName)
-                              : "Select winner first"}
+                    {showArchiveView && (
+                      <div className="rounded-2xl border border-slate-700 bg-slate-900/60 p-6 space-y-6">
+                        {/* Gender Filter */}
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs uppercase tracking-wider text-slate-400">Filter:</span>
+                          <div className="flex gap-2">
+                            {(['all', 'gentlemen', 'ladies'] as const).map((filter) => (
+                              <button
+                                key={filter}
+                                type="button"
+                                onClick={() => setArchiveGenderFilter(filter)}
+                                className={`rounded-lg px-3 py-1.5 text-xs font-semibold uppercase tracking-wider transition ${
+                                  archiveGenderFilter === filter
+                                    ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
+                                    : 'bg-slate-800 text-slate-400 border border-slate-700 hover:border-slate-600'
+                                }`}
+                              >
+                                {filter === 'all' ? '🏀 All' : filter === 'gentlemen' ? '🚹 Gentlemen' : '🚺 Ladies'}
+                              </button>
+                            ))}
                           </div>
-                        </label>
+                        </div>
 
-                        <label className="flex flex-col gap-2">
-                          <span className="text-xs uppercase tracking-[0.3em] text-slate-400">Loser Score</span>
-                          <input
-                            type="number"
-                            value={gameStatsForm.loserScore}
-                            onChange={(e) => setGameStatsForm({ ...gameStatsForm, loserScore: e.target.value })}
-                            placeholder="0"
-                            min="0"
-                            className="rounded-xl border border-white/10 bg-slate-900/60 px-4 py-3 text-base text-white focus:border-white sm:px-3 sm:py-2 sm:text-sm"
-                            required
-                          />
-                        </label>
+                        {/* Week Navigation */}
+                        {(() => {
+                          const filteredGames = archivedGames.filter(g => 
+                            archiveGenderFilter === 'all' || g.gender === archiveGenderFilter
+                          );
+                          
+                          // Group games by week
+                          const gamesByWeek = filteredGames.reduce((acc, game) => {
+                            const gameDate = new Date(game.date + 'T' + game.time);
+                            const now = new Date();
+                            const weeksDiff = Math.floor((now.getTime() - gameDate.getTime()) / (7 * 24 * 60 * 60 * 1000));
+                            const weekNumber = weeksDiff + 1; // Week 1 = last week, Week 2 = 2 weeks ago, etc.
+                            
+                            if (!acc[weekNumber]) acc[weekNumber] = [];
+                            acc[weekNumber].push(game);
+                            return acc;
+                          }, {} as Record<number, typeof filteredGames>);
+                          
+                          const availableWeeks = Object.keys(gamesByWeek).map(Number).sort((a, b) => a - b);
+                          const selectedWeekGames = gamesByWeek[selectedArchiveWeek] || [];
+                          
+                          return (
+                            <>
+                              {/* Week Selector */}
+                              {availableWeeks.length > 0 && (
+                                <div className="flex items-center gap-3">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const currentIndex = availableWeeks.indexOf(selectedArchiveWeek);
+                                      if (currentIndex > 0) {
+                                        setSelectedArchiveWeek(availableWeeks[currentIndex - 1]);
+                                      }
+                                    }}
+                                    disabled={availableWeeks.indexOf(selectedArchiveWeek) === 0}
+                                    className="rounded-lg bg-slate-800 p-2 text-white hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed"
+                                  >
+                                    ← Prev
+                                  </button>
+                                  
+                                  <div className="flex-1 text-center">
+                                    <div className="text-lg font-bold text-white">Week {selectedArchiveWeek}</div>
+                                    <div className="text-xs text-slate-400">{selectedWeekGames.length} games</div>
+                                  </div>
+                                  
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const currentIndex = availableWeeks.indexOf(selectedArchiveWeek);
+                                      if (currentIndex < availableWeeks.length - 1) {
+                                        setSelectedArchiveWeek(availableWeeks[currentIndex + 1]);
+                                      }
+                                    }}
+                                    disabled={availableWeeks.indexOf(selectedArchiveWeek) === availableWeeks.length - 1}
+                                    className="rounded-lg bg-slate-800 p-2 text-white hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed"
+                                  >
+                                    Next →
+                                  </button>
+                                </div>
+                              )}
+
+                              {/* Archived Games Grid */}
+                              <div className="grid gap-4 md:grid-cols-2">
+                                {selectedWeekGames.length > 0 ? (
+                                  selectedWeekGames.map((game) => (
+                                    <div
+                                      key={game.id}
+                                      className={`group relative overflow-hidden rounded-xl border transition-all duration-300 ${
+                                        game.completed 
+                                          ? "border-emerald-500/40 bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 hover:border-emerald-500/60" 
+                                          : "border-amber-500/40 bg-gradient-to-br from-amber-500/10 to-amber-500/5 hover:border-amber-500/60"
+                                      }`}
+                                    >
+                                      {/* Status Badge */}
+                                      <div className="absolute top-3 right-3 z-10">
+                                        <div className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 backdrop-blur-sm ${
+                                          game.completed ? 'bg-emerald-500/20' : 'bg-amber-500/20'
+                                        }`}>
+                                          <div className={`h-1.5 w-1.5 rounded-full ${game.completed ? 'bg-emerald-400' : 'bg-amber-400'}`}></div>
+                                          <span className={`text-[10px] font-bold uppercase tracking-wider ${
+                                            game.completed ? 'text-emerald-300' : 'text-amber-300'
+                                          }`}>
+                                            {game.completed ? 'Complete' : 'Pending'}
+                                          </span>
+                                        </div>
+                                      </div>
+                                      
+                                      <div className="p-5">
+                                        {/* Teams Matchup */}
+                                        <div className="mb-4">
+                                          <div className="flex items-center justify-between mb-3">
+                                            <div className="flex items-center gap-3 flex-1">
+                                              {game.awayTeamLogo && (
+                                                <div className="relative h-12 w-12 rounded-full overflow-hidden bg-slate-800 ring-2 ring-slate-700">
+                                                  <Image src={game.awayTeamLogo} alt={game.awayTeamName} fill className="object-cover" unoptimized />
+                                                </div>
+                                              )}
+                                              <div className="flex-1">
+                                                <div className="text-sm font-bold text-white">{game.awayTeamName}</div>
+                                                <div className="text-xs text-slate-400">Away</div>
+                                              </div>
+                                              {game.completed && (
+                                                <div className={`text-2xl font-bold tabular-nums ${game.winnerTeamId === game.awayTeamId ? 'text-emerald-400' : 'text-slate-500'}`}>
+                                                  {game.winnerTeamId === game.awayTeamId ? game.winnerScore : game.loserScore}
+                                                </div>
+                                              )}
+                                            </div>
+                                          </div>
+                                          
+                                          <div className="flex items-center justify-center my-2">
+                                            <div className="h-px w-full bg-gradient-to-r from-transparent via-slate-600 to-transparent"></div>
+                                            <div className="mx-3 text-xs font-semibold text-slate-500">VS</div>
+                                            <div className="h-px w-full bg-gradient-to-r from-transparent via-slate-600 to-transparent"></div>
+                                          </div>
+                                          
+                                          <div className="flex items-center justify-between mt-3">
+                                            <div className="flex items-center gap-3 flex-1">
+                                              {game.homeTeamLogo && (
+                                                <div className="relative h-12 w-12 rounded-full overflow-hidden bg-slate-800 ring-2 ring-slate-700">
+                                                  <Image src={game.homeTeamLogo} alt={game.homeTeamName} fill className="object-cover" unoptimized />
+                                                </div>
+                                              )}
+                                              <div className="flex-1">
+                                                <div className="text-sm font-bold text-white">{game.homeTeamName}</div>
+                                                <div className="text-xs text-slate-400">Home</div>
+                                              </div>
+                                              {game.completed && (
+                                                <div className={`text-2xl font-bold tabular-nums ${game.winnerTeamId === game.homeTeamId ? 'text-emerald-400' : 'text-slate-500'}`}>
+                                                  {game.winnerTeamId === game.homeTeamId ? game.winnerScore : game.loserScore}
+                                                </div>
+                                              )}
+                                            </div>
+                                          </div>
+                                        </div>
+
+                                        {/* Game Details */}
+                                        <div className="flex flex-wrap gap-2 mb-4 text-xs">
+                                          <div className="flex items-center gap-1.5 rounded-lg bg-slate-800/50 px-2.5 py-1.5">
+                                            <span className="text-slate-400">📅</span>
+                                            <span className="text-slate-300">{game.date}</span>
+                                          </div>
+                                          <div className="flex items-center gap-1.5 rounded-lg bg-slate-800/50 px-2.5 py-1.5">
+                                            <span className="text-slate-400">🕐</span>
+                                            <span className="text-slate-300">{game.time}</span>
+                                          </div>
+                                          <div className="flex items-center gap-1.5 rounded-lg bg-slate-800/50 px-2.5 py-1.5">
+                                            <span className="text-slate-400">📍</span>
+                                            <span className="text-slate-300">{game.venue}</span>
+                                          </div>
+                                          <div className="flex items-center gap-1.5 rounded-lg bg-slate-800/50 px-2.5 py-1.5">
+                                            <span className="text-slate-300 uppercase font-semibold">{game.gender}'s</span>
+                                          </div>
+                                        </div>
+
+                                        {/* Action Button */}
+                                        <button
+                                          type="button"
+                                          onClick={() => handleSelectCompletedGame(game)}
+                                          className={`w-full rounded-lg px-4 py-3 text-sm font-semibold uppercase tracking-wider transition-all ${
+                                            game.completed
+                                              ? "bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 border border-emerald-500/30"
+                                              : "bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border border-amber-500/30"
+                                          }`}
+                                        >
+                                          {game.completed ? '✏️ Edit Stats' : '📝 Collect Stats'}
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <div className="md:col-span-2 rounded-xl border border-dashed border-slate-700 bg-slate-900/40 p-12 text-center">
+                                    <div className="text-4xl mb-4">📂</div>
+                                    <p className="text-sm text-slate-400">No games in Week {selectedArchiveWeek}</p>
+                                    {!availableWeeks.includes(selectedArchiveWeek) && availableWeeks.length > 0 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setSelectedArchiveWeek(availableWeeks[0])}
+                                        className="mt-3 text-xs text-blue-400 hover:text-blue-300"
+                                      >
+                                        Go to Week {availableWeeks[0]}
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </>
+                          );
+                        })()}
+                      </div>
+                    )}
+                  </section>
+                )}
+
+                {/* Stats Form - Full Screen Modal */}
+                {selectedCompletedGame && gameStatsForm && (
+                  <div data-stats-form className="fixed inset-0 z-50 overflow-y-auto bg-slate-950">
+                    {/* Header */}
+                    <div className="sticky top-0 z-10 border-b border-emerald-500/30 bg-slate-900/95 backdrop-blur-sm">
+                      <div className="mx-auto max-w-[1600px] px-6 py-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="flex items-center gap-3">
+                              <div className="rounded-lg bg-emerald-500/20 p-2">
+                                <span className="text-2xl">📊</span>
+                              </div>
+                              <div>
+                                <h2 className="text-2xl font-bold text-white">
+                                  {selectedCompletedGame.awayTeamName} @ {selectedCompletedGame.homeTeamName}
+                                </h2>
+                                <p className="text-sm text-slate-400">
+                                  {selectedCompletedGame.date} · {selectedCompletedGame.time} · {selectedCompletedGame.venue}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedCompletedGame(null);
+                              setGameStatsForm(null);
+                              setWinnerRoster([]);
+                              setLoserRoster([]);
+                              setPlayerStatsMap({});
+                              setLoserStatsMap({});
+                            }}
+                            className="rounded-lg bg-slate-800 p-3 text-slate-400 hover:bg-slate-700 hover:text-white transition"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
                       </div>
                     </div>
 
-                    {/* Player Stats */}
-                    {winnerRoster.length > 0 && (
-                      <div className="space-y-4">
-                        <h4 className="text-sm font-semibold uppercase tracking-[0.3em] text-slate-300">
-                          Player Stats - {gameStatsForm.winnerTeamId === selectedCompletedGame.homeTeamId ? selectedCompletedGame.homeTeamName : selectedCompletedGame.awayTeamName}
-                        </h4>
-                        
-                        <div className="space-y-3 max-h-[400px] overflow-y-auto">
-                          {winnerRoster.map((player) => {
-                            const stats = playerStatsMap[player.id] || { two_pm: "", two_pa: "", three_pm: "", three_pa: "", ft_m: "", ft_a: "", ast: "", oreb: "", dreb: "", reb: "", stl: "", blk: "", fls: "", min: "", pf: "", to: "" };
-                            return (
-                              <div key={player.id} className="rounded-xl border border-white/10 bg-slate-950/60 p-4">
-                                <div className="mb-3 flex items-center gap-3">
-                                  {player.headshot && (
-                                    <Image src={player.headshot} alt={`${player.firstName} ${player.lastName}`} width={32} height={32} className="h-8 w-8 rounded-full" unoptimized />
-                                  )}
-                                  <div>
-                                    <p className="text-sm font-semibold text-white">
-                                      #{player.number} {player.firstName} {player.lastName}
-                                    </p>
-                                    <p className="text-xs text-slate-400">{player.height}</p>
-                                  </div>
+                    {/* Content */}
+                    <div className="mx-auto max-w-[1600px] px-6 py-8">
+                      <div className="space-y-8">
+
+                        {/* Score Input - Prominent Section */}
+                        <div className="rounded-2xl border-2 border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 to-slate-900 p-6">
+                          <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
+                            <span>🏆</span> Game Result
+                          </h3>
+                          
+                          {/* Teams on Same Line with Logos */}
+                          <div className="flex items-center justify-between gap-4 mb-6">
+                            {/* Away Team */}
+                            <div className="flex items-center gap-3 flex-1">
+                              {selectedCompletedGame.awayTeamLogo && (
+                                <Image src={selectedCompletedGame.awayTeamLogo} alt={selectedCompletedGame.awayTeamName} width={48} height={48} className="h-12 w-12 rounded-full ring-2 ring-slate-700 flex-shrink-0" unoptimized />
+                              )}
+                              <div className="flex-1">
+                                <p className="text-xs text-slate-400 uppercase tracking-wider">Away</p>
+                                <p className="text-lg font-bold text-white">{selectedCompletedGame.awayTeamName}</p>
+                              </div>
+                            </div>
+                            
+                            {/* VS Divider */}
+                            <div className="flex items-center gap-2">
+                              <div className="h-px w-8 bg-gradient-to-r from-transparent to-white/20"></div>
+                              <span className="text-sm font-bold text-slate-500 uppercase">VS</span>
+                              <div className="h-px w-8 bg-gradient-to-l from-transparent to-white/20"></div>
+                            </div>
+                            
+                            {/* Home Team */}
+                            <div className="flex items-center gap-3 flex-1 flex-row-reverse">
+                              {selectedCompletedGame.homeTeamLogo && (
+                                <Image src={selectedCompletedGame.homeTeamLogo} alt={selectedCompletedGame.homeTeamName} width={48} height={48} className="h-12 w-12 rounded-full ring-2 ring-slate-700 flex-shrink-0" unoptimized />
+                              )}
+                              <div className="flex-1 text-right">
+                                <p className="text-xs text-slate-400 uppercase tracking-wider">Home</p>
+                                <p className="text-lg font-bold text-white">{selectedCompletedGame.homeTeamName}</p>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="grid gap-6 md:grid-cols-2">
+                            {/* Winner Section */}
+                            <div className="space-y-4 rounded-xl bg-slate-900/60 p-4">
+                              <label className="block">
+                                <span className="text-sm font-semibold text-emerald-300 mb-2 block">Winner Team</span>
+                                <select
+                                  value={gameStatsForm.winnerTeamId}
+                                  onChange={(e) => handleWinnerChange(e.target.value)}
+                                  className="w-full rounded-lg border-2 border-emerald-500/30 bg-slate-800 px-4 py-3 text-lg font-semibold text-white focus:border-emerald-500 focus:outline-none"
+                                  required
+                                >
+                                  <option value="">Select Winner</option>
+                                  <option value={selectedCompletedGame.homeTeamId}>{selectedCompletedGame.homeTeamName}</option>
+                                  <option value={selectedCompletedGame.awayTeamId}>{selectedCompletedGame.awayTeamName}</option>
+                                </select>
+                              </label>
+                              <label className="block">
+                                <span className="text-sm font-semibold text-emerald-300 mb-2 block">Winner Score</span>
+                                <input
+                                  type="number"
+                                  value={gameStatsForm.winnerScore}
+                                  onChange={(e) => setGameStatsForm({ ...gameStatsForm, winnerScore: e.target.value })}
+                                  placeholder="0"
+                                  min="0"
+                                  className="w-full rounded-lg border-2 border-emerald-500/30 bg-slate-800 px-4 py-3 text-3xl font-bold text-emerald-300 text-center focus:border-emerald-500 focus:outline-none tabular-nums"
+                                  required
+                                />
+                              </label>
+                            </div>
+
+                            {/* Loser Section */}
+                            <div className="space-y-4 rounded-xl bg-slate-900/60 p-4">
+                              <div>
+                                <span className="text-sm font-semibold text-slate-400 mb-2 block">Loser Team</span>
+                                <div className="w-full rounded-lg border-2 border-slate-600/30 bg-slate-800/50 px-4 py-3 text-lg font-semibold text-slate-300 italic">
+                                  {gameStatsForm.loserTeamId 
+                                    ? (gameStatsForm.loserTeamId === selectedCompletedGame.homeTeamId 
+                                        ? selectedCompletedGame.homeTeamName 
+                                        : selectedCompletedGame.awayTeamName)
+                                    : "Auto-selected"}
                                 </div>
-                                <div className="space-y-2">
-                                  {/* Shooting Stats - Makes/Attempts */}
-                                  <div className="grid grid-cols-2 gap-2">
-                                    <div className="space-y-1">
-                                      <label className="text-[10px] uppercase tracking-wider text-slate-400">2PT M/A</label>
-                                      <div className="flex gap-1">
-                                        <input
-                                          type="number"
-                                          placeholder="M"
-                                          value={stats.two_pm}
-                                          onChange={(e) => {
+                              </div>
+                              <label className="block">
+                                <span className="text-sm font-semibold text-slate-400 mb-2 block">Loser Score</span>
+                                <input
+                                  type="number"
+                                  value={gameStatsForm.loserScore}
+                                  onChange={(e) => setGameStatsForm({ ...gameStatsForm, loserScore: e.target.value })}
+                                  placeholder="0"
+                                  min="0"
+                                  className="w-full rounded-lg border-2 border-slate-600/30 bg-slate-800 px-4 py-3 text-3xl font-bold text-slate-300 text-center focus:border-slate-500 focus:outline-none tabular-nums"
+                                  required
+                                />
+                              </label>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Winner Team Player Stats */}
+                        {winnerRoster.length > 0 && (
+                          <div className="rounded-2xl border-2 border-blue-500/30 bg-gradient-to-br from-blue-500/10 to-slate-900 overflow-hidden">
+                            <div className="bg-blue-500/20 px-6 py-4 border-b border-blue-500/30">
+                              <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                                <span>🏅</span> {gameStatsForm.winnerTeamId === selectedCompletedGame.homeTeamId ? selectedCompletedGame.homeTeamName : selectedCompletedGame.awayTeamName} - Player Stats
+                              </h3>
+                              <p className="text-sm text-blue-200 mt-1">{winnerRoster.length} players</p>
+                            </div>
+                            
+                            <div className="overflow-x-auto">
+                              <table className="w-full">
+                                <thead>
+                                  <tr className="sticky top-0 z-20 border-b border-slate-700 bg-slate-900/95 backdrop-blur-sm">
+                                    <th className="sticky left-0 z-30 bg-slate-900/95 px-4 py-3 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider min-w-[240px] max-w-[280px]">Player</th>
+                                    <th className="px-3 py-3 text-center text-xs font-semibold text-slate-300 uppercase">2PM</th>
+                                    <th className="px-3 py-3 text-center text-xs font-semibold text-slate-300 uppercase">2PA</th>
+                                    <th className="px-3 py-3 text-center text-xs font-semibold text-slate-300 uppercase">3PM</th>
+                                    <th className="px-3 py-3 text-center text-xs font-semibold text-slate-300 uppercase">3PA</th>
+                                    <th className="px-3 py-3 text-center text-xs font-semibold text-slate-300 uppercase">FTM</th>
+                                    <th className="px-3 py-3 text-center text-xs font-semibold text-slate-300 uppercase">FTA</th>
+                                    <th className="px-3 py-3 text-center text-xs font-semibold text-emerald-300 uppercase">PTS</th>
+                                    <th className="px-3 py-3 text-center text-xs font-semibold text-slate-300 uppercase">AST</th>
+                                    <th className="px-3 py-3 text-center text-xs font-semibold text-slate-300 uppercase">OREB</th>
+                                    <th className="px-3 py-3 text-center text-xs font-semibold text-slate-300 uppercase">DREB</th>
+                                    <th className="px-3 py-3 text-center text-xs font-semibold text-slate-300 uppercase">STL</th>
+                                    <th className="px-3 py-3 text-center text-xs font-semibold text-slate-300 uppercase">BLK</th>
+                                    <th className="px-3 py-3 text-center text-xs font-semibold text-slate-300 uppercase">TO</th>
+                                    <th className="px-3 py-3 text-center text-xs font-semibold text-slate-300 uppercase">PF</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {winnerRoster.map((player, idx) => {
+                                    const stats = playerStatsMap[player.id] || { two_pm: "", two_pa: "", three_pm: "", three_pa: "", ft_m: "", ft_a: "", ast: "", oreb: "", dreb: "", reb: "", stl: "", blk: "", fls: "", min: "", pf: "", to: "" };
+                                    const totalPoints = (parseInt(stats.two_pm) || 0) * 2 + (parseInt(stats.three_pm) || 0) * 3 + (parseInt(stats.ft_m) || 0);
+                                    return (
+                                      <tr key={player.id} className={`border-b border-slate-800 ${idx % 2 === 0 ? 'bg-slate-900/40' : 'bg-slate-900/20'} hover:bg-slate-800/60 transition`}>
+                                        <td className="sticky left-0 bg-slate-900/95 px-4 py-3 min-w-[240px] max-w-[280px]">
+                                          <div className="flex items-center gap-3">
+                                            {player.headshot && (
+                                              <Image src={player.headshot} alt={`${player.firstName} ${player.lastName}`} width={40} height={40} className="h-10 w-10 rounded-full ring-2 ring-slate-700 flex-shrink-0" unoptimized />
+                                            )}
+                                            <div className="min-w-0 flex-1">
+                                              <p className="text-sm font-bold text-white truncate">#{player.number} {player.firstName} {player.lastName}</p>
+                                              <p className="text-xs text-slate-400">{player.height}</p>
+                                            </div>
+                                          </div>
+                                        </td>
+                                        <td className="px-3 py-3">
+                                          <input type="number" value={stats.two_pm} onChange={(e) => {
                                             const made = parseInt(e.target.value) || 0;
                                             const attempts = parseInt(stats.two_pa) || 0;
                                             if (attempts > 0 && made > attempts) {
@@ -5626,16 +6801,10 @@ export default function AdminPage() {
                                             } else {
                                               setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, two_pm: e.target.value }});
                                             }
-                                          }}
-                                          min="0"
-                                          className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
-                                        />
-                                        <span className="text-slate-500">/</span>
-                                        <input
-                                          type="number"
-                                          placeholder="A"
-                                          value={stats.two_pa}
-                                          onChange={(e) => {
+                                          }} min="0" className="w-16 rounded-lg border border-slate-600 bg-slate-800 px-2 py-2 text-center text-sm text-white focus:border-blue-500 focus:outline-none" placeholder="0" />
+                                        </td>
+                                        <td className="px-3 py-3">
+                                          <input type="number" value={stats.two_pa} onChange={(e) => {
                                             const attempts = parseInt(e.target.value) || 0;
                                             const made = parseInt(stats.two_pm) || 0;
                                             if (made > attempts && attempts > 0) {
@@ -5643,20 +6812,10 @@ export default function AdminPage() {
                                             } else {
                                               setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, two_pa: e.target.value }});
                                             }
-                                          }}
-                                          min="0"
-                                          className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
-                                        />
-                                      </div>
-                                    </div>
-                                    <div className="space-y-1">
-                                      <label className="text-[10px] uppercase tracking-wider text-slate-400">3PT M/A</label>
-                                      <div className="flex gap-1">
-                                        <input
-                                          type="number"
-                                          placeholder="M"
-                                          value={stats.three_pm}
-                                          onChange={(e) => {
+                                          }} min="0" className="w-16 rounded-lg border border-slate-600 bg-slate-800 px-2 py-2 text-center text-sm text-white focus:border-blue-500 focus:outline-none" placeholder="0" />
+                                        </td>
+                                        <td className="px-3 py-3">
+                                          <input type="number" value={stats.three_pm} onChange={(e) => {
                                             const made = parseInt(e.target.value) || 0;
                                             const attempts = parseInt(stats.three_pa) || 0;
                                             if (attempts > 0 && made > attempts) {
@@ -5664,16 +6823,10 @@ export default function AdminPage() {
                                             } else {
                                               setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, three_pm: e.target.value }});
                                             }
-                                          }}
-                                          min="0"
-                                          className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
-                                        />
-                                        <span className="text-slate-500">/</span>
-                                        <input
-                                          type="number"
-                                          placeholder="A"
-                                          value={stats.three_pa}
-                                          onChange={(e) => {
+                                          }} min="0" className="w-16 rounded-lg border border-slate-600 bg-slate-800 px-2 py-2 text-center text-sm text-white focus:border-blue-500 focus:outline-none" placeholder="0" />
+                                        </td>
+                                        <td className="px-3 py-3">
+                                          <input type="number" value={stats.three_pa} onChange={(e) => {
                                             const attempts = parseInt(e.target.value) || 0;
                                             const made = parseInt(stats.three_pm) || 0;
                                             if (made > attempts && attempts > 0) {
@@ -5681,190 +6834,130 @@ export default function AdminPage() {
                                             } else {
                                               setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, three_pa: e.target.value }});
                                             }
-                                          }}
-                                          min="0"
-                                          className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
-                                        />
-                                      </div>
-                                    </div>
-                                  </div>
-                                  <div className="space-y-1">
-                                    <label className="text-[10px] uppercase tracking-wider text-slate-400">FT M/A</label>
-                                    <div className="flex gap-1">
-                                      <input
-                                        type="number"
-                                        placeholder="M"
-                                        value={stats.ft_m}
-                                        onChange={(e) => {
-                                          const made = parseInt(e.target.value) || 0;
-                                          const attempts = parseInt(stats.ft_a) || 0;
-                                          if (attempts > 0 && made > attempts) {
-                                            setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, ft_m: attempts.toString() }});
-                                          } else {
-                                            setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, ft_m: e.target.value }});
-                                          }
-                                        }}
-                                        min="0"
-                                        className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
-                                      />
-                                      <span className="text-slate-500">/</span>
-                                      <input
-                                        type="number"
-                                        placeholder="A"
-                                        value={stats.ft_a}
-                                        onChange={(e) => {
-                                          const attempts = parseInt(e.target.value) || 0;
-                                          const made = parseInt(stats.ft_m) || 0;
-                                          if (made > attempts && attempts > 0) {
-                                            setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, ft_a: e.target.value, ft_m: attempts.toString() }});
-                                          } else {
-                                            setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, ft_a: e.target.value }});
-                                          }
-                                        }}
-                                        min="0"
-                                        className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
-                                      />
-                                    </div>
-                                  </div>
-                                  {/* Total Points Display */}
-                                  <div className="rounded-lg border border-emerald-500/30 bg-emerald-950/40 px-2 py-1.5">
-                                    <div className="flex items-center justify-between gap-2">
-                                      <span className="text-[9px] uppercase tracking-wider text-emerald-300 font-semibold">PTS</span>
-                                      <span className="text-sm font-bold text-emerald-200 tabular-nums">
-                                        {(() => {
-                                          const twoPts = (parseInt(stats.two_pm) || 0) * 2;
-                                          const threePts = (parseInt(stats.three_pm) || 0) * 3;
-                                          const ftPts = (parseInt(stats.ft_m) || 0) * 1;
-                                          return twoPts + threePts + ftPts;
-                                        })()}
-                                      </span>
-                                    </div>
-                                  </div>
-                                  {/* Other Stats */}
-                                  <div className="grid grid-cols-4 gap-2 sm:grid-cols-8">
-                                    <input
-                                      type="number"
-                                      placeholder="AST"
-                                      value={stats.ast}
-                                      onChange={(e) => setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, ast: e.target.value }})}
-                                      min="0"
-                                      className="rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
-                                    />
-                                    <input
-                                      type="number"
-                                      placeholder="OREB"
-                                      value={stats.oreb}
-                                      onChange={(e) => {
-                                        const oreb = parseInt(e.target.value) || 0;
-                                        const dreb = parseInt(stats.dreb) || 0;
-                                        const reb = (oreb + dreb).toString();
-                                        setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, oreb: e.target.value, reb }});
-                                      }}
-                                      min="0"
-                                      className="rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
-                                    />
-                                    <input
-                                      type="number"
-                                      placeholder="DREB"
-                                      value={stats.dreb}
-                                      onChange={(e) => {
-                                        const dreb = parseInt(e.target.value) || 0;
-                                        const oreb = parseInt(stats.oreb) || 0;
-                                        const reb = (oreb + dreb).toString();
-                                        setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, dreb: e.target.value, reb }});
-                                      }}
-                                      min="0"
-                                      className="rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
-                                    />
-                                    <input
-                                      type="number"
-                                      placeholder="REB"
-                                      value={stats.reb}
-                                      readOnly
-                                      className="rounded-lg border border-emerald-500/30 bg-emerald-950/40 px-2 py-1 text-center text-xs text-emerald-200 cursor-not-allowed"
-                                      title="Auto-calculated: OREB + DREB"
-                                    />
-                                    <input
-                                      type="number"
-                                      placeholder="STL"
-                                      value={stats.stl}
-                                      onChange={(e) => setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, stl: e.target.value }})}
-                                      min="0"
-                                      className="rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
-                                    />
-                                    <input
-                                      type="number"
-                                      placeholder="BLK"
-                                      value={stats.blk}
-                                      onChange={(e) => setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, blk: e.target.value }})}
-                                      min="0"
-                                      className="rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
-                                    />
-                                    <input
-                                      type="number"
-                                      placeholder="TO"
-                                      value={stats.to}
-                                      onChange={(e) => setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, to: e.target.value }})}
-                                      min="0"
-                                      className="rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
-                                    />
-                                    <input
-                                      type="number"
-                                      placeholder="PF"
-                                      value={stats.fls}
-                                      onChange={(e) => {
-                                        const value = parseInt(e.target.value) || 0;
-                                        if (value <= 6) {
-                                          setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, fls: e.target.value }});
-                                        }
-                                      }}
-                                      min="0"
-                                      max="6"
-                                      className="rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
+                                          }} min="0" className="w-16 rounded-lg border border-slate-600 bg-slate-800 px-2 py-2 text-center text-sm text-white focus:border-blue-500 focus:outline-none" placeholder="0" />
+                                        </td>
+                                        <td className="px-3 py-3">
+                                          <input type="number" value={stats.ft_m} onChange={(e) => {
+                                            const made = parseInt(e.target.value) || 0;
+                                            const attempts = parseInt(stats.ft_a) || 0;
+                                            if (attempts > 0 && made > attempts) {
+                                              setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, ft_m: attempts.toString() }});
+                                            } else {
+                                              setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, ft_m: e.target.value }});
+                                            }
+                                          }} min="0" className="w-16 rounded-lg border border-slate-600 bg-slate-800 px-2 py-2 text-center text-sm text-white focus:border-blue-500 focus:outline-none" placeholder="0" />
+                                        </td>
+                                        <td className="px-3 py-3">
+                                          <input type="number" value={stats.ft_a} onChange={(e) => {
+                                            const attempts = parseInt(e.target.value) || 0;
+                                            const made = parseInt(stats.ft_m) || 0;
+                                            if (made > attempts && attempts > 0) {
+                                              setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, ft_a: e.target.value, ft_m: attempts.toString() }});
+                                            } else {
+                                              setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, ft_a: e.target.value }});
+                                            }
+                                          }} min="0" className="w-16 rounded-lg border border-slate-600 bg-slate-800 px-2 py-2 text-center text-sm text-white focus:border-blue-500 focus:outline-none" placeholder="0" />
+                                        </td>
+                                        <td className="px-3 py-3">
+                                          <div className="flex items-center justify-center">
+                                            <span className="text-xl font-bold text-emerald-300 tabular-nums">{totalPoints}</span>
+                                          </div>
+                                        </td>
+                                        <td className="px-3 py-3">
+                                          <input type="number" value={stats.ast} onChange={(e) => setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, ast: e.target.value }})} min="0" className="w-16 rounded-lg border border-slate-600 bg-slate-800 px-2 py-2 text-center text-sm text-white focus:border-blue-500 focus:outline-none" placeholder="0" />
+                                        </td>
+                                        <td className="px-3 py-3">
+                                          <input type="number" value={stats.oreb} onChange={(e) => {
+                                            const oreb = parseInt(e.target.value) || 0;
+                                            const dreb = parseInt(stats.dreb) || 0;
+                                            const reb = (oreb + dreb).toString();
+                                            setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, oreb: e.target.value, reb }});
+                                          }} min="0" className="w-16 rounded-lg border border-slate-600 bg-slate-800 px-2 py-2 text-center text-sm text-white focus:border-blue-500 focus:outline-none" placeholder="0" />
+                                        </td>
+                                        <td className="px-3 py-3">
+                                          <input type="number" value={stats.dreb} onChange={(e) => {
+                                            const dreb = parseInt(e.target.value) || 0;
+                                            const oreb = parseInt(stats.oreb) || 0;
+                                            const reb = (oreb + dreb).toString();
+                                            setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, dreb: e.target.value, reb }});
+                                          }} min="0" className="w-16 rounded-lg border border-slate-600 bg-slate-800 px-2 py-2 text-center text-sm text-white focus:border-blue-500 focus:outline-none" placeholder="0" />
+                                        </td>
+                                        <td className="px-3 py-3">
+                                          <input type="number" value={stats.stl} onChange={(e) => setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, stl: e.target.value }})} min="0" className="w-16 rounded-lg border border-slate-600 bg-slate-800 px-2 py-2 text-center text-sm text-white focus:border-blue-500 focus:outline-none" placeholder="0" />
+                                        </td>
+                                        <td className="px-3 py-3">
+                                          <input type="number" value={stats.blk} onChange={(e) => setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, blk: e.target.value }})} min="0" className="w-16 rounded-lg border border-slate-600 bg-slate-800 px-2 py-2 text-center text-sm text-white focus:border-blue-500 focus:outline-none" placeholder="0" />
+                                        </td>
+                                        <td className="px-3 py-3">
+                                          <input type="number" value={stats.to} onChange={(e) => setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, to: e.target.value }})} min="0" className="w-16 rounded-lg border border-slate-600 bg-slate-800 px-2 py-2 text-center text-sm text-white focus:border-blue-500 focus:outline-none" placeholder="0" />
+                                        </td>
+                                        <td className="px-3 py-3">
+                                          <input type="number" value={stats.fls} onChange={(e) => {
+                                            const value = parseInt(e.target.value) || 0;
+                                            if (value <= 6) {
+                                              setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, fls: e.target.value }});
+                                            }
+                                          }} min="0" max="6" className="w-16 rounded-lg border border-slate-600 bg-slate-800 px-2 py-2 text-center text-sm text-white focus:border-blue-500 focus:outline-none" placeholder="0" />
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
 
-                    {/* Loser Team Player Stats */}
-                    {loserRoster.length > 0 && (
-                      <div className="space-y-4">
-                        <h4 className="text-sm font-semibold uppercase tracking-[0.3em] text-slate-300">
-                          Player Stats - {gameStatsForm.winnerTeamId === selectedCompletedGame.homeTeamId ? selectedCompletedGame.awayTeamName : selectedCompletedGame.homeTeamName}
-                        </h4>
-                        
-                        <div className="space-y-3 max-h-[400px] overflow-y-auto">
-                          {loserRoster.map((player) => {
-                            const stats = loserStatsMap[player.id] || { two_pm: "", two_pa: "", three_pm: "", three_pa: "", ft_m: "", ft_a: "", ast: "", oreb: "", dreb: "", reb: "", stl: "", blk: "", fls: "", min: "", pf: "", to: "" };
-                            return (
-                              <div key={player.id} className="rounded-xl border border-white/10 bg-slate-950/60 p-4">
-                                <div className="mb-3 flex items-center gap-3">
-                                  {player.headshot && (
-                                    <Image src={player.headshot} alt={`${player.firstName} ${player.lastName}`} width={32} height={32} className="h-8 w-8 rounded-full" unoptimized />
-                                  )}
-                                  <div>
-                                    <p className="text-sm font-semibold text-white">
-                                      #{player.number} {player.firstName} {player.lastName}
-                                    </p>
-                                    <p className="text-xs text-slate-400">{player.height}</p>
-                                  </div>
-                                </div>
-                                <div className="space-y-2">
-                                  {/* Shooting Stats - Makes/Attempts */}
-                                  <div className="grid grid-cols-2 gap-2">
-                                    <div className="space-y-1">
-                                      <label className="text-[10px] uppercase tracking-wider text-slate-400">2PT M/A</label>
-                                      <div className="flex gap-1">
-                                        <input
-                                          type="number"
-                                          placeholder="M"
-                                          value={stats.two_pm}
-                                          onChange={(e) => {
+                        {/* Loser Team Player Stats */}
+                        {loserRoster.length > 0 && (
+                          <div className="rounded-2xl border-2 border-slate-500/30 bg-gradient-to-br from-slate-500/10 to-slate-900 overflow-hidden">
+                            <div className="bg-slate-500/20 px-6 py-4 border-b border-slate-500/30">
+                              <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                                <span>🥈</span> {gameStatsForm.winnerTeamId === selectedCompletedGame.homeTeamId ? selectedCompletedGame.awayTeamName : selectedCompletedGame.homeTeamName} - Player Stats
+                              </h3>
+                              <p className="text-sm text-slate-200 mt-1">{loserRoster.length} players</p>
+                            </div>
+                            
+                            <div className="overflow-x-auto">
+                              <table className="w-full">
+                                <thead>
+                                  <tr className="sticky top-0 z-20 border-b border-slate-700 bg-slate-900/95 backdrop-blur-sm">
+                                    <th className="sticky left-0 z-30 bg-slate-900/95 px-4 py-3 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider min-w-[240px] max-w-[280px]">Player</th>
+                                    <th className="px-3 py-3 text-center text-xs font-semibold text-slate-300 uppercase">2PM</th>
+                                    <th className="px-3 py-3 text-center text-xs font-semibold text-slate-300 uppercase">2PA</th>
+                                    <th className="px-3 py-3 text-center text-xs font-semibold text-slate-300 uppercase">3PM</th>
+                                    <th className="px-3 py-3 text-center text-xs font-semibold text-slate-300 uppercase">3PA</th>
+                                    <th className="px-3 py-3 text-center text-xs font-semibold text-slate-300 uppercase">FTM</th>
+                                    <th className="px-3 py-3 text-center text-xs font-semibold text-slate-300 uppercase">FTA</th>
+                                    <th className="px-3 py-3 text-center text-xs font-semibold text-emerald-300 uppercase">PTS</th>
+                                    <th className="px-3 py-3 text-center text-xs font-semibold text-slate-300 uppercase">AST</th>
+                                    <th className="px-3 py-3 text-center text-xs font-semibold text-slate-300 uppercase">OREB</th>
+                                    <th className="px-3 py-3 text-center text-xs font-semibold text-slate-300 uppercase">DREB</th>
+                                    <th className="px-3 py-3 text-center text-xs font-semibold text-slate-300 uppercase">STL</th>
+                                    <th className="px-3 py-3 text-center text-xs font-semibold text-slate-300 uppercase">BLK</th>
+                                    <th className="px-3 py-3 text-center text-xs font-semibold text-slate-300 uppercase">TO</th>
+                                    <th className="px-3 py-3 text-center text-xs font-semibold text-slate-300 uppercase">PF</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {loserRoster.map((player, idx) => {
+                                    const stats = loserStatsMap[player.id] || { two_pm: "", two_pa: "", three_pm: "", three_pa: "", ft_m: "", ft_a: "", ast: "", oreb: "", dreb: "", reb: "", stl: "", blk: "", fls: "", min: "", pf: "", to: "" };
+                                    const totalPoints = (parseInt(stats.two_pm) || 0) * 2 + (parseInt(stats.three_pm) || 0) * 3 + (parseInt(stats.ft_m) || 0);
+                                    return (
+                                      <tr key={player.id} className={`border-b border-slate-800 ${idx % 2 === 0 ? 'bg-slate-900/40' : 'bg-slate-900/20'} hover:bg-slate-800/60 transition`}>
+                                        <td className="sticky left-0 bg-slate-900/95 px-4 py-3 min-w-[240px] max-w-[280px]">
+                                          <div className="flex items-center gap-3">
+                                            {player.headshot && (
+                                              <Image src={player.headshot} alt={`${player.firstName} ${player.lastName}`} width={40} height={40} className="h-10 w-10 rounded-full ring-2 ring-slate-700 flex-shrink-0" unoptimized />
+                                            )}
+                                            <div className="min-w-0 flex-1">
+                                              <p className="text-sm font-bold text-white truncate">#{player.number} {player.firstName} {player.lastName}</p>
+                                              <p className="text-xs text-slate-400">{player.height}</p>
+                                            </div>
+                                          </div>
+                                        </td>
+                                        <td className="px-3 py-3">
+                                          <input type="number" value={stats.two_pm} onChange={(e) => {
                                             const made = parseInt(e.target.value) || 0;
                                             const attempts = parseInt(stats.two_pa) || 0;
                                             if (attempts > 0 && made > attempts) {
@@ -5872,16 +6965,10 @@ export default function AdminPage() {
                                             } else {
                                               setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, two_pm: e.target.value }});
                                             }
-                                          }}
-                                          min="0"
-                                          className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
-                                        />
-                                        <span className="text-slate-500">/</span>
-                                        <input
-                                          type="number"
-                                          placeholder="A"
-                                          value={stats.two_pa}
-                                          onChange={(e) => {
+                                          }} min="0" className="w-16 rounded-lg border border-slate-600 bg-slate-800 px-2 py-2 text-center text-sm text-white focus:border-blue-500 focus:outline-none" placeholder="0" />
+                                        </td>
+                                        <td className="px-3 py-3">
+                                          <input type="number" value={stats.two_pa} onChange={(e) => {
                                             const attempts = parseInt(e.target.value) || 0;
                                             const made = parseInt(stats.two_pm) || 0;
                                             if (made > attempts && attempts > 0) {
@@ -5889,20 +6976,10 @@ export default function AdminPage() {
                                             } else {
                                               setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, two_pa: e.target.value }});
                                             }
-                                          }}
-                                          min="0"
-                                          className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
-                                        />
-                                      </div>
-                                    </div>
-                                    <div className="space-y-1">
-                                      <label className="text-[10px] uppercase tracking-wider text-slate-400">3PT M/A</label>
-                                      <div className="flex gap-1">
-                                        <input
-                                          type="number"
-                                          placeholder="M"
-                                          value={stats.three_pm}
-                                          onChange={(e) => {
+                                          }} min="0" className="w-16 rounded-lg border border-slate-600 bg-slate-800 px-2 py-2 text-center text-sm text-white focus:border-blue-500 focus:outline-none" placeholder="0" />
+                                        </td>
+                                        <td className="px-3 py-3">
+                                          <input type="number" value={stats.three_pm} onChange={(e) => {
                                             const made = parseInt(e.target.value) || 0;
                                             const attempts = parseInt(stats.three_pa) || 0;
                                             if (attempts > 0 && made > attempts) {
@@ -5910,16 +6987,10 @@ export default function AdminPage() {
                                             } else {
                                               setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, three_pm: e.target.value }});
                                             }
-                                          }}
-                                          min="0"
-                                          className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
-                                        />
-                                        <span className="text-slate-500">/</span>
-                                        <input
-                                          type="number"
-                                          placeholder="A"
-                                          value={stats.three_pa}
-                                          onChange={(e) => {
+                                          }} min="0" className="w-16 rounded-lg border border-slate-600 bg-slate-800 px-2 py-2 text-center text-sm text-white focus:border-blue-500 focus:outline-none" placeholder="0" />
+                                        </td>
+                                        <td className="px-3 py-3">
+                                          <input type="number" value={stats.three_pa} onChange={(e) => {
                                             const attempts = parseInt(e.target.value) || 0;
                                             const made = parseInt(stats.three_pm) || 0;
                                             if (made > attempts && attempts > 0) {
@@ -5927,182 +6998,112 @@ export default function AdminPage() {
                                             } else {
                                               setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, three_pa: e.target.value }});
                                             }
-                                          }}
-                                          min="0"
-                                          className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
-                                        />
-                                      </div>
-                                    </div>
-                                  </div>
-                                  <div className="space-y-1">
-                                    <label className="text-[10px] uppercase tracking-wider text-slate-400">FT M/A</label>
-                                    <div className="flex gap-1">
-                                      <input
-                                        type="number"
-                                        placeholder="M"
-                                        value={stats.ft_m}
-                                        onChange={(e) => {
-                                          const made = parseInt(e.target.value) || 0;
-                                          const attempts = parseInt(stats.ft_a) || 0;
-                                          if (attempts > 0 && made > attempts) {
-                                            setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, ft_m: attempts.toString() }});
-                                          } else {
-                                            setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, ft_m: e.target.value }});
-                                          }
-                                        }}
-                                        min="0"
-                                        className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
-                                      />
-                                      <span className="text-slate-500">/</span>
-                                      <input
-                                        type="number"
-                                        placeholder="A"
-                                        value={stats.ft_a}
-                                        onChange={(e) => {
-                                          const attempts = parseInt(e.target.value) || 0;
-                                          const made = parseInt(stats.ft_m) || 0;
-                                          if (made > attempts && attempts > 0) {
-                                            setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, ft_a: e.target.value, ft_m: attempts.toString() }});
-                                          } else {
-                                            setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, ft_a: e.target.value }});
-                                          }
-                                        }}
-                                        min="0"
-                                        className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
-                                      />
-                                    </div>
-                                  </div>
-                                  {/* Total Points Display */}
-                                  <div className="rounded-lg border border-emerald-500/30 bg-emerald-950/40 px-2 py-1.5">
-                                    <div className="flex items-center justify-between gap-2">
-                                      <span className="text-[9px] uppercase tracking-wider text-emerald-300 font-semibold">PTS</span>
-                                      <span className="text-sm font-bold text-emerald-200 tabular-nums">
-                                        {(() => {
-                                          const twoPts = (parseInt(stats.two_pm) || 0) * 2;
-                                          const threePts = (parseInt(stats.three_pm) || 0) * 3;
-                                          const ftPts = (parseInt(stats.ft_m) || 0) * 1;
-                                          return twoPts + threePts + ftPts;
-                                        })()}
-                                      </span>
-                                    </div>
-                                  </div>
-                                  {/* Other Stats */}
-                                  <div className="grid grid-cols-4 gap-2 sm:grid-cols-8">
-                                    <input
-                                      type="number"
-                                      placeholder="AST"
-                                      value={stats.ast}
-                                      onChange={(e) => setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, ast: e.target.value }})}
-                                      min="0"
-                                      className="rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
-                                    />
-                                    <input
-                                      type="number"
-                                      placeholder="OREB"
-                                      value={stats.oreb}
-                                      onChange={(e) => {
-                                        const oreb = parseInt(e.target.value) || 0;
-                                        const dreb = parseInt(stats.dreb) || 0;
-                                        const reb = (oreb + dreb).toString();
-                                        setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, oreb: e.target.value, reb }});
-                                      }}
-                                      min="0"
-                                      className="rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
-                                    />
-                                    <input
-                                    type="number"
-                                    placeholder="DREB"
-                                    value={stats.dreb}
-                                    onChange={(e) => {
-                                      const dreb = parseInt(e.target.value) || 0;
-                                      const oreb = parseInt(stats.oreb) || 0;
-                                      const reb = (oreb + dreb).toString();
-                                      setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, dreb: e.target.value, reb }});
-                                    }}
-                                    min="0"
-                                    className="rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
-                                  />
-                                  <input
-                                    type="number"
-                                    placeholder="REB"
-                                    value={stats.reb}
-                                    readOnly
-                                    className="rounded-lg border border-emerald-500/30 bg-emerald-950/40 px-2 py-1 text-center text-xs text-emerald-200 cursor-not-allowed"
-                                    title="Auto-calculated: OREB + DREB"
-                                  />
-                                  <input
-                                    type="number"
-                                    placeholder="STL"
-                                    value={stats.stl}
-                                    onChange={(e) => setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, stl: e.target.value }})}
-                                    min="0"
-                                    className="rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
-                                  />
-                                  <input
-                                    type="number"
-                                    placeholder="BLK"
-                                    value={stats.blk}
-                                    onChange={(e) => setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, blk: e.target.value }})}
-                                    min="0"
-                                    className="rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
-                                  />
-                                  <input
-                                    type="number"
-                                    placeholder="TO"
-                                    value={stats.to}
-                                    onChange={(e) => setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, to: e.target.value }})}
-                                    min="0"
-                                    className="rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
-                                  />
-                                  <input
-                                    type="number"
-                                    placeholder="PF"
-                                    value={stats.fls}
-                                    onChange={(e) => {
-                                      const value = parseInt(e.target.value) || 0;
-                                      if (value <= 6) {
-                                        setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, fls: e.target.value }});
-                                      }
-                                    }}
-                                    min="0"
-                                    max="6"
-                                    className="rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-center text-xs text-white focus:border-white"
-                                  />
-                                </div>
-                              </div>
+                                          }} min="0" className="w-16 rounded-lg border border-slate-600 bg-slate-800 px-2 py-2 text-center text-sm text-white focus:border-blue-500 focus:outline-none" placeholder="0" />
+                                        </td>
+                                        <td className="px-3 py-3">
+                                          <input type="number" value={stats.ft_m} onChange={(e) => {
+                                            const made = parseInt(e.target.value) || 0;
+                                            const attempts = parseInt(stats.ft_a) || 0;
+                                            if (attempts > 0 && made > attempts) {
+                                              setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, ft_m: attempts.toString() }});
+                                            } else {
+                                              setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, ft_m: e.target.value }});
+                                            }
+                                          }} min="0" className="w-16 rounded-lg border border-slate-600 bg-slate-800 px-2 py-2 text-center text-sm text-white focus:border-blue-500 focus:outline-none" placeholder="0" />
+                                        </td>
+                                        <td className="px-3 py-3">
+                                          <input type="number" value={stats.ft_a} onChange={(e) => {
+                                            const attempts = parseInt(e.target.value) || 0;
+                                            const made = parseInt(stats.ft_m) || 0;
+                                            if (made > attempts && attempts > 0) {
+                                              setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, ft_a: e.target.value, ft_m: attempts.toString() }});
+                                            } else {
+                                              setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, ft_a: e.target.value }});
+                                            }
+                                          }} min="0" className="w-16 rounded-lg border border-slate-600 bg-slate-800 px-2 py-2 text-center text-sm text-white focus:border-blue-500 focus:outline-none" placeholder="0" />
+                                        </td>
+                                        <td className="px-3 py-3">
+                                          <div className="flex items-center justify-center">
+                                            <span className="text-xl font-bold text-emerald-300 tabular-nums">{totalPoints}</span>
+                                          </div>
+                                        </td>
+                                        <td className="px-3 py-3">
+                                          <input type="number" value={stats.ast} onChange={(e) => setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, ast: e.target.value }})} min="0" className="w-16 rounded-lg border border-slate-600 bg-slate-800 px-2 py-2 text-center text-sm text-white focus:border-blue-500 focus:outline-none" placeholder="0" />
+                                        </td>
+                                        <td className="px-3 py-3">
+                                          <input type="number" value={stats.oreb} onChange={(e) => {
+                                            const oreb = parseInt(e.target.value) || 0;
+                                            const dreb = parseInt(stats.dreb) || 0;
+                                            const reb = (oreb + dreb).toString();
+                                            setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, oreb: e.target.value, reb }});
+                                          }} min="0" className="w-16 rounded-lg border border-slate-600 bg-slate-800 px-2 py-2 text-center text-sm text-white focus:border-blue-500 focus:outline-none" placeholder="0" />
+                                        </td>
+                                        <td className="px-3 py-3">
+                                          <input type="number" value={stats.dreb} onChange={(e) => {
+                                            const dreb = parseInt(e.target.value) || 0;
+                                            const oreb = parseInt(stats.oreb) || 0;
+                                            const reb = (oreb + dreb).toString();
+                                            setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, dreb: e.target.value, reb }});
+                                          }} min="0" className="w-16 rounded-lg border border-slate-600 bg-slate-800 px-2 py-2 text-center text-sm text-white focus:border-blue-500 focus:outline-none" placeholder="0" />
+                                        </td>
+                                        <td className="px-3 py-3">
+                                          <input type="number" value={stats.stl} onChange={(e) => setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, stl: e.target.value }})} min="0" className="w-16 rounded-lg border border-slate-600 bg-slate-800 px-2 py-2 text-center text-sm text-white focus:border-blue-500 focus:outline-none" placeholder="0" />
+                                        </td>
+                                        <td className="px-3 py-3">
+                                          <input type="number" value={stats.blk} onChange={(e) => setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, blk: e.target.value }})} min="0" className="w-16 rounded-lg border border-slate-600 bg-slate-800 px-2 py-2 text-center text-sm text-white focus:border-blue-500 focus:outline-none" placeholder="0" />
+                                        </td>
+                                        <td className="px-3 py-3">
+                                          <input type="number" value={stats.to} onChange={(e) => setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, to: e.target.value }})} min="0" className="w-16 rounded-lg border border-slate-600 bg-slate-800 px-2 py-2 text-center text-sm text-white focus:border-blue-500 focus:outline-none" placeholder="0" />
+                                        </td>
+                                        <td className="px-3 py-3">
+                                          <input type="number" value={stats.fls} onChange={(e) => {
+                                            const value = parseInt(e.target.value) || 0;
+                                            if (value <= 6) {
+                                              setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, fls: e.target.value }});
+                                            }
+                                          }} min="0" max="6" className="w-16 rounded-lg border border-slate-600 bg-slate-800 px-2 py-2 text-center text-sm text-white focus:border-blue-500 focus:outline-none" placeholder="0" />
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
                             </div>
-                            );
-                          })}
+                          </div>
+                        )}
+
+                        {/* Action Buttons - Sticky Bottom */}
+                        <div className="sticky bottom-0 z-10 border-t border-emerald-500/30 bg-slate-900/95 backdrop-blur-sm">
+                          <div className="mx-auto max-w-[1600px] px-6 py-6">
+                            <div className="flex flex-wrap items-center gap-4">
+                              <button
+                                type="button"
+                                onClick={handleSubmitGameStats}
+                                disabled={statsSubmitting}
+                                className="flex-1 rounded-xl bg-emerald-500 px-8 py-4 text-base font-bold uppercase tracking-wider text-white shadow-lg transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50 min-w-[200px]"
+                              >
+                                {statsSubmitting ? "💾 Saving Stats..." : "✅ Save All Stats"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedCompletedGame(null);
+                                  setGameStatsForm(null);
+                                  setWinnerRoster([]);
+                                  setLoserRoster([]);
+                                  setPlayerStatsMap({});
+                                  setLoserStatsMap({});
+                                }}
+                                className="rounded-xl bg-slate-700 px-6 py-4 text-base font-semibold text-white transition hover:bg-slate-600"
+                              >
+                                ✕ Cancel
+                              </button>
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    )}
-
-                    {/* Action Buttons */}
-                    <div className="mt-6 flex flex-wrap items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={handleSubmitGameStats}
-                        disabled={statsSubmitting}
-                        className="rounded-full border border-white/20 bg-emerald-500/20 px-5 py-2 text-xs font-semibold uppercase tracking-[0.4em] text-white transition hover:bg-emerald-500/30 disabled:cursor-not-allowed"
-                      >
-                        {statsSubmitting ? "Saving…" : "Save Stats"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedCompletedGame(null);
-                          setGameStatsForm(null);
-                          setWinnerRoster([]);
-                          setLoserRoster([]);
-                          setPlayerStatsMap({});
-                          setLoserStatsMap({});
-                        }}
-                        className="rounded-full border border-white/10 px-4 py-2 text-xs uppercase tracking-[0.4em] text-slate-300"
-                      >
-                        Cancel
-                      </button>
                     </div>
-                  </section>
+                  </div>
                 )}
               </div>
             )}

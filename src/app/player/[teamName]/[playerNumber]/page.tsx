@@ -8,6 +8,7 @@ import { firebaseDB } from "@/lib/firebase";
 import type { RosterPlayer } from "@/data/febaco";
 import { franchises, franchisesWomen } from "@/data/febaco";
 import { countries, codeForCountryName, flagFromCode, nameForCountryCode } from "@/data/countries";
+import { useAuth } from "@/contexts/AuthContext";
 
 // Helper function to get country flag emoji. Accepts country name, common alias, or ISO A2 code.
 function getNationalityFlag(nationality: string): string {
@@ -53,6 +54,7 @@ type GameLog = {
 export default function PlayerProfilePage() {
   const params = useParams();
   const router = useRouter();
+  const { user, userProfile } = useAuth();
   const teamName = decodeURIComponent(params.teamName as string);
   const playerNumber = params.playerNumber as string;
   
@@ -60,6 +62,9 @@ export default function PlayerProfilePage() {
   const [loading, setLoading] = useState(true);
   const [rankings, setRankings] = useState({ pts: 0, reb: 0, stl: 0, blk: 0 });
   const [gameLogs, setGameLogs] = useState<GameLog[]>([]);
+  
+  // Check if the logged-in user is viewing their own profile
+  const isOwnProfile = user && userProfile && userProfile.teamName === teamName && userProfile.playerNumber?.toString() === playerNumber;
 
   const allFranchises = [...franchises, ...franchisesWomen];
   const franchise = allFranchises.find((f) => {
@@ -236,21 +241,28 @@ export default function PlayerProfilePage() {
       <nav className="border-b border-white/10 bg-black/40 backdrop-blur-xl">
         <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
-            <button
-              onClick={() => router.back()}
-              className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-slate-300 transition hover:text-white"
-            >
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-              Back
-            </button>
-            <button
-              onClick={() => router.push("/")}
-              className="text-sm font-semibold uppercase tracking-wider text-slate-300 transition hover:text-white"
-            >
-              Home
-            </button>
+            <span className="text-2xl font-bold text-white">LIPROBAKIN</span>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => router.push("/")}
+                className="group relative h-11 w-11 flex items-center justify-center overflow-hidden rounded-xl border border-white/20 bg-white/5 shadow-lg backdrop-blur-xl transition-all duration-300 hover:scale-110 hover:border-white/40 hover:bg-white/10"
+                aria-label="Home"
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100 animate-shimmer" />
+                <svg className="relative z-10 h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                </svg>
+              </button>
+              <button
+                onClick={() => router.back()}
+                className="flex items-center gap-2 rounded-lg border border-white/10 bg-slate-900/60 px-4 py-2 text-sm hover:border-white/30 transition-colors"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                Back
+              </button>
+            </div>
           </div>
         </div>
       </nav>
@@ -308,19 +320,35 @@ export default function PlayerProfilePage() {
                     <div className="flex-1 min-w-[110px] rounded-xl border border-white/20 bg-black/20 p-2.5 sm:p-4">
                       <p className="mb-1 text-[10px] uppercase tracking-wider text-blue-200 sm:text-xs">Nationality</p>
                       <p className="text-xs font-semibold text-white sm:text-base flex items-center gap-2">
-                        <span className="text-2xl sm:text-3xl flex-shrink-0" style={{ fontFamily: 'Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif' }}>
-                          {flagFromCode(player.nationality)}
-                        </span>
-                        <span className="truncate">{nameForCountryCode(player.nationality) || player.nationality}</span>
-                      </p>
-                    </div>
-                  )}
-                  {player.nationality2 && (
-                    <div className="flex-1 min-w-[110px] rounded-xl border border-white/20 bg-black/20 p-2.5 sm:p-4">
-                      <p className="mb-1 text-[10px] uppercase tracking-wider text-blue-200 sm:text-xs">Nationality</p>
-                      <p className="text-xs font-semibold text-white sm:text-base truncate flex items-center gap-1.5">
-                        <span className="text-base sm:text-xl">{flagFromCode(player.nationality2)}</span>
-                        {nameForCountryCode(player.nationality2) || player.nationality2}
+                        <img
+                          src={`https://flagcdn.com/w40/${player.nationality.toLowerCase()}.png`}
+                          alt={nameForCountryCode(player.nationality) || "Flag"}
+                          width={32}
+                          height={24}
+                          className="rounded shadow-sm flex-shrink-0"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                          }}
+                        />
+                        {player.nationality2 ? (
+                          <>
+                            <img
+                              src={`https://flagcdn.com/w40/${player.nationality2.toLowerCase()}.png`}
+                              alt={nameForCountryCode(player.nationality2) || "Flag"}
+                              width={32}
+                              height={24}
+                              className="rounded shadow-sm flex-shrink-0"
+                              onError={(e) => {
+                                const target = e.target as HTMLImageElement;
+                                target.style.display = 'none';
+                              }}
+                            />
+                            <span className="truncate">{player.nationality}, {player.nationality2}</span>
+                          </>
+                        ) : (
+                          <span className="truncate">{nameForCountryCode(player.nationality) || player.nationality}</span>
+                        )}
                       </p>
                     </div>
                   )}
@@ -351,6 +379,121 @@ export default function PlayerProfilePage() {
             </div>
           </div>
         </div>
+
+        {/* Player Dashboard - Only Visible to Logged-In Player */}
+        {isOwnProfile && (
+          <div className="mb-6 rounded-3xl border border-green-500/50 bg-gradient-to-br from-green-500/10 to-green-600/5 backdrop-blur-sm p-6 sm:p-8">
+            <div className="flex items-start gap-4 mb-6">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-500/20 backdrop-blur-sm border border-green-400/30">
+                <svg className="h-6 w-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-white mb-1">Your Player Dashboard</h2>
+                <p className="text-sm text-green-200/80">Welcome back, {player.firstName}! Here's your personal stats overview.</p>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm p-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/20">
+                    <svg className="h-5 w-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-bold text-white">Performance</h3>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-slate-400">Games Played</span>
+                    <span className="text-sm font-bold text-white">{gameLogs.length}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-slate-400">Avg PPG</span>
+                    <span className="text-sm font-bold text-green-400">{player.stats.pts}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-slate-400">Avg RPG</span>
+                    <span className="text-sm font-bold text-green-400">{player.stats.reb}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm p-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-500/20">
+                    <svg className="h-5 w-5 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-bold text-white">Rankings</h3>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-slate-400">Points Rank</span>
+                    <span className="text-sm font-bold text-yellow-400">#{rankings.pts}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-slate-400">Rebounds Rank</span>
+                    <span className="text-sm font-bold text-yellow-400">#{rankings.reb}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-slate-400">Steals Rank</span>
+                    <span className="text-sm font-bold text-yellow-400">#{rankings.stl}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm p-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-500/20">
+                    <svg className="h-5 w-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-bold text-white">Season Stats</h3>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-slate-400">Steals PG</span>
+                    <span className="text-sm font-bold text-white">{player.stats.stl}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-slate-400">Blocks PG</span>
+                    <span className="text-sm font-bold text-white">{(player.stats as any).blk || "0.0"}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-slate-400">Total Games</span>
+                    <span className="text-sm font-bold text-white">{gameLogs.length}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 flex flex-wrap gap-3">
+              <button
+                onClick={() => router.push(`/profile-settings`)}
+                className="flex items-center gap-2 rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                Profile Settings
+              </button>
+              <button
+                className="flex items-center gap-2 rounded-xl border border-green-500/50 bg-gradient-to-r from-green-500/10 to-green-600/10 px-4 py-2.5 text-sm font-semibold text-green-400 transition hover:from-green-500/20 hover:to-green-600/20"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                View Full Stats Report
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Stats Section */}
         <div className="rounded-3xl border border-white/10 bg-slate-950/80 p-4 sm:p-6 lg:p-8">
@@ -384,45 +527,45 @@ export default function PlayerProfilePage() {
         {/* Detailed Statistics - Last 5 Games */}
         {gameLogs.length > 0 && (
           <div className="mt-6 rounded-3xl border border-white/10 bg-slate-950/80 p-4 sm:p-6 lg:p-8">
-            <h2 className="mb-4 text-lg font-bold uppercase tracking-wider text-white sm:mb-6 sm:text-xl">
+            <h2 className="mb-4 text-xl font-bold uppercase tracking-wider text-white sm:mb-6 sm:text-2xl">
               Detailed Statistics
             </h2>
             <div className="overflow-x-auto">
-              <table className="w-full text-xs">
+              <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-white/10 text-slate-400">
-                    <th className="px-2 py-3 text-left text-[11px] font-semibold uppercase tracking-wider">Game(s)</th>
-                    <th className="px-2 py-3 text-center text-[11px] font-semibold uppercase tracking-wider">PTS</th>
-                    <th className="px-2 py-3 text-center text-[11px] font-semibold uppercase tracking-wider">
+                    <th className="px-3 py-4 text-left text-xs font-semibold uppercase tracking-wider">Game(s)</th>
+                    <th className="px-3 py-4 text-center text-xs font-semibold uppercase tracking-wider">PTS</th>
+                    <th className="px-3 py-4 text-center text-xs font-semibold uppercase tracking-wider">
                       <div>FG</div>
                     </th>
-                    <th className="px-2 py-3 text-center text-[11px] font-semibold uppercase tracking-wider">
+                    <th className="px-3 py-4 text-center text-xs font-semibold uppercase tracking-wider">
                       <div>Shots</div>
-                      <div className="mt-0.5 font-normal normal-case text-[10px] text-slate-500">3PT FG</div>
+                      <div className="mt-1 font-normal normal-case text-[11px] text-slate-500">3PT FG</div>
                     </th>
-                    <th className="px-2 py-3 text-center text-[11px] font-semibold uppercase tracking-wider">
+                    <th className="px-3 py-4 text-center text-xs font-semibold uppercase tracking-wider">
                       <div className="opacity-0">.</div>
-                      <div className="mt-0.5 font-normal normal-case text-[10px] text-slate-500">FT</div>
+                      <div className="mt-1 font-normal normal-case text-[11px] text-slate-500">FT</div>
                     </th>
-                    <th className="px-2 py-3 text-center text-[11px] font-semibold uppercase tracking-wider">
+                    <th className="px-3 py-4 text-center text-xs font-semibold uppercase tracking-wider">
                       <div>Rebounds</div>
-                      <div className="mt-0.5 font-normal normal-case text-[10px] text-slate-500">OREB</div>
+                      <div className="mt-1 font-normal normal-case text-[11px] text-slate-500">OREB</div>
                     </th>
-                    <th className="px-2 py-3 text-center text-[11px] font-semibold uppercase tracking-wider">
+                    <th className="px-3 py-4 text-center text-xs font-semibold uppercase tracking-wider">
                       <div className="opacity-0">.</div>
-                      <div className="mt-0.5 font-normal normal-case text-[10px] text-slate-500">DREB</div>
+                      <div className="mt-1 font-normal normal-case text-[11px] text-slate-500">DREB</div>
                     </th>
-                    <th className="px-2 py-3 text-center text-[11px] font-semibold uppercase tracking-wider">
+                    <th className="px-3 py-4 text-center text-xs font-semibold uppercase tracking-wider">
                       <div className="opacity-0">.</div>
-                      <div className="mt-0.5 font-normal normal-case text-[10px] text-slate-500">REB</div>
+                      <div className="mt-1 font-normal normal-case text-[11px] text-slate-500">REB</div>
                     </th>
-                    <th className="px-2 py-3 text-center text-[11px] font-semibold uppercase tracking-wider">AST</th>
-                    <th className="px-2 py-3 text-center text-[11px] font-semibold uppercase tracking-wider">PF</th>
-                    <th className="px-2 py-3 text-center text-[11px] font-semibold uppercase tracking-wider">TO</th>
-                    <th className="px-2 py-3 text-center text-[11px] font-semibold uppercase tracking-wider">STL</th>
-                    <th className="px-2 py-3 text-center text-[11px] font-semibold uppercase tracking-wider">BLK</th>
-                    <th className="px-2 py-3 text-center text-[11px] font-semibold uppercase tracking-wider">+/-</th>
-                    <th className="px-2 py-3 text-center text-[11px] font-semibold uppercase tracking-wider">EFF</th>
+                    <th className="px-3 py-4 text-center text-xs font-semibold uppercase tracking-wider">AST</th>
+                    <th className="px-3 py-4 text-center text-xs font-semibold uppercase tracking-wider">PF</th>
+                    <th className="px-3 py-4 text-center text-xs font-semibold uppercase tracking-wider">TO</th>
+                    <th className="px-3 py-4 text-center text-xs font-semibold uppercase tracking-wider">STL</th>
+                    <th className="px-3 py-4 text-center text-xs font-semibold uppercase tracking-wider">BLK</th>
+                    <th className="px-3 py-4 text-center text-xs font-semibold uppercase tracking-wider">+/-</th>
+                    <th className="px-3 py-4 text-center text-xs font-semibold uppercase tracking-wider">EFF</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -438,41 +581,41 @@ export default function PlayerProfilePage() {
                     
                     return (
                       <tr key={game.gameId} className="border-b border-white/5 hover:bg-white/5 transition">
-                        <td className="px-2 py-4">
+                        <td className="px-3 py-5">
                           <div className="flex items-center gap-2">
-                            <span className={`inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                            <span className={`inline-flex items-center justify-center rounded px-2 py-1 text-xs font-bold ${
                               game.result === "W" ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"
                             }`}>
-                              vs {game.result}
+                              {game.result}
                             </span>
-                            <span className="text-xs text-slate-300">
+                            <span className="text-sm text-slate-300">
                               vs {game.opponent}, {new Date(game.date).toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "numeric" })}
                             </span>
                           </div>
                         </td>
-                        <td className="px-2 py-4 text-center font-bold text-white">{game.pts}</td>
-                        <td className="px-2 py-4 text-center">
-                          <div className="text-white">{fgMade}/{fgAttempts}</div>
-                          <div className="text-[10px] text-slate-500">{fgPct}%</div>
+                        <td className="px-3 py-5 text-center font-bold text-white text-base">{game.pts}</td>
+                        <td className="px-3 py-5 text-center">
+                          <div className="text-white text-sm">{fgMade}/{fgAttempts}</div>
+                          <div className="text-xs text-slate-500">{fgPct}%</div>
                         </td>
-                        <td className="px-2 py-4 text-center">
-                          <div className="text-white">{game.three_pm}/{game.three_pa}</div>
-                          <div className="text-[10px] text-slate-500">{threePct}%</div>
+                        <td className="px-3 py-5 text-center">
+                          <div className="text-white text-sm">{game.three_pm}/{game.three_pa}</div>
+                          <div className="text-xs text-slate-500">{threePct}%</div>
                         </td>
-                        <td className="px-2 py-4 text-center">
-                          <div className="text-white">{game.ft_m}/{game.ft_a}</div>
-                          <div className="text-[10px] text-slate-500">{ftPct}%</div>
+                        <td className="px-3 py-5 text-center">
+                          <div className="text-white text-sm">{game.ft_m}/{game.ft_a}</div>
+                          <div className="text-xs text-slate-500">{ftPct}%</div>
                         </td>
-                        <td className="px-2 py-4 text-center text-white">{game.oreb}</td>
-                        <td className="px-2 py-4 text-center text-white">{game.dreb}</td>
-                        <td className="px-2 py-4 text-center text-white">{game.reb}</td>
-                        <td className="px-2 py-4 text-center text-white">{game.ast}</td>
-                        <td className="px-2 py-4 text-center text-white">{game.pf}</td>
-                        <td className="px-2 py-4 text-center text-white">{game.to}</td>
-                        <td className="px-2 py-4 text-center text-white">{game.stl}</td>
-                        <td className="px-2 py-4 text-center text-white">{game.blk}</td>
-                        <td className="px-2 py-4 text-center text-slate-500">—</td>
-                        <td className="px-2 py-4 text-center font-bold text-white">{eff}</td>
+                        <td className="px-3 py-5 text-center text-white text-sm">{game.oreb}</td>
+                        <td className="px-3 py-5 text-center text-white text-sm">{game.dreb}</td>
+                        <td className="px-3 py-5 text-center text-white text-sm">{game.reb}</td>
+                        <td className="px-3 py-5 text-center text-white text-sm">{game.ast}</td>
+                        <td className="px-3 py-5 text-center text-white text-sm">{game.pf}</td>
+                        <td className="px-3 py-5 text-center text-white text-sm">{game.to}</td>
+                        <td className="px-3 py-5 text-center text-white text-sm">{game.stl}</td>
+                        <td className="px-3 py-5 text-center text-white text-sm">{game.blk}</td>
+                        <td className="px-3 py-5 text-center text-slate-500 text-sm">—</td>
+                        <td className="px-3 py-5 text-center font-bold text-white text-base">{eff}</td>
                       </tr>
                     );
                   })}

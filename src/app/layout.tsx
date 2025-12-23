@@ -15,17 +15,46 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Liprobakin League",
-  description: "Official Liprobakin basketball showcase inspired by the NBA G League layout.",
+  title: {
+    default: "Liprobakin | Official Basketball League",
+    template: "%s | Liprobakin",
+  },
+  description: "Liprobakin - Official basketball league featuring teams, players, games, and standings. Watch live scores, news, and highlights from the Liprobakin basketball championship.",
+  keywords: [
+    "Liprobakin",
+    "liprobakin",
+    "librobakin",
+    "Liprobakin League",
+    "basketball",
+    "basketball league",
+    "sports",
+    "teams",
+    "players",
+    "games",
+    "scores",
+    "standings",
+    "basketball championship",
+    "Congo basketball",
+    "African basketball",
+    "DRC basketball"
+  ],
+  authors: [{ name: "Liprobakin League" }],
+  creator: "Liprobakin",
+  publisher: "Liprobakin League",
   metadataBase: new URL("https://liprobakin.com"),
+  alternates: {
+    canonical: "https://liprobakin.com",
+  },
   icons: {
     icon: "/logos/liprobakin.png",
     shortcut: "/logos/liprobakin.png",
     apple: "/logos/liprobakin.png",
   },
   openGraph: {
-    title: "Liprobakin League",
-    description: "Scores, news, stats, and standings across the Liprobakin basketball association.",
+    type: "website",
+    locale: "en_US",
+    title: "Liprobakin | Official Basketball League",
+    description: "Official Liprobakin basketball league - scores, news, stats, standings, teams, and players. Your source for all Liprobakin basketball action.",
     url: "https://liprobakin.com",
     siteName: "Liprobakin",
     images: [
@@ -33,15 +62,30 @@ export const metadata: Metadata = {
         url: "/logos/liprobakin.png",
         width: 1200,
         height: 630,
-        alt: "Liprobakin League",
+        alt: "Liprobakin Basketball League",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Liprobakin League",
-    description: "Players, games, and stories shaping the Liprobakin season.",
+    title: "Liprobakin | Official Basketball League",
+    description: "Official Liprobakin basketball league - Live scores, news, teams, and player stats.",
     images: ["/logos/liprobakin.png"],
+    creator: "@liprobakin",
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
+  verification: {
+    google: "your-google-verification-code",
   },
 };
 
@@ -50,8 +94,28 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "SportsOrganization",
+    "name": "Liprobakin",
+    "alternateName": ["Liprobakin League", "Librobakin"],
+    "url": "https://liprobakin.com",
+    "logo": "https://liprobakin.com/logos/liprobakin.png",
+    "description": "Official Liprobakin basketball league featuring teams, players, games, and standings.",
+    "sport": "Basketball",
+    "sameAs": [
+      "https://liprobakin.com"
+    ]
+  };
+
   return (
     <html lang="en">
+      <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-transparent`}
       >

@@ -6,8 +6,68 @@ import Image from "next/image";
 import Link from "next/link";
 import { collection, getDocs, query, where, doc, getDoc } from "firebase/firestore";
 import { firebaseDB } from "@/lib/firebase";
+import { useLanguage } from "@/contexts/LanguageContext";
 import type { RosterPlayer } from "@/data/febaco";
 import { flagFromCode } from "@/data/countries";
+
+const translations = {
+  en: {
+    loading: "Loading...",
+    loadingTeamData: "Loading team data...",
+    teamNotFound: "Team not found",
+    teamNotFoundDesc: "could not be found.",
+    backToHome: "Back to Home",
+    back: "Back",
+    record: "Record",
+    conference: "Conference",
+    roster: "Roster",
+    coachingStaff: "Coaching Staff",
+    noRoster: "No roster data available for this team.",
+    noStaff: "No coaching staff data available for this team.",
+    number: "#",
+    position: "Position",
+    height: "Height",
+    weight: "Weight",
+    nationality: "Nationality",
+    dob: "DOB",
+    ppg: "PPG",
+    rpg: "RPG",
+    apg: "APG",
+    headCoach: "Head Coach",
+    assistantCoach: "Assistant Coach",
+    staff: "Staff",
+    grid: "Grid",
+    list: "List",
+  },
+  fr: {
+    loading: "Chargement...",
+    loadingTeamData: "Chargement des données de l'équipe...",
+    teamNotFound: "Équipe introuvable",
+    teamNotFoundDesc: "n'a pas pu être trouvée.",
+    backToHome: "Retour à l'accueil",
+    back: "Retour",
+    record: "Bilan",
+    conference: "Conférence",
+    roster: "Effectif",
+    coachingStaff: "Staff Technique",
+    noRoster: "Aucune donnée d'effectif disponible pour cette équipe.",
+    noStaff: "Aucune donnée du staff technique disponible pour cette équipe.",
+    number: "#",
+    position: "Position",
+    height: "Taille",
+    weight: "Poids",
+    nationality: "Nationalité",
+    dob: "Date de Naissance",
+    ppg: "PPM",
+    rpg: "RPM",
+    apg: "PPM",
+    headCoach: "Entraîneur Principal",
+    assistantCoach: "Entraîneur Adjoint",
+    staff: "Staff",
+    grid: "Grille",
+    list: "Liste",
+  },
+};
 
 type TeamData = {
   id: string;
@@ -45,6 +105,8 @@ export default function TeamPage() {
   const params = useParams();
   const router = useRouter();
   const teamName = decodeURIComponent(params.teamName as string);
+  const { language } = useLanguage();
+  const t = translations[language];
   
   const [teamData, setTeamData] = useState<TeamData | null>(null);
   const [roster, setRoster] = useState<EnhancedRosterPlayer[]>([]);
@@ -197,7 +259,7 @@ export default function TeamPage() {
       <div className="min-h-screen bg-gradient-to-b from-[#050816] via-[#050816] to-[#020407] text-white flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-slate-400">Loading team data...</p>
+          <p className="text-slate-400">{t.loadingTeamData}</p>
         </div>
       </div>
     );
@@ -207,13 +269,13 @@ export default function TeamPage() {
     return (
       <div className="min-h-screen bg-gradient-to-b from-[#050816] via-[#050816] to-[#020407] text-white flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-4xl font-bold mb-4">Team Not Found</h1>
-          <p className="text-slate-400 mb-8">The team "{teamName}" could not be found.</p>
+          <h1 className="text-4xl font-bold mb-4">{t.teamNotFound}</h1>
+          <p className="text-slate-400 mb-8">{t.teamNotFound} "{teamName}" {t.teamNotFoundDesc}</p>
           <Link 
             href="/"
             className="inline-block px-6 py-3 bg-gradient-to-br from-blue-500/30 to-purple-500/30 hover:from-blue-500/40 hover:to-purple-500/40 border border-white/30 backdrop-blur-xl rounded-lg transition-all shadow-lg"
           >
-            Back to Home
+            {t.backToHome}
           </Link>
         </div>
       </div>
@@ -250,7 +312,7 @@ export default function TeamPage() {
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                 </svg>
-                Back
+                {t.back}
               </button>
             </div>
           </div>
@@ -278,7 +340,7 @@ export default function TeamPage() {
             <div className="text-center sm:text-left">
               <h1 className="text-4xl font-bold mb-2 sm:text-5xl">{fullTeamName}</h1>
               <div className="flex flex-wrap items-center justify-center gap-4 sm:justify-start">
-                <span className="text-xl text-slate-300">Record: <span className="font-semibold text-white">{record}</span></span>
+                <span className="text-xl text-slate-300">{t.record}: <span className="font-semibold text-white">{record}</span></span>
                 {teamData.conference && (
                   <span className="text-xl text-slate-300">{teamData.conference}</span>
                 )}
@@ -300,7 +362,7 @@ export default function TeamPage() {
       {/* Roster */}
       <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between mb-8">
-          <h2 className="text-3xl font-bold">Roster</h2>
+          <h2 className="text-3xl font-bold">{t.roster}</h2>
           
           {/* Grid/List Toggle */}
           <div className="flex gap-2">
@@ -317,7 +379,7 @@ export default function TeamPage() {
               <svg className="relative z-10 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
               </svg>
-              <span className="relative z-10">Grid</span>
+              <span className="relative z-10">{t.grid}</span>
             </button>
             <button
               onClick={() => setViewMode("list")}
@@ -332,14 +394,14 @@ export default function TeamPage() {
               <svg className="relative z-10 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
-              <span className="relative z-10">List</span>
+              <span className="relative z-10">{t.list}</span>
             </button>
           </div>
         </div>
         
         {roster.length === 0 ? (
           <div className="text-center py-12 text-slate-400">
-            <p>No roster data available for this team.</p>
+            <p>{t.noRoster}</p>
           </div>
         ) : viewMode === "grid" ? (
           <div className="grid gap-2 grid-cols-4">
@@ -393,11 +455,11 @@ export default function TeamPage() {
                 </div>
                 <div className="flex gap-8 text-sm">
                   <div>
-                    <span className="text-slate-400 block text-xs">Height</span>
+                    <span className="text-slate-400 block text-xs">{t.height}</span>
                     <span className="text-white">{player.height || "N/A"}</span>
                   </div>
                   <div>
-                    <span className="text-slate-400 block text-xs">Nationality</span>
+                    <span className="text-slate-400 block text-xs">{t.nationality}</span>
                     {player.nationality && player.nationality !== "N/A" ? (
                       <img
                         src={`https://flagcdn.com/w40/${player.nationality.toLowerCase()}.png`}
@@ -415,7 +477,7 @@ export default function TeamPage() {
                     )}
                   </div>
                   <div>
-                    <span className="text-slate-400 block text-xs">DOB</span>
+                    <span className="text-slate-400 block text-xs">{t.dob}</span>
                     <span className="text-white">{player.dateOfBirth || "N/A"}</span>
                   </div>
                 </div>
@@ -428,11 +490,11 @@ export default function TeamPage() {
       {/* Coaching Staff */}
       {
         <div className="mx-auto max-w-7xl px-4 pb-12 sm:px-6 lg:px-8">
-          <h2 className="text-3xl font-bold mb-8">Coaching Staff</h2>
+          <h2 className="text-3xl font-bold mb-8">{t.coachingStaff}</h2>
           
           {staff.length === 0 ? (
             <div className="text-center py-12 text-slate-400">
-              <p>No coaching staff data available for this team.</p>
+              <p>{t.noStaff}</p>
             </div>
           ) : (
           <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">

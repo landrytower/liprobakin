@@ -5,10 +5,118 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { firebaseDB } from "@/lib/firebase";
+import { useLanguage } from "@/contexts/LanguageContext";
 import type { RosterPlayer } from "@/data/febaco";
 import { franchises, franchisesWomen } from "@/data/febaco";
 import { countries, codeForCountryName, flagFromCode, nameForCountryCode } from "@/data/countries";
 import { useAuth } from "@/contexts/AuthContext";
+
+const translations = {
+  en: {
+    loading: "Loading player profile...",
+    playerNotFound: "Player not found",
+    goBack: "Go Back",
+    back: "Back",
+    nationality: "Nationality",
+    dateOfBirth: "Date of Birth",
+    height: "Height",
+    position: "Position",
+    yourDashboard: "Your Player Dashboard",
+    welcomeBack: "Welcome back",
+    statsOverview: "Here's your personal stats overview.",
+    performance: "Performance",
+    gamesPlayed: "Games Played",
+    avgPPG: "Avg PPG",
+    avgRPG: "Avg RPG",
+    rankings: "Rankings",
+    pointsRank: "Points Rank",
+    reboundsRank: "Rebounds Rank",
+    stealsRank: "Steals Rank",
+    seasonStats: "Season Stats",
+    stealsPG: "Steals PG",
+    blocksPG: "Blocks PG",
+    totalGames: "Total Games",
+    profileSettings: "Profile Settings",
+    viewFullStats: "View Full Stats Report",
+    seasonStatistics: "Season Statistics",
+    pointsPerGame: "Points Per Game",
+    reboundsPerGame: "Rebounds Per Game",
+    stealsPerGame: "Steals Per Game",
+    blocksPerGame: "Blocks Per Game",
+    inLeague: "in League",
+    detailedStatistics: "Detailed Statistics",
+    games: "Game(s)",
+    pts: "PTS",
+    fg: "FG",
+    shots: "Shots",
+    threePtFg: "3PT FG",
+    ft: "FT",
+    rebounds: "Rebounds",
+    oreb: "OREB",
+    dreb: "DREB",
+    reb: "REB",
+    ast: "AST",
+    pf: "PF",
+    to: "TO",
+    stl: "STL",
+    blk: "BLK",
+    plusMinus: "+/-",
+    eff: "EFF",
+    vs: "vs",
+  },
+  fr: {
+    loading: "Chargement du profil du joueur...",
+    playerNotFound: "Joueur introuvable",
+    goBack: "Retour",
+    back: "Retour",
+    nationality: "Nationalité",
+    dateOfBirth: "Date de Naissance",
+    height: "Taille",
+    position: "Position",
+    yourDashboard: "Votre Tableau de Bord Joueur",
+    welcomeBack: "Bon retour",
+    statsOverview: "Voici un aperçu de vos statistiques personnelles.",
+    performance: "Performance",
+    gamesPlayed: "Matchs Joués",
+    avgPPG: "PPM Moy.",
+    avgRPG: "RPM Moy.",
+    rankings: "Classements",
+    pointsRank: "Rang Points",
+    reboundsRank: "Rang Rebonds",
+    stealsRank: "Rang Interceptions",
+    seasonStats: "Stats de Saison",
+    stealsPG: "Interceptions PM",
+    blocksPG: "Contres PM",
+    totalGames: "Total Matchs",
+    profileSettings: "Paramètres du Profil",
+    viewFullStats: "Voir le Rapport Complet des Stats",
+    seasonStatistics: "Statistiques de Saison",
+    pointsPerGame: "Points Par Match",
+    reboundsPerGame: "Rebonds Par Match",
+    stealsPerGame: "Interceptions Par Match",
+    blocksPerGame: "Contres Par Match",
+    inLeague: "dans la Ligue",
+    detailedStatistics: "Statistiques Détaillées",
+    games: "Match(s)",
+    pts: "PTS",
+    fg: "TC",
+    shots: "Tirs",
+    threePtFg: "3PT TC",
+    ft: "LF",
+    rebounds: "Rebonds",
+    oreb: "RO",
+    dreb: "RD",
+    reb: "REB",
+    ast: "PD",
+    pf: "FP",
+    to: "BP",
+    stl: "INT",
+    blk: "CT",
+    plusMinus: "+/-",
+    eff: "EFF",
+    vs: "vs",
+  },
+};
 
 // Helper function to get country flag emoji. Accepts country name, common alias, or ISO A2 code.
 function getNationalityFlag(nationality: string): string {
@@ -55,6 +163,8 @@ export default function PlayerProfilePage() {
   const params = useParams();
   const router = useRouter();
   const { user, userProfile } = useAuth();
+  const { language } = useLanguage();
+  const t = translations[language];
   const teamName = decodeURIComponent(params.teamName as string);
   const playerNumber = params.playerNumber as string;
   
@@ -216,7 +326,7 @@ export default function PlayerProfilePage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center">
-        <div className="text-white text-xl">Loading player profile...</div>
+        <div className="text-white text-xl">{t.loading}</div>
       </div>
     );
   }
@@ -224,12 +334,12 @@ export default function PlayerProfilePage() {
   if (!player) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center justify-center p-4">
-        <div className="text-white text-2xl mb-4">Player not found</div>
+        <div className="text-white text-2xl mb-4">{t.playerNotFound}</div>
         <button
           onClick={() => router.back()}
           className="rounded-full border border-white/20 bg-white/10 px-6 py-3 text-sm font-semibold uppercase tracking-wider text-white transition hover:bg-white/20"
         >
-          Go Back
+          {t.goBack}
         </button>
       </div>
     );
@@ -260,7 +370,7 @@ export default function PlayerProfilePage() {
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                 </svg>
-                Back
+                {t.back}
               </button>
             </div>
           </div>
@@ -318,7 +428,7 @@ export default function PlayerProfilePage() {
                 <div className="flex flex-wrap gap-2 sm:grid sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
                   {player.nationality && (
                     <div className="flex-1 min-w-[110px] rounded-xl border border-white/20 bg-black/20 p-2.5 sm:p-4">
-                      <p className="mb-1 text-[10px] uppercase tracking-wider text-blue-200 sm:text-xs">Nationality</p>
+                      <p className="mb-1 text-[10px] uppercase tracking-wider text-blue-200 sm:text-xs">{t.nationality}</p>
                       <p className="text-xs font-semibold text-white sm:text-base flex items-center gap-2">
                         <img
                           src={`https://flagcdn.com/w40/${player.nationality.toLowerCase()}.png`}
@@ -354,9 +464,9 @@ export default function PlayerProfilePage() {
                   )}
                   {player.dateOfBirth && (
                     <div className="flex-1 min-w-[110px] rounded-xl border border-white/20 bg-black/20 p-2.5 sm:p-4">
-                      <p className="mb-1 text-[10px] uppercase tracking-wider text-blue-200 sm:text-xs">Date of Birth</p>
+                      <p className="mb-1 text-[10px] uppercase tracking-wider text-blue-200 sm:text-xs">{t.dateOfBirth}</p>
                       <p className="text-xs font-semibold text-white sm:text-base truncate">
-                        {new Date(player.dateOfBirth).toLocaleDateString("en-US", {
+                        {new Date(player.dateOfBirth).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', {
                           month: "short",
                           day: "numeric",
                           year: "numeric",
@@ -365,12 +475,12 @@ export default function PlayerProfilePage() {
                     </div>
                   )}
                   <div className="flex-1 min-w-[90px] rounded-xl border border-white/20 bg-black/20 p-2.5 sm:p-4">
-                    <p className="mb-1 text-[10px] uppercase tracking-wider text-blue-200 sm:text-xs">Height</p>
+                    <p className="mb-1 text-[10px] uppercase tracking-wider text-blue-200 sm:text-xs">{t.height}</p>
                     <p className="text-xs font-semibold text-white sm:text-base">{player.height || "—"}</p>
                   </div>
                   {player.position && (
                     <div className="flex-1 min-w-[90px] rounded-xl border border-white/20 bg-black/20 p-2.5 sm:p-4">
-                      <p className="mb-1 text-[10px] uppercase tracking-wider text-blue-200 sm:text-xs">Position</p>
+                      <p className="mb-1 text-[10px] uppercase tracking-wider text-blue-200 sm:text-xs">{t.position}</p>
                       <p className="text-xs font-semibold text-white sm:text-base truncate">{player.position}</p>
                     </div>
                   )}
@@ -390,8 +500,8 @@ export default function PlayerProfilePage() {
                 </svg>
               </div>
               <div>
-                <h2 className="text-2xl font-bold text-white mb-1">Your Player Dashboard</h2>
-                <p className="text-sm text-green-200/80">Welcome back, {player.firstName}! Here's your personal stats overview.</p>
+                <h2 className="text-2xl font-bold text-white mb-1">{t.yourDashboard}</h2>
+                <p className="text-sm text-green-200/80">{t.welcomeBack}, {player.firstName}! {t.statsOverview}</p>
               </div>
             </div>
             
@@ -403,19 +513,19 @@ export default function PlayerProfilePage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                     </svg>
                   </div>
-                  <h3 className="text-lg font-bold text-white">Performance</h3>
+                  <h3 className="text-lg font-bold text-white">{t.performance}</h3>
                 </div>
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-slate-400">Games Played</span>
+                    <span className="text-sm text-slate-400">{t.gamesPlayed}</span>
                     <span className="text-sm font-bold text-white">{gameLogs.length}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-slate-400">Avg PPG</span>
+                    <span className="text-sm text-slate-400">{t.avgPPG}</span>
                     <span className="text-sm font-bold text-green-400">{player.stats.pts}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-slate-400">Avg RPG</span>
+                    <span className="text-sm text-slate-400">{t.avgRPG}</span>
                     <span className="text-sm font-bold text-green-400">{player.stats.reb}</span>
                   </div>
                 </div>
@@ -428,19 +538,19 @@ export default function PlayerProfilePage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
                     </svg>
                   </div>
-                  <h3 className="text-lg font-bold text-white">Rankings</h3>
+                  <h3 className="text-lg font-bold text-white">{t.rankings}</h3>
                 </div>
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-slate-400">Points Rank</span>
+                    <span className="text-sm text-slate-400">{t.pointsRank}</span>
                     <span className="text-sm font-bold text-yellow-400">#{rankings.pts}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-slate-400">Rebounds Rank</span>
+                    <span className="text-sm text-slate-400">{t.reboundsRank}</span>
                     <span className="text-sm font-bold text-yellow-400">#{rankings.reb}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-slate-400">Steals Rank</span>
+                    <span className="text-sm text-slate-400">{t.stealsRank}</span>
                     <span className="text-sm font-bold text-yellow-400">#{rankings.stl}</span>
                   </div>
                 </div>
@@ -453,19 +563,19 @@ export default function PlayerProfilePage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   </div>
-                  <h3 className="text-lg font-bold text-white">Season Stats</h3>
+                  <h3 className="text-lg font-bold text-white">{t.seasonStats}</h3>
                 </div>
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-slate-400">Steals PG</span>
+                    <span className="text-sm text-slate-400">{t.stealsPG}</span>
                     <span className="text-sm font-bold text-white">{player.stats.stl}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-slate-400">Blocks PG</span>
+                    <span className="text-sm text-slate-400">{t.blocksPG}</span>
                     <span className="text-sm font-bold text-white">{(player.stats as any).blk || "0.0"}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-slate-400">Total Games</span>
+                    <span className="text-sm text-slate-400">{t.totalGames}</span>
                     <span className="text-sm font-bold text-white">{gameLogs.length}</span>
                   </div>
                 </div>
@@ -481,7 +591,7 @@ export default function PlayerProfilePage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
-                Profile Settings
+                {t.profileSettings}
               </button>
               <button
                 className="flex items-center gap-2 rounded-xl border border-green-500/50 bg-gradient-to-r from-green-500/10 to-green-600/10 px-4 py-2.5 text-sm font-semibold text-green-400 transition hover:from-green-500/20 hover:to-green-600/20"
@@ -489,7 +599,7 @@ export default function PlayerProfilePage() {
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
-                View Full Stats Report
+                {t.viewFullStats}
               </button>
             </div>
           </div>
@@ -498,28 +608,28 @@ export default function PlayerProfilePage() {
         {/* Stats Section */}
         <div className="rounded-3xl border border-white/10 bg-slate-950/80 p-4 sm:p-6 lg:p-8">
           <h2 className="mb-4 text-lg font-bold uppercase tracking-wider text-slate-300 sm:mb-6 sm:text-xl lg:text-2xl">
-            Season Statistics
+            {t.seasonStatistics}
           </h2>
           <div className="grid grid-cols-2 gap-3 sm:gap-6 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/80 to-slate-900/40 p-3 sm:p-6">
-              <p className="mb-1 text-[10px] uppercase tracking-wider text-slate-400 sm:mb-2 sm:text-sm">Points Per Game</p>
+              <p className="mb-1 text-[10px] uppercase tracking-wider text-slate-400 sm:mb-2 sm:text-sm">{t.pointsPerGame}</p>
               <p className="mb-1 text-3xl font-bold text-white sm:mb-2 sm:text-5xl lg:text-6xl">{player.stats.pts}</p>
-              <p className="text-[10px] font-semibold text-emerald-400 sm:text-sm">#{rankings.pts} in League</p>
+              <p className="text-[10px] font-semibold text-emerald-400 sm:text-sm">#{rankings.pts} {t.inLeague}</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/80 to-slate-900/40 p-3 sm:p-6">
-              <p className="mb-1 text-[10px] uppercase tracking-wider text-slate-400 sm:mb-2 sm:text-sm">Rebounds Per Game</p>
+              <p className="mb-1 text-[10px] uppercase tracking-wider text-slate-400 sm:mb-2 sm:text-sm">{t.reboundsPerGame}</p>
               <p className="mb-1 text-3xl font-bold text-white sm:mb-2 sm:text-5xl lg:text-6xl">{player.stats.reb}</p>
-              <p className="text-[10px] font-semibold text-emerald-400 sm:text-sm">#{rankings.reb} in League</p>
+              <p className="text-[10px] font-semibold text-emerald-400 sm:text-sm">#{rankings.reb} {t.inLeague}</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/80 to-slate-900/40 p-3 sm:p-6">
-              <p className="mb-1 text-[10px] uppercase tracking-wider text-slate-400 sm:mb-2 sm:text-sm">Steals Per Game</p>
+              <p className="mb-1 text-[10px] uppercase tracking-wider text-slate-400 sm:mb-2 sm:text-sm">{t.stealsPerGame}</p>
               <p className="mb-1 text-3xl font-bold text-white sm:mb-2 sm:text-5xl lg:text-6xl">{player.stats.stl}</p>
-              <p className="text-[10px] font-semibold text-emerald-400 sm:text-sm">#{rankings.stl} in League</p>
+              <p className="text-[10px] font-semibold text-emerald-400 sm:text-sm">#{rankings.stl} {t.inLeague}</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/80 to-slate-900/40 p-3 sm:p-6">
-              <p className="mb-1 text-[10px] uppercase tracking-wider text-slate-400 sm:mb-2 sm:text-sm">Blocks Per Game</p>
+              <p className="mb-1 text-[10px] uppercase tracking-wider text-slate-400 sm:mb-2 sm:text-sm">{t.blocksPerGame}</p>
               <p className="mb-1 text-3xl font-bold text-white sm:mb-2 sm:text-5xl lg:text-6xl">{(player.stats as any).blk || "0.0"}</p>
-              <p className="text-[10px] font-semibold text-emerald-400 sm:text-sm">#{rankings.blk} in League</p>
+              <p className="text-[10px] font-semibold text-emerald-400 sm:text-sm">#{rankings.blk} {t.inLeague}</p>
             </div>
           </div>
         </div>
@@ -528,44 +638,44 @@ export default function PlayerProfilePage() {
         {gameLogs.length > 0 && (
           <div className="mt-6 rounded-3xl border border-white/10 bg-slate-950/80 p-4 sm:p-6 lg:p-8">
             <h2 className="mb-4 text-xl font-bold uppercase tracking-wider text-white sm:mb-6 sm:text-2xl">
-              Detailed Statistics
+              {t.detailedStatistics}
             </h2>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-white/10 text-slate-400">
-                    <th className="px-3 py-4 text-left text-xs font-semibold uppercase tracking-wider">Game(s)</th>
-                    <th className="px-3 py-4 text-center text-xs font-semibold uppercase tracking-wider">PTS</th>
+                    <th className="px-3 py-4 text-left text-xs font-semibold uppercase tracking-wider">{t.games}</th>
+                    <th className="px-3 py-4 text-center text-xs font-semibold uppercase tracking-wider">{t.pts}</th>
                     <th className="px-3 py-4 text-center text-xs font-semibold uppercase tracking-wider">
-                      <div>FG</div>
+                      <div>{t.fg}</div>
                     </th>
                     <th className="px-3 py-4 text-center text-xs font-semibold uppercase tracking-wider">
-                      <div>Shots</div>
-                      <div className="mt-1 font-normal normal-case text-[11px] text-slate-500">3PT FG</div>
-                    </th>
-                    <th className="px-3 py-4 text-center text-xs font-semibold uppercase tracking-wider">
-                      <div className="opacity-0">.</div>
-                      <div className="mt-1 font-normal normal-case text-[11px] text-slate-500">FT</div>
-                    </th>
-                    <th className="px-3 py-4 text-center text-xs font-semibold uppercase tracking-wider">
-                      <div>Rebounds</div>
-                      <div className="mt-1 font-normal normal-case text-[11px] text-slate-500">OREB</div>
+                      <div>{t.shots}</div>
+                      <div className="mt-1 font-normal normal-case text-[11px] text-slate-500">{t.threePtFg}</div>
                     </th>
                     <th className="px-3 py-4 text-center text-xs font-semibold uppercase tracking-wider">
                       <div className="opacity-0">.</div>
-                      <div className="mt-1 font-normal normal-case text-[11px] text-slate-500">DREB</div>
+                      <div className="mt-1 font-normal normal-case text-[11px] text-slate-500">{t.ft}</div>
+                    </th>
+                    <th className="px-3 py-4 text-center text-xs font-semibold uppercase tracking-wider">
+                      <div>{t.rebounds}</div>
+                      <div className="mt-1 font-normal normal-case text-[11px] text-slate-500">{t.oreb}</div>
                     </th>
                     <th className="px-3 py-4 text-center text-xs font-semibold uppercase tracking-wider">
                       <div className="opacity-0">.</div>
-                      <div className="mt-1 font-normal normal-case text-[11px] text-slate-500">REB</div>
+                      <div className="mt-1 font-normal normal-case text-[11px] text-slate-500">{t.dreb}</div>
                     </th>
-                    <th className="px-3 py-4 text-center text-xs font-semibold uppercase tracking-wider">AST</th>
-                    <th className="px-3 py-4 text-center text-xs font-semibold uppercase tracking-wider">PF</th>
-                    <th className="px-3 py-4 text-center text-xs font-semibold uppercase tracking-wider">TO</th>
-                    <th className="px-3 py-4 text-center text-xs font-semibold uppercase tracking-wider">STL</th>
-                    <th className="px-3 py-4 text-center text-xs font-semibold uppercase tracking-wider">BLK</th>
-                    <th className="px-3 py-4 text-center text-xs font-semibold uppercase tracking-wider">+/-</th>
-                    <th className="px-3 py-4 text-center text-xs font-semibold uppercase tracking-wider">EFF</th>
+                    <th className="px-3 py-4 text-center text-xs font-semibold uppercase tracking-wider">
+                      <div className="opacity-0">.</div>
+                      <div className="mt-1 font-normal normal-case text-[11px] text-slate-500">{t.reb}</div>
+                    </th>
+                    <th className="px-3 py-4 text-center text-xs font-semibold uppercase tracking-wider">{t.ast}</th>
+                    <th className="px-3 py-4 text-center text-xs font-semibold uppercase tracking-wider">{t.pf}</th>
+                    <th className="px-3 py-4 text-center text-xs font-semibold uppercase tracking-wider">{t.to}</th>
+                    <th className="px-3 py-4 text-center text-xs font-semibold uppercase tracking-wider">{t.stl}</th>
+                    <th className="px-3 py-4 text-center text-xs font-semibold uppercase tracking-wider">{t.blk}</th>
+                    <th className="px-3 py-4 text-center text-xs font-semibold uppercase tracking-wider">{t.plusMinus}</th>
+                    <th className="px-3 py-4 text-center text-xs font-semibold uppercase tracking-wider">{t.eff}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -589,7 +699,7 @@ export default function PlayerProfilePage() {
                               {game.result}
                             </span>
                             <span className="text-sm text-slate-300">
-                              vs {game.opponent}, {new Date(game.date).toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "numeric" })}
+                              {t.vs} {game.opponent}, {new Date(game.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { month: "numeric", day: "numeric", year: "numeric" })}
                             </span>
                           </div>
                         </td>

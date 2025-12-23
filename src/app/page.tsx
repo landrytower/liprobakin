@@ -1844,18 +1844,30 @@ export default function Home() {
           <div className="flex items-center gap-4">
             <button
               type="button"
-              className="flex rounded-full border border-white/20 p-2 text-white transition hover:border-white/50 lg:hidden"
+              className="flex flex-col justify-center items-center w-10 h-10 rounded-lg border border-white/20 bg-white/5 text-white transition-all hover:border-white/50 hover:bg-white/10 lg:hidden"
               onClick={() => setMobileNavOpen((prev) => !prev)}
               aria-expanded={mobileNavOpen}
               aria-controls="mobile-nav-panel"
+              aria-label="Toggle navigation menu"
             >
               <span className="sr-only">Toggle navigation</span>
-              <span
-                className={`block h-0.5 w-6 bg-current transition ${mobileNavOpen ? "translate-y-1 rotate-45" : ""}`}
-              />
-              <span
-                className={`block h-0.5 w-6 bg-current transition ${mobileNavOpen ? "-translate-y-1 -rotate-45" : "mt-1"}`}
-              />
+              <div className="relative w-5 h-4 flex flex-col justify-between">
+                <span
+                  className={`block h-0.5 w-full bg-current transition-all duration-300 ease-in-out ${
+                    mobileNavOpen ? "translate-y-1.5 rotate-45" : ""
+                  }`}
+                />
+                <span
+                  className={`block h-0.5 w-full bg-current transition-all duration-300 ease-in-out ${
+                    mobileNavOpen ? "opacity-0" : "opacity-100"
+                  }`}
+                />
+                <span
+                  className={`block h-0.5 w-full bg-current transition-all duration-300 ease-in-out ${
+                    mobileNavOpen ? "-translate-y-1.5 -rotate-45" : ""
+                  }`}
+                />
+              </div>
             </button>
             <div className="hidden gap-8 text-xs font-medium uppercase tracking-[0.3em] text-slate-300 lg:flex">
               {navSections.map((section) => (
@@ -1912,6 +1924,32 @@ export default function Home() {
                 </svg>
               </button>
             )}
+            <div className="hidden lg:flex items-center gap-2 border-l border-white/10 pl-4">
+              <button
+                onClick={() => setLanguage('fr')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all ${
+                  language === 'fr'
+                    ? 'bg-white text-slate-900'
+                    : 'text-slate-300 hover:text-white hover:bg-white/10'
+                }`}
+                type="button"
+                aria-label="Switch to French"
+              >
+                FR
+              </button>
+              <button
+                onClick={() => setLanguage('en')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all ${
+                  language === 'en'
+                    ? 'bg-white text-slate-900'
+                    : 'text-slate-300 hover:text-white hover:bg-white/10'
+                }`}
+                type="button"
+                aria-label="Switch to English"
+              >
+                EN
+              </button>
+            </div>
             <GenderToggle value={gender} onChange={setGender} language={language} />
           </div>
         </div>
@@ -1920,26 +1958,119 @@ export default function Home() {
       {mobileNavOpen ? (
         <div
           id="mobile-nav-panel"
-          className="border-b border-white/10 bg-black/90 backdrop-blur lg:hidden"
+          className="fixed inset-0 top-[73px] z-40 bg-black/95 backdrop-blur-xl lg:hidden overflow-y-auto"
         >
-          <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-4 md:px-8">
-            {mobileNavSections.map((section) => (
-              <a
-                key={section}
-                href={`#${slug(section)}`}
-                onClick={(e) => {
-                  e.preventDefault();
-                  setMobileNavOpen(false);
-                  const element = document.getElementById(slug(section));
-                  if (element) {
-                    element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                  }
-                }}
-                className="rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-sm font-semibold uppercase tracking-[0.3em] text-slate-200 transition hover:border-white/40 hover:text-white cursor-pointer"
-              >
-                {copy.nav[slug(section) as keyof typeof copy.nav] ?? section}
-              </a>
-            ))}
+          <div className="mx-auto max-w-6xl px-4 py-6 md:px-8">
+            {/* Navigation Links */}
+            <div className="flex flex-col gap-2 mb-6">
+              {mobileNavSections.map((section) => (
+                <a
+                  key={section}
+                  href={`#${slug(section)}`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setMobileNavOpen(false);
+                    const element = document.getElementById(slug(section));
+                    if (element) {
+                      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                  }}
+                  className="group relative overflow-hidden rounded-xl border border-white/10 bg-gradient-to-r from-white/5 to-white/[0.02] px-6 py-4 text-base font-semibold uppercase tracking-[0.2em] text-slate-200 transition-all hover:border-blue-400/50 hover:text-white hover:shadow-lg hover:shadow-blue-500/10 cursor-pointer"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 via-blue-500/5 to-blue-500/0 opacity-0 transition-opacity group-hover:opacity-100" />
+                  <span className="relative z-10">{copy.nav[slug(section) as keyof typeof copy.nav] ?? section}</span>
+                </a>
+              ))}
+            </div>
+            
+            {/* User Section */}
+            {user ? (
+              <div className="flex flex-col gap-3 pt-6 border-t border-white/10">
+                <Link
+                  href="/account"
+                  onClick={() => setMobileNavOpen(false)}
+                  className="flex items-center gap-3 rounded-xl border border-white/10 bg-gradient-to-r from-blue-500/10 to-blue-600/5 px-6 py-4 text-white transition-all hover:border-blue-400/50 hover:shadow-lg hover:shadow-blue-500/20"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  <div className="flex-1 text-left">
+                    <div className="text-sm font-semibold">{language === 'fr' ? 'Paramètres du compte' : 'Account Settings'}</div>
+                    {userProfile?.displayName && (
+                      <div className="text-xs text-slate-400">{userProfile.displayName}</div>
+                    )}
+                  </div>
+                </Link>
+                <button
+                  onClick={() => {
+                    handleSignOut();
+                    setMobileNavOpen(false);
+                  }}
+                  className="flex items-center gap-3 rounded-xl border border-red-500/20 bg-gradient-to-r from-red-500/10 to-red-600/5 px-6 py-4 text-red-400 transition-all hover:border-red-400/50 hover:shadow-lg hover:shadow-red-500/20"
+                  type="button"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                  <span className="flex-1 text-left text-sm font-semibold">{language === 'fr' ? 'Se déconnecter' : 'Sign Out'}</span>
+                </button>
+              </div>
+            ) : (
+              <div className="pt-6 border-t border-white/10">
+                <button
+                  onClick={() => {
+                    setAuthModalOpen(true);
+                    setMobileNavOpen(false);
+                  }}
+                  className="w-full flex items-center justify-center gap-3 rounded-xl border border-white/20 bg-gradient-to-r from-white/10 to-white/5 px-6 py-4 text-white font-semibold transition-all hover:border-white/40 hover:bg-white/15 hover:shadow-lg hover:shadow-white/10"
+                  type="button"
+                >
+                  <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  <span>{language === 'fr' ? 'Se connecter / S\'inscrire' : 'Log In / Sign Up'}</span>
+                </button>
+              </div>
+            )}
+            
+            {/* Language & Gender Controls */}
+            <div className="flex flex-col gap-3 pt-6 border-t border-white/10">
+              <div>
+                <p className="text-xs uppercase tracking-wider text-slate-400 mb-2 px-2">{language === 'fr' ? 'Langue' : 'Language'}</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setLanguage('fr')}
+                    className={`flex-1 px-4 py-3 rounded-xl text-sm font-semibold uppercase tracking-wider transition-all ${
+                      language === 'fr'
+                        ? 'bg-white text-slate-900 shadow-lg'
+                        : 'bg-white/5 border border-white/10 text-slate-300 hover:border-white/30 hover:bg-white/10'
+                    }`}
+                    type="button"
+                  >
+                    🇫🇷 Français
+                  </button>
+                  <button
+                    onClick={() => setLanguage('en')}
+                    className={`flex-1 px-4 py-3 rounded-xl text-sm font-semibold uppercase tracking-wider transition-all ${
+                      language === 'en'
+                        ? 'bg-white text-slate-900 shadow-lg'
+                        : 'bg-white/5 border border-white/10 text-slate-300 hover:border-white/30 hover:bg-white/10'
+                    }`}
+                    type="button"
+                  >
+                    🇬🇧 English
+                  </button>
+                </div>
+              </div>
+              
+              <div>
+                <p className="text-xs uppercase tracking-wider text-slate-400 mb-2 px-2">{language === 'fr' ? 'Ligue' : 'League'}</p>
+                <div className="w-full">
+                  <GenderToggle value={gender} onChange={setGender} language={language} />
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       ) : null}

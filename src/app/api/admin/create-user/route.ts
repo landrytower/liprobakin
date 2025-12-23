@@ -6,7 +6,7 @@ import type { AdminRole } from '@/types/admin';
 import { mergePermissions } from '@/types/admin';
 
 // Initialize Firebase Admin (only once)
-if (!getApps().length) {
+if (!getApps().length && process.env.FIREBASE_PROJECT_ID) {
   // For production, use environment variables
   // For now, you'll need to add your service account
   initializeApp({

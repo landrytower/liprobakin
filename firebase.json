@@ -1,11 +1,19 @@
 {
-  "hosting": [
-    {
-      "site": "ppop-35930",
-      "source": ".",
-      "frameworksBackend": {}
-    }
-  ],
+  "hosting": {
+    "site": "ppop-35930",
+    "public": "public",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/hosted/index.html"
+      }
+    ]
+  },
   "storage": {
     "rules": "storage.rules"
   }

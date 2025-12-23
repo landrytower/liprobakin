@@ -7,6 +7,7 @@ import Link from "next/link";
 import { collection, query, orderBy, limit, getDocs } from "firebase/firestore";
 import { firebaseDB } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import AuthModal from "@/components/AuthModal";
 import PlayerProfilePopup from "@/components/PlayerProfilePopup";
 
@@ -36,10 +37,13 @@ type EnhancedMatchup = FeaturedMatchup & {
 
 type NewsArticle = {
   id: string;
-  title: string;
-  summary: string;
+  title: string; // French (base/default)
+  title_en?: string; // English translation
+  summary: string; // French (base/default)
+  summary_en?: string; // English translation
   category: string;
-  headline: string;
+  headline: string; // French (base/default)
+  headline_en?: string; // English translation
   imageUrl?: string;
   createdAt: Date | null;
 };
@@ -759,7 +763,10 @@ const PlayerStatsModal = ({ player, onClose }: { player: SpotlightPlayer; onClos
 
 export default function Home() {
   const { user, userProfile, signOut: handleSignOut } = useAuth();
-  const [language, setLanguage] = useState<Locale>("fr");
+  const { language, setLanguage } = useLanguage();
+  
+  console.log('Current language:', language);
+  
   const [selectedTeam, setSelectedTeam] = useState<SelectedTeamState>(null);
   const [selectedPlayer, setSelectedPlayer] = useState<SpotlightPlayer | null>(null);
   const [playerMetric, setPlayerMetric] = useState<PlayerMetric>("pts");
@@ -919,17 +926,28 @@ export default function Home() {
         
         const articles: NewsArticle[] = newsSnapshot.docs.map((doc) => {
           const data = doc.data();
+          console.log('News article data:', { 
+            id: doc.id, 
+            title: data.title, 
+            title_en: data.title_en,
+            headline: data.headline,
+            headline_en: data.headline_en
+          });
           return {
             id: doc.id,
-            title: data.title || "",
-            summary: data.summary || "",
+            title: data.title || "", // French (default)
+            title_en: data.title_en || "", // English
+            summary: data.summary || "", // French (default)
+            summary_en: data.summary_en || "", // English
             category: data.category || "News",
-            headline: data.headline || "",
+            headline: data.headline || "", // French (default)
+            headline_en: data.headline_en || "", // English
             imageUrl: data.imageUrl,
             createdAt: data.createdAt?.toDate() || null,
           };
         });
         
+        console.log('Total articles fetched:', articles.length);
         setNewsArticles(articles);
         if (articles.length > 0) {
           setFeaturedArticleId(articles[0].id);
@@ -2031,16 +2049,16 @@ export default function Home() {
                                   </span>
                                   
                                   <h3 className="mb-1 md:mb-1.5 text-[10px] md:text-xs font-bold leading-tight text-white group-hover:text-orange-500 transition-colors line-clamp-2">
-                                    {article.title}
+                                    {language === 'en' ? (article.title_en || article.title) : article.title}
                                   </h3>
                                   
                                   <p className="text-[9px] md:text-[11px] text-slate-400 line-clamp-2">
-                                    {article.headline}
+                                    {language === 'en' ? (article.headline_en || article.headline) : article.headline}
                                   </p>
                                   
                                   {article.createdAt && (
                                     <p className="mt-1 md:mt-1.5 text-[9px] md:text-[10px] text-slate-500">
-                                      {new Intl.DateTimeFormat("fr-FR", {
+                                      {new Intl.DateTimeFormat(language === 'fr' ? "fr-FR" : "en-US", {
                                         month: "short",
                                         day: "numeric",
                                       }).format(article.createdAt)}
@@ -2063,11 +2081,11 @@ export default function Home() {
                           </span>
                           
                           <h1 className="mb-2 text-2xl font-bold leading-tight text-white md:text-3xl lg:text-4xl max-w-4xl line-clamp-2">
-                            {featured.title}
+                            {language === 'en' && featured.title_en ? featured.title_en : featured.title}
                           </h1>
                           
                           <p className="mb-2 text-sm md:text-base text-slate-200 max-w-3xl line-clamp-2">
-                            {featured.headline}
+                            {language === 'en' && featured.headline_en ? featured.headline_en : featured.headline}
                           </p>
                           
                           {featured.createdAt && (
@@ -2123,7 +2141,7 @@ export default function Home() {
                                 {/* Article content with custom scrollbar */}
                                 <div className="max-h-[500px] overflow-y-auto pr-4 custom-scrollbar">
                                   <p className="text-sm md:text-base leading-relaxed text-slate-200 whitespace-pre-line">
-                                    {featured.summary}
+                                    {language === 'en' && featured.summary_en ? featured.summary_en : featured.summary}
                                   </p>
                                 </div>
 
@@ -2501,7 +2519,7 @@ export default function Home() {
                         </div>
                         <div className="text-right">
                           <p className="text-[10px] sm:text-xs text-slate-400">
-                            {game.dateObj ? new Intl.DateTimeFormat("en-US", {
+                            {game.dateObj ? new Intl.DateTimeFormat(language === 'fr' ? "fr-FR" : "en-US", {
                               month: "short",
                               day: "numeric",
                             }).format(game.dateObj) : ""}

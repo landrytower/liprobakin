@@ -1997,8 +1997,8 @@ export default function Home() {
                   </svg>
                   <div className="flex-1 text-left">
                     <div className="text-sm font-semibold">{language === 'fr' ? 'Paramètres du compte' : 'Account Settings'}</div>
-                    {userProfile?.displayName && (
-                      <div className="text-xs text-slate-400">{userProfile.displayName}</div>
+                    {(userProfile?.firstName || userProfile?.lastName) && (
+                      <div className="text-xs text-slate-400">{`${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim()}</div>
                     )}
                   </div>
                 </Link>

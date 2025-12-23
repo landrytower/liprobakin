@@ -933,6 +933,10 @@ export default function Home() {
             headline: data.headline,
             headline_en: data.headline_en
           });
+          
+          // Check if title appears to be in English (simple check)
+          const titleIsEnglish = data.title && /^[A-Za-z\s]+$/.test(data.title.substring(0, 50));
+          
           return {
             id: doc.id,
             title: data.title || "", // French (default)

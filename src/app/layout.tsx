@@ -17,17 +17,31 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Liprobakin League",
   description: "Official Liprobakin basketball showcase inspired by the NBA G League layout.",
-  metadataBase: new URL("https://liprobakin.local"),
+  metadataBase: new URL("https://liprobakin.com"),
+  icons: {
+    icon: "/logos/liprobakin.png",
+    shortcut: "/logos/liprobakin.png",
+    apple: "/logos/liprobakin.png",
+  },
   openGraph: {
     title: "Liprobakin League",
     description: "Scores, news, stats, and standings across the Liprobakin basketball association.",
-    url: "https://liprobakin.local",
+    url: "https://liprobakin.com",
     siteName: "Liprobakin",
+    images: [
+      {
+        url: "/logos/liprobakin.png",
+        width: 1200,
+        height: 630,
+        alt: "Liprobakin League",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "Liprobakin League",
     description: "Players, games, and stories shaping the Liprobakin season.",
+    images: ["/logos/liprobakin.png"],
   },
 };
 

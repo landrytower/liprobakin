@@ -335,10 +335,13 @@ export default function GamePage() {
                 {pointsLeader && pointsLeader.pts > 0 && (
                   <div>
                     <h3 className="mb-4 text-base sm:text-lg font-bold uppercase tracking-wider text-slate-300">{t.gameLeaders}</h3>
-                    <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                    <div className="grid gap-3 sm:gap-4 grid-cols-3">
                       {/* Points Leader */}
                       <div className="rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent p-3 sm:p-4 overflow-hidden">
-                        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">{t.points}</p>
+                        <div className="mb-3 flex items-center justify-between">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{t.points}</p>
+                          <div className="text-xl sm:text-2xl font-black text-white/90">{pointsLeader.pts}</div>
+                        </div>
                         <div className="flex items-center gap-2 sm:gap-3">
                           {pointsLeader.headshot && (
                             <div className="w-10 h-10 sm:w-12 sm:h-12 flex-shrink-0">
@@ -346,15 +349,17 @@ export default function GamePage() {
                             </div>
                           )}
                           <div className="flex-1 min-w-0">
-                            <p className="font-semibold truncate text-sm sm:text-base"><span className="text-slate-400">#{pointsLeader.number}</span> {pointsLeader.lastName}</p>
+                            <p className="font-semibold truncate text-sm sm:text-base">{pointsLeader.lastName}</p>
                           </div>
-                          <div className="text-xl sm:text-2xl font-black text-white/90 flex-shrink-0">{pointsLeader.pts}</div>
                         </div>
                       </div>
 
                       {/* Rebounds Leader */}
                       <div className="rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent p-3 sm:p-4 overflow-hidden">
-                        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">{t.rebounds}</p>
+                        <div className="mb-3 flex items-center justify-between">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{t.rebounds}</p>
+                          <div className="text-xl sm:text-2xl font-black text-white/90">{reboundsLeader.reb}</div>
+                        </div>
                         <div className="flex items-center gap-2 sm:gap-3">
                           {reboundsLeader.headshot && (
                             <div className="w-10 h-10 sm:w-12 sm:h-12 flex-shrink-0">
@@ -362,15 +367,17 @@ export default function GamePage() {
                             </div>
                           )}
                           <div className="flex-1 min-w-0">
-                            <p className="font-semibold truncate text-sm sm:text-base"><span className="text-slate-400">#{reboundsLeader.number}</span> {reboundsLeader.lastName}</p>
+                            <p className="font-semibold truncate text-sm sm:text-base">{reboundsLeader.lastName}</p>
                           </div>
-                          <div className="text-xl sm:text-2xl font-black text-white/90 flex-shrink-0">{reboundsLeader.reb}</div>
                         </div>
                       </div>
 
                       {/* Assists Leader */}
                       <div className="rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent p-3 sm:p-4 overflow-hidden">
-                        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">{t.assists}</p>
+                        <div className="mb-3 flex items-center justify-between">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{t.assists}</p>
+                          <div className="text-xl sm:text-2xl font-black text-white/90">{assistsLeader.ast}</div>
+                        </div>
                         <div className="flex items-center gap-2 sm:gap-3">
                           {assistsLeader.headshot && (
                             <div className="w-10 h-10 sm:w-12 sm:h-12 flex-shrink-0">
@@ -378,9 +385,8 @@ export default function GamePage() {
                             </div>
                           )}
                           <div className="flex-1 min-w-0">
-                            <p className="font-semibold truncate text-sm sm:text-base"><span className="text-slate-400">#{assistsLeader.number}</span> {assistsLeader.lastName}</p>
+                            <p className="font-semibold truncate text-sm sm:text-base">{assistsLeader.lastName}</p>
                           </div>
-                          <div className="text-xl sm:text-2xl font-black text-white/90 flex-shrink-0">{assistsLeader.ast}</div>
                         </div>
                       </div>
                     </div>
@@ -472,7 +478,7 @@ export default function GamePage() {
                       <tbody className="divide-y divide-white/5">
                         {awayStats.map((player) => (
                           <tr key={player.playerId} className="hover:bg-white/5">
-                            <td className="p-2 sm:p-3 sticky left-0 bg-slate-900/95">
+                            <td className="p-2 sm:p-3 sticky left-0 bg-slate-900 w-1 whitespace-nowrap z-10">
                               <div className="flex items-center gap-2">
                                 {player.headshot && (
                                   <div className="w-7 h-7 sm:w-8 sm:h-8 flex-shrink-0">
@@ -480,7 +486,7 @@ export default function GamePage() {
                                   </div>
                                 )}
                                 <div className="min-w-0">
-                                  <p className="font-medium text-xs sm:text-sm truncate">
+                                  <p className="font-medium text-xs sm:text-sm">
                                     <span className="text-slate-400">#{player.number}</span> {player.lastName}
                                   </p>
                                 </div>
@@ -509,7 +515,7 @@ export default function GamePage() {
                     <table className="w-full min-w-[600px]">
                       <thead className="border-b border-white/10 bg-white/5">
                         <tr className="text-xs uppercase text-slate-400">
-                          <th className="p-2 sm:p-3 text-left font-semibold sticky left-0 bg-white/5">{t.player}</th>
+                          <th className="p-2 sm:p-3 text-left font-semibold sticky left-0 bg-white/5 w-1 whitespace-nowrap">{t.player}</th>
                           <th className="p-2 sm:p-3 text-center font-semibold">{t.pts}</th>
                           <th className="p-2 sm:p-3 text-center font-semibold">{t.reb}</th>
                           <th className="p-2 sm:p-3 text-center font-semibold">{t.ast}</th>
@@ -521,7 +527,7 @@ export default function GamePage() {
                       <tbody className="divide-y divide-white/5">
                         {homeStats.map((player) => (
                           <tr key={player.playerId} className="hover:bg-white/5">
-                            <td className="p-2 sm:p-3 sticky left-0 bg-slate-900/95">
+                            <td className="p-2 sm:p-3 sticky left-0 bg-slate-900 w-1 whitespace-nowrap z-10">
                               <div className="flex items-center gap-2">
                                 {player.headshot && (
                                   <div className="w-7 h-7 sm:w-8 sm:h-8 flex-shrink-0">
@@ -529,7 +535,7 @@ export default function GamePage() {
                                   </div>
                                 )}
                                 <div className="min-w-0">
-                                  <p className="font-medium text-xs sm:text-sm truncate">
+                                  <p className="font-medium text-xs sm:text-sm">
                                     <span className="text-slate-400">#{player.number}</span> {player.lastName}
                                   </p>
                                 </div>

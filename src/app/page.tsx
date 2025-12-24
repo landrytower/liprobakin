@@ -146,7 +146,12 @@ const formatGameDateTime = (dateTimeStr: string, language: Locale): string => {
     }
   }
   
-  return `${month}/${day}, ${formattedTime}`;
+  // Format date based on language
+  const dateStr = language === 'fr' 
+    ? `${day}/${month}` // French: day/month (25/12)
+    : `${month}/${day}`; // English: month/day (12/25)
+  
+  return `${dateStr}, ${formattedTime}`;
 };
 
 const translations = {
@@ -2101,15 +2106,18 @@ export default function Home() {
             
             return (
               <div className="space-y-8">
+                {/* Click-away backdrop when expanded */}
+                {isExpanded && (
+                  <div 
+                    className="fixed inset-0 bg-black/50 z-40 cursor-pointer"
+                    onClick={() => setExpandedArticleId(null)}
+                    aria-label="Close article"
+                  />
+                )}
+                
                 {/* Featured Article */}
                 <div 
-                  className={`relative overflow-hidden border-y border-white/10 bg-gradient-to-br from-slate-900/80 to-slate-950/90 transition-opacity duration-300 ${isArticleChanging ? 'opacity-0' : 'opacity-100'}`}
-                  onClick={(e) => {
-                    // Close expanded article when clicking on the background
-                    if (isExpanded && e.target === e.currentTarget) {
-                      setExpandedArticleId(null);
-                    }
-                  }}
+                  className={`relative overflow-hidden border-y border-white/10 bg-gradient-to-br from-slate-900/80 to-slate-950/90 transition-opacity duration-300 ${isArticleChanging ? 'opacity-0' : 'opacity-100'} ${isExpanded ? 'z-50' : ''}`}
                 >
                   {featured.imageUrl && (
                     <div className={`relative overflow-hidden transition-all duration-500 ${isExpanded ? 'min-h-[600px]' : 'h-[600px]'}`}>
@@ -2784,7 +2792,7 @@ export default function Home() {
                 <p className="mt-2 text-sm text-slate-500">Check back after games are finished!</p>
               </div>
             ) : (
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-4 grid-cols-2 sm:grid-cols-2">
                 {completedGames.map((game) => {
                   const homeWon = game.winnerTeamId === game.homeTeamId;
                   const awayWon = game.winnerTeamId === game.awayTeamId;

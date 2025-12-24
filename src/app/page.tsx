@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import type { ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
@@ -798,6 +798,8 @@ export default function Home() {
   const [nextGame, setNextGame] = useState<EnhancedMatchup | null>(null);
   const [liveGames, setLiveGames] = useState<EnhancedMatchup[]>([]);
   const [showProfilePopup, setShowProfilePopup] = useState(false);
+  const [scheduleStartIndex, setScheduleStartIndex] = useState(0);
+  const scheduleScrollRef = useRef<HTMLDivElement>(null);
   const copy = translations[language];
   const sectionCopy = copy.sections;
   const languageOptions: Locale[] = ["en", "fr"];
@@ -2650,14 +2652,18 @@ export default function Home() {
             eyebrow={sectionCopy.schedule.eyebrow}
             title={sectionCopy.schedule.title}
           />
-          <div className="rounded-3xl border border-white/10 bg-slate-950/70 p-6">
-            <div className="space-y-4">
-              {weeklyScheduleGames.length === 0 ? (
-                <div className="py-8 text-center">
-                  <p className="text-slate-400">{language === 'fr' ? "Aucun match n'est encore prévu." : "No games scheduled yet."}</p>
-                </div>
-              ) : (
-                weeklyScheduleGames.slice(0, 5).map((game) => (
+          <div className="relative">
+            <div className="rounded-3xl border border-white/10 bg-slate-950/70 p-6">
+              <div 
+                ref={scheduleScrollRef}
+                className="space-y-4 max-h-[600px] md:max-h-[700px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-slate-900 scroll-smooth"
+              >
+                {weeklyScheduleGames.length === 0 ? (
+                  <div className="py-8 text-center">
+                    <p className="text-slate-400">{language === 'fr' ? "Aucun match n'est encore prévu." : "No games scheduled yet."}</p>
+                  </div>
+                ) : (
+                  weeklyScheduleGames.map((game) => (
                   <div
                     key={game.id}
                     className="rounded-2xl border border-white/5 bg-black/30 p-3 sm:p-4"
@@ -2680,9 +2686,9 @@ export default function Home() {
                       </div>
                       
                       {/* Bottom Row: Teams Section - Compact horizontal layout */}
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center justify-between gap-2">
                         {/* Away Team */}
-                        <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 min-w-0">
                           {game.awayTeamLogo && (
                             <Image
                               src={game.awayTeamLogo}
@@ -2699,7 +2705,8 @@ export default function Home() {
                         <span className="text-[10px] uppercase tracking-wider text-slate-500 flex-shrink-0 px-1">vs</span>
                         
                         {/* Home Team */}
-                        <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-xs md:text-sm font-medium text-white truncate">{game.home.team}</span>
                           {game.homeTeamLogo && (
                             <Image
                               src={game.homeTeamLogo}
@@ -2709,7 +2716,6 @@ export default function Home() {
                               className="h-6 w-6 rounded-full border border-white/10 object-cover flex-shrink-0"
                             />
                           )}
-                          <span className="text-xs md:text-sm font-medium text-white truncate">{game.home.team}</span>
                         </div>
                       </div>
                     </div>
@@ -2718,6 +2724,35 @@ export default function Home() {
               )}
             </div>
           </div>
+          
+          {/* Down Arrow Button - Desktop only */}
+          {weeklyScheduleGames.length > 7 && (
+            <div className="hidden md:flex justify-center mt-4">
+              <button
+                onClick={() => {
+                  if (scheduleScrollRef.current) {
+                    const container = scheduleScrollRef.current;
+                    const scrollHeight = container.scrollHeight;
+                    const clientHeight = container.clientHeight;
+                    const scrollTop = container.scrollTop;
+                    
+                    // Scroll down by approximately one game card height (around 100px)
+                    container.scrollTo({
+                      top: Math.min(scrollTop + 120, scrollHeight - clientHeight),
+                      behavior: 'smooth'
+                    });
+                  }
+                }}
+                className="flex items-center justify-center w-12 h-12 rounded-full bg-white/10 border border-white/20 text-white hover:bg-white/20 transition-all hover:translate-y-1 animate-bounce"
+                aria-label="Show more games"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+            </div>
+          )}
+        </div>
         </section>
 
         {/* Final Buzzer Section */}

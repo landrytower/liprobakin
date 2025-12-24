@@ -63,6 +63,7 @@ const translations = {
     home: "Home",
     overview: "Overview",
     boxScore: "Box Score",
+    pictures: "Pictures",
     gameLeaders: "Game Leaders",
     points: "Points",
     rebounds: "Rebounds",
@@ -87,6 +88,7 @@ const translations = {
     home: "Domicile",
     overview: "Aperçu",
     boxScore: "Feuille de Match",
+    pictures: "Photos",
     gameLeaders: "Meilleurs Joueurs",
     points: "Points",
     rebounds: "Rebonds",
@@ -111,7 +113,7 @@ export default function GamePage() {
   const t = translations[language];
   const [game, setGame] = useState<GameData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"overview" | "boxscore">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "boxscore" | "pictures">("overview");
 
   useEffect(() => {
     const fetchGame = async () => {
@@ -314,6 +316,16 @@ export default function GamePage() {
               >
                 {t.boxScore}
               </button>
+              <button
+                onClick={() => setActiveTab("pictures")}
+                className={`pb-3 px-1 text-sm font-semibold uppercase tracking-wider transition border-b-2 ${
+                  activeTab === "pictures" 
+                    ? "border-orange-500 text-white" 
+                    : "border-transparent text-slate-400 hover:text-white"
+                }`}
+              >
+                {t.pictures}
+              </button>
             </div>
 
             {/* Overview Tab */}
@@ -322,56 +334,53 @@ export default function GamePage() {
                 {/* Game Leaders */}
                 {pointsLeader && pointsLeader.pts > 0 && (
                   <div>
-                    <h3 className="mb-4 text-lg font-bold uppercase tracking-wider text-slate-300">{t.gameLeaders}</h3>
-                    <div className="grid gap-4 md:grid-cols-3">
+                    <h3 className="mb-4 text-base sm:text-lg font-bold uppercase tracking-wider text-slate-300">{t.gameLeaders}</h3>
+                    <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                       {/* Points Leader */}
-                      <div className="rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent p-4 overflow-hidden">
+                      <div className="rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent p-3 sm:p-4 overflow-hidden">
                         <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">{t.points}</p>
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2 sm:gap-3">
                           {pointsLeader.headshot && (
-                            <div className="w-12 h-12 flex-shrink-0">
+                            <div className="w-10 h-10 sm:w-12 sm:h-12 flex-shrink-0">
                               <Image src={pointsLeader.headshot} alt={pointsLeader.playerName} width={48} height={48} className="rounded-full object-cover w-full h-full" />
                             </div>
                           )}
-                          <div className="flex-1">
-                            <p className="font-semibold">{pointsLeader.playerName}</p>
-                            <p className="text-xs text-slate-400">#{pointsLeader.number}</p>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold truncate text-sm sm:text-base"><span className="text-slate-400">#{pointsLeader.number}</span> {pointsLeader.lastName}</p>
                           </div>
-                          <div className="text-2xl font-black text-orange-400">{pointsLeader.pts}</div>
+                          <div className="text-xl sm:text-2xl font-black text-white/90 flex-shrink-0">{pointsLeader.pts}</div>
                         </div>
                       </div>
 
                       {/* Rebounds Leader */}
-                      <div className="rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent p-4 overflow-hidden">
+                      <div className="rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent p-3 sm:p-4 overflow-hidden">
                         <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">{t.rebounds}</p>
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2 sm:gap-3">
                           {reboundsLeader.headshot && (
-                            <div className="w-12 h-12 flex-shrink-0">
+                            <div className="w-10 h-10 sm:w-12 sm:h-12 flex-shrink-0">
                               <Image src={reboundsLeader.headshot} alt={reboundsLeader.playerName} width={48} height={48} className="rounded-full object-cover w-full h-full" />
                             </div>
                           )}
-                          <div className="flex-1">
-                            <p className="font-semibold">{reboundsLeader.playerName}</p>
-                            <p className="text-xs text-slate-400">#{reboundsLeader.number}</p>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold truncate text-sm sm:text-base"><span className="text-slate-400">#{reboundsLeader.number}</span> {reboundsLeader.lastName}</p>
                           </div>
-                          <div className="text-2xl font-black text-blue-400">{reboundsLeader.reb}</div>
+                          <div className="text-xl sm:text-2xl font-black text-white/90 flex-shrink-0">{reboundsLeader.reb}</div>
                         </div>
                       </div>
 
                       {/* Assists Leader */}
-                      <div className="rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent p-4 overflow-hidden">
+                      <div className="rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent p-3 sm:p-4 overflow-hidden">
                         <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">{t.assists}</p>
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2 sm:gap-3">
                           {assistsLeader.headshot && (
-                            <div className="w-12 h-12 flex-shrink-0">
+                            <div className="w-10 h-10 sm:w-12 sm:h-12 flex-shrink-0">
                               <Image src={assistsLeader.headshot} alt={assistsLeader.playerName} width={48} height={48} className="rounded-full object-cover w-full h-full" />
                             </div>
                           )}
-                          <div className="flex-1">
-                            <p className="font-semibold">{assistsLeader.playerName}</p>
-                            <p className="text-xs text-slate-400">#{assistsLeader.number}</p>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold truncate text-sm sm:text-base"><span className="text-slate-400">#{assistsLeader.number}</span> {assistsLeader.lastName}</p>
                           </div>
-                          <div className="text-2xl font-black text-green-400">{assistsLeader.ast}</div>
+                          <div className="text-xl sm:text-2xl font-black text-white/90 flex-shrink-0">{assistsLeader.ast}</div>
                         </div>
                       </div>
                     </div>
@@ -380,8 +389,8 @@ export default function GamePage() {
 
                 {/* Team Stats Comparison */}
                 <div>
-                  <h3 className="mb-4 text-lg font-bold uppercase tracking-wider text-slate-300">{t.teamStats}</h3>
-                  <div className="space-y-4 rounded-xl border border-white/10 bg-white/5 p-6 overflow-hidden">
+                  <h3 className="mb-4 text-base sm:text-lg font-bold uppercase tracking-wider text-slate-300">{t.teamStats}</h3>
+                  <div className="space-y-4 rounded-xl border border-white/10 bg-white/5 p-4 sm:p-6 overflow-hidden">
                     {/* FG% */}
                     <div>
                       <div className="mb-2 flex items-center justify-between text-sm">
@@ -440,51 +449,49 @@ export default function GamePage() {
 
             {/* Box Score Tab */}
             {activeTab === "boxscore" && (
-              <div className="space-y-8">
+              <div className="space-y-6 sm:space-y-8">
                 {/* Away Team */}
                 <div>
-                  <h3 className="mb-4 flex items-center gap-2 text-lg font-bold">
-                    {game.awayTeamLogo && <Image src={game.awayTeamLogo} alt="" width={32} height={32} className="rounded-full border-2 border-white/20 object-cover" />}
-                    {game.awayTeamName}
+                  <h3 className="mb-3 sm:mb-4 flex items-center gap-2 text-base sm:text-lg font-bold">
+                    {game.awayTeamLogo && <Image src={game.awayTeamLogo} alt="" width={32} height={32} className="w-6 h-6 sm:w-8 sm:h-8 rounded-full border-2 border-white/20 object-cover" />}
+                    <span className="truncate">{game.awayTeamName}</span>
                   </h3>
-                  <div className="overflow-x-auto rounded-xl border border-white/10">
-                    <table className="w-full">
+                  <div className="overflow-x-auto rounded-xl border border-white/10 -mx-4 sm:mx-0">
+                    <table className="w-full min-w-[600px]">
                       <thead className="border-b border-white/10 bg-white/5">
                         <tr className="text-xs uppercase text-slate-400">
-                          <th className="p-3 text-left font-semibold">{t.player}</th>
-                          <th className="p-3 text-center font-semibold">{t.pts}</th>
-                          <th className="p-3 text-center font-semibold">{t.reb}</th>
-                          <th className="p-3 text-center font-semibold">{t.ast}</th>
-                          <th className="p-3 text-center font-semibold">{t.fg}</th>
-                          <th className="p-3 text-center font-semibold">{t.threeP}</th>
-                          <th className="p-3 text-center font-semibold">{t.ft}</th>
+                          <th className="p-2 sm:p-3 text-left font-semibold sticky left-0 bg-white/5">{t.player}</th>
+                          <th className="p-2 sm:p-3 text-center font-semibold">{t.pts}</th>
+                          <th className="p-2 sm:p-3 text-center font-semibold">{t.reb}</th>
+                          <th className="p-2 sm:p-3 text-center font-semibold">{t.ast}</th>
+                          <th className="p-2 sm:p-3 text-center font-semibold">{t.fg}</th>
+                          <th className="p-2 sm:p-3 text-center font-semibold">{t.threeP}</th>
+                          <th className="p-2 sm:p-3 text-center font-semibold">{t.ft}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/5">
                         {awayStats.map((player) => (
                           <tr key={player.playerId} className="hover:bg-white/5">
-                            <td className="p-3">
+                            <td className="p-2 sm:p-3 sticky left-0 bg-slate-900/95">
                               <div className="flex items-center gap-2">
                                 {player.headshot && (
-                                  <div className="w-8 h-8 flex-shrink-0">
+                                  <div className="w-7 h-7 sm:w-8 sm:h-8 flex-shrink-0">
                                     <Image src={player.headshot} alt="" width={32} height={32} className="rounded-full object-cover w-full h-full" />
                                   </div>
                                 )}
-                                <div>
-                                  <p className="font-medium">
-                                    <span className="md:hidden">{player.lastName}</span>
-                                    <span className="hidden md:inline">{player.playerName}</span>
+                                <div className="min-w-0">
+                                  <p className="font-medium text-xs sm:text-sm truncate">
+                                    <span className="text-slate-400">#{player.number}</span> {player.lastName}
                                   </p>
-                                  <p className="text-xs text-slate-500">#{player.number}</p>
                                 </div>
                               </div>
                             </td>
-                            <td className="p-3 text-center font-bold">{player.pts}</td>
-                            <td className="p-3 text-center">{player.reb}</td>
-                            <td className="p-3 text-center">{player.ast}</td>
-                            <td className="p-3 text-center text-sm">{player.two_pm + player.three_pm}-{player.two_pa + player.three_pa}</td>
-                            <td className="p-3 text-center text-sm">{player.three_pm}-{player.three_pa}</td>
-                            <td className="p-3 text-center text-sm">{player.ft_m}-{player.ft_a}</td>
+                            <td className="p-2 sm:p-3 text-center font-bold text-sm sm:text-base">{player.pts}</td>
+                            <td className="p-2 sm:p-3 text-center text-sm">{player.reb}</td>
+                            <td className="p-2 sm:p-3 text-center text-sm">{player.ast}</td>
+                            <td className="p-2 sm:p-3 text-center text-xs sm:text-sm">{player.two_pm + player.three_pm}-{player.two_pa + player.three_pa}</td>
+                            <td className="p-2 sm:p-3 text-center text-xs sm:text-sm">{player.three_pm}-{player.three_pa}</td>
+                            <td className="p-2 sm:p-3 text-center text-xs sm:text-sm">{player.ft_m}-{player.ft_a}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -494,53 +501,77 @@ export default function GamePage() {
 
                 {/* Home Team */}
                 <div>
-                  <h3 className="mb-4 flex items-center gap-2 text-lg font-bold">
-                    {game.homeTeamLogo && <Image src={game.homeTeamLogo} alt="" width={32} height={32} className="rounded-full border-2 border-white/20 object-cover" />}
-                    {game.homeTeamName}
+                  <h3 className="mb-3 sm:mb-4 flex items-center gap-2 text-base sm:text-lg font-bold">
+                    {game.homeTeamLogo && <Image src={game.homeTeamLogo} alt="" width={32} height={32} className="w-6 h-6 sm:w-8 sm:h-8 rounded-full border-2 border-white/20 object-cover" />}
+                    <span className="truncate">{game.homeTeamName}</span>
                   </h3>
-                  <div className="overflow-x-auto rounded-xl border border-white/10">
-                    <table className="w-full">
+                  <div className="overflow-x-auto rounded-xl border border-white/10 -mx-4 sm:mx-0">
+                    <table className="w-full min-w-[600px]">
                       <thead className="border-b border-white/10 bg-white/5">
                         <tr className="text-xs uppercase text-slate-400">
-                          <th className="p-3 text-left font-semibold">{t.player}</th>
-                          <th className="p-3 text-center font-semibold">{t.pts}</th>
-                          <th className="p-3 text-center font-semibold">{t.reb}</th>
-                          <th className="p-3 text-center font-semibold">{t.ast}</th>
-                          <th className="p-3 text-center font-semibold">{t.fg}</th>
-                          <th className="p-3 text-center font-semibold">{t.threeP}</th>
-                          <th className="p-3 text-center font-semibold">{t.ft}</th>
+                          <th className="p-2 sm:p-3 text-left font-semibold sticky left-0 bg-white/5">{t.player}</th>
+                          <th className="p-2 sm:p-3 text-center font-semibold">{t.pts}</th>
+                          <th className="p-2 sm:p-3 text-center font-semibold">{t.reb}</th>
+                          <th className="p-2 sm:p-3 text-center font-semibold">{t.ast}</th>
+                          <th className="p-2 sm:p-3 text-center font-semibold">{t.fg}</th>
+                          <th className="p-2 sm:p-3 text-center font-semibold">{t.threeP}</th>
+                          <th className="p-2 sm:p-3 text-center font-semibold">{t.ft}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/5">
                         {homeStats.map((player) => (
                           <tr key={player.playerId} className="hover:bg-white/5">
-                            <td className="p-3">
+                            <td className="p-2 sm:p-3 sticky left-0 bg-slate-900/95">
                               <div className="flex items-center gap-2">
                                 {player.headshot && (
-                                  <div className="w-8 h-8 flex-shrink-0">
+                                  <div className="w-7 h-7 sm:w-8 sm:h-8 flex-shrink-0">
                                     <Image src={player.headshot} alt="" width={32} height={32} className="rounded-full object-cover w-full h-full" />
                                   </div>
                                 )}
-                                <div>
-                                  <p className="font-medium">
-                                    <span className="md:hidden">{player.lastName}</span>
-                                    <span className="hidden md:inline">{player.playerName}</span>
+                                <div className="min-w-0">
+                                  <p className="font-medium text-xs sm:text-sm truncate">
+                                    <span className="text-slate-400">#{player.number}</span> {player.lastName}
                                   </p>
-                                  <p className="text-xs text-slate-500">#{player.number}</p>
                                 </div>
                               </div>
                             </td>
-                            <td className="p-3 text-center font-bold">{player.pts}</td>
-                            <td className="p-3 text-center">{player.reb}</td>
-                            <td className="p-3 text-center">{player.ast}</td>
-                            <td className="p-3 text-center text-sm">{player.two_pm + player.three_pm}-{player.two_pa + player.three_pa}</td>
-                            <td className="p-3 text-center text-sm">{player.three_pm}-{player.three_pa}</td>
-                            <td className="p-3 text-center text-sm">{player.ft_m}-{player.ft_a}</td>
+                            <td className="p-2 sm:p-3 text-center font-bold text-sm sm:text-base">{player.pts}</td>
+                            <td className="p-2 sm:p-3 text-center text-sm">{player.reb}</td>
+                            <td className="p-2 sm:p-3 text-center text-sm">{player.ast}</td>
+                            <td className="p-2 sm:p-3 text-center text-xs sm:text-sm">{player.two_pm + player.three_pm}-{player.two_pa + player.three_pa}</td>
+                            <td className="p-2 sm:p-3 text-center text-xs sm:text-sm">{player.three_pm}-{player.three_pa}</td>
+                            <td className="p-2 sm:p-3 text-center text-xs sm:text-sm">{player.ft_m}-{player.ft_a}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* Pictures Tab */}
+            {activeTab === "pictures" && (
+              <div className="space-y-6">
+                <div className="rounded-xl border border-white/10 bg-white/5 p-8 text-center">
+                  <div className="mb-6">
+                    <svg className="mx-auto h-16 w-16 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <h3 className="mb-2 text-xl font-bold text-white">
+                    {language === 'fr' ? 'Photos du Match' : 'Game Pictures'}
+                  </h3>
+                  <p className="text-sm text-slate-400 mb-6">
+                    {language === 'fr' 
+                      ? 'Les photos de ce match seront affichées ici.' 
+                      : 'Game pictures will be displayed here.'}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {language === 'fr' 
+                      ? 'Les administrateurs peuvent télécharger des photos via le panneau d\'administration.' 
+                      : 'Administrators can upload pictures via the admin panel.'}
+                  </p>
                 </div>
               </div>
             )}

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
 // Initialize Firebase Admin (only once)
 if (!getApps().length && process.env.FIREBASE_PROJECT_ID) {
@@ -62,8 +62,39 @@ export async function POST(request: NextRequest) {
       // Continue even if auth deletion fails (user might already be deleted)
     }
 
+    // Get info before deletion for audit log
+    const targetEmail = targetDoc.exists ? targetDoc.data()?.email : 'unknown';
+    const targetName = targetDoc.exists ? targetDoc.data()?.displayName : 'unknown';
+    const deleterEmail = deleterDoc.data()?.email || 'unknown';
+
     // Delete from Firestore
     await db.collection('adminUsers').doc(targetUid).delete();
+
+    // Get device info from request headers
+    const userAgent = request.headers.get('user-agent') || 'unknown';
+    const deviceInfo = {
+      userAgent,
+      ip: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown',
+      timestamp: new Date().toISOString(),
+    };
+
+    // Log comprehensive audit trail
+    await db.collection('auditLogs').add({
+      action: 'admin_user_deleted',
+      userId: deletedByUid,
+      userEmail: deleterEmail,
+      targetType: 'admin',
+      targetId: targetUid,
+      targetName: targetEmail,
+      details: {
+        displayName: targetName,
+        deletedViaAPI: true,
+      },
+      deviceInfo,
+      timestamp: FieldValue.serverTimestamp(),
+    });
+
+    console.log(`✅ Admin user deleted: ${targetEmail} by ${deleterEmail}`);
 
     return NextResponse.json({
       success: true,

@@ -35,8 +35,11 @@ export type AuditAction =
   | "admin_user_deactivated"
   | "admin_user_reactivated"
   | "admin_user_deleted"
+  | "admin_password_changed"
   | "stats_reset"
-  | "data_exported";
+  | "data_exported"
+  | "system_test"
+  | "system_initialized";
 
 export type AuditLog = {
   id: string;

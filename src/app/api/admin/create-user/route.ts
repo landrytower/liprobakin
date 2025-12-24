@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     const creatorDoc = await db.collection('adminUsers').doc(createdByUid).get();
     if (!creatorDoc.exists || !creatorDoc.data()?.roles?.includes('master')) {
       return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
+        { success: false, error: 'Unauthorized: Only master admins can create new admin users' },
         { status: 403 }
       );
     }
@@ -85,23 +85,41 @@ export async function POST(request: NextRequest) {
       isActive: true,
     });
 
-    // Log audit trail
+    // Get creator info for audit log
+    const creatorData = creatorDoc.data();
+    const creatorEmail = creatorData?.email || 'unknown';
+
+    // Get device info from request headers
+    const userAgent = request.headers.get('user-agent') || 'unknown';
+    const deviceInfo = {
+      userAgent,
+      ip: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown',
+      timestamp: new Date().toISOString(),
+    };
+
+    // Log comprehensive audit trail
     await db.collection('auditLogs').add({
       action: 'admin_user_created',
       userId: createdByUid,
-      userEmail: (await db.collection('adminUsers').doc(createdByUid).get()).data()?.email || 'unknown',
+      userEmail: creatorEmail,
       targetType: 'admin',
       targetId: userRecord.uid,
-      targetName: displayName,
+      targetName: email,
+      details: {
+        displayName,
+        roles,
+        createdViaAPI: true,
+      },
+      deviceInfo,
       timestamp: FieldValue.serverTimestamp(),
     });
 
-    console.log(`✅ Admin user created: ${email} with roles:`, roles);
+    console.log(`✅ Admin user created: ${email} with roles:`, roles, 'by:', creatorEmail);
 
     return NextResponse.json({
       success: true,
       userId: userRecord.uid,
-      message: `User created successfully. They can log in with their email and password.`,
+      message: `Admin user "${displayName}" created successfully. They can log in with their email and password.`,
     });
   } catch (error: any) {
     console.error('Error creating admin user:', error);

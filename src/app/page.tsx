@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { collection, query, orderBy, limit, getDocs } from "firebase/firestore";
+import { collection, query, orderBy, limit, getDocs, onSnapshot } from "firebase/firestore";
 import { firebaseDB } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -46,6 +46,7 @@ type NewsArticle = {
   headline_en?: string; // English translation
   imageUrl?: string;
   createdAt: Date | null;
+  author?: string; // Author name
 };
 
 type SectionHeaderProps = {
@@ -918,50 +919,51 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const fetchNews = async () => {
-      try {
-        const newsRef = collection(firebaseDB, "news");
-        const newsQuery = query(newsRef, orderBy("createdAt", "desc"));
-        const newsSnapshot = await getDocs(newsQuery);
-        
-        const articles: NewsArticle[] = newsSnapshot.docs.map((doc) => {
-          const data = doc.data();
-          console.log('News article data:', { 
-            id: doc.id, 
-            title: data.title, 
-            title_en: data.title_en,
-            headline: data.headline,
-            headline_en: data.headline_en
-          });
-          
-          // Check if title appears to be in English (simple check)
-          const titleIsEnglish = data.title && /^[A-Za-z\s]+$/.test(data.title.substring(0, 50));
-          
-          return {
-            id: doc.id,
-            title: data.title || "", // French (default)
-            title_en: data.title_en || "", // English
-            summary: data.summary || "", // French (default)
-            summary_en: data.summary_en || "", // English
-            category: data.category || "News",
-            headline: data.headline || "", // French (default)
-            headline_en: data.headline_en || "", // English
-            imageUrl: data.imageUrl,
-            createdAt: data.createdAt?.toDate() || null,
-          };
+    // Real-time listener for news articles
+    const newsRef = collection(firebaseDB, "news");
+    const newsQuery = query(newsRef, orderBy("createdAt", "desc"));
+    
+    const unsubscribe = onSnapshot(newsQuery, (snapshot) => {
+      const articles: NewsArticle[] = snapshot.docs.map((doc) => {
+        const data = doc.data();
+        console.log('News article data:', { 
+          id: doc.id, 
+          title: data.title, 
+          title_en: data.title_en,
+          headline: data.headline,
+          headline_en: data.headline_en,
+          author: data.author
         });
         
-        console.log('Total articles fetched:', articles.length);
-        setNewsArticles(articles);
-        if (articles.length > 0) {
-          setFeaturedArticleId(articles[0].id);
-        }
-      } catch (error) {
-        console.error("Error fetching news:", error);
+        return {
+          id: doc.id,
+          title: data.title || "",
+          title_en: data.title_en || "",
+          summary: data.summary || "",
+          summary_en: data.summary_en || "",
+          category: data.category || "News",
+          headline: data.headline || "",
+          headline_en: data.headline_en || "",
+          imageUrl: data.imageUrl,
+          createdAt: data.createdAt?.toDate() || null,
+          author: data.author || "LIPROBAKIN Staff",
+        };
+      });
+      
+      console.log('✅ Total articles (real-time):', articles.length);
+      console.log('📰 Articles:', articles.map(a => ({ id: a.id, title: a.title })));
+      setNewsArticles(articles);
+      
+      if (articles.length > 0 && !featuredArticleId) {
+        console.log('🎯 Setting featured article to:', articles[0].id);
+        setFeaturedArticleId(articles[0].id);
       }
-    };
+    }, (error) => {
+      console.error("❌ Error fetching news:", error);
+    });
     
-    fetchNews();
+    // Cleanup listener on unmount
+    return () => unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -2096,7 +2098,7 @@ export default function Home() {
                     <div className={`relative overflow-hidden transition-all duration-500 ${isExpanded ? 'min-h-[600px]' : 'h-[600px]'}`}>
                       <Image
                         src={featured.imageUrl}
-                        alt={featured.title}
+                        alt={language === 'en' && featured.title_en ? featured.title_en : featured.title}
                         fill
                         className="object-cover"
                         priority
@@ -2104,8 +2106,15 @@ export default function Home() {
                       <div className="absolute inset-0 bg-gradient-to-b from-slate-950/80 via-slate-950/40 to-slate-950" />
                       
                       {/* Article Grid - Fixed position above title */}
-                      {newsArticles.length > 0 && !isExpanded && (
-                        <div className="absolute left-0 right-0 px-8 md:px-16 z-30" style={{bottom: 'calc(1.25rem - 3%)'}}>
+                      <div 
+                        className={`absolute left-0 right-0 px-8 md:px-16 z-30 transition-all duration-700 ease-out ${
+                          isExpanded 
+                            ? 'opacity-0 translate-y-8 pointer-events-none' 
+                            : 'opacity-100 translate-y-0'
+                        }`}
+                        style={{bottom: 'calc(1.25rem - 3%)'}}
+                      >
+                      {newsArticles.length > 0 && (
 
 
                           <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 max-w-4xl mx-auto">
@@ -2170,7 +2179,7 @@ export default function Home() {
                                   <div className="relative h-20 md:h-28 overflow-hidden">
                                     <Image
                                       src={article.imageUrl}
-                                      alt={article.title}
+                                      alt={language === 'en' && article.title_en ? article.title_en : article.title}
                                       fill
                                       className="object-cover transition duration-300 group-hover:scale-105"
                                     />
@@ -2184,11 +2193,11 @@ export default function Home() {
                                   </span>
                                   
                                   <h3 className="mb-1 md:mb-1.5 text-[10px] md:text-xs font-bold leading-tight text-white group-hover:text-orange-500 transition-colors line-clamp-2">
-                                    {language === 'en' ? (article.title_en || article.title) : article.title}
+                                    {language === 'en' && article.title_en ? article.title_en : article.title}
                                   </h3>
                                   
                                   <p className="text-[9px] md:text-[11px] text-slate-400 line-clamp-2">
-                                    {language === 'en' ? (article.headline_en || article.headline) : article.headline}
+                                    {language === 'en' && article.headline_en ? article.headline_en : article.headline}
                                   </p>
                                   
                                   {article.createdAt && (
@@ -2204,8 +2213,8 @@ export default function Home() {
                               ));
                             })()}
                           </div>
-                        </div>
-                      )}
+                        )}
+                      </div>
 
                       {/* Title and Headline on top of image */}
                       <div className={`absolute inset-0 flex flex-col p-8 md:p-16 ${isExpanded ? 'relative' : 'justify-start'} z-10`}>
@@ -2238,22 +2247,22 @@ export default function Home() {
                             type="button"
                             className="flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 backdrop-blur-md px-6 py-3 text-sm font-semibold uppercase tracking-wider text-white transition hover:border-white/40 hover:bg-white/20 active:scale-95 w-fit cursor-pointer"
                           >
-                            {isExpanded ? "Fermer" : "Voir l'article »"}
+                            {language === 'fr' ? (isExpanded ? "Fermer" : "Voir l'article »") : (isExpanded ? "Close" : "Read Article »")}
                           </button>
                         </div>
                           
                           {/* Expandable Article Content - Modern slide-in overlay with animations */}
                           <div 
-                            className={`overflow-hidden transition-all duration-500 ease-out ${
+                            className={`overflow-hidden transition-all duration-700 ease-in-out ${
                               isExpanded 
                                 ? 'max-h-[800px] opacity-100 mt-8' 
                                 : 'max-h-0 opacity-0 mt-0'
                             }`}
                           >
-                            <div className={`transform transition-all duration-500 ease-out ${
+                            <div className={`transform transition-all duration-700 ease-in-out ${
                               isExpanded 
-                                ? 'translate-y-0 scale-100' 
-                                : 'translate-y-4 scale-95'
+                                ? 'translate-y-0 scale-100 delay-100' 
+                                : 'translate-y-8 scale-95'
                             }`}>
                               <div className="relative rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/95 via-slate-950/95 to-black/95 backdrop-blur-xl p-6 md:p-8 shadow-2xl">
                                 {/* Close button - top right */}
@@ -2275,9 +2284,104 @@ export default function Home() {
 
                                 {/* Article content with custom scrollbar */}
                                 <div className="max-h-[500px] overflow-y-auto pr-4 custom-scrollbar">
-                                  <p className="text-sm md:text-base leading-relaxed text-slate-200 whitespace-pre-line">
-                                    {language === 'en' && featured.summary_en ? featured.summary_en : featured.summary}
-                                  </p>
+                                  {/* Article Header */}
+                                  <div className="mb-6 pb-6 border-b border-white/10">
+                                    <h2 className="text-2xl md:text-3xl font-bold text-white mb-3 leading-tight">
+                                      {language === 'en' && featured.title_en ? featured.title_en : featured.title}
+                                    </h2>
+                                    <p className="text-base md:text-lg text-slate-300 font-medium italic">
+                                      {language === 'en' && featured.headline_en ? featured.headline_en : featured.headline}
+                                    </p>
+                                    {featured.createdAt && (
+                                      <div className="flex items-center gap-3 mt-4 text-sm text-slate-400">
+                                        <span className="flex items-center gap-1.5">
+                                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                          </svg>
+                                          {new Intl.DateTimeFormat(language === 'fr' ? "fr-FR" : "en-US", {
+                                            year: 'numeric',
+                                            month: 'long',
+                                            day: 'numeric',
+                                          }).format(featured.createdAt)}
+                                        </span>
+                                        <span className="text-slate-600">•</span>
+                                        <span className="uppercase tracking-wider text-xs font-semibold text-orange-400">
+                                          {featured.category}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                  
+                                  {/* Article Body */}
+                                  <div className="prose prose-invert prose-slate max-w-none">
+                                    <div className="text-base md:text-lg leading-relaxed text-slate-200 space-y-4">
+                                      {(language === 'en' && featured.summary_en ? featured.summary_en : featured.summary)
+                                        .split('\n\n')
+                                        .filter(para => para.trim())
+                                        .map((paragraph, idx) => (
+                                          <p key={idx} className="first-letter:text-3xl first-letter:font-bold first-letter:text-orange-400 first-letter:mr-1 first-letter:float-left first-letter:leading-none first-of-type:first-letter:text-5xl">
+                                            {paragraph}
+                                          </p>
+                                        ))
+                                      }
+                                    </div>
+                                  </div>
+
+                                  {/* Article Footer */}
+                                  <div className="mt-8 pt-6 border-t border-white/10">
+                                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                                      {/* Author Info */}
+                                      <div className="flex items-center gap-3">
+                                        <div className="flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 text-white font-bold text-sm">
+                                          {(featured.author || 'LIPROBAKIN Staff').charAt(0).toUpperCase()}
+                                        </div>
+                                        <div>
+                                          <p className="text-xs text-slate-400 uppercase tracking-wider">
+                                            {language === 'fr' ? 'Publié par' : 'Posted By'}
+                                          </p>
+                                          <p className="text-sm font-semibold text-white">
+                                            {featured.author || 'LIPROBAKIN Staff'}
+                                          </p>
+                                        </div>
+                                      </div>
+                                      
+                                      {/* Share Section */}
+                                      <div className="flex flex-wrap items-center gap-3">
+                                        <span className="text-sm text-slate-400">
+                                          {language === 'fr' ? 'Partager' : 'Share'}
+                                        </span>
+                                        <div className="flex gap-2">
+                                          {/* Social Share Buttons */}
+                                          <button 
+                                            onClick={() => {
+                                              const url = typeof window !== 'undefined' ? window.location.href : '';
+                                              const text = language === 'en' && featured.title_en ? featured.title_en : featured.title;
+                                              window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`, '_blank');
+                                            }}
+                                            className="p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition text-slate-400 hover:text-white"
+                                            aria-label="Share on Facebook"
+                                          >
+                                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                                              <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                                            </svg>
+                                          </button>
+                                          <button 
+                                            onClick={() => {
+                                              const url = typeof window !== 'undefined' ? window.location.href : '';
+                                              const text = language === 'en' && featured.title_en ? featured.title_en : featured.title;
+                                              window.open(`https://twitter.com/intent/tweet?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`, '_blank');
+                                            }}
+                                            className="p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition text-slate-400 hover:text-white"
+                                            aria-label="Share on Twitter"
+                                          >
+                                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                                              <path d="M23.953 4.57a10 10 0 01-2.825.775 4.958 4.958 0 002.163-2.723c-.951.555-2.005.959-3.127 1.184a4.92 4.92 0 00-8.384 4.482C7.69 8.095 4.067 6.13 1.64 3.162a4.822 4.822 0 00-.666 2.475c0 1.71.87 3.213 2.188 4.096a4.904 4.904 0 01-2.228-.616v.06a4.923 4.923 0 003.946 4.827 4.996 4.996 0 01-2.212.085 4.936 4.936 0 004.604 3.417 9.867 9.867 0 01-6.102 2.105c-.39 0-.779-.023-1.17-.067a13.995 13.995 0 007.557 2.209c9.053 0 13.998-7.496 13.998-13.985 0-.21 0-.42-.015-.63A9.935 9.935 0 0024 4.59z"/>
+                                            </svg>
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
                                 </div>
 
                                 {/* Gradient fade at bottom */}
@@ -2922,68 +3026,99 @@ export default function Home() {
           </div>
         </section>
 
-        <section id="teams" className="space-y-8">
+        <section id="teams" className="space-y-6 sm:space-y-8">
           <SectionHeader
             id="teams"
             eyebrow={sectionCopy.teams.eyebrow}
             title={sectionCopy.teams.title}
           />
-          <div className="relative">
+          <div className="relative px-1 sm:px-0">
             <div 
-              className="overflow-x-auto overflow-y-hidden pb-4" 
-              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+              className="overflow-x-auto overflow-y-hidden pb-6 -mx-1 px-1" 
+              style={{ 
+                scrollbarWidth: 'none', 
+                msOverflowStyle: 'none',
+                WebkitOverflowScrolling: 'touch'
+              }}
             >
-              <div className="grid grid-flow-col grid-rows-2 auto-cols-[minmax(202px,1fr)] gap-3 pb-2 sm:auto-cols-[minmax(230px,1fr)] lg:auto-cols-[minmax(274px,1fr)]">
+              <div className="grid grid-flow-col grid-rows-2 auto-cols-[minmax(180px,1fr)] gap-3 pb-2 sm:auto-cols-[minmax(220px,1fr)] md:auto-cols-[minmax(260px,1fr)] lg:auto-cols-[minmax(300px,1fr)] sm:gap-4">
                 {genderFranchises.map((team) => {
                   const fullName = [team.city, team.name].filter(Boolean).join(" ").trim();
                   return (
                     <Link
                       key={fullName}
                       href={`/team/${encodeURIComponent(fullName)}`}
-                      className="rounded-2xl border border-white/5 bg-slate-900/70 p-5 text-left transition hover:border-white/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+                      className="group relative rounded-xl sm:rounded-2xl border border-white/10 bg-gradient-to-br from-slate-800/40 via-slate-900/60 to-slate-950/80 p-4 sm:p-6 text-left transition-all duration-300 active:scale-95 sm:hover:scale-[1.02] hover:border-white/30 sm:hover:shadow-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 overflow-hidden"
                       style={{
-                        backgroundImage: `linear-gradient(120deg, ${team.colors[0]}22, ${team.colors[1]}11)`
+                        backgroundImage: `linear-gradient(135deg, ${team.colors[0]}15, ${team.colors[1]}08)`
                       }}
                     >
-                      {team.logo ? (
-                        <div className="mb-3 flex items-center gap-2.5">
-                          <Image
-                            src={team.logo}
-                            alt={`${fullName} logo`}
-                            width={45}
-                            height={45}
-                            className="h-11 w-11 rounded-full border-2 border-white/20 object-cover"
-                          />
-                          <p className="text-lg font-semibold text-white">{fullName}</p>
+                      {/* Glow effect on hover */}
+                      <div 
+                        className="absolute inset-0 opacity-0 sm:group-hover:opacity-100 transition-opacity duration-300 blur-xl pointer-events-none"
+                        style={{
+                          background: `radial-gradient(circle at 50% 50%, ${team.colors[0]}30, transparent 70%)`
+                        }}
+                      />
+                      
+                      <div className="relative z-10">
+                        {team.logo ? (
+                          <div className="mb-3 sm:mb-4 flex items-center gap-2 sm:gap-3">
+                            <div className="relative flex-shrink-0">
+                              <div 
+                                className="absolute inset-0 rounded-full blur-md opacity-50 sm:group-hover:opacity-80 transition-opacity"
+                                style={{ backgroundColor: team.colors[0] }}
+                              />
+                              <Image
+                                src={team.logo}
+                                alt={`${fullName} logo`}
+                                width={56}
+                                height={56}
+                                className="relative h-11 w-11 sm:h-14 sm:w-14 rounded-full border-2 border-white/30 object-cover shadow-lg"
+                              />
+                            </div>
+                            <p className="text-sm sm:text-lg font-bold text-white tracking-tight leading-tight line-clamp-2">{fullName}</p>
+                          </div>
+                        ) : (
+                          <p className="text-sm sm:text-lg font-bold text-white mb-3 sm:mb-4 line-clamp-2">{fullName}</p>
+                        )}
+                        
+                        {/* Color bars with enhanced styling */}
+                        <div className="mt-4 sm:mt-5 flex gap-2 sm:gap-2.5">
+                          {team.colors.map((color, idx) => (
+                            <div key={`${fullName}-${color}`} className="flex-1 relative">
+                              <div
+                                className="h-2 sm:h-2.5 rounded-full shadow-md transition-all duration-300 sm:group-hover:h-3 sm:group-hover:shadow-lg"
+                                style={{ 
+                                  backgroundColor: color,
+                                  boxShadow: `0 0 8px ${color}40, 0 0 12px ${color}30`
+                                }}
+                              />
+                              <div
+                                className="absolute inset-0 h-2 sm:h-2.5 rounded-full opacity-0 sm:group-hover:opacity-100 transition-opacity duration-300 blur-sm pointer-events-none"
+                                style={{ backgroundColor: color }}
+                              />
+                            </div>
+                          ))}
                         </div>
-                      ) : (
-                        <p className="text-lg font-semibold text-white">{fullName}</p>
-                      )}
-                      <div className="mt-4 flex gap-2">
-                        {team.colors.map((color) => (
-                          <span
-                            key={`${fullName}-${color}`}
-                            className="h-2 flex-1 rounded-full"
-                            style={{ backgroundColor: color }}
-                          />
-                        ))}
                       </div>
                     </Link>
                   );
                 })}
               </div>
             </div>
+            {/* Navigation buttons - hidden on mobile, visible on tablet+ */}
             <button
               type="button"
               onClick={(e) => {
                 const container = e.currentTarget.parentElement?.querySelector('.overflow-x-auto');
                 if (container) container.scrollBy({ left: -400, behavior: 'smooth' });
               }}
-              className="absolute left-0 top-1/2 z-10 -translate-y-1/2 flex h-12 w-12 items-center justify-center rounded-full bg-orange-600 text-white shadow-lg transition hover:bg-orange-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400"
+              className="hidden sm:flex absolute left-0 top-1/2 z-10 -translate-y-1/2 h-12 w-12 lg:h-14 lg:w-14 items-center justify-center rounded-full bg-gradient-to-br from-orange-600 to-orange-700 text-white shadow-xl transition-all hover:scale-110 hover:from-orange-500 hover:to-orange-600 hover:shadow-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 active:scale-95"
               aria-label="Scroll left"
             >
-              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              <svg className="h-6 w-6 lg:h-7 lg:w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
               </svg>
             </button>
             <button
@@ -2992,11 +3127,11 @@ export default function Home() {
                 const container = e.currentTarget.parentElement?.querySelector('.overflow-x-auto');
                 if (container) container.scrollBy({ left: 400, behavior: 'smooth' });
               }}
-              className="absolute right-0 top-1/2 z-10 -translate-y-1/2 flex h-12 w-12 items-center justify-center rounded-full bg-orange-600 text-white shadow-lg transition hover:bg-orange-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400"
+              className="hidden sm:flex absolute right-0 top-1/2 z-10 -translate-y-1/2 h-12 w-12 lg:h-14 lg:w-14 items-center justify-center rounded-full bg-gradient-to-br from-orange-600 to-orange-700 text-white shadow-xl transition-all hover:scale-110 hover:from-orange-500 hover:to-orange-600 hover:shadow-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 active:scale-95"
               aria-label="Scroll right"
             >
-              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              <svg className="h-6 w-6 lg:h-7 lg:w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
               </svg>
             </button>
           </div>

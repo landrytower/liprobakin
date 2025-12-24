@@ -41,7 +41,7 @@ export async function logAuditAction(
   try {
     const sessionId = sessionStorage.getItem('sessionId') || generateSessionId();
     
-    await addDoc(collection(firebaseDB, "auditLogs"), {
+    const logData = {
       action,
       userId,
       userEmail,
@@ -52,9 +52,22 @@ export async function logAuditAction(
       sessionId,
       deviceInfo: getDeviceInfo(),
       timestamp: serverTimestamp(),
-    });
+    };
+    
+    console.log("📝 Creating audit log:", { action, userId, userEmail, targetType, targetId, targetName });
+    
+    const docRef = await addDoc(collection(firebaseDB, "auditLogs"), logData);
+    
+    console.log("✅ Audit log created successfully:", docRef.id);
   } catch (error) {
-    console.error("Failed to log audit action:", error);
+    console.error("❌ Failed to log audit action:", error);
+    console.error("Error details:", {
+      action,
+      userId,
+      userEmail,
+      targetType,
+      errorMessage: error instanceof Error ? error.message : String(error)
+    });
     // Don't throw - audit logging should not break the main flow
   }
 }
@@ -159,9 +172,18 @@ export function formatAuditLogDisplay(log: any): string {
     committee_added: "added committee member",
     committee_updated: "updated committee member",
     committee_deleted: "deleted committee member",
-    admin_created: "created admin user",
-    admin_role_changed: "changed admin role",
-    admin_deleted: "deleted admin user",
+    admin_user_created: "created admin user",
+    admin_roles_updated: "updated admin roles",
+    admin_user_deactivated: "deactivated admin user",
+    admin_user_reactivated: "reactivated admin user",
+    admin_user_deleted: "deleted admin user",
+    admin_password_changed: "changed admin password",
+    user_login: "logged in",
+    user_logout: "logged out",
+    stats_reset: "reset statistics",
+    data_exported: "exported data",
+    system_test: "created test log entry",
+    system_initialized: "initialized audit log system",
   };
 
   const action = actionMap[log.action] || log.action;

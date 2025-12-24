@@ -323,13 +323,12 @@ const statusClassMap: Record<StatusKind, string> = {
 };
 
 const mapFranchiseToAdminTeam = (
-  franchise: { city: string; name: string; colors: string[] | [string, string]; logo?: string },
+  franchise: { name: string; colors: string[] | [string, string]; logo?: string },
   gender: GenderKey,
   index: number,
 ): AdminTeam => ({
   id: `${gender}-${index}`,
   name: franchise.name,
-  city: franchise.city,
   gender,
   colors: (Array.isArray(franchise.colors) ? franchise.colors : []).filter((tone): tone is string => typeof tone === "string" && tone.length > 0),
   logo: franchise.logo ?? "",
@@ -538,7 +537,7 @@ function TeamTypeahead({ label, selectedTeamId, teams, onSelect, placeholder }: 
     if (!searchTerm.trim()) return teams;
     const search = searchTerm.toLowerCase();
     return teams.filter(
-      (t) => t.name.toLowerCase().includes(search) || t.city.toLowerCase().includes(search)
+      (t) => t.name.toLowerCase().includes(search)
     );
   }, [teams, searchTerm]);
 
@@ -566,7 +565,7 @@ function TeamTypeahead({ label, selectedTeamId, teams, onSelect, placeholder }: 
         <div className="relative">
           <input
             type="text"
-            value={selectedTeam ? `${selectedTeam.name} - ${selectedTeam.city}` : searchTerm}
+            value={selectedTeam ? selectedTeam.name : searchTerm}
             onChange={(e) => {
               setSearchTerm(e.target.value);
               setIsOpen(true);
@@ -612,7 +611,7 @@ function TeamTypeahead({ label, selectedTeamId, teams, onSelect, placeholder }: 
                 )}
                 <div className="flex-1 min-w-0">
                   <div className="text-white font-medium">{team.name}</div>
-                  <div className="text-slate-400 text-sm">{team.city}</div>
+                  <div className="text-slate-400 text-sm">{team.gender === 'men' ? 'Men' : 'Women'}</div>
                 </div>
               </button>
             ))}
@@ -765,8 +764,7 @@ export default function AdminPage() {
     const filtered = franchiseTeams.filter((team) => {
       const matchesGender = team.gender === teamGenderFilter;
       const matchesSearch = teamSearchQuery.trim() === "" || 
-        team.name.toLowerCase().includes(teamSearchQuery.toLowerCase()) ||
-        (team.city && team.city.toLowerCase().includes(teamSearchQuery.toLowerCase()));
+        team.name.toLowerCase().includes(teamSearchQuery.toLowerCase());
       return matchesGender && matchesSearch;
     });
     return filtered;
@@ -1802,7 +1800,6 @@ export default function AdminPage() {
     }
 
     const name = teamForm.name.trim();
-    const city = teamForm.city.trim();
     let logo = teamForm.logo.trim();
     const colors = teamForm.colorsInput
       .split(",")
@@ -1819,7 +1816,6 @@ export default function AdminPage() {
 
     const payload: any = {
       name,
-      city,
       gender: teamForm.gender,
       colors,
       logo,
@@ -3460,7 +3456,7 @@ export default function AdminPage() {
     if (!gameTeamSearch.trim()) return teams.filter((t) => t.gender === gameForm.gender);
     const search = gameTeamSearch.toLowerCase();
     return teams.filter(
-      (t) => t.gender === gameForm.gender && (t.name.toLowerCase().includes(search) || t.city.toLowerCase().includes(search))
+      (t) => t.gender === gameForm.gender && t.name.toLowerCase().includes(search)
     );
   }, [teams, gameForm.gender, gameTeamSearch]);
 
@@ -4493,7 +4489,7 @@ export default function AdminPage() {
                                     ) : null}
                                   </p>
                                   <p className="text-[11px] uppercase tracking-[0.4em] text-slate-400">
-                                    {team.city || "—"} · {team.gender === "men" ? "MEN" : "WOMEN"}
+                                    {team.gender === "men" ? "MEN" : "WOMEN"}
                                   </p>
                                 </div>
                               </div>

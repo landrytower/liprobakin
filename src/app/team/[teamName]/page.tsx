@@ -443,42 +443,42 @@ export default function TeamPage() {
               <Link
                 key={player.id}
                 href={`/player/${encodeURIComponent(fullTeamName)}/${player.number}`}
-                className="group flex items-center gap-4 rounded-lg border border-white/10 bg-slate-900/60 px-6 py-4 transition hover:border-white/30 hover:bg-slate-900/80"
+                className="group block rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:px-6 sm:py-4 transition hover:border-white/30 hover:bg-slate-900/80"
               >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-baseline gap-3">
-                    <span className="text-2xl font-bold text-blue-400">#{player.number}</span>
-                    <h3 className="text-lg font-semibold text-white group-hover:text-blue-400 transition-colors">
-                      {player.name}
-                    </h3>
-                  </div>
+                <div className="flex items-center gap-3 mb-2 sm:mb-0">
+                  <span className="text-xl sm:text-2xl font-bold text-blue-400 flex-shrink-0">#{player.number}</span>
+                  <h3 className="text-sm sm:text-lg font-semibold text-white group-hover:text-blue-400 transition-colors flex-1 min-w-0 truncate">
+                    {player.name}
+                  </h3>
                 </div>
-                <div className="flex gap-8 text-sm">
-                  <div>
-                    <span className="text-slate-400 block text-xs">{t.height}</span>
-                    <span className="text-white">{player.height || "N/A"}</span>
+                <div className="grid grid-cols-3 gap-2 sm:gap-4 text-xs sm:text-sm mt-2 sm:mt-0 sm:flex sm:justify-end">
+                  <div className="text-center sm:text-left">
+                    <span className="text-slate-400 block text-[10px] sm:text-xs">{t.height}</span>
+                    <span className="text-white text-xs sm:text-sm">{player.height || "N/A"}</span>
                   </div>
-                  <div>
-                    <span className="text-slate-400 block text-xs">{t.nationality}</span>
-                    {player.nationality && player.nationality !== "N/A" ? (
-                      <img
-                        src={`https://flagcdn.com/w40/${player.nationality.toLowerCase()}.png`}
-                        alt={player.nationality}
-                        width={24}
-                        height={16}
-                        className="rounded"
-                        onError={(e) => {
-                          const target = e.target as HTMLImageElement;
-                          target.style.display = 'none';
-                        }}
-                      />
-                    ) : (
-                      <span className="text-white">N/A</span>
-                    )}
+                  <div className="text-center sm:text-left">
+                    <span className="text-slate-400 block text-[10px] sm:text-xs">{t.nationality}</span>
+                    <div className="flex justify-center sm:justify-start">
+                      {player.nationality && player.nationality !== "N/A" ? (
+                        <img
+                          src={`https://flagcdn.com/w40/${player.nationality.toLowerCase()}.png`}
+                          alt={player.nationality}
+                          width={20}
+                          height={14}
+                          className="rounded sm:w-6 sm:h-4"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                          }}
+                        />
+                      ) : (
+                        <span className="text-white text-xs sm:text-sm">N/A</span>
+                      )}
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-slate-400 block text-xs">{t.dob}</span>
-                    <span className="text-white">{player.dateOfBirth || "N/A"}</span>
+                  <div className="text-center sm:text-left">
+                    <span className="text-slate-400 block text-[10px] sm:text-xs">{t.dob}</span>
+                    <span className="text-white text-xs sm:text-sm">{player.dateOfBirth || "N/A"}</span>
                   </div>
                 </div>
               </Link>

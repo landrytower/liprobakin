@@ -1733,6 +1733,11 @@ export default function Home() {
         startOfWeek.setDate(now.getDate() + diffToMonday);
         startOfWeek.setHours(0, 0, 0, 0);
         
+        // Get the end of current week (Sunday)
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 6);
+        endOfWeek.setHours(23, 59, 59, 999);
+        
         const completedGamesData = completedSnapshot.docs
           .map((doc) => {
             const data = doc.data();
@@ -1743,10 +1748,10 @@ export default function Home() {
             };
           })
           .filter((game: any) => {
-            // Only show completed games from the current week (Monday to now)
+            // Only show completed games from the current week (Monday to Sunday)
             if (game.completed !== true) return false;
             if (!game.dateObj) return false;
-            return game.dateObj >= startOfWeek && game.dateObj <= now;
+            return game.dateObj >= startOfWeek && game.dateObj <= endOfWeek;
           })
           .sort((a: any, b: any) => (b.dateObj?.getTime() || 0) - (a.dateObj?.getTime() || 0))
           .slice(0, 7);

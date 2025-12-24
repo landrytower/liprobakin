@@ -1725,9 +1725,13 @@ export default function Home() {
         
         // Get current date
         const now = new Date();
-        const fourDaysAgo = new Date(now);
-        fourDaysAgo.setDate(now.getDate() - 4);
-        fourDaysAgo.setHours(0, 0, 0, 0);
+        
+        // Get the start of current week (Monday)
+        const currentDay = now.getDay();
+        const diffToMonday = currentDay === 0 ? -6 : 1 - currentDay; // If Sunday, go back 6 days, else go to Monday
+        const startOfWeek = new Date(now);
+        startOfWeek.setDate(now.getDate() + diffToMonday);
+        startOfWeek.setHours(0, 0, 0, 0);
         
         const completedGamesData = completedSnapshot.docs
           .map((doc) => {
@@ -1739,10 +1743,10 @@ export default function Home() {
             };
           })
           .filter((game: any) => {
-            // Only show completed games from the last 4 days
+            // Only show completed games from the current week (Monday to now)
             if (game.completed !== true) return false;
             if (!game.dateObj) return false;
-            return game.dateObj >= fourDaysAgo;
+            return game.dateObj >= startOfWeek && game.dateObj <= now;
           })
           .sort((a: any, b: any) => (b.dateObj?.getTime() || 0) - (a.dateObj?.getTime() || 0))
           .slice(0, 7);

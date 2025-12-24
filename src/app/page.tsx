@@ -1634,17 +1634,22 @@ export default function Home() {
             const minutes = dateObj.getMinutes();
             
             let timeStr;
+            let dateStr;
             if (language === 'fr') {
               // 24-hour format for French
               timeStr = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+              // French: day/month (25/12)
+              dateStr = `${day}/${month}`;
             } else {
               // 12-hour format for English
               const period = hours >= 12 ? 'PM' : 'AM';
               const hours12 = hours % 12 || 12;
               timeStr = `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
+              // English: month/day (12/25)
+              dateStr = `${month}/${day}`;
             }
             
-            return `${day}/${month} · ${timeStr}`;
+            return `${dateStr} · ${timeStr}`;
           };
           
           const homeTeam = teamsMap.get(game.data.homeTeamId) || { wins: 0, losses: 0 };
@@ -2097,7 +2102,15 @@ export default function Home() {
             return (
               <div className="space-y-8">
                 {/* Featured Article */}
-                <div className={`relative overflow-hidden border-y border-white/10 bg-gradient-to-br from-slate-900/80 to-slate-950/90 transition-opacity duration-300 ${isArticleChanging ? 'opacity-0' : 'opacity-100'}`}>
+                <div 
+                  className={`relative overflow-hidden border-y border-white/10 bg-gradient-to-br from-slate-900/80 to-slate-950/90 transition-opacity duration-300 ${isArticleChanging ? 'opacity-0' : 'opacity-100'}`}
+                  onClick={(e) => {
+                    // Close expanded article when clicking on the background
+                    if (isExpanded && e.target === e.currentTarget) {
+                      setExpandedArticleId(null);
+                    }
+                  }}
+                >
                   {featured.imageUrl && (
                     <div className={`relative overflow-hidden transition-all duration-500 ${isExpanded ? 'min-h-[600px]' : 'h-[600px]'}`}>
                       <Image

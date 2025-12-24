@@ -377,9 +377,18 @@ const LeaderRow = ({ leader, allFranchises }: { leader: FeaturedMatchup["leaders
     .slice(0, 2)
     .toUpperCase();
   const displayName = leader.player.trim().split(" ").pop() ?? leader.player;
+  
+  // Determine the link URL - prioritize player page if number is available
+  const playerNumber = 'number' in leader ? leader.number : null;
+  const linkUrl = playerNumber 
+    ? `/player/${encodeURIComponent(leader.team)}/${playerNumber}`
+    : `/team/${encodeURIComponent(leader.team)}`;
 
   return (
-    <div className="flex items-center justify-between gap-2 min-w-0">
+    <Link 
+      href={linkUrl}
+      className="flex items-center justify-between gap-2 min-w-0 group transition-all hover:bg-white/5 rounded-lg p-1.5 -m-1.5"
+    >
       <div className="flex items-center gap-2 min-w-0 overflow-hidden">
         {headshot ? (
           <Image
@@ -387,7 +396,7 @@ const LeaderRow = ({ leader, allFranchises }: { leader: FeaturedMatchup["leaders
             alt={`${leader.player} portrait`}
             width={40}
             height={40}
-            className="h-10 w-10 rounded-full border border-white/20 object-cover flex-shrink-0"
+            className="h-10 w-10 rounded-full border border-white/20 object-cover flex-shrink-0 group-hover:border-blue-400 transition-colors"
           />
         ) : franchise?.logo ? (
           <Image
@@ -395,20 +404,20 @@ const LeaderRow = ({ leader, allFranchises }: { leader: FeaturedMatchup["leaders
             alt={`${formatFranchiseName(franchise)} logo`}
             width={40}
             height={40}
-            className="h-10 w-10 rounded-full border border-white/20 bg-white/5 object-cover flex-shrink-0"
+            className="h-10 w-10 rounded-full border border-white/20 bg-white/5 object-cover flex-shrink-0 group-hover:border-blue-400 transition-colors"
           />
         ) : (
-          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-xs font-semibold flex-shrink-0">
+          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-xs font-semibold flex-shrink-0 group-hover:bg-white/20 transition-colors">
             {initials}
           </span>
         )}
         <div className="min-w-0 overflow-hidden">
-          <p className="text-[10px] uppercase tracking-[0.3em] text-slate-400 truncate">{leader.team}</p>
-          <p className="text-sm font-semibold text-white truncate">{displayName}</p>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-slate-400 truncate group-hover:text-blue-400 transition-colors">{leader.team}</p>
+          <p className="text-sm font-semibold text-white truncate group-hover:text-blue-400 transition-colors">{displayName}</p>
           <p className="text-[10px] text-slate-400 truncate">{leader.stats}</p>
         </div>
       </div>
-    </div>
+    </Link>
   );
 };
 
@@ -1601,6 +1610,7 @@ export default function Home() {
                   team: teamName,
                   stats: `${pts} PTS · ${secondStat}`,
                   headshot: topPlayer.headshot || undefined,
+                  number: topPlayer.number || 0,
                 };
               }
             } else {
@@ -1622,6 +1632,7 @@ export default function Home() {
                   team: teamName,
                   stats: `${pts} PTS · ${secondStat}`,
                   headshot: firstPlayer.headshot || undefined,
+                  number: firstPlayer.number || 0,
                 };
               }
             }

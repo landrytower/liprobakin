@@ -1698,7 +1698,9 @@ export default function Home() {
         };
 
         const spotlightGames = await Promise.all(spotlightGamesData.map(formatGameData));
-        const allWeeklyGames = await Promise.all(allGames.map(formatGameData));
+        // Exclude spotlight games from weekly schedule (skip first 3 games)
+        const weeklyScheduleGamesData = allGames.slice(3);
+        const allWeeklyGames = await Promise.all(weeklyScheduleGamesData.map(formatGameData));
         
         setDynamicSpotlightGames(spotlightGames);
         setWeeklyScheduleGames(allWeeklyGames);

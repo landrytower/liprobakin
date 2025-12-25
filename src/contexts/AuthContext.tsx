@@ -26,6 +26,7 @@ import type { UserProfile } from "@/types/user";
 interface AuthContextType {
   user: FirebaseUser | null;
   userProfile: UserProfile | null;
+  isAdmin: boolean;
   loading: boolean;
   signUp: (
     email: string,
@@ -44,6 +45,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const fetchUserProfile = async (uid: string) => {
@@ -81,22 +83,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (firebaseUser) {
-        await fetchUserProfile(firebaseUser.uid);
-
         // Check if user is an admin first
         const adminDoc = await getDoc(doc(firebaseDB, "adminUsers", firebaseUser.uid));
-        const isAdmin = adminDoc.exists();
+        const isAdminUser = adminDoc.exists();
+        setIsAdmin(isAdminUser);
+
+        // Only fetch user profile if NOT an admin
+        if (!isAdminUser) {
+          await fetchUserProfile(firebaseUser.uid);
+        } else {
+          setUserProfile(null);
+        }
 
         // Set up real-time listener for user profile document
-        // Admin users are in 'adminUsers' collection, regular users in 'users' collection
-        const collectionName = isAdmin ? "adminUsers" : "users";
+        // Only listen to regular users, not admins
+        const collectionName = "users";
         
         unsubscribeProfile = onSnapshot(
           doc(firebaseDB, collectionName, firebaseUser.uid),
           async (docSnapshot) => {
             if (!docSnapshot.exists()) {
               // User profile was deleted from Firestore - kick them out
-              console.warn(`${isAdmin ? 'Admin' : 'User'} profile deleted from Firestore. Signing out...`);
+              console.warn('User profile deleted from Firestore. Signing out...');
               await firebaseSignOut(firebaseAuth);
               setUserProfile(null);
             } else {
@@ -117,6 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         );
       } else {
         setUserProfile(null);
+        setIsAdmin(false);
       }
       setLoading(false);
     });
@@ -208,6 +217,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         userProfile,
+        isAdmin,
         loading,
         signUp,
         signIn,

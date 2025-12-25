@@ -778,7 +778,7 @@ const PlayerStatsModal = ({ player, onClose }: { player: SpotlightPlayer; onClos
 };
 
 export default function Home() {
-  const { user, userProfile, signOut: handleSignOut } = useAuth();
+  const { user, userProfile, isAdmin, signOut: handleSignOut } = useAuth();
   const { language, setLanguage } = useLanguage();
   
   console.log('Current language:', language);
@@ -1928,7 +1928,7 @@ export default function Home() {
                 </a>
                 ))}
             </div>
-            {user ? (
+            {user && !isAdmin ? (
               <div className="hidden items-center gap-3 lg:flex">
                 <Link
                   href="/account"
@@ -1951,7 +1951,15 @@ export default function Home() {
                   </svg>
                 </button>
               </div>
-            ) : null}
+            ) : (
+              <AnimatedButton
+                onClick={() => setAuthModalOpen(true)}
+                className="hidden lg:flex"
+                ariaLabel={language === 'fr' ? 'Se connecter / S\'inscrire' : 'Log In / Sign Up'}
+              >
+                {language === 'fr' ? 'Connexion' : 'Sign In'}
+              </AnimatedButton>
+            )}
             <div className="hidden lg:flex items-center gap-2 border-l border-white/10 pl-4">
               <button
                 onClick={() => setLanguage('fr')}
@@ -2012,7 +2020,7 @@ export default function Home() {
             </div>
             
             {/* User Section */}
-            {user ? (
+            {user && !isAdmin ? (
               <div className="flex flex-col gap-3 pt-6 border-t border-white/10">
                 <Link
                   href="/account"

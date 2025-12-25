@@ -1863,7 +1863,7 @@ export default function Home() {
   }, [genderFranchises]); // Re-run when teams change
 
   return (
-    <div className="relative isolate min-h-screen bg-gradient-to-b from-[#050816] via-[#050816] to-[#020407] text-white">
+    <div className="relative isolate min-h-screen bg-gradient-to-b from-[#050816] via-[#050816] to-[#020407] text-white overflow-x-hidden w-full max-w-[100vw]">
       <div
         className="pointer-events-none absolute inset-x-0 top-[-200px] h-[500px] bg-[radial-gradient(circle,_rgba(56,189,248,0.35),_transparent_60%)] blur-3xl"
         aria-hidden
@@ -2148,7 +2148,7 @@ export default function Home() {
                       
                       {/* Article Grid - Fixed position above title */}
                       <div 
-                        className={`absolute left-0 right-0 px-8 md:px-16 z-30 transition-all duration-700 ease-out ${
+                        className={`absolute left-0 right-0 px-4 md:px-8 lg:px-16 z-30 transition-all duration-700 ease-out ${
                           isExpanded 
                             ? 'opacity-0 translate-y-8 pointer-events-none' 
                             : 'opacity-100 translate-y-0'
@@ -2158,7 +2158,7 @@ export default function Home() {
                       {newsArticles.length > 0 && (
 
 
-                          <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 max-w-4xl mx-auto">
+                          <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 max-w-4xl mx-auto w-full">
                             {(() => {
                               // On mobile (< 640px): show 2 articles with rotation
                               // On desktop (>= 640px): show first 3 articles, no rotation

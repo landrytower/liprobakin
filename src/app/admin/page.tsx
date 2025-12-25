@@ -175,6 +175,7 @@ type AdminGame = {
   refereeAwayTeam?: string;
   createdAt: Date | null;
   updatedAt: Date | null;
+  archived?: boolean;
 };
 
 type GameFormState = {
@@ -488,6 +489,7 @@ const mapSnapshotToGame = (snapshot: DocumentSnapshot<DocumentData>): AdminGame 
     refereeAwayTeam: data?.refereeAwayTeam ?? "",
     createdAt: getDateField(data?.createdAt),
     updatedAt: getDateField(data?.updatedAt),
+    archived: data?.archived ?? false,
   };
 };
 
@@ -657,7 +659,7 @@ export default function AdminPage() {
   });
   const [teamSearchQuery, setTeamSearchQuery] = useState("");
   const [teamCurrentPage, setTeamCurrentPage] = useState(1);
-  const teamsPerPage = 8;
+  const teamsPerPage = 100;
   const [rosterFormVisible, setRosterFormVisible] = useState(false);
   const [transferModalVisible, setTransferModalVisible] = useState(false);
   const [transferPlayerId, setTransferPlayerId] = useState<string | null>(null);
@@ -673,7 +675,15 @@ export default function AdminPage() {
   const [coachHeadshotPreview, setCoachHeadshotPreview] = useState<string>("");
   const [coachStaffSubmitting, setCoachStaffSubmitting] = useState(false);
   const coachHeadshotPreviewBlobRef = useRef<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'stories' | 'teams' | 'traffic' | 'accounts' | 'games' | 'stats' | 'league' | 'admins'>('stories');
+  const [activeTab, setActiveTab] = useState<'stories' | 'teams' | 'traffic' | 'accounts' | 'games' | 'stats' | 'league' | 'admins'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('adminActiveTab');
+      if (saved && ['stories', 'teams', 'traffic', 'accounts', 'games', 'stats', 'league', 'admins'].includes(saved)) {
+        return saved as 'stories' | 'teams' | 'traffic' | 'accounts' | 'games' | 'stats' | 'league' | 'admins';
+      }
+    }
+    return 'stories';
+  });
   const [language, setLanguage] = useState<'en' | 'fr'>('fr');
   const [currentAdminUser, setCurrentAdminUser] = useState<AdminUser | null>(null);
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
@@ -941,6 +951,20 @@ export default function AdminPage() {
     const interval = setInterval(updateActivity, 2 * 60 * 1000);
     return () => clearInterval(interval);
   }, [user?.uid]);
+
+  // Persist active tab to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('adminActiveTab', activeTab);
+    }
+  }, [activeTab]);
+
+  // Auto-open Team Management when Teams tab is selected
+  useEffect(() => {
+    if (activeTab === 'teams') {
+      setTeamAssistantOpen(true);
+    }
+  }, [activeTab]);
 
   // Real-time listener for all admin users to see who's online
   useEffect(() => {
@@ -3463,9 +3487,25 @@ export default function AdminPage() {
   // Auto-calculate spotlight: top 3 upcoming games (future date/time only)
   const gamesWithSpotlight = useMemo(() => {
     const now = new Date();
+    const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     
-    // Filter to future games and sort by date+time ascending
-    const upcomingGames = games
+    // Auto-archive games older than 7 days
+    games.forEach(async (game) => {
+      if (!game.archived) {
+        const gameDateTime = new Date(`${game.date}T${game.time}`);
+        if (gameDateTime < oneWeekAgo) {
+          try {
+            await updateDoc(doc(firebaseDB, "games", game.id), { archived: true });
+          } catch (error) {
+            console.error("Error archiving game:", error);
+          }
+        }
+      }
+    });
+
+    // Filter out archived games and get upcoming games
+    const activeGames = games.filter((game) => !game.archived);
+    const upcomingGames = activeGames
       .map((game) => {
         const gameDateTime = new Date(`${game.date}T${game.time}`);
         return { ...game, gameDateTime };
@@ -4448,7 +4488,7 @@ export default function AdminPage() {
 
                     {paginatedTeams.length ? (
                       <>
-                        <div className="grid gap-2.5 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                        <div className="grid gap-2.5 grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
                           {paginatedTeams.map((team, teamIndex) => {
                           const isFirestore = teams.some(t => t.id === team.id);
                           const isTemplate = !isFirestore;
@@ -4456,81 +4496,32 @@ export default function AdminPage() {
                             <article
                               key={`${team.id}-${team.gender}-${teamIndex}`}
                               onClick={() => isFirestore && router.push(`/admin/edit-team/${team.id}`)}
-                              className={`group rounded-xl border p-3 transition-all duration-200 ${
+                              className={`group rounded-xl border transition-all duration-200 relative overflow-hidden aspect-square ${
                                 isTemplate
                                   ? "border-dashed border-white/15 bg-slate-900/30"
                                   : "border-white/10 bg-slate-900/50"
                               } ${isFirestore ? "cursor-pointer hover:border-white/30 hover:scale-[1.02]" : ""}`}
+                              style={team.logo ? {
+                                backgroundImage: `url(${team.logo})`,
+                                backgroundSize: 'cover',
+                                backgroundPosition: 'center',
+                                backgroundRepeat: 'no-repeat'
+                              } : {}}
                             >
-                              <div className="flex items-center gap-3">
-                                <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-xl border-2 border-white/20 bg-gradient-to-br from-slate-800 to-slate-900 p-2 shadow-lg">
-                                  {team.logo ? (
-                                    <Image
-                                      src={team.logo}
-                                      alt={`${team.name} logo`}
-                                      fill
-                                      className="object-contain p-1"
-                                      sizes="64px"
-                                      unoptimized
-                                    />
-                                  ) : (
-                                    <div className="flex h-full w-full items-center justify-center text-[10px] uppercase tracking-[0.4em] text-slate-500">
-                                      Logo
-                                    </div>
+                              {team.logo && (
+                                <div className="absolute inset-0 bg-gradient-to-br from-slate-900/70 via-slate-900/60 to-slate-900/70" />
+                              )}
+                              <div className="relative z-10 p-[10px] h-full flex items-center justify-center">
+                                <div className="text-center px-2 py-1 rounded bg-black/20">
+                                  <p className="text-base font-bold text-white uppercase tracking-wider drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)] [text-shadow:_0_1px_2px_rgb(0_0_0_/_80%),_0_2px_4px_rgb(0_0_0_/_60%)]">
+                                    {team.name}
+                                  </p>
+                                  {isTemplate && (
+                                    <span className="inline-block mt-1 rounded-full border border-white/40 bg-white/10 px-2 py-[2px] text-[9px] uppercase tracking-[0.4em] text-white drop-shadow-lg">
+                                      Template
+                                    </span>
                                   )}
                                 </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs font-semibold text-white flex items-center gap-1.5 truncate">
-                                    {team.name}
-                                    {isTemplate ? (
-                                      <span className="rounded-full border border-white/20 px-2 py-[2px] text-[9px] uppercase tracking-[0.4em] text-slate-300">
-                                        Template
-                                      </span>
-                                    ) : null}
-                                  </p>
-                                  <p className="text-[11px] uppercase tracking-[0.4em] text-slate-400">
-                                    {team.gender === "men" ? "MEN" : "WOMEN"}
-                                  </p>
-                                </div>
-                              </div>
-                              {team.colors.length ? (
-                                <div className="mt-3 flex flex-wrap gap-1">
-                                  {team.colors.map((tone, index) => (
-                                    <span
-                                      key={`${team.id}-${tone}-${index}`}
-                                      className="h-4 w-8 rounded-full border border-white/10"
-                                      style={{ backgroundColor: tone }}
-                                      title={tone}
-                                    />
-                                  ))}
-                                </div>
-                              ) : null}
-                              <div className="mt-4 flex flex-wrap gap-2">
-                                {isTemplate ? (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleUseStaticTeam(team);
-                                    }}
-                                    className="rounded-full border border-white/20 px-3 py-1 text-[10px] uppercase tracking-[0.4em] text-white hover:border-white/40"
-                                  >
-                                    Load & add
-                                  </button>
-                                ) : (
-                                  <>
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleDeleteTeam(team);
-                                      }}
-                                      className="rounded-full border border-rose-500/40 px-3 py-1 text-[10px] uppercase tracking-[0.4em] text-rose-200 hover:border-rose-400"
-                                    >
-                                      Delete
-                                    </button>
-                                  </>
-                                )}
                               </div>
                             </article>
                           );
@@ -4573,15 +4564,15 @@ export default function AdminPage() {
                 </div>
 
                 {/* Desktop roster editor (hidden on mobile when team selected) */}
-                <div className={`space-y-4 rounded-2xl border border-white/10 bg-black/30 p-5 ${selectedTeamId ? 'hidden lg:block' : ''}`}>
-                  <div className="flex items-baseline justify-between gap-3">
-                    <div>
-                      <h3 className="text-lg font-semibold text-white">Roster editor</h3>
-                      <p className="text-xs uppercase tracking-[0.4em] text-slate-500">
-                        {selectedTeamId ? teams.find((team) => team.id === selectedTeamId)?.name ?? "Selected team" : "Select a team"}
-                      </p>
-                    </div>
-                    {selectedTeamId ? (
+                {selectedTeamId ? (
+                  <div className="hidden lg:block space-y-4 rounded-2xl border border-white/10 bg-black/30 p-5">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <div>
+                        <h3 className="text-lg font-semibold text-white">Roster editor</h3>
+                        <p className="text-xs uppercase tracking-[0.4em] text-slate-500">
+                          {teams.find((team) => team.id === selectedTeamId)?.name ?? "Selected team"}
+                        </p>
+                      </div>
                       <button
                         type="button"
                         onClick={resetRosterForm}
@@ -4589,9 +4580,7 @@ export default function AdminPage() {
                       >
                         Reset
                       </button>
-                    ) : null}
-                  </div>
-                  {selectedTeamId ? (
+                    </div>
                     <>
                       {!rosterFormVisible ? (
                         <button
@@ -5036,12 +5025,8 @@ export default function AdminPage() {
                         </div>
                       </div>
                     </>
-                  ) : (
-                    <p className="rounded-2xl border border-dashed border-white/20 bg-slate-900/40 p-4 text-sm text-slate-400">
-                      Select a franchise in the table to manage its roster.
-                    </p>
-                  )}
-                </div>
+                  </div>
+                ) : null}
               </div>
             </section>
 
@@ -6279,129 +6264,115 @@ export default function AdminPage() {
                   </div>
                 )}
 
-                {/* Completed Games List */}
+                {/* Completed Games List - Simplified */}
                 <section className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="text-lg font-bold text-white">Available Games</h3>
-                      <p className="text-xs text-slate-400 mt-1">Games ready for stats collection (last 7 days)</p>
+                      <h3 className="text-xl font-bold text-white">Available Games</h3>
+                      <p className="text-xs text-slate-400 mt-1">Ready for stats collection</p>
                     </div>
                     {completedGames.length > 0 && (
-                      <div className="text-right">
-                        <div className="text-2xl font-bold text-white">{completedGames.length}</div>
-                        <div className="text-xs text-slate-400">games</div>
+                      <div className="rounded-xl bg-blue-500/10 px-4 py-2 border border-blue-500/30">
+                        <span className="text-lg font-bold text-blue-300">{completedGames.length}</span>
+                        <span className="text-xs text-slate-400 ml-1">games</span>
                       </div>
                     )}
                   </div>
 
-                  <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-3">
                     {completedGames.length > 0 ? (
                       completedGames.map((game) => (
-                        <div
+                        <button
                           key={game.id}
-                          className={`group relative overflow-hidden rounded-xl border transition-all duration-300 ${
+                          type="button"
+                          onClick={() => handleSelectCompletedGame(game)}
+                          className={`group relative overflow-hidden rounded-2xl border transition-all text-left ${
                             game.completed 
-                              ? "border-emerald-500/40 bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 hover:border-emerald-500/60" 
-                              : "border-slate-700 bg-gradient-to-br from-slate-900 to-slate-800 hover:border-slate-600 hover:shadow-xl"
+                              ? "border-emerald-500/30 bg-emerald-500/5 hover:bg-emerald-500/10 hover:border-emerald-500/50" 
+                              : "border-blue-500/30 bg-blue-500/5 hover:bg-blue-500/10 hover:border-blue-500/50"
                           }`}
                         >
+                          <div className="p-5">
+                            <div className="flex items-center gap-6">
+                              {/* Teams Section - Horizontal Layout */}
+                              <div className="flex-1 flex items-center justify-between gap-4">
+                                {/* Away Team */}
+                                <div className="flex items-center gap-3 flex-1">
+                                  {game.awayTeamLogo && (
+                                    <Image src={game.awayTeamLogo} alt={game.awayTeamName} width={56} height={56} className="rounded-xl ring-2 ring-white/10 flex-shrink-0 object-cover" unoptimized />
+                                  )}
+                                  <div>
+                                    <div className="text-base font-bold text-white">{game.awayTeamName}</div>
+                                    <div className="text-xs text-slate-400">Away</div>
+                                  </div>
+                                </div>
+
+                                {/* Score Display */}
+                                {game.completed && (
+                                  <div className="flex items-center gap-2 px-6">
+                                    <div className={`text-3xl font-black tabular-nums ${game.winnerTeamId === game.awayTeamId ? 'text-emerald-400' : 'text-slate-500'}`}>
+                                      {game.winnerTeamId === game.awayTeamId ? game.winnerScore : game.loserScore}
+                                    </div>
+                                    <div className="text-lg font-bold text-slate-600">-</div>
+                                    <div className={`text-3xl font-black tabular-nums ${game.winnerTeamId === game.homeTeamId ? 'text-emerald-400' : 'text-slate-500'}`}>
+                                      {game.winnerTeamId === game.homeTeamId ? game.winnerScore : game.loserScore}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {!game.completed && (
+                                  <div className="text-2xl font-bold text-slate-600 px-6">VS</div>
+                                )}
+
+                                {/* Home Team */}
+                                <div className="flex items-center gap-3 flex-1 flex-row-reverse">
+                                  {game.homeTeamLogo && (
+                                    <Image src={game.homeTeamLogo} alt={game.homeTeamName} width={56} height={56} className="rounded-xl ring-2 ring-white/10 flex-shrink-0 object-cover" unoptimized />
+                                  )}
+                                  <div className="text-right">
+                                    <div className="text-base font-bold text-white">{game.homeTeamName}</div>
+                                    <div className="text-xs text-slate-400">Home</div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Game Info & Status */}
+                              <div className="flex items-center gap-4">
+                                <div className="text-right space-y-1">
+                                  <div className="text-xs text-slate-400">{game.date} • {game.time}</div>
+                                  <div className="text-xs text-slate-500">{game.venue}</div>
+                                  <div className="inline-block rounded-md bg-slate-700/50 px-2 py-0.5 text-[10px] font-bold uppercase text-slate-300">{game.gender}'s</div>
+                                </div>
+                                
+                                {/* Action Indicator */}
+                                <div className={`flex items-center gap-2 rounded-xl px-5 py-3 font-bold ${
+                                  game.completed 
+                                    ? "bg-emerald-500/20 text-emerald-300" 
+                                    : "bg-blue-500/20 text-blue-300"
+                                }`}>
+                                  <span className="text-lg">{game.completed ? "✏️" : "📝"}</span>
+                                  <span className="text-sm whitespace-nowrap">{game.completed ? "Edit" : "Collect"}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
                           {/* Status Badge */}
                           {game.completed && (
-                            <div className="absolute top-3 right-3 z-10">
-                              <div className="flex items-center gap-1.5 rounded-full bg-emerald-500/20 px-2.5 py-1 backdrop-blur-sm">
-                                <div className="h-1.5 w-1.5 rounded-full bg-emerald-400"></div>
+                            <div className="absolute top-3 left-3">
+                              <div className="flex items-center gap-1.5 rounded-full bg-emerald-500/20 px-2.5 py-1 backdrop-blur-sm border border-emerald-500/30">
+                                <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"></div>
                                 <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-300">Complete</span>
                               </div>
                             </div>
                           )}
-                          
-                          <div className="p-5">
-                            {/* Teams Matchup */}
-                            <div className="mb-4">
-                              <div className="flex items-center justify-between mb-3">
-                                <div className="flex items-center gap-3 flex-1">
-                                  {game.awayTeamLogo && (
-                                    <div className="relative h-12 w-12 rounded-full overflow-hidden bg-slate-800 ring-2 ring-slate-700">
-                                      <Image src={game.awayTeamLogo} alt={game.awayTeamName} fill className="object-cover" unoptimized />
-                                    </div>
-                                  )}
-                                  <div className="flex-1">
-                                    <div className="text-sm font-bold text-white">{game.awayTeamName}</div>
-                                    <div className="text-xs text-slate-400">Away</div>
-                                  </div>
-                                  {game.completed && (
-                                    <div className={`text-2xl font-bold tabular-nums ${game.winnerTeamId === game.awayTeamId ? 'text-emerald-400' : 'text-slate-500'}`}>
-                                      {game.winnerTeamId === game.awayTeamId ? game.winnerScore : game.loserScore}
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                              
-                              <div className="flex items-center justify-center my-2">
-                                <div className="h-px w-full bg-gradient-to-r from-transparent via-slate-600 to-transparent"></div>
-                                <div className="mx-3 text-xs font-semibold text-slate-500">VS</div>
-                                <div className="h-px w-full bg-gradient-to-r from-transparent via-slate-600 to-transparent"></div>
-                              </div>
-                              
-                              <div className="flex items-center justify-between mt-3">
-                                <div className="flex items-center gap-3 flex-1">
-                                  {game.homeTeamLogo && (
-                                    <div className="relative h-12 w-12 rounded-full overflow-hidden bg-slate-800 ring-2 ring-slate-700">
-                                      <Image src={game.homeTeamLogo} alt={game.homeTeamName} fill className="object-cover" unoptimized />
-                                    </div>
-                                  )}
-                                  <div className="flex-1">
-                                    <div className="text-sm font-bold text-white">{game.homeTeamName}</div>
-                                    <div className="text-xs text-slate-400">Home</div>
-                                  </div>
-                                  {game.completed && (
-                                    <div className={`text-2xl font-bold tabular-nums ${game.winnerTeamId === game.homeTeamId ? 'text-emerald-400' : 'text-slate-500'}`}>
-                                      {game.winnerTeamId === game.homeTeamId ? game.winnerScore : game.loserScore}
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Game Details */}
-                            <div className="flex flex-wrap gap-2 mb-4 text-xs">
-                              <div className="flex items-center gap-1.5 rounded-lg bg-slate-800/50 px-2.5 py-1.5">
-                                <span className="text-slate-400">📅</span>
-                                <span className="text-slate-300">{game.date}</span>
-                              </div>
-                              <div className="flex items-center gap-1.5 rounded-lg bg-slate-800/50 px-2.5 py-1.5">
-                                <span className="text-slate-400">🕐</span>
-                                <span className="text-slate-300">{game.time}</span>
-                              </div>
-                              <div className="flex items-center gap-1.5 rounded-lg bg-slate-800/50 px-2.5 py-1.5">
-                                <span className="text-slate-400">📍</span>
-                                <span className="text-slate-300">{game.venue}</span>
-                              </div>
-                              <div className="flex items-center gap-1.5 rounded-lg bg-slate-800/50 px-2.5 py-1.5">
-                                <span className="text-slate-300 uppercase font-semibold">{game.gender}'s</span>
-                              </div>
-                            </div>
-
-                            {/* Action Button */}
-                            <button
-                              type="button"
-                              onClick={() => handleSelectCompletedGame(game)}
-                              className={`w-full rounded-lg px-4 py-3 text-sm font-semibold uppercase tracking-wider transition-all ${
-                                game.completed
-                                  ? "bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 border border-emerald-500/30"
-                                  : "bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 border border-blue-500/30 shadow-lg shadow-blue-500/10"
-                              }`}
-                            >
-                              {game.completed ? "✏️ Edit Stats" : "📝 Collect Stats"}
-                            </button>
-                          </div>
-                        </div>
+                        </button>
                       ))
                     ) : (
-                      <div className="md:col-span-2 rounded-xl border border-dashed border-slate-700 bg-slate-900/40 p-12 text-center">
-                        <div className="text-4xl mb-4">📊</div>
-                        <p className="text-sm text-slate-400">No games available for stats collection</p>
-                        <p className="text-xs text-slate-500 mt-2">Games appear 45 minutes after start time</p>
+                      <div className="rounded-2xl border-2 border-dashed border-slate-700 bg-slate-900/40 p-16 text-center">
+                        <div className="text-6xl mb-4">📊</div>
+                        <p className="text-base font-semibold text-slate-300">No games available</p>
+                        <p className="text-sm text-slate-500 mt-2">Games appear 45 minutes after start time</p>
                       </div>
                     )}
                   </div>
@@ -6648,18 +6619,18 @@ export default function AdminPage() {
                   <div data-stats-form className="fixed inset-0 z-50 overflow-y-auto bg-slate-950">
                     {/* Header */}
                     <div className="sticky top-0 z-10 border-b border-emerald-500/30 bg-slate-900/95 backdrop-blur-sm">
-                      <div className="mx-auto max-w-[1600px] px-6 py-4">
+                      <div className="mx-auto max-w-[1600px] px-4 py-2.5">
                         <div className="flex items-center justify-between">
                           <div>
-                            <div className="flex items-center gap-3">
-                              <div className="rounded-lg bg-emerald-500/20 p-2">
-                                <span className="text-2xl">📊</span>
+                            <div className="flex items-center gap-2">
+                              <div className="rounded bg-emerald-500/20 p-1.5">
+                                <span className="text-lg">📊</span>
                               </div>
                               <div>
-                                <h2 className="text-2xl font-bold text-white">
+                                <h2 className="text-lg font-bold text-white">
                                   {selectedCompletedGame.awayTeamName} @ {selectedCompletedGame.homeTeamName}
                                 </h2>
-                                <p className="text-sm text-slate-400">
+                                <p className="text-xs text-slate-400">
                                   {selectedCompletedGame.date} · {selectedCompletedGame.time} · {selectedCompletedGame.venue}
                                 </p>
                               </div>
@@ -6675,9 +6646,9 @@ export default function AdminPage() {
                               setPlayerStatsMap({});
                               setLoserStatsMap({});
                             }}
-                            className="rounded-lg bg-slate-800 p-3 text-slate-400 hover:bg-slate-700 hover:text-white transition"
+                            className="rounded bg-slate-800 p-2 text-slate-400 hover:bg-slate-700 hover:text-white transition"
                           >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                             </svg>
                           </button>
@@ -6686,35 +6657,35 @@ export default function AdminPage() {
                     </div>
 
                     {/* Content */}
-                    <div className="mx-auto max-w-[1800px] px-6 py-8">
-                      <div className="space-y-6">
+                    <div className="mx-auto max-w-[1800px] px-4 py-4">
+                      <div className="space-y-4">
 
                         {/* Modern Score Input with Quick Winner Selection */}
-                        <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-slate-800/50 to-slate-900 overflow-hidden shadow-2xl">
+                        <div className="rounded-xl border border-white/10 bg-gradient-to-br from-slate-800/50 to-slate-900 overflow-hidden shadow-xl">
                           
                           {/* Matchup Header with Interactive Score Cards */}
-                          <div className="relative bg-gradient-to-br from-slate-800 to-slate-900 px-8 py-6">
-                            <div className="flex items-center justify-center gap-8">
+                          <div className="relative bg-gradient-to-br from-slate-800 to-slate-900 px-4 py-3">
+                            <div className="flex items-center justify-center gap-4">
                               
                               {/* Away Team Card - Clickable */}
                               <button
                                 type="button"
                                 onClick={() => handleWinnerChange(selectedCompletedGame.awayTeamId)}
-                                className={`group relative flex-1 max-w-md rounded-2xl border-2 p-6 transition-all duration-300 ${
+                                className={`group relative flex-1 max-w-xs rounded-xl border-2 p-3 transition-all duration-300 ${
                                   gameStatsForm.winnerTeamId === selectedCompletedGame.awayTeamId
-                                    ? 'border-emerald-500 bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 shadow-xl shadow-emerald-500/20 scale-105'
+                                    ? 'border-emerald-500 bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 shadow-lg shadow-emerald-500/20 scale-105'
                                     : 'border-slate-600/50 bg-slate-800/50 hover:border-slate-500 hover:scale-102'
                                 }`}
                               >
-                                <div className="flex flex-col items-center gap-4">
+                                <div className="flex flex-col items-center gap-2">
                                   {selectedCompletedGame.awayTeamLogo && (
                                     <div className={`relative ${gameStatsForm.winnerTeamId === selectedCompletedGame.awayTeamId ? 'animate-pulse' : ''}`}>
                                       <Image 
                                         src={selectedCompletedGame.awayTeamLogo} 
                                         alt={selectedCompletedGame.awayTeamName} 
-                                        width={80} 
-                                        height={80} 
-                                        className={`h-20 w-20 rounded-full object-cover transition-all ${
+                                        width={48} 
+                                        height={48} 
+                                        className={`h-12 w-12 rounded-full object-cover transition-all ${
                                           gameStatsForm.winnerTeamId === selectedCompletedGame.awayTeamId 
                                             ? 'ring-4 ring-emerald-400 shadow-lg shadow-emerald-400/50' 
                                             : 'ring-2 ring-slate-600 group-hover:ring-slate-500'
@@ -6722,15 +6693,15 @@ export default function AdminPage() {
                                         unoptimized 
                                       />
                                       {gameStatsForm.winnerTeamId === selectedCompletedGame.awayTeamId && (
-                                        <div className="absolute -top-2 -right-2 flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500 shadow-lg">
-                                          <span className="text-lg">🏆</span>
+                                        <div className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 shadow-lg">
+                                          <span className="text-xs">🏆</span>
                                         </div>
                                       )}
                                     </div>
                                   )}
                                   <div className="text-center">
-                                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Away</p>
-                                    <h3 className="mt-1 text-xl font-bold text-white">{selectedCompletedGame.awayTeamName}</h3>
+                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Away</p>
+                                    <h3 className="mt-0.5 text-sm font-bold text-white">{selectedCompletedGame.awayTeamName}</h3>
                                   </div>
                                   <input
                                     type="number"
@@ -6745,7 +6716,7 @@ export default function AdminPage() {
                                     onClick={(e) => e.stopPropagation()}
                                     placeholder="0"
                                     min="0"
-                                    className={`w-32 rounded-xl border-2 px-4 py-3 text-center text-5xl font-black transition-all focus:outline-none focus:ring-4 tabular-nums ${
+                                    className={`w-20 rounded-lg border-2 px-2 py-1.5 text-center text-3xl font-black transition-all focus:outline-none focus:ring-2 tabular-nums ${
                                       gameStatsForm.winnerTeamId === selectedCompletedGame.awayTeamId
                                         ? 'border-emerald-500/50 bg-slate-900 text-emerald-400 focus:border-emerald-400 focus:ring-emerald-400/30'
                                         : 'border-slate-600/50 bg-slate-900/50 text-slate-300 focus:border-slate-500 focus:ring-slate-500/30'
@@ -6755,32 +6726,32 @@ export default function AdminPage() {
                               </button>
 
                               {/* VS Divider */}
-                              <div className="flex flex-col items-center gap-2 px-4">
-                                <div className="rounded-full bg-slate-700/50 px-6 py-3 backdrop-blur-sm">
-                                  <span className="text-xl font-black uppercase tracking-wider text-slate-400">VS</span>
+                              <div className="flex flex-col items-center gap-1 px-2">
+                                <div className="rounded-full bg-slate-700/50 px-3 py-1.5 backdrop-blur-sm">
+                                  <span className="text-sm font-black uppercase tracking-wider text-slate-400">VS</span>
                                 </div>
-                                <p className="text-xs text-slate-500">Click team to select winner</p>
+                                <p className="text-[10px] text-slate-500">Click team to select winner</p>
                               </div>
 
                               {/* Home Team Card - Clickable */}
                               <button
                                 type="button"
                                 onClick={() => handleWinnerChange(selectedCompletedGame.homeTeamId)}
-                                className={`group relative flex-1 max-w-md rounded-2xl border-2 p-6 transition-all duration-300 ${
+                                className={`group relative flex-1 max-w-xs rounded-xl border-2 p-3 transition-all duration-300 ${
                                   gameStatsForm.winnerTeamId === selectedCompletedGame.homeTeamId
-                                    ? 'border-emerald-500 bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 shadow-xl shadow-emerald-500/20 scale-105'
+                                    ? 'border-emerald-500 bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 shadow-lg shadow-emerald-500/20 scale-105'
                                     : 'border-slate-600/50 bg-slate-800/50 hover:border-slate-500 hover:scale-102'
                                 }`}
                               >
-                                <div className="flex flex-col items-center gap-4">
+                                <div className="flex flex-col items-center gap-2">
                                   {selectedCompletedGame.homeTeamLogo && (
                                     <div className={`relative ${gameStatsForm.winnerTeamId === selectedCompletedGame.homeTeamId ? 'animate-pulse' : ''}`}>
                                       <Image 
                                         src={selectedCompletedGame.homeTeamLogo} 
                                         alt={selectedCompletedGame.homeTeamName} 
-                                        width={80} 
-                                        height={80} 
-                                        className={`h-20 w-20 rounded-full object-cover transition-all ${
+                                        width={48} 
+                                        height={48} 
+                                        className={`h-12 w-12 rounded-full object-cover transition-all ${
                                           gameStatsForm.winnerTeamId === selectedCompletedGame.homeTeamId 
                                             ? 'ring-4 ring-emerald-400 shadow-lg shadow-emerald-400/50' 
                                             : 'ring-2 ring-slate-600 group-hover:ring-slate-500'
@@ -6788,15 +6759,15 @@ export default function AdminPage() {
                                         unoptimized 
                                       />
                                       {gameStatsForm.winnerTeamId === selectedCompletedGame.homeTeamId && (
-                                        <div className="absolute -top-2 -right-2 flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500 shadow-lg">
-                                          <span className="text-lg">🏆</span>
+                                        <div className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 shadow-lg">
+                                          <span className="text-xs">🏆</span>
                                         </div>
                                       )}
                                     </div>
                                   )}
                                   <div className="text-center">
-                                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Home</p>
-                                    <h3 className="mt-1 text-xl font-bold text-white">{selectedCompletedGame.homeTeamName}</h3>
+                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Home</p>
+                                    <h3 className="mt-0.5 text-sm font-bold text-white">{selectedCompletedGame.homeTeamName}</h3>
                                   </div>
                                   <input
                                     type="number"
@@ -6811,7 +6782,7 @@ export default function AdminPage() {
                                     onClick={(e) => e.stopPropagation()}
                                     placeholder="0"
                                     min="0"
-                                    className={`w-32 rounded-xl border-2 px-4 py-3 text-center text-5xl font-black transition-all focus:outline-none focus:ring-4 tabular-nums ${
+                                    className={`w-20 rounded-lg border-2 px-2 py-1.5 text-center text-3xl font-black transition-all focus:outline-none focus:ring-2 tabular-nums ${
                                       gameStatsForm.winnerTeamId === selectedCompletedGame.homeTeamId
                                         ? 'border-emerald-500/50 bg-slate-900 text-emerald-400 focus:border-emerald-400 focus:ring-emerald-400/30'
                                         : 'border-slate-600/50 bg-slate-900/50 text-slate-300 focus:border-slate-500 focus:ring-slate-500/30'
@@ -6825,23 +6796,23 @@ export default function AdminPage() {
 
                         {/* Winner Team Player Stats */}
                         {winnerRoster.length > 0 && (
-                          <div className="rounded-3xl border border-emerald-500/30 bg-gradient-to-br from-emerald-500/5 to-slate-900 overflow-hidden shadow-xl">
-                            <div className="bg-gradient-to-r from-emerald-600/20 to-emerald-500/20 px-8 py-5 border-b border-emerald-500/30">
+                          <div className="rounded-xl border border-emerald-500/30 bg-gradient-to-br from-emerald-500/5 to-slate-900 overflow-hidden shadow-lg">
+                            <div className="bg-gradient-to-r from-emerald-600/20 to-emerald-500/20 px-4 py-2.5 border-b border-emerald-500/30">
                               <div className="flex items-center justify-between">
                                 <div>
-                                  <div className="flex items-center gap-3 mb-1">
-                                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/20 backdrop-blur-sm">
-                                      <span className="text-2xl">🏆</span>
+                                  <div className="flex items-center gap-2 mb-0.5">
+                                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500/20 backdrop-blur-sm">
+                                      <span className="text-base">🏆</span>
                                     </div>
-                                    <h3 className="text-2xl font-black text-white">
+                                    <h3 className="text-lg font-black text-white">
                                       {gameStatsForm.winnerTeamId === selectedCompletedGame.homeTeamId ? selectedCompletedGame.homeTeamName : selectedCompletedGame.awayTeamName}
                                     </h3>
                                   </div>
-                                  <p className="text-sm text-emerald-300 ml-13">Winner - {winnerRoster.length} players</p>
+                                  <p className="text-xs text-emerald-300 ml-9">Winner - {winnerRoster.length} players</p>
                                 </div>
                                 <div className="text-right">
-                                  <p className="text-xs text-slate-400 uppercase tracking-wider">Team Score</p>
-                                  <p className="text-4xl font-black text-emerald-400 tabular-nums">{gameStatsForm.winnerScore || 0}</p>
+                                  <p className="text-[10px] text-slate-400 uppercase tracking-wider">Team Score</p>
+                                  <p className="text-2xl font-black text-emerald-400 tabular-nums">{gameStatsForm.winnerScore || 0}</p>
                                 </div>
                               </div>
                             </div>
@@ -6849,92 +6820,39 @@ export default function AdminPage() {
                             <div className="overflow-x-auto">
                               <table className="w-full">
                                 <thead>
+                                  {/* Category Headers */}
+                                  <tr className="border-b border-emerald-500/10">
+                                    <th className="sticky left-0 z-30 bg-slate-900 px-4 py-1"></th>
+                                    <th colSpan={6} className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-blue-500/5 border-x border-blue-500/20">
+                                      Shooting
+                                    </th>
+                                    <th colSpan={1} className="px-2 py-1"></th>
+                                    <th colSpan={5} className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-purple-500/5 border-x border-purple-500/20">
+                                      Defense & Stats
+                                    </th>
+                                    <th colSpan={2} className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-red-500/5 border-x border-red-500/20">
+                                      Fouls
+                                    </th>
+                                  </tr>
+                                  {/* Stat Headers */}
                                   <tr className="sticky top-0 z-20 border-b-2 border-emerald-500/20 bg-gradient-to-b from-slate-900 to-slate-900/95 backdrop-blur-sm">
-                                    <th className="sticky left-0 z-30 bg-gradient-to-b from-slate-900 to-slate-900/95 px-6 py-4 text-left text-xs font-bold text-emerald-300 uppercase tracking-wider min-w-[260px] max-w-[300px]">Player</th>
-                                    <th className="px-4 py-4 text-center">
-                                      <div className="flex flex-col items-center gap-1">
-                                        <span className="text-xs font-bold text-slate-400 uppercase">2PM</span>
-                                        <span className="text-[10px] text-slate-500">Made</span>
-                                      </div>
+                                    <th className="sticky left-0 z-30 bg-gradient-to-b from-slate-900 to-slate-900/95 px-4 py-2 text-left text-[10px] font-bold text-emerald-300 uppercase tracking-wider min-w-[180px]">Player</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">2PM</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">2PA</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">3PM</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">3PA</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">FTM</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">FTA</th>
+                                    <th className="px-2 py-2 text-center bg-emerald-500/10">
+                                      <span className="text-xs font-black text-emerald-400 uppercase">PTS</span>
                                     </th>
-                                    <th className="px-4 py-4 text-center">
-                                      <div className="flex flex-col items-center gap-1">
-                                        <span className="text-xs font-bold text-slate-400 uppercase">2PA</span>
-                                        <span className="text-[10px] text-slate-500">Attempt</span>
-                                      </div>
-                                    </th>
-                                    <th className="px-4 py-4 text-center">
-                                      <div className="flex flex-col items-center gap-1">
-                                        <span className="text-xs font-bold text-slate-400 uppercase">3PM</span>
-                                        <span className="text-[10px] text-slate-500">Made</span>
-                                      </div>
-                                    </th>
-                                    <th className="px-4 py-4 text-center">
-                                      <div className="flex flex-col items-center gap-1">
-                                        <span className="text-xs font-bold text-slate-400 uppercase">3PA</span>
-                                        <span className="text-[10px] text-slate-500">Attempt</span>
-                                      </div>
-                                    </th>
-                                    <th className="px-4 py-4 text-center">
-                                      <div className="flex flex-col items-center gap-1">
-                                        <span className="text-xs font-bold text-slate-400 uppercase">FTM</span>
-                                        <span className="text-[10px] text-slate-500">Made</span>
-                                      </div>
-                                    </th>
-                                    <th className="px-4 py-4 text-center">
-                                      <div className="flex flex-col items-center gap-1">
-                                        <span className="text-xs font-bold text-slate-400 uppercase">FTA</span>
-                                        <span className="text-[10px] text-slate-500">Attempt</span>
-                                      </div>
-                                    </th>
-                                    <th className="px-4 py-4 text-center bg-gradient-to-r from-transparent via-emerald-500/10 to-transparent">
-                                      <div className="flex flex-col items-center gap-1">
-                                        <span className="text-xs font-bold text-emerald-400 uppercase">PTS</span>
-                                        <span className="text-[10px] text-emerald-300/70">Points</span>
-                                      </div>
-                                    </th>
-                                    <th className="px-4 py-4 text-center">
-                                      <div className="flex flex-col items-center gap-1">
-                                        <span className="text-xs font-bold text-slate-400 uppercase">AST</span>
-                                        <span className="text-[10px] text-slate-500">Assists</span>
-                                      </div>
-                                    </th>
-                                    <th className="px-4 py-4 text-center">
-                                      <div className="flex flex-col items-center gap-1">
-                                        <span className="text-xs font-bold text-slate-400 uppercase">OREB</span>
-                                        <span className="text-[10px] text-slate-500">Off Reb</span>
-                                      </div>
-                                    </th>
-                                    <th className="px-4 py-4 text-center">
-                                      <div className="flex flex-col items-center gap-1">
-                                        <span className="text-xs font-bold text-slate-400 uppercase">DREB</span>
-                                        <span className="text-[10px] text-slate-500">Def Reb</span>
-                                      </div>
-                                    </th>
-                                    <th className="px-4 py-4 text-center">
-                                      <div className="flex flex-col items-center gap-1">
-                                        <span className="text-xs font-bold text-slate-400 uppercase">STL</span>
-                                        <span className="text-[10px] text-slate-500">Steals</span>
-                                      </div>
-                                    </th>
-                                    <th className="px-4 py-4 text-center">
-                                      <div className="flex flex-col items-center gap-1">
-                                        <span className="text-xs font-bold text-slate-400 uppercase">BLK</span>
-                                        <span className="text-[10px] text-slate-500">Blocks</span>
-                                      </div>
-                                    </th>
-                                    <th className="px-4 py-4 text-center">
-                                      <div className="flex flex-col items-center gap-1">
-                                        <span className="text-xs font-bold text-slate-400 uppercase">TO</span>
-                                        <span className="text-[10px] text-slate-500">Turnovrs</span>
-                                      </div>
-                                    </th>
-                                    <th className="px-4 py-4 text-center">
-                                      <div className="flex flex-col items-center gap-1">
-                                        <span className="text-xs font-bold text-slate-400 uppercase">PF</span>
-                                        <span className="text-[10px] text-slate-500">Fouls</span>
-                                      </div>
-                                    </th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">AST</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">OR</th>
+                                    <th className="px-2 py-3 text-center text-[11px] font-bold text-slate-400 uppercase">DR</th>
+                                    <th className="px-2 py-3 text-center text-[11px] font-bold text-slate-400 uppercase">STL</th>
+                                    <th className="px-2 py-3 text-center text-[11px] font-bold text-slate-400 uppercase">BLK</th>
+                                    <th className="px-2 py-3 text-center text-[11px] font-bold text-slate-400 uppercase">TO</th>
+                                    <th className="px-2 py-3 text-center text-[11px] font-bold text-slate-400 uppercase">PF</th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -6942,22 +6860,19 @@ export default function AdminPage() {
                                     const stats = playerStatsMap[player.id] || { two_pm: "", two_pa: "", three_pm: "", three_pa: "", ft_m: "", ft_a: "", ast: "", oreb: "", dreb: "", reb: "", stl: "", blk: "", fls: "", min: "", pf: "", to: "" };
                                     const totalPoints = (parseInt(stats.two_pm) || 0) * 2 + (parseInt(stats.three_pm) || 0) * 3 + (parseInt(stats.ft_m) || 0);
                                     return (
-                                      <tr key={player.id} className={`group border-b border-emerald-500/10 transition-all hover:bg-emerald-500/5 ${idx % 2 === 0 ? 'bg-slate-900/40' : 'bg-slate-900/20'}`}>
-                                        <td className="sticky left-0 z-10 bg-slate-900/95 px-6 py-4 backdrop-blur-sm min-w-[260px] max-w-[300px] border-r border-emerald-500/10 group-hover:bg-emerald-500/5">
-                                          <div className="flex items-center gap-4">
+                                      <tr key={player.id} className={`group border-b border-emerald-500/10 hover:bg-emerald-500/5 ${idx % 2 === 0 ? 'bg-slate-900/40' : 'bg-slate-900/20'}`}>
+                                        <td className="sticky left-0 z-10 bg-slate-900/95 px-4 py-1.5 backdrop-blur-sm min-w-[180px] border-r border-emerald-500/10 group-hover:bg-emerald-500/5">
+                                          <div className="flex items-center gap-1.5">
+                                            <span className="inline-flex items-center justify-center rounded bg-emerald-500/20 px-1 py-0.5 text-[10px] font-black text-emerald-300 min-w-[24px]">#{player.number}</span>
                                             {player.headshot && (
-                                              <Image src={player.headshot} alt={`${player.firstName} ${player.lastName}`} width={48} height={48} className="h-12 w-12 rounded-full ring-2 ring-emerald-500/30 flex-shrink-0 object-cover" unoptimized />
+                                              <Image src={player.headshot} alt={`${player.firstName} ${player.lastName}`} width={24} height={24} className="h-6 w-6 rounded-full ring-1 ring-emerald-500/30 flex-shrink-0 object-cover" unoptimized />
                                             )}
                                             <div className="min-w-0 flex-1">
-                                              <p className="text-sm font-bold text-white truncate">
-                                                <span className="inline-flex items-center justify-center rounded-md bg-emerald-500/20 px-2 py-0.5 text-xs font-black text-emerald-300 mr-2">#{player.number}</span>
-                                                {player.firstName} {player.lastName}
-                                              </p>
-                                              <p className="text-xs text-slate-400 mt-0.5">{player.height}</p>
+                                              <p className="text-xs font-bold text-white truncate">{player.firstName} {player.lastName}</p>
                                             </div>
                                           </div>
                                         </td>
-                                        <td className="px-4 py-4">
+                                        <td className="px-2 py-1.5">
                                           <input type="number" value={stats.two_pm} onChange={(e) => {
                                             const made = parseInt(e.target.value) || 0;
                                             const attempts = parseInt(stats.two_pa) || 0;
@@ -6966,9 +6881,9 @@ export default function AdminPage() {
                                             } else {
                                               setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, two_pm: e.target.value }});
                                             }
-                                          }} min="0" className="w-20 rounded-lg border-2 border-slate-600/50 bg-slate-800/80 px-3 py-2.5 text-center text-base font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition-all" placeholder="0" />
+                                          }} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30" placeholder="0" />
                                         </td>
-                                        <td className="px-4 py-4">
+                                        <td className="px-2 py-1.5">
                                           <input type="number" value={stats.two_pa} onChange={(e) => {
                                             const attempts = parseInt(e.target.value) || 0;
                                             const made = parseInt(stats.two_pm) || 0;
@@ -6977,9 +6892,9 @@ export default function AdminPage() {
                                             } else {
                                               setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, two_pa: e.target.value }});
                                             }
-                                          }} min="0" className="w-20 rounded-lg border-2 border-slate-600/50 bg-slate-800/80 px-3 py-2.5 text-center text-base font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition-all" placeholder="0" />
+                                          }} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30" placeholder="0" />
                                         </td>
-                                        <td className="px-4 py-4">
+                                        <td className="px-2 py-1.5">
                                           <input type="number" value={stats.three_pm} onChange={(e) => {
                                             const made = parseInt(e.target.value) || 0;
                                             const attempts = parseInt(stats.three_pa) || 0;
@@ -6988,9 +6903,9 @@ export default function AdminPage() {
                                             } else {
                                               setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, three_pm: e.target.value }});
                                             }
-                                          }} min="0" className="w-20 rounded-lg border-2 border-slate-600/50 bg-slate-800/80 px-3 py-2.5 text-center text-base font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition-all" placeholder="0" />
+                                          }} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30" placeholder="0" />
                                         </td>
-                                        <td className="px-4 py-4">
+                                        <td className="px-2 py-1.5">
                                           <input type="number" value={stats.three_pa} onChange={(e) => {
                                             const attempts = parseInt(e.target.value) || 0;
                                             const made = parseInt(stats.three_pm) || 0;
@@ -6999,9 +6914,9 @@ export default function AdminPage() {
                                             } else {
                                               setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, three_pa: e.target.value }});
                                             }
-                                          }} min="0" className="w-20 rounded-lg border-2 border-slate-600/50 bg-slate-800/80 px-3 py-2.5 text-center text-base font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition-all" placeholder="0" />
+                                          }} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30" placeholder="0" />
                                         </td>
-                                        <td className="px-4 py-4">
+                                        <td className="px-2 py-1.5">
                                           <input type="number" value={stats.ft_m} onChange={(e) => {
                                             const made = parseInt(e.target.value) || 0;
                                             const attempts = parseInt(stats.ft_a) || 0;
@@ -7010,9 +6925,9 @@ export default function AdminPage() {
                                             } else {
                                               setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, ft_m: e.target.value }});
                                             }
-                                          }} min="0" className="w-20 rounded-lg border-2 border-slate-600/50 bg-slate-800/80 px-3 py-2.5 text-center text-base font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition-all" placeholder="0" />
+                                          }} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30" placeholder="0" />
                                         </td>
-                                        <td className="px-4 py-4">
+                                        <td className="px-2 py-1.5">
                                           <input type="number" value={stats.ft_a} onChange={(e) => {
                                             const attempts = parseInt(e.target.value) || 0;
                                             const made = parseInt(stats.ft_m) || 0;
@@ -7021,50 +6936,48 @@ export default function AdminPage() {
                                             } else {
                                               setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, ft_a: e.target.value }});
                                             }
-                                          }} min="0" className="w-20 rounded-lg border-2 border-slate-600/50 bg-slate-800/80 px-3 py-2.5 text-center text-base font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition-all" placeholder="0" />
+                                          }} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30" placeholder="0" />
                                         </td>
-                                        <td className="px-4 py-4 bg-gradient-to-r from-transparent via-emerald-500/10 to-transparent">
+                                        <td className="px-2 py-1.5 bg-emerald-500/10">
                                           <div className="flex items-center justify-center">
-                                            <div className="rounded-lg bg-emerald-500/20 px-4 py-2 backdrop-blur-sm">
-                                              <span className="text-2xl font-black text-emerald-300 tabular-nums">{totalPoints}</span>
-                                            </div>
+                                            <span className="text-base font-black text-emerald-300 tabular-nums">{totalPoints}</span>
                                           </div>
                                         </td>
-                                        <td className="px-4 py-4">
-                                          <input type="number" value={stats.ast} onChange={(e) => setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, ast: e.target.value }})} min="0" className="w-20 rounded-lg border-2 border-slate-600/50 bg-slate-800/80 px-3 py-2.5 text-center text-base font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition-all" placeholder="0" />
+                                        <td className="px-2 py-1.5">
+                                          <input type="number" value={stats.ast} onChange={(e) => setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, ast: e.target.value }})} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30" placeholder="0" />
                                         </td>
-                                        <td className="px-4 py-4">
+                                        <td className="px-2 py-1.5">
                                           <input type="number" value={stats.oreb} onChange={(e) => {
                                             const oreb = parseInt(e.target.value) || 0;
                                             const dreb = parseInt(stats.dreb) || 0;
                                             const reb = (oreb + dreb).toString();
                                             setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, oreb: e.target.value, reb }});
-                                          }} min="0" className="w-20 rounded-lg border-2 border-slate-600/50 bg-slate-800/80 px-3 py-2.5 text-center text-base font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition-all" placeholder="0" />
+                                          }} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30" placeholder="0" />
                                         </td>
-                                        <td className="px-4 py-4">
+                                        <td className="px-2 py-1.5">
                                           <input type="number" value={stats.dreb} onChange={(e) => {
                                             const dreb = parseInt(e.target.value) || 0;
                                             const oreb = parseInt(stats.oreb) || 0;
                                             const reb = (oreb + dreb).toString();
                                             setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, dreb: e.target.value, reb }});
-                                          }} min="0" className="w-20 rounded-lg border-2 border-slate-600/50 bg-slate-800/80 px-3 py-2.5 text-center text-base font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition-all" placeholder="0" />
+                                          }} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30" placeholder="0" />
                                         </td>
-                                        <td className="px-4 py-4">
-                                          <input type="number" value={stats.stl} onChange={(e) => setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, stl: e.target.value }})} min="0" className="w-20 rounded-lg border-2 border-slate-600/50 bg-slate-800/80 px-3 py-2.5 text-center text-base font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition-all" placeholder="0" />
+                                        <td className="px-2 py-1.5">
+                                          <input type="number" value={stats.stl} onChange={(e) => setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, stl: e.target.value }})} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30" placeholder="0" />
                                         </td>
-                                        <td className="px-4 py-4">
-                                          <input type="number" value={stats.blk} onChange={(e) => setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, blk: e.target.value }})} min="0" className="w-20 rounded-lg border-2 border-slate-600/50 bg-slate-800/80 px-3 py-2.5 text-center text-base font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition-all" placeholder="0" />
+                                        <td className="px-2 py-1.5">
+                                          <input type="number" value={stats.blk} onChange={(e) => setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, blk: e.target.value }})} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30" placeholder="0" />
                                         </td>
-                                        <td className="px-4 py-4">
-                                          <input type="number" value={stats.to} onChange={(e) => setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, to: e.target.value }})} min="0" className="w-20 rounded-lg border-2 border-slate-600/50 bg-slate-800/80 px-3 py-2.5 text-center text-base font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition-all" placeholder="0" />
+                                        <td className="px-2 py-1.5">
+                                          <input type="number" value={stats.to} onChange={(e) => setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, to: e.target.value }})} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30" placeholder="0" />
                                         </td>
-                                        <td className="px-4 py-4">
+                                        <td className="px-2 py-1.5">
                                           <input type="number" value={stats.fls} onChange={(e) => {
                                             const value = parseInt(e.target.value) || 0;
                                             if (value <= 6) {
                                               setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, fls: e.target.value }});
                                             }
-                                          }} min="0" max="6" className="w-20 rounded-lg border-2 border-slate-600/50 bg-slate-800/80 px-3 py-2.5 text-center text-base font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition-all" placeholder="0" />
+                                          }} min="0" max="6" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30" placeholder="0" />
                                         </td>
                                       </tr>
                                     );
@@ -7077,23 +6990,23 @@ export default function AdminPage() {
 
                         {/* Loser Team Player Stats */}
                         {loserRoster.length > 0 && (
-                          <div className="rounded-3xl border border-slate-500/30 bg-gradient-to-br from-slate-500/5 to-slate-900 overflow-hidden shadow-xl">
-                            <div className="bg-gradient-to-r from-slate-600/20 to-slate-500/20 px-8 py-5 border-b border-slate-500/30">
+                          <div className="rounded-xl border border-slate-500/30 bg-gradient-to-br from-slate-500/5 to-slate-900 overflow-hidden shadow-lg">
+                            <div className="bg-gradient-to-r from-slate-600/20 to-slate-500/20 px-4 py-2.5 border-b border-slate-500/30">
                               <div className="flex items-center justify-between">
                                 <div>
-                                  <div className="flex items-center gap-3 mb-1">
-                                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-500/20 backdrop-blur-sm">
-                                      <span className="text-2xl">🥈</span>
+                                  <div className="flex items-center gap-2 mb-0.5">
+                                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-500/20 backdrop-blur-sm">
+                                      <span className="text-base">🥈</span>
                                     </div>
-                                    <h3 className="text-2xl font-black text-white">
+                                    <h3 className="text-lg font-black text-white">
                                       {gameStatsForm.winnerTeamId === selectedCompletedGame.homeTeamId ? selectedCompletedGame.awayTeamName : selectedCompletedGame.homeTeamName}
                                     </h3>
                                   </div>
-                                  <p className="text-sm text-slate-300 ml-13">{loserRoster.length} players</p>
+                                  <p className="text-xs text-slate-300 ml-9">{loserRoster.length} players</p>
                                 </div>
                                 <div className="text-right">
-                                  <p className="text-xs text-slate-400 uppercase tracking-wider">Team Score</p>
-                                  <p className="text-4xl font-black text-slate-300 tabular-nums">{gameStatsForm.loserScore || 0}</p>
+                                  <p className="text-[10px] text-slate-400 uppercase tracking-wider">Team Score</p>
+                                  <p className="text-2xl font-black text-slate-300 tabular-nums">{gameStatsForm.loserScore || 0}</p>
                                 </div>
                               </div>
                             </div>
@@ -7101,92 +7014,39 @@ export default function AdminPage() {
                             <div className="overflow-x-auto">
                               <table className="w-full">
                                 <thead>
+                                  {/* Category Headers */}
+                                  <tr className="border-b border-slate-500/10">
+                                    <th className="sticky left-0 z-30 bg-slate-900 px-4 py-1"></th>
+                                    <th colSpan={6} className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-blue-500/5 border-x border-blue-500/20">
+                                      Shooting
+                                    </th>
+                                    <th colSpan={1} className="px-2 py-1"></th>
+                                    <th colSpan={5} className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-purple-500/5 border-x border-purple-500/20">
+                                      Defense & Stats
+                                    </th>
+                                    <th colSpan={2} className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-red-500/5 border-x border-red-500/20">
+                                      Fouls
+                                    </th>
+                                  </tr>
+                                  {/* Stat Headers */}
                                   <tr className="sticky top-0 z-20 border-b-2 border-slate-500/20 bg-gradient-to-b from-slate-900 to-slate-900/95 backdrop-blur-sm">
-                                    <th className="sticky left-0 z-30 bg-gradient-to-b from-slate-900 to-slate-900/95 px-6 py-4 text-left text-xs font-bold text-slate-300 uppercase tracking-wider min-w-[260px] max-w-[300px]">Player</th>
-                                    <th className="px-4 py-4 text-center">
-                                      <div className="flex flex-col items-center gap-1">
-                                        <span className="text-xs font-bold text-slate-400 uppercase">2PM</span>
-                                        <span className="text-[10px] text-slate-500">Made</span>
-                                      </div>
+                                    <th className="sticky left-0 z-30 bg-gradient-to-b from-slate-900 to-slate-900/95 px-4 py-2 text-left text-[10px] font-bold text-slate-300 uppercase tracking-wider min-w-[180px]">Player</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">2PM</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">2PA</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">3PM</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">3PA</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">FTM</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">FTA</th>
+                                    <th className="px-2 py-2 text-center bg-slate-500/10">
+                                      <span className="text-xs font-black text-slate-300 uppercase">PTS</span>
                                     </th>
-                                    <th className="px-4 py-4 text-center">
-                                      <div className="flex flex-col items-center gap-1">
-                                        <span className="text-xs font-bold text-slate-400 uppercase">2PA</span>
-                                        <span className="text-[10px] text-slate-500">Attempt</span>
-                                      </div>
-                                    </th>
-                                    <th className="px-4 py-4 text-center">
-                                      <div className="flex flex-col items-center gap-1">
-                                        <span className="text-xs font-bold text-slate-400 uppercase">3PM</span>
-                                        <span className="text-[10px] text-slate-500">Made</span>
-                                      </div>
-                                    </th>
-                                    <th className="px-4 py-4 text-center">
-                                      <div className="flex flex-col items-center gap-1">
-                                        <span className="text-xs font-bold text-slate-400 uppercase">3PA</span>
-                                        <span className="text-[10px] text-slate-500">Attempt</span>
-                                      </div>
-                                    </th>
-                                    <th className="px-4 py-4 text-center">
-                                      <div className="flex flex-col items-center gap-1">
-                                        <span className="text-xs font-bold text-slate-400 uppercase">FTM</span>
-                                        <span className="text-[10px] text-slate-500">Made</span>
-                                      </div>
-                                    </th>
-                                    <th className="px-4 py-4 text-center">
-                                      <div className="flex flex-col items-center gap-1">
-                                        <span className="text-xs font-bold text-slate-400 uppercase">FTA</span>
-                                        <span className="text-[10px] text-slate-500">Attempt</span>
-                                      </div>
-                                    </th>
-                                    <th className="px-4 py-4 text-center bg-gradient-to-r from-transparent via-slate-500/10 to-transparent">
-                                      <div className="flex flex-col items-center gap-1">
-                                        <span className="text-xs font-bold text-slate-300 uppercase">PTS</span>
-                                        <span className="text-[10px] text-slate-400">Points</span>
-                                      </div>
-                                    </th>
-                                    <th className="px-4 py-4 text-center">
-                                      <div className="flex flex-col items-center gap-1">
-                                        <span className="text-xs font-bold text-slate-400 uppercase">AST</span>
-                                        <span className="text-[10px] text-slate-500">Assists</span>
-                                      </div>
-                                    </th>
-                                    <th className="px-4 py-4 text-center">
-                                      <div className="flex flex-col items-center gap-1">
-                                        <span className="text-xs font-bold text-slate-400 uppercase">OREB</span>
-                                        <span className="text-[10px] text-slate-500">Off Reb</span>
-                                      </div>
-                                    </th>
-                                    <th className="px-4 py-4 text-center">
-                                      <div className="flex flex-col items-center gap-1">
-                                        <span className="text-xs font-bold text-slate-400 uppercase">DREB</span>
-                                        <span className="text-[10px] text-slate-500">Def Reb</span>
-                                      </div>
-                                    </th>
-                                    <th className="px-4 py-4 text-center">
-                                      <div className="flex flex-col items-center gap-1">
-                                        <span className="text-xs font-bold text-slate-400 uppercase">STL</span>
-                                        <span className="text-[10px] text-slate-500">Steals</span>
-                                      </div>
-                                    </th>
-                                    <th className="px-4 py-4 text-center">
-                                      <div className="flex flex-col items-center gap-1">
-                                        <span className="text-xs font-bold text-slate-400 uppercase">BLK</span>
-                                        <span className="text-[10px] text-slate-500">Blocks</span>
-                                      </div>
-                                    </th>
-                                    <th className="px-4 py-4 text-center">
-                                      <div className="flex flex-col items-center gap-1">
-                                        <span className="text-xs font-bold text-slate-400 uppercase">TO</span>
-                                        <span className="text-[10px] text-slate-500">Turnovrs</span>
-                                      </div>
-                                    </th>
-                                    <th className="px-4 py-4 text-center">
-                                      <div className="flex flex-col items-center gap-1">
-                                        <span className="text-xs font-bold text-slate-400 uppercase">PF</span>
-                                        <span className="text-[10px] text-slate-500">Fouls</span>
-                                      </div>
-                                    </th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">AST</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">OR</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">DR</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">STL</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">BLK</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">TO</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">PF</th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -7194,21 +7054,19 @@ export default function AdminPage() {
                                     const stats = loserStatsMap[player.id] || { two_pm: "", two_pa: "", three_pm: "", three_pa: "", ft_m: "", ft_a: "", ast: "", oreb: "", dreb: "", reb: "", stl: "", blk: "", fls: "", min: "", pf: "", to: "" };
                                     const totalPoints = (parseInt(stats.two_pm) || 0) * 2 + (parseInt(stats.three_pm) || 0) * 3 + (parseInt(stats.ft_m) || 0);
                                     return (
-                                      <tr key={player.id} className={`group border-b border-slate-500/10 transition-all hover:bg-slate-500/5 ${idx % 2 === 0 ? 'bg-slate-900/40' : 'bg-slate-900/20'}`}>
-                                        <td className="sticky left-0 z-10 bg-slate-900/95 px-6 py-4 backdrop-blur-sm min-w-[260px] max-w-[300px] border-r border-slate-500/10 group-hover:bg-slate-500/5">
-                                          <div className="flex items-center gap-4">
+                                      <tr key={player.id} className={`group border-b border-slate-500/10 hover:bg-slate-500/5 ${idx % 2 === 0 ? 'bg-slate-900/40' : 'bg-slate-900/20'}`}>
+                                        <td className="sticky left-0 z-10 bg-slate-900/95 px-4 py-1.5 backdrop-blur-sm min-w-[180px] border-r border-slate-500/10 group-hover:bg-slate-500/5">
+                                          <div className="flex items-center gap-1.5">
+                                            <span className="inline-flex items-center justify-center rounded bg-slate-500/20 px-1 py-0.5 text-[10px] font-black text-slate-300 min-w-[24px]">#{player.number}</span>
                                             {player.headshot && (
-                                              <Image src={player.headshot} alt={`${player.firstName} ${player.lastName}`} width={48} height={48} className="h-12 w-12 rounded-full ring-2 ring-slate-500/30 flex-shrink-0 object-cover" unoptimized />
+                                              <Image src={player.headshot} alt={`${player.firstName} ${player.lastName}`} width={24} height={24} className="h-6 w-6 rounded-full ring-1 ring-slate-500/30 flex-shrink-0 object-cover" unoptimized />
                                             )}
                                             <div className="min-w-0 flex-1">
-                                              <p className="text-sm font-bold text-white truncate">
-                                                <span className="inline-flex items-center justify-center rounded-md bg-slate-500/20 px-2 py-0.5 text-xs font-black text-slate-300 mr-2">#{player.number}</span>
-                                                {player.firstName} {player.lastName}</p>
-                                              <p className="text-xs text-slate-400 mt-0.5">{player.height}</p>
+                                              <p className="text-xs font-bold text-white truncate">{player.firstName} {player.lastName}</p>
                                             </div>
                                           </div>
                                         </td>
-                                        <td className="px-4 py-4">
+                                        <td className="px-2 py-1.5">
                                           <input type="number" value={stats.two_pm} onChange={(e) => {
                                             const made = parseInt(e.target.value) || 0;
                                             const attempts = parseInt(stats.two_pa) || 0;
@@ -7217,9 +7075,9 @@ export default function AdminPage() {
                                             } else {
                                               setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, two_pm: e.target.value }});
                                             }
-                                          }} min="0" className="w-20 rounded-lg border-2 border-slate-600/50 bg-slate-800/80 px-3 py-2.5 text-center text-base font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400/30 transition-all" placeholder="0" />
+                                          }} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30" placeholder="0" />
                                         </td>
-                                        <td className="px-4 py-4">
+                                        <td className="px-2 py-1.5">
                                           <input type="number" value={stats.two_pa} onChange={(e) => {
                                             const attempts = parseInt(e.target.value) || 0;
                                             const made = parseInt(stats.two_pm) || 0;
@@ -7228,9 +7086,9 @@ export default function AdminPage() {
                                             } else {
                                               setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, two_pa: e.target.value }});
                                             }
-                                          }} min="0" className="w-20 rounded-lg border-2 border-slate-600/50 bg-slate-800/80 px-3 py-2.5 text-center text-base font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400/30 transition-all" placeholder="0" />
+                                          }} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30" placeholder="0" />
                                         </td>
-                                        <td className="px-4 py-4">
+                                        <td className="px-2 py-1.5">
                                           <input type="number" value={stats.three_pm} onChange={(e) => {
                                             const made = parseInt(e.target.value) || 0;
                                             const attempts = parseInt(stats.three_pa) || 0;
@@ -7239,9 +7097,9 @@ export default function AdminPage() {
                                             } else {
                                               setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, three_pm: e.target.value }});
                                             }
-                                          }} min="0" className="w-20 rounded-lg border-2 border-slate-600/50 bg-slate-800/80 px-3 py-2.5 text-center text-base font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400/30 transition-all" placeholder="0" />
+                                          }} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30" placeholder="0" />
                                         </td>
-                                        <td className="px-4 py-4">
+                                        <td className="px-2 py-1.5">
                                           <input type="number" value={stats.three_pa} onChange={(e) => {
                                             const attempts = parseInt(e.target.value) || 0;
                                             const made = parseInt(stats.three_pm) || 0;
@@ -7250,9 +7108,9 @@ export default function AdminPage() {
                                             } else {
                                               setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, three_pa: e.target.value }});
                                             }
-                                          }} min="0" className="w-20 rounded-lg border-2 border-slate-600/50 bg-slate-800/80 px-3 py-2.5 text-center text-base font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400/30 transition-all" placeholder="0" />
+                                          }} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30" placeholder="0" />
                                         </td>
-                                        <td className="px-4 py-4">
+                                        <td className="px-2 py-1.5">
                                           <input type="number" value={stats.ft_m} onChange={(e) => {
                                             const made = parseInt(e.target.value) || 0;
                                             const attempts = parseInt(stats.ft_a) || 0;
@@ -7261,9 +7119,9 @@ export default function AdminPage() {
                                             } else {
                                               setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, ft_m: e.target.value }});
                                             }
-                                          }} min="0" className="w-20 rounded-lg border-2 border-slate-600/50 bg-slate-800/80 px-3 py-2.5 text-center text-base font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400/30 transition-all" placeholder="0" />
+                                          }} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30" placeholder="0" />
                                         </td>
-                                        <td className="px-4 py-4">
+                                        <td className="px-2 py-1.5">
                                           <input type="number" value={stats.ft_a} onChange={(e) => {
                                             const attempts = parseInt(e.target.value) || 0;
                                             const made = parseInt(stats.ft_m) || 0;
@@ -7272,50 +7130,48 @@ export default function AdminPage() {
                                             } else {
                                               setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, ft_a: e.target.value }});
                                             }
-                                          }} min="0" className="w-20 rounded-lg border-2 border-slate-600/50 bg-slate-800/80 px-3 py-2.5 text-center text-base font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400/30 transition-all" placeholder="0" />
+                                          }} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30" placeholder="0" />
                                         </td>
-                                        <td className="px-4 py-4 bg-gradient-to-r from-transparent via-slate-500/10 to-transparent">
+                                        <td className="px-2 py-1.5 bg-slate-500/10">
                                           <div className="flex items-center justify-center">
-                                            <div className="rounded-lg bg-slate-500/20 px-4 py-2 backdrop-blur-sm">
-                                              <span className="text-2xl font-black text-slate-300 tabular-nums">{totalPoints}</span>
-                                            </div>
+                                            <span className="text-base font-black text-slate-300 tabular-nums">{totalPoints}</span>
                                           </div>
                                         </td>
-                                        <td className="px-4 py-4">
-                                          <input type="number" value={stats.ast} onChange={(e) => setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, ast: e.target.value }})} min="0" className="w-20 rounded-lg border-2 border-slate-600/50 bg-slate-800/80 px-3 py-2.5 text-center text-base font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400/30 transition-all" placeholder="0" />
+                                        <td className="px-2 py-1.5">
+                                          <input type="number" value={stats.ast} onChange={(e) => setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, ast: e.target.value }})} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30" placeholder="0" />
                                         </td>
-                                        <td className="px-4 py-4">
+                                        <td className="px-2 py-1.5">
                                           <input type="number" value={stats.oreb} onChange={(e) => {
                                             const oreb = parseInt(e.target.value) || 0;
                                             const dreb = parseInt(stats.dreb) || 0;
                                             const reb = (oreb + dreb).toString();
                                             setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, oreb: e.target.value, reb }});
-                                          }} min="0" className="w-20 rounded-lg border-2 border-slate-600/50 bg-slate-800/80 px-3 py-2.5 text-center text-base font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400/30 transition-all" placeholder="0" />
+                                          }} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30" placeholder="0" />
                                         </td>
-                                        <td className="px-4 py-4">
+                                        <td className="px-2 py-1.5">
                                           <input type="number" value={stats.dreb} onChange={(e) => {
                                             const dreb = parseInt(e.target.value) || 0;
                                             const oreb = parseInt(stats.oreb) || 0;
                                             const reb = (oreb + dreb).toString();
                                             setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, dreb: e.target.value, reb }});
-                                          }} min="0" className="w-20 rounded-lg border-2 border-slate-600/50 bg-slate-800/80 px-3 py-2.5 text-center text-base font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400/30 transition-all" placeholder="0" />
+                                          }} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30" placeholder="0" />
                                         </td>
-                                        <td className="px-4 py-4">
-                                          <input type="number" value={stats.stl} onChange={(e) => setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, stl: e.target.value }})} min="0" className="w-20 rounded-lg border-2 border-slate-600/50 bg-slate-800/80 px-3 py-2.5 text-center text-base font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400/30 transition-all" placeholder="0" />
+                                        <td className="px-2 py-1.5">
+                                          <input type="number" value={stats.stl} onChange={(e) => setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, stl: e.target.value }})} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30" placeholder="0" />
                                         </td>
-                                        <td className="px-4 py-4">
-                                          <input type="number" value={stats.blk} onChange={(e) => setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, blk: e.target.value }})} min="0" className="w-20 rounded-lg border-2 border-slate-600/50 bg-slate-800/80 px-3 py-2.5 text-center text-base font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400/30 transition-all" placeholder="0" />
+                                        <td className="px-2 py-1.5">
+                                          <input type="number" value={stats.blk} onChange={(e) => setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, blk: e.target.value }})} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30" placeholder="0" />
                                         </td>
-                                        <td className="px-4 py-4">
-                                          <input type="number" value={stats.to} onChange={(e) => setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, to: e.target.value }})} min="0" className="w-20 rounded-lg border-2 border-slate-600/50 bg-slate-800/80 px-3 py-2.5 text-center text-base font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400/30 transition-all" placeholder="0" />
+                                        <td className="px-2 py-1.5">
+                                          <input type="number" value={stats.to} onChange={(e) => setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, to: e.target.value }})} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30" placeholder="0" />
                                         </td>
-                                        <td className="px-4 py-4">
+                                        <td className="px-2 py-1.5">
                                           <input type="number" value={stats.fls} onChange={(e) => {
                                             const value = parseInt(e.target.value) || 0;
                                             if (value <= 6) {
                                               setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, fls: e.target.value }});
                                             }
-                                          }} min="0" max="6" className="w-20 rounded-lg border-2 border-slate-600/50 bg-slate-800/80 px-3 py-2.5 text-center text-base font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400/30 transition-all" placeholder="0" />
+                                          }} min="0" max="6" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30" placeholder="0" />
                                         </td>
                                       </tr>
                                     );
@@ -7327,20 +7183,20 @@ export default function AdminPage() {
                         )}
 
                         {/* Action Buttons - Sticky Bottom with Modern Design */}
-                        <div className="sticky bottom-0 z-20 -mx-6 border-t-2 border-emerald-500/20 bg-gradient-to-b from-slate-900/80 via-slate-900/95 to-slate-900 backdrop-blur-lg shadow-2xl">
-                          <div className="mx-auto max-w-[1800px] px-8 py-8">
-                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
+                        <div className="sticky bottom-0 z-20 -mx-4 border-t-2 border-emerald-500/20 bg-gradient-to-b from-slate-900/80 via-slate-900/95 to-slate-900 backdrop-blur-lg shadow-xl">
+                          <div className="mx-auto max-w-[1800px] px-4 py-3">
+                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                               <button
                                 type="button"
                                 onClick={handleSubmitGameStats}
                                 disabled={statsSubmitting || !gameStatsForm.winnerTeamId || !gameStatsForm.winnerScore || !gameStatsForm.loserScore}
-                                className="flex-1 group relative overflow-hidden rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-500 px-10 py-5 text-lg font-black uppercase tracking-wide text-white shadow-2xl shadow-emerald-500/30 transition-all hover:shadow-emerald-500/50 hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 disabled:shadow-none"
+                                className="flex-1 group relative overflow-hidden rounded-lg bg-gradient-to-r from-emerald-600 to-emerald-500 px-6 py-3 text-sm font-black uppercase tracking-wide text-white shadow-lg shadow-emerald-500/30 transition-all hover:shadow-emerald-500/50 hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 disabled:shadow-none"
                               >
                                 <div className="absolute inset-0 bg-gradient-to-r from-emerald-500 to-emerald-400 opacity-0 transition-opacity group-hover:opacity-100"></div>
-                                <span className="relative z-10 flex items-center justify-center gap-3">
+                                <span className="relative z-10 flex items-center justify-center gap-2">
                                   {statsSubmitting ? (
                                     <>
-                                      <svg className="animate-spin h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                      <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                       </svg>
@@ -7348,7 +7204,7 @@ export default function AdminPage() {
                                     </>
                                   ) : (
                                     <>
-                                      <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                                       </svg>
                                       <span>Save All Stats</span>
@@ -7366,10 +7222,10 @@ export default function AdminPage() {
                                   setPlayerStatsMap({});
                                   setLoserStatsMap({});
                                 }}
-                                className="sm:flex-none rounded-2xl border-2 border-slate-600/50 bg-slate-800/50 px-8 py-5 text-base font-bold text-slate-300 backdrop-blur-sm transition-all hover:border-slate-500 hover:bg-slate-700/50 hover:text-white hover:scale-[1.02]"
+                                className="sm:flex-none rounded-lg border-2 border-slate-600/50 bg-slate-800/50 px-5 py-3 text-xs font-bold text-slate-300 backdrop-blur-sm transition-all hover:border-slate-500 hover:bg-slate-700/50 hover:text-white hover:scale-[1.02]"
                               >
-                                <span className="flex items-center justify-center gap-2">
-                                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <span className="flex items-center justify-center gap-1.5">
+                                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                   </svg>
                                   <span>Cancel</span>
@@ -7377,8 +7233,8 @@ export default function AdminPage() {
                               </button>
                             </div>
                             {(!gameStatsForm.winnerTeamId || !gameStatsForm.winnerScore || !gameStatsForm.loserScore) && (
-                              <p className="mt-4 text-center text-sm text-amber-400/90 flex items-center justify-center gap-2">
-                                <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                              <p className="mt-2 text-center text-xs text-amber-400/90 flex items-center justify-center gap-1.5">
+                                <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
                                   <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                                 </svg>
                                 Please select a winner and enter both team scores before saving

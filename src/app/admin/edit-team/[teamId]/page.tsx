@@ -10,6 +10,7 @@ import { getAdminUser } from "@/lib/adminAuth";
 import type { AdminUser } from "@/types/admin";
 import Image from "next/image";
 import { countries, flagFromCode, nameForCountryCode } from "@/data/countries";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 type Player = {
   id: string;
@@ -70,6 +71,7 @@ export default function EditTeamPage() {
   const params = useParams();
   const router = useRouter();
   const teamId = params.teamId as string;
+  const { language } = useLanguage();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -747,25 +749,6 @@ export default function EditTeamPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">City</label>
-                <input
-                  type="text"
-                  value={teamForm.city}
-                  onChange={(e) => setTeamForm({ ...teamForm, city: e.target.value })}
-                  className="w-full rounded-lg border border-white/20 bg-white/5 px-4 py-2 text-white"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Home Venue</label>
-                <input
-                  type="text"
-                  value={teamForm.venue}
-                  onChange={(e) => setTeamForm({ ...teamForm, venue: e.target.value })}
-                  placeholder="e.g., Stades des Martyrs"
-                  className="w-full rounded-lg border border-white/20 bg-white/5 px-4 py-2 text-white"
-                />
-              </div>
-              <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2">Gender</label>
                 <select
                   value={teamForm.gender}
@@ -777,54 +760,85 @@ export default function EditTeamPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Team Logo</label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => setTeamLogoFile(e.target.files?.[0] || null)}
-                  className="w-full rounded-lg border border-dashed border-white/20 bg-white/5 px-4 py-2 text-slate-300 text-sm"
-                />
-                {teamLogoFile && (
-                  <p className="mt-1 text-xs text-emerald-400">✓ {teamLogoFile.name}</p>
-                )}
-                {!teamLogoFile && teamForm.logo && (
-                  <p className="mt-1 text-xs text-slate-400">Current: {teamForm.logo.substring(0, 50)}...</p>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Primary Color</label>
-                <div className="flex gap-2">
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  {language === 'fr' ? 'Logo de l\'équipe' : 'Team Logo'}
+                </label>
+                <div className="relative">
                   <input
-                    type="color"
-                    value={teamForm.color1}
-                    onChange={(e) => setTeamForm({ ...teamForm, color1: e.target.value })}
-                    className="h-12 w-20 rounded-lg border border-white/20 bg-white/5 cursor-pointer"
+                    type="file"
+                    id="team-logo-upload"
+                    accept="image/*"
+                    onChange={(e) => setTeamLogoFile(e.target.files?.[0] || null)}
+                    className="hidden"
                   />
-                  <input
-                    type="text"
-                    value={teamForm.color1}
-                    onChange={(e) => setTeamForm({ ...teamForm, color1: e.target.value })}
-                    className="flex-1 rounded-lg border border-white/20 bg-white/5 px-4 py-2 text-white"
-                    placeholder="#000000"
-                  />
+                  <label
+                    htmlFor="team-logo-upload"
+                    className="flex flex-col items-center justify-center w-32 h-32 rounded-xl border-2 border-dashed border-white/30 bg-white/5 cursor-pointer hover:bg-white/10 hover:border-white/50 transition"
+                  >
+                    {teamLogoFile ? (
+                      <div className="flex flex-col items-center gap-2">
+                        <div className="w-16 h-16 rounded-lg overflow-hidden">
+                          <img
+                            src={URL.createObjectURL(teamLogoFile)}
+                            alt="Preview"
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <p className="text-xs text-emerald-400 text-center px-2 truncate w-full">✓ {teamLogoFile.name}</p>
+                      </div>
+                    ) : teamForm.logo ? (
+                      <div className="flex flex-col items-center gap-2">
+                        <div className="w-16 h-16 rounded-lg overflow-hidden">
+                          <img
+                            src={teamForm.logo}
+                            alt="Current"
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <p className="text-xs text-slate-400 text-center">
+                          {language === 'fr' ? 'Changer' : 'Change'}
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        <svg className="w-8 h-8 text-slate-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                        <p className="text-xs text-slate-400 text-center px-2">
+                          {language === 'fr' ? 'Ajouter un logo' : 'Add logo'}
+                        </p>
+                      </>
+                    )}
+                  </label>
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Secondary Color</label>
-                <div className="flex gap-2">
-                  <input
-                    type="color"
-                    value={teamForm.color2}
-                    onChange={(e) => setTeamForm({ ...teamForm, color2: e.target.value })}
-                    className="h-12 w-20 rounded-lg border border-white/20 bg-white/5 cursor-pointer"
-                  />
-                  <input
-                    type="text"
-                    value={teamForm.color2}
-                    onChange={(e) => setTeamForm({ ...teamForm, color2: e.target.value })}
-                    className="flex-1 rounded-lg border border-white/20 bg-white/5 px-4 py-2 text-white"
-                    placeholder="#FFFFFF"
-                  />
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  {language === 'fr' ? 'Couleurs de l\'équipe' : 'Team Colors'}
+                </label>
+                <div className="flex gap-3">
+                  <div className="flex-1">
+                    <p className="text-xs text-slate-400 mb-1">
+                      {language === 'fr' ? 'Primaire' : 'Primary'}
+                    </p>
+                    <input
+                      type="color"
+                      value={teamForm.color1}
+                      onChange={(e) => setTeamForm({ ...teamForm, color1: e.target.value })}
+                      className="w-full h-20 rounded-lg border border-white/20 bg-white/5 cursor-pointer"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-xs text-slate-400 mb-1">
+                      {language === 'fr' ? 'Secondaire' : 'Secondary'}
+                    </p>
+                    <input
+                      type="color"
+                      value={teamForm.color2}
+                      onChange={(e) => setTeamForm({ ...teamForm, color2: e.target.value })}
+                      className="w-full h-20 rounded-lg border border-white/20 bg-white/5 cursor-pointer"
+                    />
+                  </div>
                 </div>
               </div>
               
@@ -854,15 +868,7 @@ export default function EditTeamPage() {
               </div>
             </div>
           ) : (
-            <div className="grid gap-4 md:grid-cols-4">
-              <div>
-                <div className="text-xs text-slate-400">City</div>
-                <div className="text-white">{team.city || "—"}</div>
-              </div>
-              <div>
-                <div className="text-xs text-slate-400">Home Venue</div>
-                <div className="text-white">{team.venue || "—"}</div>
-              </div>
+            <div className="grid gap-4 md:grid-cols-3">
               <div>
                 <div className="text-xs text-slate-400">Gender</div>
                 <div className="text-white">{team.gender}</div>

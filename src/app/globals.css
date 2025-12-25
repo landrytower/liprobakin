@@ -126,3 +126,66 @@ body {
   scrollbar-width: thin;
   scrollbar-color: #3b82f6 rgba(255, 255, 255, 0.05);
 }
+
+/* Animated Send Button */
+.animated-send-btn {
+  font-family: inherit;
+  font-size: 0.875rem;
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.15), rgba(34, 211, 238, 0.1));
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  color: white;
+  padding: 0.6em 0.9em;
+  padding-left: 0.75em;
+  display: flex;
+  align-items: center;
+  border-radius: 14px;
+  overflow: hidden;
+  transition: all 0.2s;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(56, 189, 248, 0.1);
+}
+
+.animated-send-btn:hover {
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.25), rgba(34, 211, 238, 0.15));
+  border-color: rgba(56, 189, 248, 0.5);
+  box-shadow: 0 6px 20px rgba(56, 189, 248, 0.2);
+}
+
+.animated-send-btn span {
+  display: block;
+  margin-left: 0.3em;
+  transition: all 0.3s ease-in-out;
+}
+
+.animated-send-btn svg {
+  display: block;
+  transform-origin: center center;
+  transition: transform 0.3s ease-in-out;
+}
+
+.animated-send-btn:hover .svg-wrapper {
+  animation: fly-1 0.6s ease-in-out infinite alternate;
+}
+
+.animated-send-btn:hover svg {
+  transform: translateX(1.2em) rotate(45deg) scale(1.1);
+}
+
+.animated-send-btn:hover span {
+  transform: translateX(5em);
+}
+
+.animated-send-btn:active {
+  transform: scale(0.95);
+}
+
+@keyframes fly-1 {
+  from {
+    transform: translateY(0.1em);
+  }
+  to {
+    transform: translateY(-0.1em);
+  }
+}

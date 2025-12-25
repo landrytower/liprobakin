@@ -439,7 +439,7 @@ const teamLogoOverrides: Record<string, string> = {
   "heritage": "/logos/Males/heritage.jpg",
   "figuier": "/logos/Males/figuier.jpg",
   "mboka mboka": "/logos/Females/mboka_mboka.jpg",
-  "corridor de l'espoir": "/logos/liprobakin.png",
+  "corridor de l'espoir": "/logos/Females/corridor de l'espoir.jpg",
   "marche de la liberte": "/logos/Males/marche_de_la liberte.jpg",
   "ngaliema": "/logos/Males/ngaliema.jpg",
   "terreur": "/logos/Males/terreur.jpg",

@@ -10,6 +10,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import AuthModal from "@/components/AuthModal";
 import PlayerProfilePopup from "@/components/PlayerProfilePopup";
+import AnimatedButton from "@/components/AnimatedButton";
 
 import {
   conferenceStandings,
@@ -384,7 +385,7 @@ const LeaderRow = ({ leader, allFranchises }: { leader: FeaturedMatchup["leaders
     ? `/player/${encodeURIComponent(leader.team)}/${playerNumber}`
     : `/team/${encodeURIComponent(leader.team)}`;
 
-  return (
+  return (           
     <Link 
       href={linkUrl}
       className="flex items-center justify-between gap-2 min-w-0 group transition-all hover:bg-white/5 rounded-lg p-1.5 -m-1.5"
@@ -1951,18 +1952,13 @@ export default function Home() {
                 </button>
               </div>
             ) : (
-              <button
+              <AnimatedButton
                 onClick={() => setAuthModalOpen(true)}
-                className="group relative hidden h-11 w-11 items-center justify-center overflow-hidden rounded-xl border border-white/20 bg-white/5 shadow-lg backdrop-blur-xl transition-all duration-300 hover:scale-110 hover:border-white/40 hover:bg-white/10"
-                type="button"
-                aria-label="Log In / Sign Up"
-                style={{ display: 'none' }}
+                className="hidden lg:flex"
+                ariaLabel={language === 'fr' ? 'Se connecter / S\'inscrire' : 'Log In / Sign Up'}
               >
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100 animate-shimmer" />
-                <svg className="relative z-10 h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-              </button>
+                {language === 'fr' ? 'Connexion' : 'Sign In'}
+              </AnimatedButton>
             )}
             <div className="hidden lg:flex items-center gap-2 border-l border-white/10 pl-4">
               <button
@@ -2283,17 +2279,17 @@ export default function Home() {
                             </p>
                           )}
                           
-                          <button
+                          <AnimatedButton
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
                               setExpandedArticleId(isExpanded ? null : featured.id);
                             }}
-                            type="button"
-                            className="flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 backdrop-blur-md px-6 py-3 text-sm font-semibold uppercase tracking-wider text-white transition hover:border-white/40 hover:bg-white/20 active:scale-95 w-fit cursor-pointer"
+                            icon="book"
+                            ariaLabel={language === 'fr' ? (isExpanded ? "Fermer" : "Lire") : (isExpanded ? "Close" : "Read")}
                           >
-                            {language === 'fr' ? (isExpanded ? "Fermer" : "Voir l'article »") : (isExpanded ? "Close" : "Read Article »")}
-                          </button>
+                            {language === 'fr' ? (isExpanded ? "Fermer" : "Lire") : (isExpanded ? "Close" : "Read")}
+                          </AnimatedButton>
                         </div>
                           
                           {/* Expandable Article Content - Modern slide-in overlay with animations */}

@@ -1,7 +1,7 @@
-import type { ReactNode } from "react";
+import type { ReactNode, MouseEvent } from "react";
 
 type AnimatedButtonProps = {
-  onClick?: () => void;
+  onClick?: (e: MouseEvent<HTMLButtonElement | HTMLAnchorElement>) => void;
   children: ReactNode;
   className?: string;
   disabled?: boolean;

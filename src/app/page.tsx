@@ -1951,15 +1951,7 @@ export default function Home() {
                   </svg>
                 </button>
               </div>
-            ) : (
-              <AnimatedButton
-                onClick={() => setAuthModalOpen(true)}
-                className="hidden lg:flex"
-                ariaLabel={language === 'fr' ? 'Se connecter / S\'inscrire' : 'Log In / Sign Up'}
-              >
-                {language === 'fr' ? 'Connexion' : 'Sign In'}
-              </AnimatedButton>
-            )}
+            ) : null}
             <div className="hidden lg:flex items-center gap-2 border-l border-white/10 pl-4">
               <button
                 onClick={() => setLanguage('fr')}

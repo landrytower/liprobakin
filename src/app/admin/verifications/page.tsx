@@ -104,7 +104,6 @@ export default function AdminVerification() {
             number: newPlayerData.number,
             position: newPlayerData.position || "",
             height: newPlayerData.height || "",
-            weight: newPlayerData.weight || "",
             birthdate: newPlayerData.birthdate || "",
             nationality: newPlayerData.nationality || "",
             headshot: "",

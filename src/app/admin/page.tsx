@@ -1148,16 +1148,20 @@ export default function AdminPage() {
 
         // Fetch all verification requests (not just pending)
         const verificationsSnapshot = await getDocs(collection(firebaseDB, "verificationRequests"));
-        const allVerificationsData = verificationsSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          submittedAt: doc.data().submittedAt?.toDate() || new Date(),
-          reviewedAt: doc.data().reviewedAt?.toDate(),
-        }));
-        setVerificationRequests(allVerificationsData);
+        const allVerificationsData = verificationsSnapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            ...data,
+            submittedAt: data.submittedAt?.toDate() || new Date(),
+            reviewedAt: data.reviewedAt?.toDate(),
+            status: data.status || 'pending',
+          };
+        });
+        setVerificationRequests(allVerificationsData as any);
 
         // Filter pending ones for notification badge
-        const pendingOnly = allVerificationsData.filter(v => v.status === 'pending');
+        const pendingOnly = allVerificationsData.filter((v: any) => v.status === 'pending');
         setPendingVerifications(pendingOnly);
       } catch (error) {
         console.error("Error fetching users/verifications:", error);

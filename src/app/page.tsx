@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import type { ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { collection, query, orderBy, limit, getDocs, onSnapshot } from "firebase/firestore";
+import { collection, query, orderBy, limit, getDocs, onSnapshot, where } from "firebase/firestore";
 import { firebaseDB } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -888,7 +888,7 @@ const FanFavoritePlayerCard = ({ playerId, teamId }: { playerId: string; teamId?
 };
 
 // Fan Favorite Team Card Component  
-const FanFavoriteTeamCard = ({ teamId, teamName }: { teamId: string; teamName: string }) => {
+const FanFavoriteTeamCard = ({ teamId, teamName }: { teamId?: string; teamName?: string }) => {
   const [teamData, setTeamData] = useState<any>(null);
   const [roster, setRoster] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -942,7 +942,7 @@ const FanFavoriteTeamCard = ({ teamId, teamName }: { teamId: string; teamName: s
           <div className="relative h-24 w-24 flex-shrink-0">
             <Image
               src={teamData.logo}
-              alt={teamName}
+              alt={teamName || 'Team logo'}
               fill
               className="object-contain"
             />
@@ -966,7 +966,7 @@ const FanFavoriteTeamCard = ({ teamId, teamName }: { teamId: string; teamName: s
             {roster.map((player) => (
               <Link
                 key={player.id}
-                href={`/player/${encodeURIComponent(teamName)}/${player.number}`}
+                href={`/player/${encodeURIComponent(teamName || '')}/${player.number}`}
                 className="flex items-center gap-4 p-3 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all"
               >
                 {player.headshot && (
@@ -2683,7 +2683,7 @@ export default function Home() {
             {/* Dropdown arrows */}
             <div className="flex gap-3">
               {/* Global Favorite Player Arrow */}
-              {userProfile.favoritePlayerId && (
+              {(userProfile.favoritePlayerMenId || userProfile.favoritePlayerWomenId) && (
                 <button
                   onClick={() => setShowFavoritePlayer(!showFavoritePlayer)}
                   className="group relative flex flex-col items-center gap-2 p-4 rounded-2xl border border-white/20 bg-white/5 backdrop-blur-xl transition-all duration-300 hover:border-white/40 hover:bg-white/10 hover:scale-105"
@@ -2755,23 +2755,25 @@ export default function Home() {
             </div>
 
             {/* Dropdown Content - Favorite Player */}
-            {showFavoritePlayer && userProfile.favoritePlayerId && (
+            {showFavoritePlayer && (userProfile.favoritePlayerMenId || userProfile.favoritePlayerWomenId) && (
               <div className="w-full max-w-3xl overflow-hidden rounded-t-none rounded-b-2xl border-x border-b border-white/10 bg-white/5 backdrop-blur-2xl shadow-2xl animate-in slide-in-from-top-4 duration-500">
-                <FanFavoritePlayerCard playerId={userProfile.favoritePlayerId} teamId={userProfile.favoritePlayerTeamId} />
+                <div className="p-8 text-center text-white/60">
+                  <p>Favorite Player: {userProfile.favoritePlayerMenName || userProfile.favoritePlayerWomenName}</p>
+                </div>
               </div>
             )}
 
             {/* Dropdown Content - Men's Team */}
             {showMenTeamFavorite && userProfile.favoriteTeamMenId && (
               <div className="w-full max-w-3xl overflow-hidden rounded-t-none rounded-b-2xl border-x border-b border-white/10 bg-white/5 backdrop-blur-2xl shadow-2xl animate-in slide-in-from-top-4 duration-500">
-                <FanFavoriteTeamCard teamId={userProfile.favoriteTeamMenId} teamName={userProfile.favoriteTeamMenName} />
+                <FanFavoriteTeamCard teamId={userProfile.favoriteTeamMenId || ''} teamName={userProfile.favoriteTeamMenName || ''} />
               </div>
             )}
 
             {/* Dropdown Content - Women's Team */}
             {showWomenTeamFavorite && userProfile.favoriteTeamWomenId && (
               <div className="w-full max-w-3xl overflow-hidden rounded-t-none rounded-b-2xl border-x border-b border-white/10 bg-white/5 backdrop-blur-2xl shadow-2xl animate-in slide-in-from-top-4 duration-500">
-                <FanFavoriteTeamCard teamId={userProfile.favoriteTeamWomenId} teamName={userProfile.favoriteTeamWomenName} />
+                <FanFavoriteTeamCard teamId={userProfile.favoriteTeamWomenId || ''} teamName={userProfile.favoriteTeamWomenName || ''} />
               </div>
             )}
           </div>

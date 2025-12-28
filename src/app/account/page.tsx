@@ -148,19 +148,39 @@ export default function AccountPage() {
               </div>
             )}
 
-            {/* Favorite Team */}
-            {userProfile.favoriteTeamName && (
+            {/* Favorite Men's Team */}
+            {userProfile.role === 'fan' && (
               <div className="rounded-xl border border-white/10 bg-white/5 p-5">
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 block">Favorite Team</label>
-                <p className="text-lg text-white font-medium">⭐ {userProfile.favoriteTeamName}</p>
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 block">Favorite Men&apos;s Team</label>
+                <p className="text-lg text-white font-medium">
+                  {userProfile.favoriteTeamMenName ? `⭐ ${userProfile.favoriteTeamMenName}` : 'Not selected'}
+                </p>
               </div>
             )}
 
-            {/* Favorite Athlete */}
-            {userProfile.favoriteAthleteName && (
+            {/* Favorite Men's Player */}
+            {userProfile.role === 'fan' && userProfile.favoritePlayerMenName && (
               <div className="rounded-xl border border-white/10 bg-white/5 p-5">
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 block">Favorite Athlete</label>
-                <p className="text-lg text-white font-medium">⭐ {userProfile.favoriteAthleteName}</p>
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 block">Favorite Men&apos;s Player</label>
+                <p className="text-lg text-white font-medium">🏀 {userProfile.favoritePlayerMenName}</p>
+              </div>
+            )}
+
+            {/* Favorite Women's Team */}
+            {userProfile.role === 'fan' && (
+              <div className="rounded-xl border border-white/10 bg-white/5 p-5">
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 block">Favorite Women&apos;s Team</label>
+                <p className="text-lg text-white font-medium">
+                  {userProfile.favoriteTeamWomenName ? `⭐ ${userProfile.favoriteTeamWomenName}` : 'Not selected'}
+                </p>
+              </div>
+            )}
+
+            {/* Favorite Women's Player */}
+            {userProfile.role === 'fan' && userProfile.favoritePlayerWomenName && (
+              <div className="rounded-xl border border-white/10 bg-white/5 p-5">
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 block">Favorite Women&apos;s Player</label>
+                <p className="text-lg text-white font-medium">🏀 {userProfile.favoritePlayerWomenName}</p>
               </div>
             )}
           </div>

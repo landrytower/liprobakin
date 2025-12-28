@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Import Firestore Data</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        .container {
+            background: #2a2a2a;
+            padding: 30px;
+            border-radius: 8px;
+        }
+        h1 {
+            color: #4ade80;
+        }
+        button {
+            background: #4ade80;
+            color: #000;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #22c55e;
+        }
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+        .log {
+            background: #1a1a1a;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+        .success { color: #4ade80; }
+        .error { color: #f87171; }
+        .warning { color: #fbbf24; }
+        .info { color: #60a5fa; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 Import Firestore Data</h1>
+        <p>This will import all your data from the JSON export files back into Firestore.</p>
+        
+        <button id="importBtn" onclick="importAllData()">Import All Data</button>
+        <button onclick="clearLog()">Clear Log</button>
+        
+        <div id="log" class="log"></div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-app.js";
+        import { getFirestore, collection, doc, setDoc, Timestamp } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyApCmWDWPfmBwVAOvNAu3_CSVCqGycN5OE",
+            authDomain: "ppop-35930.firebaseapp.com",
+            databaseURL: "https://ppop-35930-default-rtdb.firebaseio.com",
+            projectId: "ppop-35930",
+            storageBucket: "ppop-35930.firebasestorage.app",
+            messagingSenderId: "478592036466",
+            appId: "1:478592036466:web:f149e594436026717adceb",
+            measurementId: "G-YJY5T6TD8E",
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        function log(message, type = 'info') {
+            const logEl = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = type;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logEl.appendChild(entry);
+            logEl.scrollTop = logEl.scrollHeight;
+            console.log(message);
+        }
+
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+
+        function convertTimestamps(obj) {
+            if (!obj || typeof obj !== 'object') return obj;
+            
+            if (obj._seconds !== undefined && obj._nanoseconds !== undefined) {
+                return Timestamp.fromMillis(obj._seconds * 1000 + Math.floor(obj._nanoseconds / 1000000));
+            }
+            
+            if (Array.isArray(obj)) {
+                return obj.map(item => convertTimestamps(item));
+            }
+            
+            const converted = {};
+            for (const [key, value] of Object.entries(obj)) {
+                converted[key] = convertTimestamps(value);
+            }
+            return converted;
+        }
+
+        async function importCollection(collectionName, data) {
+            if (!Array.isArray(data) || data.length === 0) {
+                log(`⚠️ No data for ${collectionName}`, 'warning');
+                return 0;
+            }
+
+            log(`📥 Importing ${data.length} documents into "${collectionName}"...`, 'info');
+            let count = 0;
+
+            for (const item of data) {
+                try {
+                    const { id, ...docData } = item;
+                    const converted = convertTimestamps(docData);
+                    
+                    if (id) {
+                        await setDoc(doc(db, collectionName, id), converted, { merge: true });
+                    } else {
+                        await setDoc(doc(db, collectionName), converted);
+                    }
+                    count++;
+                    
+                    if (count % 10 === 0) {
+                        log(`  ✓ Imported ${count}/${data.length} documents...`, 'info');
+                    }
+                } catch (error) {
+                    log(`  ❌ Error importing document: ${error.message}`, 'error');
+                }
+            }
+
+            log(`✅ Successfully imported ${count} documents into "${collectionName}"`, 'success');
+            return count;
+        }
+
+        window.importAllData = async function() {
+            const btn = document.getElementById('importBtn');
+            btn.disabled = true;
+            clearLog();
+            
+            log('🚀 Starting Firestore import...', 'info');
+            
+            const collections = [
+                'games',
+                'news',
+                'partners',
+                'committee',
+                'teams',
+                'players',
+                'referees',
+                'schedule',
+                'standings',
+                'teamTraffic'
+            ];
+
+            let totalImported = 0;
+
+            for (const collectionName of collections) {
+                try {
+                    const response = await fetch(`/src/data/exports/${collectionName}.json`);
+                    if (!response.ok) {
+                        log(`⚠️ Could not load ${collectionName}.json - skipping`, 'warning');
+                        continue;
+                    }
+                    const data = await response.json();
+                    const count = await importCollection(collectionName, data);
+                    totalImported += count;
+                } catch (error) {
+                    log(`❌ Error with ${collectionName}: ${error.message}`, 'error');
+                }
+            }
+
+            log(`\n✅ Import completed! Total documents imported: ${totalImported}`, 'success');
+            log('🔄 Refresh your app to see the data!', 'info');
+            btn.disabled = false;
+        };
+
+        log('Ready to import data. Click "Import All Data" to begin.', 'info');
+    </script>
+</body>
+</html>

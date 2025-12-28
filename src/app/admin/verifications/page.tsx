@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import { collection, query, where, getDocs, doc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { collection, query, where, getDocs, doc, updateDoc, serverTimestamp, addDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { firebaseAuth, firebaseDB } from "@/lib/firebase";
 import type { VerificationRequest } from "@/types/user";
@@ -65,36 +65,80 @@ export default function AdminVerification() {
         notes: reviewNotes,
       });
 
-      // Update user profile
-      // IMPORTANT: Never update firstName/lastName here - those are the user's real identity
-      // from sign-up and must never be changed by player selection
-      await updateDoc(doc(firebaseDB, "users", selectedRequest.userId), {
-        verificationStatus: status,
-        verificationReviewedAt: serverTimestamp(),
-        verificationReviewedBy: user.email,
-        verificationNotes: reviewNotes,
-        updatedAt: serverTimestamp(),
-        // Store the link to the player they claimed, but DO NOT modify their name
-        linkedPlayerId: status === "approved" ? selectedRequest.selectedPersonId : null,
-        linkedPlayerName: status === "approved" ? selectedRequest.selectedPersonName : null,
-        // Explicitly preserve the user's real name (never overwrite with player data)
-        // firstName and lastName should remain unchanged from their original sign-up values
-      });
+      if (selectedRequest.requestType === "claim_existing") {
+        // CLAIM EXISTING PLAYER
+        await updateDoc(doc(firebaseDB, "users", selectedRequest.userId), {
+          role: "player",
+          teamId: selectedRequest.teamId,
+          teamName: selectedRequest.teamName,
+          verificationStatus: status,
+          verificationReviewedAt: serverTimestamp(),
+          verificationReviewedBy: user.email,
+          verificationNotes: reviewNotes,
+          updatedAt: serverTimestamp(),
+          linkedPlayerId: status === "approved" ? selectedRequest.existingPlayerId : null,
+          linkedPlayerName: status === "approved" ? selectedRequest.existingPlayerName : null,
+        });
 
-      // If approved, link the user account to the player roster entry
-      // This creates a bidirectional link without modifying the player's actual name
-      if (status === "approved" && selectedRequest.teamId && selectedRequest.selectedPersonId) {
-        await updateDoc(
-          doc(firebaseDB, "teams", selectedRequest.teamId, "roster", selectedRequest.selectedPersonId),
-          {
+        // Link user to player roster entry
+        if (status === "approved" && selectedRequest.existingPlayerId) {
+          await updateDoc(
+            doc(firebaseDB, "teams", selectedRequest.teamId, "roster", selectedRequest.existingPlayerId),
+            {
+              verificationStatus: "verified",
+              linkedUserId: selectedRequest.userId,
+              linkedUserEmail: selectedRequest.userEmail,
+              linkedAt: serverTimestamp(),
+            }
+          );
+        }
+      } else if (selectedRequest.requestType === "create_new") {
+        // CREATE NEW PLAYER REQUEST
+        if (status === "approved" && selectedRequest.newPlayerData) {
+          // Admin approved - create the player in the team roster
+          const newPlayerData = selectedRequest.newPlayerData;
+          const playerRef = await collection(firebaseDB, `teams/${selectedRequest.teamId}/roster`);
+          const newPlayerDoc = await addDoc(playerRef, {
+            firstName: newPlayerData.firstName,
+            lastName: newPlayerData.lastName,
+            number: newPlayerData.number,
+            position: newPlayerData.position || "",
+            height: newPlayerData.height || "",
+            weight: newPlayerData.weight || "",
+            birthdate: newPlayerData.birthdate || "",
+            nationality: newPlayerData.nationality || "",
+            headshot: "",
+            stats: { pts: 0, reb: 0, ast: 0, stl: 0, blk: 0 },
+            verificationStatus: "verified",
             linkedUserId: selectedRequest.userId,
-            linkedUserName: `${selectedRequest.userFirstName} ${selectedRequest.userLastName}`,
+            linkedUserEmail: selectedRequest.userEmail,
             linkedAt: serverTimestamp(),
-            // CRITICAL: Do NOT update the player's firstName, lastName, or name fields
-            // The player roster name must remain the official player name
-            // linkedUserName is stored separately for reference only
-          }
-        );
+            createdAt: serverTimestamp(),
+          });
+
+          // Update user profile with new player link
+          await updateDoc(doc(firebaseDB, "users", selectedRequest.userId), {
+            role: "player",
+            teamId: selectedRequest.teamId,
+            teamName: selectedRequest.teamName,
+            verificationStatus: status,
+            verificationReviewedAt: serverTimestamp(),
+            verificationReviewedBy: user.email,
+            verificationNotes: reviewNotes,
+            updatedAt: serverTimestamp(),
+            linkedPlayerId: newPlayerDoc.id,
+            linkedPlayerName: `${newPlayerData.firstName} ${newPlayerData.lastName}`,
+          });
+        } else {
+          // Rejected - just update user status
+          await updateDoc(doc(firebaseDB, "users", selectedRequest.userId), {
+            verificationStatus: status,
+            verificationReviewedAt: serverTimestamp(),
+            verificationReviewedBy: user.email,
+            verificationNotes: reviewNotes,
+            updatedAt: serverTimestamp(),
+          });
+        }
       }
 
       // Refresh list
@@ -197,22 +241,51 @@ export default function AdminVerification() {
                   </div>
 
                   <div>
-                    <label className="text-sm font-medium text-slate-400">Selected Person</label>
-                    <p className="text-white">{selectedRequest.selectedPersonName}</p>
+                    <label className="text-sm font-medium text-slate-400">Request Type</label>
+                    <p className="text-white capitalize">
+                      {selectedRequest.requestType === "claim_existing" ? "Claim Existing Player" : "Create New Player"}
+                    </p>
                   </div>
 
-                  <div>
-                    <label className="text-sm font-medium text-slate-400">ID Document</label>
-                    <div className="mt-2 rounded-lg border border-white/20 bg-black/30 p-2">
-                      <Image
-                        src={selectedRequest.idImageUrl}
-                        alt="Verification ID"
-                        width={400}
-                        height={300}
-                        className="w-full rounded object-contain"
-                      />
+                  {selectedRequest.requestType === "claim_existing" && selectedRequest.existingPlayerName && (
+                    <div>
+                      <label className="text-sm font-medium text-slate-400">Claiming Player</label>
+                      <p className="text-white">
+                        {selectedRequest.existingPlayerName} #{selectedRequest.existingPlayerNumber}
+                      </p>
                     </div>
-                  </div>
+                  )}
+
+                  {selectedRequest.requestType === "create_new" && selectedRequest.newPlayerData && (
+                    <div>
+                      <label className="text-sm font-medium text-slate-400">New Player Details</label>
+                      <div className="mt-2 rounded-lg border border-white/10 bg-white/5 p-4 space-y-2">
+                        <p className="text-white">
+                          Name: {selectedRequest.newPlayerData.firstName} {selectedRequest.newPlayerData.lastName}
+                        </p>
+                        <p className="text-slate-300 text-sm">
+                          #{selectedRequest.newPlayerData.number}
+                          {selectedRequest.newPlayerData.position && ` • ${selectedRequest.newPlayerData.position}`}
+                          {selectedRequest.newPlayerData.height && ` • ${selectedRequest.newPlayerData.height}`}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedRequest.idImageUrl && (
+                    <div>
+                      <label className="text-sm font-medium text-slate-400">ID Document</label>
+                      <div className="mt-2 rounded-lg border border-white/20 bg-black/30 p-2">
+                        <Image
+                          src={selectedRequest.idImageUrl}
+                          alt="Verification ID"
+                          width={400}
+                          height={300}
+                          className="w-full rounded object-contain"
+                        />
+                      </div>
+                    </div>
+                  )}
 
                   <div>
                     <label className="block text-sm font-medium text-slate-400">Review Notes (Optional)</label>

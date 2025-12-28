@@ -27,9 +27,30 @@ export default function ProfileSetup() {
   const [idImage, setIdImage] = useState<File | null>(null);
 
   // Fan fields
-  const [favoriteTeamId, setFavoriteTeamId] = useState("");
-  const [athletes, setAthletes] = useState<Array<{ id: string; name: string; teamName: string }>>([]);
-  const [favoriteAthleteId, setFavoriteAthleteId] = useState("");
+  const [favoriteTeamMenId, setFavoriteTeamMenId] = useState("");
+  const [favoriteTeamWomenId, setFavoriteTeamWomenId] = useState("");
+  const [menTeams, setMenTeams] = useState<Array<{ id: string; name: string; gender: string }>>([]);
+  const [womenTeams, setWomenTeams] = useState<Array<{ id: string; name: string; gender: string }>>([]);
+  const [menTeamPlayers, setMenTeamPlayers] = useState<Array<{ id: string; name: string; number?: string }>>([]);
+  const [womenTeamPlayers, setWomenTeamPlayers] = useState<Array<{ id: string; name: string; number?: string }>>([]);
+  const [favoritePlayerMenId, setFavoritePlayerMenId] = useState("");
+  const [favoritePlayerWomenId, setFavoritePlayerWomenId] = useState("");
+  
+  // Type-ahead search states
+  const [menTeamSearch, setMenTeamSearch] = useState("");
+  const [womenTeamSearch, setWomenTeamSearch] = useState("");
+  const [menPlayerSearch, setMenPlayerSearch] = useState("");
+  const [womenPlayerSearch, setWomenPlayerSearch] = useState("");
+  const [showMenTeamDropdown, setShowMenTeamDropdown] = useState(false);
+  const [showWomenTeamDropdown, setShowWomenTeamDropdown] = useState(false);
+  const [showMenPlayerDropdown, setShowMenPlayerDropdown] = useState(false);
+  const [showWomenPlayerDropdown, setShowWomenPlayerDropdown] = useState(false);
+  
+  // Global player search for fans (across all teams)
+  const [allPlayers, setAllPlayers] = useState<Array<{ id: string; name: string; number?: string; teamName?: string; headshot?: string; teamId?: string }>>([]);
+  const [globalPlayerSearch, setGlobalPlayerSearch] = useState("");
+  const [showGlobalPlayerDropdown, setShowGlobalPlayerDropdown] = useState(false);
+  const [selectedGlobalPlayerId, setSelectedGlobalPlayerId] = useState("");
 
   useEffect(() => {
     // Redirect if user already has a role
@@ -47,14 +68,20 @@ export default function ProfileSetup() {
     // Fetch teams when needed - FILTER BY GENDER
     const fetchTeams = async () => {
       const teamsSnapshot = await getDocs(collection(firebaseDB, "teams"));
-      const teamsList = teamsSnapshot.docs
-        .map((doc) => ({
-          id: doc.id,
-          name: doc.data().name || doc.id,
-          gender: doc.data().gender || "men",
-        }))
-        .filter((team) => !selectedGender || team.gender === selectedGender);
-      setTeams(teamsList);
+      const allTeams = teamsSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        name: doc.data().name || doc.id,
+        gender: doc.data().gender || "men",
+      }));
+
+      if (step === "fan-setup") {
+        // Separate men's and women's teams for fan selection
+        setMenTeams(allTeams.filter(team => team.gender === "men"));
+        setWomenTeams(allTeams.filter(team => team.gender === "women"));
+      } else if (step === "player-staff-setup" && selectedGender) {
+        // Filter by selected gender for player/staff
+        setTeams(allTeams.filter((team) => team.gender === selectedGender));
+      }
     };
 
     if ((step === "player-staff-setup" && selectedGender) || step === "fan-setup") {
@@ -84,19 +111,81 @@ export default function ProfileSetup() {
   }, [selectedTeamId, step]);
 
   useEffect(() => {
-    // Fetch athletes for fan setup
-    const fetchAthletes = async () => {
-      const playersSnapshot = await getDocs(collection(firebaseDB, "players"));
-      const athletesList = playersSnapshot.docs.map((doc) => ({
+    // Fetch players for men's team when selected by fan
+    const fetchMenPlayers = async () => {
+      if (!favoriteTeamMenId) {
+        setMenTeamPlayers([]);
+        return;
+      }
+
+      const rosterRef = collection(firebaseDB, "teams", favoriteTeamMenId, "roster");
+      const rosterSnapshot = await getDocs(rosterRef);
+      const players = rosterSnapshot.docs.map((doc) => ({
         id: doc.id,
         name: doc.data().name || `${doc.data().firstName} ${doc.data().lastName}`,
-        teamName: doc.data().teamName || "",
+        number: doc.data().number,
       }));
-      setAthletes(athletesList);
+      setMenTeamPlayers(players);
+    };
+
+    if (favoriteTeamMenId && step === "fan-setup") {
+      fetchMenPlayers();
+    }
+  }, [favoriteTeamMenId, step]);
+
+  useEffect(() => {
+    // Fetch players for women's team when selected by fan
+    const fetchWomenPlayers = async () => {
+      if (!favoriteTeamWomenId) {
+        setWomenTeamPlayers([]);
+        return;
+      }
+
+      const rosterRef = collection(firebaseDB, "teams", favoriteTeamWomenId, "roster");
+      const rosterSnapshot = await getDocs(rosterRef);
+      const players = rosterSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        name: doc.data().name || `${doc.data().firstName} ${doc.data().lastName}`,
+        number: doc.data().number,
+      }));
+      setWomenTeamPlayers(players);
+    };
+
+    if (favoriteTeamWomenId && step === "fan-setup") {
+      fetchWomenPlayers();
+    }
+  }, [favoriteTeamWomenId, step]);
+
+  useEffect(() => {
+    // Fetch all players from all teams for global player search
+    const fetchAllPlayers = async () => {
+      const teamsSnapshot = await getDocs(collection(firebaseDB, "teams"));
+      const playersList: Array<{ id: string; name: string; number?: string; teamName?: string; headshot?: string; teamId?: string }> = [];
+
+      for (const teamDoc of teamsSnapshot.docs) {
+        const teamId = teamDoc.id;
+        const teamName = teamDoc.data().name || teamId;
+        const rosterRef = collection(firebaseDB, "teams", teamId, "roster");
+        const rosterSnapshot = await getDocs(rosterRef);
+
+        rosterSnapshot.docs.forEach((playerDoc) => {
+          const playerData = playerDoc.data();
+          playersList.push({
+            id: playerDoc.id,
+            name: playerData.name || `${playerData.firstName} ${playerData.lastName}`,
+            number: playerData.number,
+            teamName,
+            teamId,
+            headshot: playerData.headshot || playerData.photo || "",
+          });
+        });
+      }
+
+      setAllPlayers(playersList);
     };
 
     if (step === "fan-setup") {
-      fetchAthletes();
+      fetchAllPlayers();
     }
   }, [step]);
 
@@ -167,8 +256,14 @@ export default function ProfileSetup() {
   };
 
   const handleFanSubmit = async () => {
-    if (!user || !favoriteTeamId || !favoriteAthleteId) {
-      setError("Please select your favorite team and athlete");
+    if (!user) {
+      setError("User not authenticated");
+      return;
+    }
+
+    // At least one team or player should be selected
+    if (!favoriteTeamMenId && !favoriteTeamWomenId && !selectedGlobalPlayerId) {
+      setError("Please select at least one favorite team or player");
       return;
     }
 
@@ -176,15 +271,36 @@ export default function ProfileSetup() {
     setError("");
 
     try {
-      const selectedTeam = teams.find((t) => t.id === favoriteTeamId);
-      const selectedAthlete = athletes.find((a) => a.id === favoriteAthleteId);
+      const selectedMenTeam = menTeams.find((t) => t.id === favoriteTeamMenId);
+      const selectedWomenTeam = womenTeams.find((t) => t.id === favoriteTeamWomenId);
+      const selectedMenPlayer = menTeamPlayers.find((p) => p.id === favoritePlayerMenId);
+      const selectedWomenPlayer = womenTeamPlayers.find((p) => p.id === favoritePlayerWomenId);
+      const selectedGlobalPlayer = allPlayers.find((p) => p.id === selectedGlobalPlayerId);
 
       await updateDoc(doc(firebaseDB, "users", user.uid), {
         role: "fan",
-        favoriteTeamId,
-        favoriteTeamName: selectedTeam?.name || "",
-        favoriteAthleteId,
-        favoriteAthleteName: selectedAthlete?.name || "",
+        ...(favoriteTeamMenId && {
+          favoriteTeamMenId,
+          favoriteTeamMenName: selectedMenTeam?.name || "",
+        }),
+        ...(favoriteTeamWomenId && {
+          favoriteTeamWomenId,
+          favoriteTeamWomenName: selectedWomenTeam?.name || "",
+        }),
+        ...(selectedGlobalPlayerId && {
+          favoritePlayerId: selectedGlobalPlayerId,
+          favoritePlayerName: selectedGlobalPlayer?.name || "",
+          favoritePlayerTeamId: selectedGlobalPlayer?.teamId || "",
+          favoritePlayerTeamName: selectedGlobalPlayer?.teamName || "",
+        }),
+        ...(favoritePlayerMenId && {
+          favoritePlayerMenId,
+          favoritePlayerMenName: selectedMenPlayer?.name || "",
+        }),
+        ...(favoritePlayerWomenId && {
+          favoritePlayerWomenId,
+          favoritePlayerWomenName: selectedWomenPlayer?.name || "",
+        }),
         updatedAt: serverTimestamp(),
       });
 
@@ -503,73 +619,354 @@ export default function ProfileSetup() {
                 </svg>
                 <div className="text-sm">
                   <p className="font-semibold text-orange-300 mb-1">Welcome, Fan!</p>
-                  <p className="text-orange-200/80">Complete your profile to personalize your experience and stay updated with your favorites.</p>
+                  <p className="text-orange-200/80">Choose your favorite teams from men&apos;s and women&apos;s leagues. You can update these anytime from your account settings.</p>
                 </div>
               </div>
 
-              {/* Favorite Team Selection */}
-              <div className="group">
+              {/* Global Player Search with Headshots */}
+              <div className="group relative">
                 <label className="block text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wider">
-                  Select Your Favorite Team
+                  Search for Your Favorite Player
                 </label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
+                  <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none z-10">
+                    <svg className="h-4 w-4 text-slate-400 group-focus-within:text-orange-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </div>
+                  <input
+                    type="text"
+                    value={globalPlayerSearch}
+                    onChange={(e) => setGlobalPlayerSearch(e.target.value)}
+                    onFocus={() => setShowGlobalPlayerDropdown(true)}
+                    onBlur={() => setTimeout(() => setShowGlobalPlayerDropdown(false), 200)}
+                    placeholder="Type player name to search..."
+                    aria-label="Search for favorite player"
+                    className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm pl-11 pr-10 py-3 text-white placeholder-slate-500 focus:border-orange-400/50 focus:outline-none focus:ring-2 focus:ring-orange-400/30 transition-all duration-300"
+                  />
+                  {globalPlayerSearch && (
+                    <button
+                      onClick={() => {
+                        setGlobalPlayerSearch("");
+                        setSelectedGlobalPlayerId("");
+                      }}
+                      className="absolute inset-y-0 right-0 flex items-center pr-4 z-10"
+                      type="button"
+                    >
+                      <svg className="h-4 w-4 text-slate-400 hover:text-orange-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
+                  {showGlobalPlayerDropdown && allPlayers.filter(player => 
+                    player.name.toLowerCase().includes(globalPlayerSearch.toLowerCase())
+                  ).length > 0 && (
+                    <div className="absolute z-20 mt-2 w-full rounded-xl border border-white/20 bg-slate-900 backdrop-blur-xl shadow-2xl max-h-80 overflow-y-auto">
+                      {allPlayers
+                        .filter(player => player.name.toLowerCase().includes(globalPlayerSearch.toLowerCase()))
+                        .slice(0, 10)
+                        .map((player) => (
+                          <button
+                            key={`${player.teamId}-${player.id}`}
+                            onClick={() => {
+                              setSelectedGlobalPlayerId(player.id);
+                              setGlobalPlayerSearch(`${player.name}${player.number ? ` #${player.number}` : ""} - ${player.teamName}`);
+                              setShowGlobalPlayerDropdown(false);
+                            }}
+                            className="w-full text-left px-4 py-3 text-white hover:bg-orange-500/20 transition-colors first:rounded-t-xl last:rounded-b-xl border-b border-white/10 last:border-b-0 flex items-center gap-3"
+                            type="button"
+                          >
+                            {/* Player Headshot */}
+                            <div className="flex-shrink-0 h-12 w-12 rounded-full overflow-hidden bg-slate-800 border-2 border-white/20">
+                              {player.headshot ? (
+                                <img 
+                                  src={player.headshot} 
+                                  alt={player.name}
+                                  className="h-full w-full object-cover"
+                                  onError={(e) => {
+                                    e.currentTarget.src = "/players/default.svg";
+                                  }}
+                                />
+                              ) : (
+                                <div className="h-full w-full flex items-center justify-center">
+                                  <svg className="h-6 w-6 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                  </svg>
+                                </div>
+                              )}
+                            </div>
+                            {/* Player Info */}
+                            <div className="flex-1 min-w-0">
+                              <div className="font-semibold text-white truncate">
+                                {player.name} {player.number ? `#${player.number}` : ""}
+                              </div>
+                              <div className="text-xs text-slate-400 truncate">
+                                {player.teamName}
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                    </div>
+                  )}
+                </div>
+                {selectedGlobalPlayerId && (
+                  <div className="mt-2 flex items-center gap-2 text-xs text-green-400">
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span>Player selected</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Favorite Men's Team Selection - Type Ahead */}
+              <div className="group relative">
+                <label className="block text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wider">
+                  Favorite Men&apos;s Team (Optional)
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none z-10">
                     <svg className="h-4 w-4 text-slate-400 group-focus-within:text-orange-400 transition-colors" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
                     </svg>
                   </div>
-                  <select
-                    value={favoriteTeamId}
-                    onChange={(e) => setFavoriteTeamId(e.target.value)}
-                    aria-label="Select Your Favorite Team"
-                    className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm pl-11 pr-4 py-3 text-white focus:border-orange-400/50 focus:outline-none focus:ring-2 focus:ring-orange-400/30 transition-all duration-300 appearance-none cursor-pointer"
-                  >
-                    <option value="" className="bg-slate-900">Choose a team...</option>
-                    {teams.map((team) => (
-                      <option key={team.id} value={team.id} className="bg-slate-900">
-                        {team.name} ({team.gender})
-                      </option>
-                    ))}
-                  </select>
-                  <div className="absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none">
-                    <svg className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </div>
+                  <input
+                    type="text"
+                    value={menTeamSearch}
+                    onChange={(e) => setMenTeamSearch(e.target.value)}
+                    onFocus={() => setShowMenTeamDropdown(true)}
+                    onBlur={() => setTimeout(() => setShowMenTeamDropdown(false), 200)}
+                    placeholder="Type to search teams..."
+                    aria-label="Search Men's Team"
+                    className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm pl-11 pr-10 py-3 text-white placeholder-slate-500 focus:border-orange-400/50 focus:outline-none focus:ring-2 focus:ring-orange-400/30 transition-all duration-300"
+                  />
+                  {menTeamSearch && (
+                    <button
+                      onClick={() => {
+                        setMenTeamSearch("");
+                        setFavoriteTeamMenId("");
+                        setFavoritePlayerMenId("");
+                      }}
+                      className="absolute inset-y-0 right-0 flex items-center pr-4 z-10"
+                      type="button"
+                    >
+                      <svg className="h-4 w-4 text-slate-400 hover:text-orange-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
+                  {showMenTeamDropdown && menTeams.filter(team => 
+                    team.name.toLowerCase().includes(menTeamSearch.toLowerCase())
+                  ).length > 0 && (
+                    <div className="absolute z-20 mt-2 w-full rounded-xl border border-white/20 bg-slate-900 backdrop-blur-xl shadow-2xl max-h-60 overflow-y-auto">
+                      {menTeams
+                        .filter(team => team.name.toLowerCase().includes(menTeamSearch.toLowerCase()))
+                        .map((team) => (
+                          <button
+                            key={team.id}
+                            onClick={() => {
+                              setFavoriteTeamMenId(team.id);
+                              setMenTeamSearch(team.name);
+                              setFavoritePlayerMenId("");
+                              setShowMenTeamDropdown(false);
+                            }}
+                            className="w-full text-left px-4 py-3 text-white hover:bg-orange-500/20 transition-colors first:rounded-t-xl last:rounded-b-xl border-b border-white/10 last:border-b-0"
+                            type="button"
+                          >
+                            {team.name}
+                          </button>
+                        ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {/* Favorite Athlete Selection */}
-              <div className="group">
-                <label className="block text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wider">
-                  Select Your Favorite Athlete
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
-                    <svg className="h-4 w-4 text-slate-400 group-focus-within:text-orange-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-                    </svg>
-                  </div>
-                  <select
-                    value={favoriteAthleteId}
-                    onChange={(e) => setFavoriteAthleteId(e.target.value)}
-                    aria-label="Select Your Favorite Athlete"
-                    className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm pl-11 pr-4 py-3 text-white focus:border-orange-400/50 focus:outline-none focus:ring-2 focus:ring-orange-400/30 transition-all duration-300 appearance-none cursor-pointer"
-                  >
-                    <option value="" className="bg-slate-900">Choose an athlete...</option>
-                    {athletes.map((athlete) => (
-                      <option key={athlete.id} value={athlete.id} className="bg-slate-900">
-                        {athlete.name} ({athlete.teamName})
-                      </option>
-                    ))}
-                  </select>
-                  <div className="absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none">
-                    <svg className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
+              {/* Favorite Men's Player Selection - Type Ahead - Shows after team is selected */}
+              {favoriteTeamMenId && menTeamPlayers.length > 0 && (
+                <div className="group relative">
+                  <label className="block text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wider">
+                    Favorite Player from Men&apos;s Team (Optional)
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none z-10">
+                      <svg className="h-4 w-4 text-slate-400 group-focus-within:text-orange-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                    </div>
+                    <input
+                      type="text"
+                      value={menPlayerSearch}
+                      onChange={(e) => setMenPlayerSearch(e.target.value)}
+                      onFocus={() => setShowMenPlayerDropdown(true)}
+                      onBlur={() => setTimeout(() => setShowMenPlayerDropdown(false), 200)}
+                      placeholder="Type to search players..."
+                      aria-label="Search Men's Player"
+                      className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm pl-11 pr-10 py-3 text-white placeholder-slate-500 focus:border-orange-400/50 focus:outline-none focus:ring-2 focus:ring-orange-400/30 transition-all duration-300"
+                    />
+                    {menPlayerSearch && (
+                      <button
+                        onClick={() => {
+                          setMenPlayerSearch("");
+                          setFavoritePlayerMenId("");
+                        }}
+                        className="absolute inset-y-0 right-0 flex items-center pr-4 z-10"
+                        type="button"
+                      >
+                        <svg className="h-4 w-4 text-slate-400 hover:text-orange-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
+                    {showMenTeamDropdown && menTeams.filter(team => 
+                      team.name.toLowerCase().includes(menTeamSearch.toLowerCase())
+                    ).length > 0 && (
+                      <div className="absolute z-20 mt-2 w-full rounded-xl border border-white/20 bg-slate-900 backdrop-blur-xl shadow-2xl max-h-60 overflow-y-auto">
+                        {menTeams
+                          .filter(team => team.name.toLowerCase().includes(menTeamSearch.toLowerCase()))
+                          .map((team) => (
+                            <button
+                              key={team.id}
+                              onClick={() => {
+                                setFavoriteTeamMenId(team.id);
+                                setMenTeamSearch(team.name);
+                                setFavoritePlayerMenId("");
+                                setShowMenTeamDropdown(false);
+                              }}
+                              className="w-full text-left px-4 py-3 text-white hover:bg-orange-500/20 transition-colors first:rounded-t-xl last:rounded-b-xl border-b border-white/10 last:border-b-0"
+                              type="button"
+                            >
+                              {team.name}
+                            </button>
+                          ))}
+                      </div>
+                    )}
                   </div>
                 </div>
+              )}
+
+              {/* Favorite Women's Team Selection - Type Ahead */}
+              <div className="group relative">
+                <label className="block text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wider">
+                  Favorite Women&apos;s Team (Optional)
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none z-10">
+                    <svg className="h-4 w-4 text-slate-400 group-focus-within:text-orange-400 transition-colors" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+                    </svg>
+                  </div>
+                  <input
+                    type="text"
+                    value={womenTeamSearch}
+                    onChange={(e) => setWomenTeamSearch(e.target.value)}
+                    onFocus={() => setShowWomenTeamDropdown(true)}
+                    onBlur={() => setTimeout(() => setShowWomenTeamDropdown(false), 200)}
+                    placeholder="Type to search teams..."
+                    aria-label="Search Women's Team"
+                    className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm pl-11 pr-10 py-3 text-white placeholder-slate-500 focus:border-orange-400/50 focus:outline-none focus:ring-2 focus:ring-orange-400/30 transition-all duration-300"
+                  />
+                  {womenTeamSearch && (
+                    <button
+                      onClick={() => {
+                        setWomenTeamSearch("");
+                        setFavoriteTeamWomenId("");
+                        setFavoritePlayerWomenId("");
+                      }}
+                      className="absolute inset-y-0 right-0 flex items-center pr-4 z-10"
+                      type="button"
+                    >
+                      <svg className="h-4 w-4 text-slate-400 hover:text-orange-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
+                  {showWomenTeamDropdown && womenTeams.filter(team => 
+                    team.name.toLowerCase().includes(womenTeamSearch.toLowerCase())
+                  ).length > 0 && (
+                    <div className="absolute z-20 mt-2 w-full rounded-xl border border-white/20 bg-slate-900 backdrop-blur-xl shadow-2xl max-h-60 overflow-y-auto">
+                      {womenTeams
+                        .filter(team => team.name.toLowerCase().includes(womenTeamSearch.toLowerCase()))
+                        .map((team) => (
+                          <button
+                            key={team.id}
+                            onClick={() => {
+                              setFavoriteTeamWomenId(team.id);
+                              setWomenTeamSearch(team.name);
+                              setFavoritePlayerWomenId("");
+                              setShowWomenTeamDropdown(false);
+                            }}
+                            className="w-full text-left px-4 py-3 text-white hover:bg-orange-500/20 transition-colors first:rounded-t-xl last:rounded-b-xl border-b border-white/10 last:border-b-0"
+                            type="button"
+                          >
+                            {team.name}
+                          </button>
+                        ))}
+                    </div>
+                  )}
+                </div>
               </div>
+
+              {/* Favorite Women's Player Selection - Type Ahead - Shows after team is selected */}
+              {favoriteTeamWomenId && womenTeamPlayers.length > 0 && (
+                <div className="group relative">
+                  <label className="block text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wider">
+                    Favorite Player from Women&apos;s Team (Optional)
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none z-10">
+                      <svg className="h-4 w-4 text-slate-400 group-focus-within:text-orange-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                    </div>
+                    <input
+                      type="text"
+                      value={womenPlayerSearch}
+                      onChange={(e) => setWomenPlayerSearch(e.target.value)}
+                      onFocus={() => setShowWomenPlayerDropdown(true)}
+                      onBlur={() => setTimeout(() => setShowWomenPlayerDropdown(false), 200)}
+                      placeholder="Type to search players..."
+                      aria-label="Search Women's Player"
+                      className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm pl-11 pr-10 py-3 text-white placeholder-slate-500 focus:border-orange-400/50 focus:outline-none focus:ring-2 focus:ring-orange-400/30 transition-all duration-300"
+                    />
+                    {womenPlayerSearch && (
+                      <button
+                        onClick={() => {
+                          setWomenPlayerSearch("");
+                          setFavoritePlayerWomenId("");
+                        }}
+                        className="absolute inset-y-0 right-0 flex items-center pr-4 z-10"
+                        type="button"
+                      >
+                        <svg className="h-4 w-4 text-slate-400 hover:text-orange-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
+                    {showWomenPlayerDropdown && womenTeamPlayers.filter(player => 
+                      player.name.toLowerCase().includes(womenPlayerSearch.toLowerCase())
+                    ).length > 0 && (
+                      <div className="absolute z-20 mt-2 w-full rounded-xl border border-white/20 bg-slate-900 backdrop-blur-xl shadow-2xl max-h-60 overflow-y-auto">
+                        {womenTeamPlayers
+                          .filter(player => player.name.toLowerCase().includes(womenPlayerSearch.toLowerCase()))
+                          .map((player) => (
+                            <button
+                              key={player.id}
+                              onClick={() => {
+                                setFavoritePlayerWomenId(player.id);
+                                setWomenPlayerSearch(`${player.name}${player.number ? ` #${player.number}` : ""}`);
+                                setShowWomenPlayerDropdown(false);
+                              }}
+                              className="w-full text-left px-4 py-3 text-white hover:bg-orange-500/20 transition-colors first:rounded-t-xl last:rounded-b-xl border-b border-white/10 last:border-b-0"
+                              type="button"
+                            >
+                              {player.name} {player.number ? `#${player.number}` : ""}
+                            </button>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {error && (
                 <div className="rounded-xl border border-red-400/50 bg-red-500/10 backdrop-blur-sm p-4 flex items-start gap-3 animate-in slide-in-from-top-2 duration-300">
@@ -582,7 +979,7 @@ export default function ProfileSetup() {
 
               <button
                 onClick={handleFanSubmit}
-                disabled={loading || !favoriteTeamId || !favoriteAthleteId}
+                disabled={loading || (!favoriteTeamMenId && !favoriteTeamWomenId && !selectedGlobalPlayerId)}
                 className="group relative w-full overflow-hidden rounded-xl bg-gradient-to-r from-orange-500 to-pink-600 px-4 py-4 font-bold text-white shadow-lg shadow-orange-500/50 transition-all duration-300 hover:shadow-xl hover:shadow-orange-500/60 hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                 type="button"
               >

@@ -92,9 +92,8 @@ export default function PlayerProfilePopup({ userProfile, onClose }: PlayerProfi
         const gamesRef = collection(firebaseDB, "games");
         const completedGamesQuery = query(
           gamesRef,
-          where("completed", "==", true),
           orderBy("date", "desc"),
-          limit(10)
+          limit(50)
         );
         
         const gamesSnapshot = await getDocs(completedGamesQuery);
@@ -108,6 +107,9 @@ export default function PlayerProfilePopup({ userProfile, onClose }: PlayerProfi
 
         gamesSnapshot.docs.forEach((doc) => {
           const gameData = doc.data();
+          // Filter completed games in memory
+          if (!gameData.completed) return;
+          
           const playerStats = gameData.playerStats || [];
           
           // Find the linked player's stats using their number and team
@@ -140,15 +142,17 @@ export default function PlayerProfilePopup({ userProfile, onClose }: PlayerProfi
         // Fetch next game
         const upcomingGamesQuery = query(
           gamesRef,
-          where("completed", "==", false),
           orderBy("date", "asc"),
-          limit(20)
+          limit(50)
         );
 
         const upcomingSnapshot = await getDocs(upcomingGamesQuery);
         
         for (const doc of upcomingSnapshot.docs) {
           const gameData = doc.data();
+          
+          // Skip completed games
+          if (gameData.completed) continue;
           
           // Check if this is the linked player's team game
           if (gameData.homeTeamName === userProfile.teamName || 

@@ -32,20 +32,45 @@ export interface UserProfile {
   favoriteTeamName?: string;
   favoriteAthleteId?: string;
   favoriteAthleteName?: string;
+  // New fan favorites (men's and women's teams)
+  favoriteTeamMenId?: string;
+  favoriteTeamMenName?: string;
+  favoriteTeamWomenId?: string;
+  favoriteTeamWomenName?: string;
+  // Favorite players from teams
+  favoritePlayerMenId?: string;
+  favoritePlayerMenName?: string;
+  favoritePlayerWomenId?: string;
+  favoritePlayerWomenName?: string;
 }
 
 export interface VerificationRequest {
   id: string;
   userId: string;
+  userEmail?: string;
   userFirstName: string;
   userLastName: string;
   userPhone: string;
+  requestType: "claim_existing" | "create_new";
   role: "player" | "coach" | "staff";
   teamId: string;
   teamName: string;
-  selectedPersonName: string;
-  selectedPersonId?: string;
-  idImageUrl: string;
+  teamGender?: string;
+  // For claiming existing player
+  existingPlayerId?: string;
+  existingPlayerName?: string;
+  existingPlayerNumber?: number;
+  // For creating new player
+  newPlayerData?: {
+    firstName: string;
+    lastName: string;
+    number?: number;
+    position?: string;
+    height?: string;
+    birthdate?: string;
+    nationality?: string;
+  };
+  idImageUrl?: string;
   status: VerificationStatus;
   submittedAt: Date;
   reviewedAt?: Date;

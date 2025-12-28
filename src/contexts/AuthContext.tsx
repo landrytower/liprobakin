@@ -8,6 +8,9 @@ import {
   onAuthStateChanged,
   User as FirebaseUser,
   updateProfile,
+  signInWithPopup,
+  GoogleAuthProvider,
+  OAuthProvider,
 } from "firebase/auth";
 import {
   doc,
@@ -36,6 +39,8 @@ interface AuthContextType {
     phoneNumber: string
   ) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
+  signInWithApple: () => Promise<void>;
   signOut: () => Promise<void>;
   refreshUserProfile: () => Promise<void>;
 }
@@ -91,38 +96,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Only fetch user profile if NOT an admin
         if (!isAdminUser) {
           await fetchUserProfile(firebaseUser.uid);
+
+          // Set up real-time listener for user profile document
+          // Only listen to regular users, not admins
+          const collectionName = "users";
+          
+          unsubscribeProfile = onSnapshot(
+            doc(firebaseDB, collectionName, firebaseUser.uid),
+            async (docSnapshot) => {
+              if (!docSnapshot.exists()) {
+                // User profile was deleted from Firestore - kick them out
+                console.warn('User profile deleted from Firestore. Signing out...');
+                await firebaseSignOut(firebaseAuth);
+                setUserProfile(null);
+              } else {
+                // Update profile with latest data
+                const data = docSnapshot.data();
+                setUserProfile({
+                  ...data,
+                  createdAt: data.createdAt?.toDate() || new Date(),
+                  updatedAt: data.updatedAt?.toDate() || new Date(),
+                  verificationSubmittedAt: data.verificationSubmittedAt?.toDate(),
+                  verificationReviewedAt: data.verificationReviewedAt?.toDate(),
+                } as UserProfile);
+              }
+            },
+            (error) => {
+              console.error("Error listening to user profile:", error);
+            }
+          );
         } else {
           setUserProfile(null);
         }
-
-        // Set up real-time listener for user profile document
-        // Only listen to regular users, not admins
-        const collectionName = "users";
-        
-        unsubscribeProfile = onSnapshot(
-          doc(firebaseDB, collectionName, firebaseUser.uid),
-          async (docSnapshot) => {
-            if (!docSnapshot.exists()) {
-              // User profile was deleted from Firestore - kick them out
-              console.warn('User profile deleted from Firestore. Signing out...');
-              await firebaseSignOut(firebaseAuth);
-              setUserProfile(null);
-            } else {
-              // Update profile with latest data
-              const data = docSnapshot.data();
-              setUserProfile({
-                ...data,
-                createdAt: data.createdAt?.toDate() || new Date(),
-                updatedAt: data.updatedAt?.toDate() || new Date(),
-                verificationSubmittedAt: data.verificationSubmittedAt?.toDate(),
-                verificationReviewedAt: data.verificationReviewedAt?.toDate(),
-              } as UserProfile);
-            }
-          },
-          (error) => {
-            console.error("Error listening to user profile:", error);
-          }
-        );
       } else {
         setUserProfile(null);
         setIsAdmin(false);
@@ -183,8 +188,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   };
 
-  const signIn = async (email: string, password: string) => {
-    const userCredential = await signInWithEmailAndPassword(firebaseAuth, email, password);
+  const signIn = async (emailOrPhone: string, password: string) => {
+    let userEmail = emailOrPhone;
+    
+    // If input looks like a phone number, search for the user by phone number
+    if (!emailOrPhone.includes('@')) {
+      // Search for user by phone number
+      const usersRef = collection(firebaseDB, "users");
+      const phoneQuery = query(usersRef, where("phoneNumber", "==", emailOrPhone));
+      const phoneSnapshot = await getDocs(phoneQuery);
+      
+      if (phoneSnapshot.empty) {
+        throw new Error("No account found with this phone number.");
+      }
+      
+      // Get the email associated with this phone number
+      const userData = phoneSnapshot.docs[0].data();
+      userEmail = userData.email;
+    }
+    
+    const userCredential = await signInWithEmailAndPassword(firebaseAuth, userEmail, password);
     const user = userCredential.user;
     
     // CRITICAL: Check if user exists in adminUsers collection
@@ -208,6 +231,72 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const signInWithGoogle = async () => {
+    const provider = new GoogleAuthProvider();
+    const userCredential = await signInWithPopup(firebaseAuth, provider);
+    const user = userCredential.user;
+
+    // Check if user profile exists, if not create one
+    const userDocRef = doc(firebaseDB, "users", user.uid);
+    const userDocSnap = await getDoc(userDocRef);
+
+    if (!userDocSnap.exists()) {
+      // Create user profile for new Google sign-in
+      const nameParts = user.displayName?.split(" ") || ["", ""];
+      const firstName = nameParts[0] || "";
+      const lastName = nameParts.slice(1).join(" ") || "";
+
+      const userProfile: Partial<UserProfile> = {
+        uid: user.uid,
+        email: user.email || "",
+        phoneNumber: user.phoneNumber || "",
+        firstName,
+        lastName,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      await setDoc(userDocRef, {
+        ...userProfile,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    }
+  };
+
+  const signInWithApple = async () => {
+    const provider = new OAuthProvider('apple.com');
+    const userCredential = await signInWithPopup(firebaseAuth, provider);
+    const user = userCredential.user;
+
+    // Check if user profile exists, if not create one
+    const userDocRef = doc(firebaseDB, "users", user.uid);
+    const userDocSnap = await getDoc(userDocRef);
+
+    if (!userDocSnap.exists()) {
+      // Create user profile for new Apple sign-in
+      const nameParts = user.displayName?.split(" ") || ["", ""];
+      const firstName = nameParts[0] || "";
+      const lastName = nameParts.slice(1).join(" ") || "";
+
+      const userProfile: Partial<UserProfile> = {
+        uid: user.uid,
+        email: user.email || "",
+        phoneNumber: user.phoneNumber || "",
+        firstName,
+        lastName,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      await setDoc(userDocRef, {
+        ...userProfile,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    }
+  };
+
   const signOut = async () => {
     await firebaseSignOut(firebaseAuth);
   };
@@ -221,6 +310,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loading,
         signUp,
         signIn,
+        signInWithGoogle,
+        signInWithApple,
         signOut,
         refreshUserProfile,
       }}

@@ -11,11 +11,10 @@ interface AuthModalProps {
 
 export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
   const router = useRouter();
-  const { signUp, signIn } = useAuth();
+  const { signUp, signIn, signInWithGoogle, signInWithApple } = useAuth();
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
 
   // Form fields
   const [email, setEmail] = useState("");
@@ -52,7 +51,6 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
     setLastName("");
     setPhoneNumber("");
     setError("");
-    setShowPassword(false);
   };
 
   const switchMode = () => {
@@ -60,189 +58,392 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
     resetForm();
   };
 
+  const handleGoogleSignIn = async () => {
+    setError("");
+    setLoading(true);
+    try {
+      await signInWithGoogle();
+      router.push("/profile-setup");
+      onClose();
+    } catch (err: any) {
+      setError(err.message || "Google sign-in failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAppleSignIn = async () => {
+    setError("");
+    setLoading(true);
+    try {
+      await signInWithApple();
+      router.push("/profile-setup");
+      onClose();
+    } catch (err: any) {
+      setError(err.message || "Apple sign-in failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4 animate-in fade-in duration-200"
-      onClick={onClose}
-    >
-      <div
-        className="relative w-full max-w-sm rounded-2xl border border-white/20 bg-slate-900/90 backdrop-blur-xl shadow-2xl animate-in zoom-in-95 duration-200"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Content Container */}
-        <div className="relative z-10 p-5">
-          {/* Close button */}
-          <button
-            onClick={onClose}
-            className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-lg bg-white/10 text-slate-300 transition hover:bg-white/20 hover:text-white active:scale-95"
-            type="button"
-          >
-            <span className="text-xl leading-none">×</span>
+    <>
+      <style jsx>{`
+        .auth-modal-overlay {
+          position: fixed;
+          inset: 0;
+          z-index: 100;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: rgba(0, 0, 0, 0.7);
+          backdrop-filter: blur(4px);
+          padding: 1rem;
+          animation: fadeIn 0.2s ease-out;
+        }
+
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+
+        .auth-container {
+          max-width: 350px;
+          width: 100%;
+          background: linear-gradient(0deg, rgb(255, 255, 255) 0%, rgb(244, 247, 251) 100%);
+          border-radius: 40px;
+          padding: 25px 35px;
+          border: 5px solid rgb(255, 255, 255);
+          box-shadow: rgba(133, 189, 215, 0.878) 0px 30px 30px -20px;
+          position: relative;
+          animation: zoomIn 0.2s ease-out;
+        }
+
+        @keyframes zoomIn {
+          from { transform: scale(0.95); opacity: 0; }
+          to { transform: scale(1); opacity: 1; }
+        }
+
+        .close-button {
+          position: absolute;
+          right: 15px;
+          top: 15px;
+          background: rgba(0, 0, 0, 0.1);
+          border: none;
+          border-radius: 50%;
+          width: 30px;
+          height: 30px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          font-size: 20px;
+          color: #666;
+          transition: all 0.2s;
+        }
+
+        .close-button:hover {
+          background: rgba(0, 0, 0, 0.2);
+          transform: scale(1.1);
+        }
+
+        .heading {
+          text-align: center;
+          font-weight: 900;
+          font-size: 30px;
+          color: rgb(16, 137, 211);
+          margin-bottom: 20px;
+        }
+
+        .auth-form {
+          margin-top: 20px;
+        }
+
+        .auth-input {
+          width: 100%;
+          background: white;
+          border: none;
+          padding: 15px 20px;
+          border-radius: 20px;
+          margin-top: 15px;
+          box-shadow: #cff0ff 0px 10px 10px -5px;
+          border-inline: 2px solid transparent;
+          font-size: 14px;
+          color: #000;
+        }
+
+        .auth-input::placeholder {
+          color: rgb(170, 170, 170);
+        }
+
+        .auth-input:focus {
+          outline: none;
+          border-inline: 2px solid #12B1D1;
+        }
+
+        .name-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px;
+        }
+
+        .forgot-password {
+          display: block;
+          margin-top: 10px;
+          margin-left: 10px;
+        }
+
+        .forgot-password a {
+          font-size: 11px;
+          color: #0099ff;
+          text-decoration: none;
+        }
+
+        .forgot-password a:hover {
+          text-decoration: underline;
+        }
+
+        .error-message {
+          margin-top: 15px;
+          padding: 12px 15px;
+          background: #fee;
+          border: 1px solid #fcc;
+          border-radius: 15px;
+          color: #c33;
+          font-size: 13px;
+          text-align: center;
+        }
+
+        .login-button {
+          display: block;
+          width: 100%;
+          font-weight: bold;
+          background: linear-gradient(45deg, rgb(16, 137, 211) 0%, rgb(18, 177, 209) 100%);
+          color: white;
+          padding: 15px;
+          margin: 20px auto;
+          border-radius: 20px;
+          box-shadow: rgba(133, 189, 215, 0.878) 0px 20px 10px -15px;
+          border: none;
+          transition: all 0.2s ease-in-out;
+          cursor: pointer;
+          font-size: 14px;
+        }
+
+        .login-button:hover:not(:disabled) {
+          transform: scale(1.03);
+          box-shadow: rgba(133, 189, 215, 0.878) 0px 23px 10px -20px;
+        }
+
+        .login-button:active:not(:disabled) {
+          transform: scale(0.95);
+          box-shadow: rgba(133, 189, 215, 0.878) 0px 15px 10px -10px;
+        }
+
+        .login-button:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+
+        .social-account-container {
+          margin-top: 25px;
+        }
+
+        .social-title {
+          display: block;
+          text-align: center;
+          font-size: 10px;
+          color: rgb(170, 170, 170);
+        }
+
+        .social-accounts {
+          width: 100%;
+          display: flex;
+          justify-content: center;
+          gap: 15px;
+          margin-top: 5px;
+        }
+
+        .social-button {
+          background: linear-gradient(45deg, rgb(0, 0, 0) 0%, rgb(112, 112, 112) 100%);
+          border: 5px solid white;
+          padding: 5px;
+          border-radius: 50%;
+          width: 40px;
+          aspect-ratio: 1;
+          display: grid;
+          place-content: center;
+          box-shadow: rgba(133, 189, 215, 0.878) 0px 12px 10px -8px;
+          transition: all 0.2s ease-in-out;
+          cursor: pointer;
+        }
+
+        .social-button svg {
+          fill: white;
+          margin: auto;
+          width: 16px;
+          height: 16px;
+        }
+
+        .social-button:hover {
+          transform: scale(1.2);
+        }
+
+        .social-button:active {
+          transform: scale(0.9);
+        }
+
+        .agreement {
+          display: block;
+          text-align: center;
+          margin-top: 15px;
+        }
+
+        .agreement a {
+          text-decoration: none;
+          color: #0099ff;
+          font-size: 9px;
+        }
+
+        .agreement a:hover {
+          text-decoration: underline;
+        }
+
+        .switch-mode {
+          text-align: center;
+          margin-top: 15px;
+          font-size: 12px;
+          color: rgb(100, 100, 100);
+        }
+
+        .switch-mode button {
+          background: none;
+          border: none;
+          color: #0099ff;
+          text-decoration: underline;
+          cursor: pointer;
+          font-size: 12px;
+          margin-left: 5px;
+        }
+
+        .switch-mode button:hover {
+          color: rgb(16, 137, 211);
+        }
+      `}</style>
+
+      <div className="auth-modal-overlay" onClick={onClose}>
+        <div className="auth-container" onClick={(e) => e.stopPropagation()}>
+          <button onClick={onClose} className="close-button" type="button">
+            ×
           </button>
 
-          {/* Header */}
-          <div className="mb-5 text-center">
-            <h2 className="text-2xl font-bold text-white mb-1">
-              {mode === "login" ? "Welcome Back" : "Create Account"}
-            </h2>
-            <p className="text-xs text-slate-400">
-              {mode === "login" 
-                ? "Sign in to continue" 
-                : "Join us today"}
-            </p>
+          <div className="heading">
+            {mode === "login" ? "Sign In" : "Create Account"}
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-3">
+          <form onSubmit={handleSubmit} className="auth-form">
             {mode === "signup" && (
               <>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label htmlFor="firstName" className="block text-xs text-slate-300 mb-1">
-                      First Name
-                    </label>
-                    <input
-                      id="firstName"
-                      type="text"
-                      required
-                      value={firstName}
-                      onChange={(e) => setFirstName(e.target.value)}
-                      className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-white/40 focus:bg-white/10 focus:outline-none transition"
-                      placeholder="John"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="lastName" className="block text-xs text-slate-300 mb-1">
-                      Last Name
-                    </label>
-                    <input
-                      id="lastName"
-                      type="text"
-                      required
-                      value={lastName}
-                      onChange={(e) => setLastName(e.target.value)}
-                      className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-white/40 focus:bg-white/10 focus:outline-none transition"
-                      placeholder="Doe"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label htmlFor="phoneNumber" className="block text-xs text-slate-300 mb-1">
-                    Phone Number
-                  </label>
+                <div className="name-grid">
                   <input
-                    id="phoneNumber"
-                    type="tel"
                     required
-                    value={phoneNumber}
-                    onChange={(e) => setPhoneNumber(e.target.value)}
-                    className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-white/40 focus:bg-white/10 focus:outline-none transition"
-                    placeholder="+1234567890"
+                    className="auth-input"
+                    type="text"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    placeholder="First Name"
+                  />
+                  <input
+                    required
+                    className="auth-input"
+                    type="text"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    placeholder="Last Name"
                   />
                 </div>
+                <input
+                  required
+                  className="auth-input"
+                  type="tel"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  placeholder="Phone Number"
+                />
               </>
             )}
 
-            <div>
-              <label htmlFor="email" className="block text-xs text-slate-300 mb-1">
-                Email Address
-              </label>
-              <input
-                id="email"
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-white/40 focus:bg-white/10 focus:outline-none transition"
-                placeholder="you@example.com"
-              />
-            </div>
+            <input
+              required
+              className="auth-input"
+              type="text"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="E-mail or Phone Number"
+            />
+            <input
+              required
+              className="auth-input"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Password"
+              minLength={6}
+            />
 
-            <div>
-              <label htmlFor="password" className="block text-xs text-slate-300 mb-1">
-                Password
-              </label>
-              <div className="relative">
-                <input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 pr-10 text-sm text-white placeholder-slate-500 focus:border-white/40 focus:bg-white/10 focus:outline-none transition"
-                  placeholder="••••••••"
-                  minLength={6}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-white"
-                >
-                  {showPassword ? (
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                    </svg>
-                  ) : (
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                    </svg>
-                  )}
-                </button>
-              </div>
-            </div>
-
-            {error && (
-              <div className="rounded-lg border border-red-400/50 bg-red-500/10 p-3">
-                <p className="text-xs text-red-300">{error}</p>
-              </div>
+            {mode === "login" && (
+              <span className="forgot-password">
+                <a href="#">Forgot Password?</a>
+              </span>
             )}
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full rounded-lg bg-white/10 backdrop-blur-md px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed border border-white/20"
-            >
-              <span className="flex items-center justify-center gap-2">
-                {loading ? (
-                  <>
-                    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                    <span className="tracking-wide">Processing...</span>
-                  </>
-                ) : (
-                  <>
-                    <span className="tracking-wide">{mode === "login" ? "Sign In" : "Create Account"}</span>
-                    <svg className="h-5 w-5 transition-transform group-hover:translate-x-2 duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                    </svg>
-                  </>
-                )}
-              </span>
-              <div className="absolute inset-0 bg-gradient-to-r from-emerald-600 via-cyan-600 to-blue-600 opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
-              {/* Shimmer effect */}
-              <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+            {error && <div className="error-message">{error}</div>}
+
+            <button type="submit" disabled={loading} className="login-button">
+              {loading ? "Processing..." : mode === "login" ? "Sign In" : "Create Account"}
             </button>
           </form>
 
-          <div className="mt-4 text-center">
-            <p className="text-xs text-slate-400 mb-2">
-              {mode === "login" ? "New here?" : "Already have an account?"}
-            </p>
-            <button
-              onClick={switchMode}
-              className="text-sm text-white hover:underline"
-              type="button"
-            >
+          <div className="social-account-container">
+            <span className="social-title">Or Sign in with</span>
+            <div className="social-accounts">
+              <button 
+                type="button" 
+                className="social-button google"
+                onClick={handleGoogleSignIn}
+                disabled={loading}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" height="1em" viewBox="0 0 488 512">
+                  <path d="M488 261.8C488 403.3 391.1 504 248 504 110.8 504 0 393.2 0 256S110.8 8 248 8c66.8 0 123 24.5 166.3 64.9l-67.5 64.9C258.5 52.6 94.3 116.6 94.3 256c0 86.5 69.1 156.6 153.7 156.6 98.2 0 135-70.4 140.8-106.9H248v-85.3h236.1c2.3 12.7 3.9 24.9 3.9 41.4z"></path>
+                </svg>
+              </button>
+              <button 
+                type="button" 
+                className="social-button apple"
+                onClick={handleAppleSignIn}
+                disabled={loading}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" height="1em" viewBox="0 0 384 512">
+                  <path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <span className="agreement">
+            <a href="#">Learn user licence agreement</a>
+          </span>
+
+          <div className="switch-mode">
+            {mode === "login" ? "New here?" : "Already have an account?"}
+            <button type="button" onClick={switchMode}>
               {mode === "login" ? "Create an account" : "Sign in"}
             </button>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }

@@ -777,6 +777,228 @@ const PlayerStatsModal = ({ player, onClose }: { player: SpotlightPlayer; onClos
   );
 };
 
+// Fan Favorite Player Card Component
+const FanFavoritePlayerCard = ({ playerId, teamId }: { playerId: string; teamId?: string }) => {
+  const [playerData, setPlayerData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const { language } = useLanguage();
+
+  useEffect(() => {
+    const fetchPlayerData = async () => {
+      if (!playerId || !teamId) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const rosterRef = collection(firebaseDB, "teams", teamId, "roster");
+        const rosterSnapshot = await getDocs(rosterRef);
+        
+        const player = rosterSnapshot.docs.find(doc => doc.id === playerId);
+        if (player) {
+          const data = player.data();
+          setPlayerData({
+            name: data.name || `${data.firstName} ${data.lastName}`,
+            number: data.number,
+            position: data.position,
+            height: data.height,
+            photo: data.headshot || data.photo || "/players/default.svg",
+            stats: data.stats || {},
+          });
+        }
+      } catch (error) {
+        console.error("Error fetching player data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPlayerData();
+  }, [playerId, teamId]);
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center p-12">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-orange-400"></div>
+      </div>
+    );
+  }
+
+  if (!playerData) {
+    return (
+      <div className="flex justify-center items-center p-12 text-slate-400">
+        {language === 'fr' ? 'Joueur non trouvé' : 'Player not found'}
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6">
+      <div className="flex items-center gap-6">
+        {/* Player Photo */}
+        <div className="relative h-32 w-32 flex-shrink-0 rounded-full overflow-hidden border-4 border-orange-400/30 shadow-2xl">
+          <Image
+            src={playerData.photo}
+            alt={playerData.name}
+            fill
+            className="object-cover"
+            onError={(e) => {
+              e.currentTarget.src = "/players/default.svg";
+            }}
+          />
+        </div>
+
+        {/* Player Info */}
+        <div className="flex-1">
+          <p className="text-xs uppercase tracking-[0.4em] text-orange-400 mb-1">
+            {language === 'fr' ? 'Votre Joueur Favori' : 'Your Favorite Player'}
+          </p>
+          <h3 className="text-3xl font-bold text-white mb-2">
+            {playerData.number && `#${playerData.number} · `}{playerData.name}
+          </h3>
+          <div className="flex flex-wrap gap-3 text-sm text-slate-300">
+            {playerData.position && (
+              <span className="px-3 py-1 rounded-full border border-white/20 bg-white/5">
+                {playerData.position}
+              </span>
+            )}
+            {playerData.height && (
+              <span className="px-3 py-1 rounded-full border border-white/20 bg-white/5">
+                {playerData.height}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Player Stats */}
+      {playerData.stats && Object.keys(playerData.stats).length > 0 && (
+        <div className="mt-6 grid grid-cols-3 md:grid-cols-5 gap-4">
+          {Object.entries(playerData.stats).map(([key, value]) => (
+            <div key={key} className="text-center p-3 rounded-xl bg-white/5 border border-white/10">
+              <p className="text-xs uppercase text-slate-400 mb-1">{key}</p>
+              <p className="text-2xl font-bold text-white">{String(value)}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Fan Favorite Team Card Component  
+const FanFavoriteTeamCard = ({ teamId, teamName }: { teamId: string; teamName: string }) => {
+  const [teamData, setTeamData] = useState<any>(null);
+  const [roster, setRoster] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { language } = useLanguage();
+
+  useEffect(() => {
+    const fetchTeamData = async () => {
+      if (!teamId) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        // Fetch team info
+        const teamDoc = await getDocs(query(collection(firebaseDB, "teams"), where("__name__", "==", teamId)));
+        if (!teamDoc.empty) {
+          setTeamData(teamDoc.docs[0].data());
+        }
+
+        // Fetch roster
+        const rosterRef = collection(firebaseDB, "teams", teamId, "roster");
+        const rosterSnapshot = await getDocs(rosterRef);
+        const players = rosterSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })).slice(0, 5); // Show top 5 players
+        setRoster(players);
+      } catch (error) {
+        console.error("Error fetching team data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTeamData();
+  }, [teamId]);
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center p-12">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-green-400"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6">
+      <div className="flex items-center gap-6 mb-6">
+        {teamData?.logo && (
+          <div className="relative h-24 w-24 flex-shrink-0">
+            <Image
+              src={teamData.logo}
+              alt={teamName}
+              fill
+              className="object-contain"
+            />
+          </div>
+        )}
+        <div>
+          <p className="text-xs uppercase tracking-[0.4em] text-green-400 mb-1">
+            {language === 'fr' ? 'Votre Équipe Favorite' : 'Your Favorite Team'}
+          </p>
+          <h3 className="text-3xl font-bold text-white">{teamName}</h3>
+        </div>
+      </div>
+
+      {/* Roster Preview */}
+      {roster.length > 0 && (
+        <div>
+          <h4 className="text-sm uppercase tracking-[0.3em] text-slate-400 mb-3">
+            {language === 'fr' ? 'Effectif' : 'Roster'}
+          </h4>
+          <div className="grid gap-3">
+            {roster.map((player) => (
+              <Link
+                key={player.id}
+                href={`/player/${encodeURIComponent(teamName)}/${player.number}`}
+                className="flex items-center gap-4 p-3 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all"
+              >
+                {player.headshot && (
+                  <div className="relative h-12 w-12 rounded-full overflow-hidden border-2 border-white/20">
+                    <Image
+                      src={player.headshot}
+                      alt={player.name || `${player.firstName} ${player.lastName}`}
+                      fill
+                      className="object-cover"
+                      onError={(e) => {
+                        e.currentTarget.src = "/players/default.svg";
+                      }}
+                    />
+                  </div>
+                )}
+                <div className="flex-1">
+                  <p className="font-semibold text-white">
+                    #{player.number} {player.name || `${player.firstName} ${player.lastName}`}
+                  </p>
+                  {player.position && (
+                    <p className="text-xs text-slate-400">{player.position}</p>
+                  )}
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default function Home() {
   const { user, userProfile, isAdmin, signOut: handleSignOut } = useAuth();
   const { language, setLanguage } = useLanguage();
@@ -815,6 +1037,12 @@ export default function Home() {
   const [showProfilePopup, setShowProfilePopup] = useState(false);
   const [scheduleStartIndex, setScheduleStartIndex] = useState(0);
   const scheduleScrollRef = useRef<HTMLDivElement>(null);
+  
+  // Fan favorites state
+  const [showFavoritePlayer, setShowFavoritePlayer] = useState(false);
+  const [showMenTeamFavorite, setShowMenTeamFavorite] = useState(false);
+  const [showWomenTeamFavorite, setShowWomenTeamFavorite] = useState(false);
+  
   const copy = translations[language];
   const sectionCopy = copy.sections;
   const languageOptions: Locale[] = ["en", "fr"];
@@ -1797,15 +2025,15 @@ export default function Home() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [mobileNavOpen]);
 
-  // Show profile popup for verified players after login
-  useEffect(() => {
-    if (user && userProfile && userProfile.verificationStatus === "approved") {
-      const timer = setTimeout(() => {
-        setShowProfilePopup(true);
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [user, userProfile]);
+  // Disabled auto-popup - players can access from navbar
+  // useEffect(() => {
+  //   if (user && userProfile && userProfile.verificationStatus === "approved") {
+  //     const timer = setTimeout(() => {
+  //       setShowProfilePopup(true);
+  //     }, 1000);
+  //     return () => clearTimeout(timer);
+  //   }
+  // }, [user, userProfile]);
 
   // Auto-scroll for teams section
   useEffect(() => {
@@ -1870,17 +2098,17 @@ export default function Home() {
       />
 
       <nav className="sticky top-0 z-50 border-b border-white/10 bg-black/30 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-8 px-6 py-5 md:px-12 md:pl-16">
-          <Link href="/" className="flex items-center gap-3 text-xl font-semibold tracking-[0.3em]">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 sm:gap-4 md:gap-8 px-3 sm:px-6 py-4 sm:py-5 md:px-12 md:pl-16">
+          <Link href="/" className="flex items-center gap-2 sm:gap-3 text-base sm:text-xl font-semibold tracking-[0.2em] sm:tracking-[0.3em]">
             <Image
               src="/logos/liprobakin.png"
               alt="Liprobakin logo"
               width={36}
               height={36}
-              className="h-9 w-9 rounded-full border border-white/20 bg-white/5 object-cover"
+              className="h-8 w-8 sm:h-9 sm:w-9 rounded-full border border-white/20 bg-white/5 object-cover"
               priority
             />
-            <span>{copy.brand}</span>
+            <span className="hidden xs:inline sm:inline">{copy.brand}</span>
           </Link>
           <div className="flex items-center gap-4">
             <button
@@ -1952,18 +2180,25 @@ export default function Home() {
                 </button>
               </div>
             ) : (
-              <AnimatedButton
+              <button
                 onClick={() => setAuthModalOpen(true)}
-                className="hidden lg:flex"
-                ariaLabel={language === 'fr' ? 'Se connecter / S\'inscrire' : 'Log In / Sign Up'}
+                className="animated-send-btn !p-2.5"
+                type="button"
+                aria-label={language === 'fr' ? 'Se connecter / S\'inscrire' : 'Log In / Sign Up'}
               >
-                {language === 'fr' ? 'Connexion' : 'Sign In'}
-              </AnimatedButton>
+                <div className="svg-wrapper-1">
+                  <div className="svg-wrapper">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                  </div>
+                </div>
+              </button>
             )}
-            <div className="hidden lg:flex items-center gap-2 border-l border-white/10 pl-4">
+            <div className="hidden md:flex items-center gap-1.5 sm:gap-2 border-l border-white/10 pl-2 sm:pl-4">
               <button
                 onClick={() => setLanguage('fr')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all ${
+                className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-xs font-semibold uppercase tracking-wider transition-all ${
                   language === 'fr'
                     ? 'bg-white text-slate-900'
                     : 'text-slate-300 hover:text-white hover:bg-white/10'
@@ -1975,7 +2210,7 @@ export default function Home() {
               </button>
               <button
                 onClick={() => setLanguage('en')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all ${
+                className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-xs font-semibold uppercase tracking-wider transition-all ${
                   language === 'en'
                     ? 'bg-white text-slate-900'
                     : 'text-slate-300 hover:text-white hover:bg-white/10'
@@ -2438,6 +2673,108 @@ export default function Home() {
               </div>
             );
           })()}
+        </section>
+      )}
+
+      {/* Fan Favorites Section - Shows right after news for logged-in fans */}
+      {user && userProfile && userProfile.role === 'fan' && (
+        <section className="mx-auto max-w-6xl px-4 md:px-8 pb-12">
+          <div className="flex flex-col items-center gap-6">
+            {/* Dropdown arrows */}
+            <div className="flex gap-3">
+              {/* Global Favorite Player Arrow */}
+              {userProfile.favoritePlayerId && (
+                <button
+                  onClick={() => setShowFavoritePlayer(!showFavoritePlayer)}
+                  className="group relative flex flex-col items-center gap-2 p-4 rounded-2xl border border-white/20 bg-white/5 backdrop-blur-xl transition-all duration-300 hover:border-white/40 hover:bg-white/10 hover:scale-105"
+                  type="button"
+                  aria-label="Toggle favorite player"
+                >
+                  <svg className="h-8 w-8 text-white/80" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M16 3c-1.2 0-2.4.6-3.2 1.6-.2.2-.4.4-.6.6-.1.1-.1.2-.2.3-.1-.1-.1-.2-.2-.3-.2-.2-.4-.4-.6-.6C10.4 3.6 9.2 3 8 3c-1.7 0-3 1.3-3 3 0 .8.3 1.6.8 2.2L6 8.4V20c0 .6.4 1 1 1h10c.6 0 1-.4 1-1V8.4l.2-.2c.5-.6.8-1.4.8-2.2 0-1.7-1.3-3-3-3zM16 19H8V9.2l.8-.8c.4-.4.6-1 .6-1.5 0-.6-.4-1-1-1-.3 0-.6.1-.8.3l-.2.2-.4-.4c-.2-.2-.5-.3-.8-.3-.6 0-1 .4-1 1 0 .5.2 1.1.6 1.5l.8.8V19h-.6v-8.8l-.8-.8C4.3 8.6 4 7.8 4 7c0-2.2 1.8-4 4-4 1.4 0 2.7.7 3.5 1.8.1.1.2.3.3.4.1.1.2.3.2.4 0-.1.1-.3.2-.4.1-.1.2-.3.3-.4C13.3 3.7 14.6 3 16 3c2.2 0 4 1.8 4 4 0 .8-.3 1.6-.8 2.2l-.8.8V19h-.4z"/>
+                    <text x="12" y="15" fontSize="8" fontWeight="bold" textAnchor="middle" fill="currentColor">23</text>
+                  </svg>
+                  <svg 
+                    className={`h-6 w-6 text-white/80 transition-transform duration-300 ${showFavoritePlayer ? 'rotate-180' : ''}`}
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+              )}
+
+              {/* Men's Team Arrow */}
+              {userProfile.favoriteTeamMenId && (
+                <button
+                  onClick={() => setShowMenTeamFavorite(!showMenTeamFavorite)}
+                  className="group relative flex flex-col items-center gap-2 p-4 rounded-2xl border border-white/20 bg-white/5 backdrop-blur-xl transition-all duration-300 hover:border-white/40 hover:bg-white/10 hover:scale-105"
+                  type="button"
+                  aria-label="Toggle men's favorite team"
+                >
+                  <svg className="h-8 w-8 text-white/80" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="9" strokeWidth="2"/>
+                    <path d="M12 3c0 3-3 6-3 9s3 6 3 9" />
+                    <path d="M21 12c-3 0-6-3-9-3s-6 3-9 3" />
+                  </svg>
+                  <svg 
+                    className={`h-6 w-6 text-white/80 transition-transform duration-300 ${showMenTeamFavorite ? 'rotate-180' : ''}`}
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+              )}
+
+              {/* Women's Team Arrow */}
+              {userProfile.favoriteTeamWomenId && (
+                <button
+                  onClick={() => setShowWomenTeamFavorite(!showWomenTeamFavorite)}
+                  className="group relative flex flex-col items-center gap-2 p-4 rounded-2xl border border-white/20 bg-white/5 backdrop-blur-xl transition-all duration-300 hover:border-white/40 hover:bg-white/10 hover:scale-105"
+                  type="button"
+                  aria-label="Toggle women's favorite team"
+                >
+                  <svg className="h-8 w-8 text-white/80" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="9" strokeWidth="2"/>
+                    <path d="M12 3c0 3-3 6-3 9s3 6 3 9" />
+                    <path d="M21 12c-3 0-6-3-9-3s-6 3-9 3" />
+                  </svg>
+                  <svg 
+                    className={`h-6 w-6 text-white/80 transition-transform duration-300 ${showWomenTeamFavorite ? 'rotate-180' : ''}`}
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+              )}
+            </div>
+
+            {/* Dropdown Content - Favorite Player */}
+            {showFavoritePlayer && userProfile.favoritePlayerId && (
+              <div className="w-full max-w-3xl overflow-hidden rounded-t-none rounded-b-2xl border-x border-b border-white/10 bg-white/5 backdrop-blur-2xl shadow-2xl animate-in slide-in-from-top-4 duration-500">
+                <FanFavoritePlayerCard playerId={userProfile.favoritePlayerId} teamId={userProfile.favoritePlayerTeamId} />
+              </div>
+            )}
+
+            {/* Dropdown Content - Men's Team */}
+            {showMenTeamFavorite && userProfile.favoriteTeamMenId && (
+              <div className="w-full max-w-3xl overflow-hidden rounded-t-none rounded-b-2xl border-x border-b border-white/10 bg-white/5 backdrop-blur-2xl shadow-2xl animate-in slide-in-from-top-4 duration-500">
+                <FanFavoriteTeamCard teamId={userProfile.favoriteTeamMenId} teamName={userProfile.favoriteTeamMenName} />
+              </div>
+            )}
+
+            {/* Dropdown Content - Women's Team */}
+            {showWomenTeamFavorite && userProfile.favoriteTeamWomenId && (
+              <div className="w-full max-w-3xl overflow-hidden rounded-t-none rounded-b-2xl border-x border-b border-white/10 bg-white/5 backdrop-blur-2xl shadow-2xl animate-in slide-in-from-top-4 duration-500">
+                <FanFavoriteTeamCard teamId={userProfile.favoriteTeamWomenId} teamName={userProfile.favoriteTeamWomenName} />
+              </div>
+            )}
+          </div>
         </section>
       )}
 

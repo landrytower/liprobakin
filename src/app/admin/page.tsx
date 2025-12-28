@@ -675,7 +675,7 @@ export default function AdminPage() {
   const [coachHeadshotPreview, setCoachHeadshotPreview] = useState<string>("");
   const [coachStaffSubmitting, setCoachStaffSubmitting] = useState(false);
   const coachHeadshotPreviewBlobRef = useRef<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'stories' | 'teams' | 'traffic' | 'accounts' | 'games' | 'stats' | 'league' | 'admins'>(() => {
+  const [activeTab, setActiveTab] = useState<'stories' | 'teams' | 'traffic' | 'accounts' | 'verifications' | 'games' | 'stats' | 'league' | 'admins'>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('adminActiveTab');
       if (saved && ['stories', 'teams', 'traffic', 'accounts', 'games', 'stats', 'league', 'admins'].includes(saved)) {
@@ -712,6 +712,10 @@ export default function AdminPage() {
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [verificationNotes, setVerificationNotes] = useState("");
   const [processingVerification, setProcessingVerification] = useState(false);
+  const [verificationRequests, setVerificationRequests] = useState<any[]>([]);
+  const [selectedVerificationRequest, setSelectedVerificationRequest] = useState<any>(null);
+  const [reviewNotes, setReviewNotes] = useState("");
+  const [processingReview, setProcessingReview] = useState(false);
   const [gameStatsAssistantOpen, setGameStatsAssistantOpen] = useState(false);
   const [showArchiveView, setShowArchiveView] = useState(false);
   const [selectedArchiveWeek, setSelectedArchiveWeek] = useState<number>(1);
@@ -1142,18 +1146,19 @@ export default function AdminPage() {
         }));
         setAllUsers(usersData);
 
-        // Fetch pending verifications
-        const verificationsQuery = query(
-          collection(firebaseDB, "verificationRequests"),
-          where("status", "==", "pending")
-        );
-        const verificationsSnapshot = await getDocs(verificationsQuery);
-        const verificationsData = verificationsSnapshot.docs.map(doc => ({
+        // Fetch all verification requests (not just pending)
+        const verificationsSnapshot = await getDocs(collection(firebaseDB, "verificationRequests"));
+        const allVerificationsData = verificationsSnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data(),
           submittedAt: doc.data().submittedAt?.toDate() || new Date(),
+          reviewedAt: doc.data().reviewedAt?.toDate(),
         }));
-        setPendingVerifications(verificationsData);
+        setVerificationRequests(allVerificationsData);
+
+        // Filter pending ones for notification badge
+        const pendingOnly = allVerificationsData.filter(v => v.status === 'pending');
+        setPendingVerifications(pendingOnly);
       } catch (error) {
         console.error("Error fetching users/verifications:", error);
       }
@@ -2683,6 +2688,119 @@ export default function AdminPage() {
     }
   };
 
+  // Verification review handler
+  const handleReviewVerification = async (requestId: string, status: "approved" | "rejected") => {
+    if (!selectedVerificationRequest || !user) return;
+
+    setProcessingReview(true);
+    try {
+      // Update verification request
+      await updateDoc(doc(firebaseDB, "verificationRequests", requestId), {
+        status,
+        reviewedAt: serverTimestamp(),
+        reviewedBy: user.email,
+        notes: reviewNotes,
+      });
+
+      if (selectedVerificationRequest.requestType === "claim_existing") {
+        // CLAIM EXISTING PLAYER
+        await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId), {
+          role: "player",
+          teamId: selectedVerificationRequest.teamId,
+          teamName: selectedVerificationRequest.teamName,
+          verificationStatus: status,
+          verificationReviewedAt: serverTimestamp(),
+          verificationReviewedBy: user.email,
+          verificationNotes: reviewNotes,
+          updatedAt: serverTimestamp(),
+          linkedPlayerId: status === "approved" ? selectedVerificationRequest.existingPlayerId : null,
+          linkedPlayerName: status === "approved" ? selectedVerificationRequest.existingPlayerName : null,
+        });
+
+        // Link user to player roster entry
+        if (status === "approved" && selectedVerificationRequest.existingPlayerId) {
+          await updateDoc(
+            doc(firebaseDB, "teams", selectedVerificationRequest.teamId, "roster", selectedVerificationRequest.existingPlayerId),
+            {
+              verificationStatus: "verified",
+              linkedUserId: selectedVerificationRequest.userId,
+              linkedUserEmail: selectedVerificationRequest.userEmail,
+              linkedAt: serverTimestamp(),
+            }
+          );
+        }
+      } else if (selectedVerificationRequest.requestType === "create_new") {
+        // CREATE NEW PLAYER REQUEST
+        if (status === "approved" && selectedVerificationRequest.newPlayerData) {
+          // Admin approved - create the player in the team roster
+          const newPlayerData = selectedVerificationRequest.newPlayerData;
+          const playerRef = collection(firebaseDB, `teams/${selectedVerificationRequest.teamId}/roster`);
+          const newPlayerDoc = await addDoc(playerRef, {
+            firstName: newPlayerData.firstName,
+            lastName: newPlayerData.lastName,
+            number: newPlayerData.number,
+            position: newPlayerData.position || "",
+            height: newPlayerData.height || "",
+            birthdate: newPlayerData.birthdate || "",
+            nationality: newPlayerData.nationality || "",
+            ...(newPlayerData.nationality2 && { nationality2: newPlayerData.nationality2 }),
+            ...(newPlayerData.playerLicense && { playerLicense: newPlayerData.playerLicense }),
+            headshot: newPlayerData.headshot || "",
+            stats: { pts: 0, reb: 0, ast: 0, stl: 0, blk: 0 },
+            verificationStatus: "verified",
+            linkedUserId: selectedVerificationRequest.userId,
+            linkedUserEmail: selectedVerificationRequest.userEmail,
+            linkedAt: serverTimestamp(),
+            createdAt: serverTimestamp(),
+          });
+
+          // Update user profile with new player link
+          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId), {
+            role: "player",
+            teamId: selectedVerificationRequest.teamId,
+            teamName: selectedVerificationRequest.teamName,
+            verificationStatus: status,
+            verificationReviewedAt: serverTimestamp(),
+            verificationReviewedBy: user.email,
+            verificationNotes: reviewNotes,
+            updatedAt: serverTimestamp(),
+            linkedPlayerId: newPlayerDoc.id,
+            linkedPlayerName: `${newPlayerData.firstName} ${newPlayerData.lastName}`,
+          });
+        } else {
+          // Rejected - just update user status
+          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId), {
+            verificationStatus: status,
+            verificationReviewedAt: serverTimestamp(),
+            verificationReviewedBy: user.email,
+            verificationNotes: reviewNotes,
+            updatedAt: serverTimestamp(),
+          });
+        }
+      }
+
+      // Refresh list - refetch
+      const verificationsSnapshot = await getDocs(collection(firebaseDB, "verificationRequests"));
+      const allVerificationsData = verificationsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        submittedAt: doc.data().submittedAt?.toDate() || new Date(),
+        reviewedAt: doc.data().reviewedAt?.toDate(),
+      }));
+      setVerificationRequests(allVerificationsData);
+      const pendingOnly = allVerificationsData.filter((v: any) => v.status === 'pending');
+      setPendingVerifications(pendingOnly);
+
+      setSelectedVerificationRequest(null);
+      setReviewNotes("");
+    } catch (error) {
+      console.error("Error reviewing verification:", error);
+      alert("Failed to process verification");
+    } finally {
+      setProcessingReview(false);
+    }
+  };
+
   // Coach/Staff management handlers
   const handleCoachHeadshotChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] ?? null;
@@ -3962,9 +4080,21 @@ export default function AdminPage() {
                     }`}
                   >
                     👥 Accounts
-                    {pendingVerifications.length > 0 && (
+                  </button>
+                )}
+                {currentAdminUser?.permissions.canManageTeams && (
+                  <button
+                    onClick={() => setActiveTab('verifications')}
+                    className={`relative whitespace-nowrap border-b-2 px-4 py-3 text-xs font-semibold uppercase tracking-wider transition ${
+                      activeTab === 'verifications'
+                        ? 'border-orange-500 text-orange-400'
+                        : 'border-transparent text-slate-400 hover:text-slate-300'
+                    }`}
+                  >
+                    ✓ Verifications
+                    {verificationRequests.filter(req => req.status === 'pending').length > 0 && (
                       <span className="ml-2 inline-flex items-center justify-center rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white">
-                        +{pendingVerifications.length}
+                        +{verificationRequests.filter(req => req.status === 'pending').length}
                       </span>
                     )}
                   </button>
@@ -5251,7 +5381,7 @@ export default function AdminPage() {
                   <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Module</p>
                   <h2 className="mt-2 text-3xl font-bold text-white">👥 Account Management</h2>
                   <p className="mt-3 text-sm text-slate-300">
-                    Manage all user accounts (players, fans, coaches) and validate identity verification requests.
+                    Manage verified user accounts - modify names, teams, reset passwords, and handle account administration (call center functions).
                   </p>
                 </div>
 
@@ -5274,47 +5404,6 @@ export default function AdminPage() {
                     </div>
                   </div>
                 </div>
-
-                {/* Pending Verifications Section */}
-                {pendingVerifications.length > 0 && (
-                  <div className="mb-8 rounded-2xl border border-red-500/30 bg-red-500/5 p-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-red-500 text-white text-sm font-bold">
-                          {pendingVerifications.length}
-                        </span>
-                        Vérifications en attente
-                      </h3>
-                    </div>
-                    <div className="space-y-3">
-                      {pendingVerifications.map((verification: any) => (
-                        <div
-                          key={verification.id}
-                          className="rounded-xl border border-white/20 bg-slate-900/50 p-4 transition hover:bg-slate-900/70 cursor-pointer"
-                          onClick={() => setSelectedUser(verification)}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <h4 className="font-semibold text-white">
-                                {verification.userFirstName} {verification.userLastName}
-                              </h4>
-                              <p className="text-sm text-slate-400 capitalize">{verification.role}</p>
-                              <p className="text-sm text-slate-500">{verification.teamName}</p>
-                            </div>
-                            <div className="text-right">
-                              <span className="rounded-full bg-yellow-500/20 px-3 py-1 text-xs font-semibold text-yellow-400">
-                                En attente
-                              </span>
-                              <p className="mt-2 text-xs text-slate-500">
-                                {verification.submittedAt?.toLocaleDateString('fr-FR')}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
 
                 {/* All Users List */}
                 <div className="rounded-2xl border border-white/10 bg-slate-900/30 p-6">
@@ -5343,15 +5432,9 @@ export default function AdminPage() {
                                     {user.role}
                                   </span>
                                 )}
-                                {user.verificationStatus && (
-                                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                                    user.verificationStatus === 'approved' ? 'bg-green-500/20 text-green-400' :
-                                    user.verificationStatus === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
-                                    'bg-red-500/20 text-red-400'
-                                  }`}>
-                                    {user.verificationStatus === 'approved' ? '✓ Vérifié' :
-                                     user.verificationStatus === 'pending' ? '⏳ En attente' :
-                                     '✗ Rejeté'}
+                                {user.verificationStatus === 'approved' && (
+                                  <span className="rounded-full px-2 py-0.5 text-xs font-semibold bg-green-500/20 text-green-400">
+                                    ✓ Vérifié
                                   </span>
                                 )}
                               </div>
@@ -5392,11 +5475,6 @@ export default function AdminPage() {
                                       const usersSnapshot = await getDocs(collection(firebaseDB, "users"));
                                       setAllUsers(usersSnapshot.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate() || new Date() })));
                                       
-                                      // Refresh verifications
-                                      const verificationsQuery = query(collection(firebaseDB, "verificationRequests"), where("status", "==", "pending"));
-                                      const verificationsSnapshot = await getDocs(verificationsQuery);
-                                      setPendingVerifications(verificationsSnapshot.docs.map(d => ({ id: d.id, ...d.data(), submittedAt: d.data().submittedAt?.toDate() || new Date() })));
-                                      
                                       alert("User deleted successfully");
                                     } catch (error) {
                                       console.error("Error deleting user:", error);
@@ -5418,197 +5496,6 @@ export default function AdminPage() {
                 </div>
               </div>
             </div>
-
-            {/* Verification Review Modal */}
-            {selectedUser && (
-              <div
-                className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
-                onClick={() => setSelectedUser(null)}
-              >
-                <div
-                  className="relative w-full max-w-3xl rounded-2xl border border-white/20 bg-gradient-to-br from-slate-900 to-slate-950 shadow-2xl overflow-hidden"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <button
-                    onClick={() => setSelectedUser(null)}
-                    className="absolute right-4 top-4 z-10 text-slate-400 transition hover:text-white"
-                    type="button"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-
-                  <div className="p-8 pb-4">
-                    <h2 className="mb-6 text-2xl font-bold text-white">Verification Review</h2>
-
-                    <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div>
-                        <label className="text-sm font-medium text-slate-400">Nom</label>
-                        <p className="text-white">{selectedUser.userFirstName} {selectedUser.userLastName}</p>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-slate-400">Téléphone</label>
-                        <p className="text-white">{selectedUser.userPhone}</p>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-slate-400">Rôle</label>
-                        <p className="text-white capitalize">{selectedUser.role}</p>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-slate-400">Équipe</label>
-                        <p className="text-white">{selectedUser.teamName}</p>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="text-sm font-medium text-slate-400">Personne sélectionnée</label>
-                      <p className="text-white">{selectedUser.selectedPersonName}</p>
-                    </div>
-
-                    <div>
-                      <label className="text-sm font-medium text-slate-400 block mb-2">Document d'identité</label>
-                      <div className="rounded-lg border border-white/20 bg-black/30 p-2">
-                        <img
-                          src={selectedUser.idImageUrl}
-                          alt="ID de vérification"
-                          className="w-full rounded object-contain"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-slate-400 mb-1">Review Notes (Optional)</label>
-                      <textarea
-                        value={verificationNotes}
-                        onChange={(e) => setVerificationNotes(e.target.value)}
-                        className="w-full rounded-lg border border-white/20 bg-white/5 px-4 py-2 text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                        rows={3}
-                        placeholder="Add notes about this verification..."
-                      />
-                    </div>
-                  </div>
-                  </div>
-
-                  {/* Action Area */}
-                  <div className="bg-slate-800/80 backdrop-blur border-t-2 border-slate-700 p-6">
-                    <div className="flex gap-4">
-                      <button
-                        onClick={async () => {
-                          setProcessingVerification(true);
-                          try {
-                            await updateDoc(doc(firebaseDB, "verificationRequests", selectedUser.id), {
-                              status: "approved",
-                              reviewedAt: serverTimestamp(),
-                              reviewedBy: currentAdminUser?.email,
-                              notes: verificationNotes,
-                            });
-                            await updateDoc(doc(firebaseDB, "users", selectedUser.userId), {
-                              verificationStatus: "approved",
-                              verificationReviewedAt: serverTimestamp(),
-                              verificationReviewedBy: currentAdminUser?.email,
-                              verificationNotes: verificationNotes,
-                              updatedAt: serverTimestamp(),
-                            });
-                            
-                            // Refresh data
-                            const usersSnapshot = await getDocs(collection(firebaseDB, "users"));
-                            setAllUsers(usersSnapshot.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate() || new Date() })));
-                            const verificationsQuery = query(collection(firebaseDB, "verificationRequests"), where("status", "==", "pending"));
-                            const verificationsSnapshot = await getDocs(verificationsQuery);
-                            setPendingVerifications(verificationsSnapshot.docs.map(d => ({ id: d.id, ...d.data(), submittedAt: d.data().submittedAt?.toDate() || new Date() })));
-                            
-                            setSelectedUser(null);
-                            setVerificationNotes("");
-                          } catch (error) {
-                            console.error("Error approving verification:", error);
-                            alert("Error approving verification");
-                          } finally {
-                            setProcessingVerification(false);
-                          }
-                        }}
-                        disabled={processingVerification}
-                        className="flex-1 rounded-xl bg-green-600 hover:bg-green-500 px-8 py-5 text-xl font-bold text-white shadow-2xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed border-2 border-green-400 hover:scale-105 active:scale-95 flex items-center justify-center gap-3"
-                        type="button"
-                      >
-                        {processingVerification ? (
-                          <>
-                            <svg className="animate-spin h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                            <span>Processing...</span>
-                          </>
-                        ) : (
-                          <>
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                            </svg>
-                            <span>APPROVE</span>
-                          </>
-                        )}
-                      </button>
-                      <button
-                        onClick={async () => {
-                          setProcessingVerification(true);
-                          try {
-                            await updateDoc(doc(firebaseDB, "verificationRequests", selectedUser.id), {
-                              status: "rejected",
-                              reviewedAt: serverTimestamp(),
-                              reviewedBy: currentAdminUser?.email,
-                              notes: verificationNotes,
-                            });
-                            await updateDoc(doc(firebaseDB, "users", selectedUser.userId), {
-                              verificationStatus: "rejected",
-                              verificationReviewedAt: serverTimestamp(),
-                              verificationReviewedBy: currentAdminUser?.email,
-                              verificationNotes: verificationNotes,
-                              updatedAt: serverTimestamp(),
-                            });
-                            
-                            // Refresh data
-                            const usersSnapshot = await getDocs(collection(firebaseDB, "users"));
-                            setAllUsers(usersSnapshot.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate() || new Date() })));
-                            const verificationsQuery = query(collection(firebaseDB, "verificationRequests"), where("status", "==", "pending"));
-                            const verificationsSnapshot = await getDocs(verificationsQuery);
-                            setPendingVerifications(verificationsSnapshot.docs.map(d => ({ id: d.id, ...d.data(), submittedAt: d.data().submittedAt?.toDate() || new Date() })));
-                            
-                            setSelectedUser(null);
-                            setVerificationNotes("");
-                          } catch (error) {
-                            console.error("Error rejecting verification:", error);
-                            alert("Error rejecting verification");
-                          } finally {
-                            setProcessingVerification(false);
-                          }
-                        }}
-                        disabled={processingVerification}
-                        className="flex-1 rounded-xl bg-red-600 hover:bg-red-500 px-8 py-5 text-xl font-bold text-white shadow-2xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed border-2 border-red-400 hover:scale-105 active:scale-95 flex items-center justify-center gap-3"
-                        type="button"
-                      >
-                        {processingVerification ? (
-                          <>
-                            <svg className="animate-spin h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                            <span>Processing...</span>
-                          </>
-                        ) : (
-                          <>
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                            <span>REJECT</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
             </>
             )}
 
@@ -7248,6 +7135,173 @@ export default function AdminPage() {
                 )}
               </div>
             )}
+            </>
+            )}
+
+            {/* Verifications Tab Content */}
+            {activeTab === 'verifications' && currentAdminUser?.permissions.canManageTeams && (
+            <>
+            <div className="space-y-6">
+              <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900 to-slate-950 p-8">
+                <div className="mb-6">
+                  <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Module</p>
+                  <h2 className="mt-2 text-3xl font-bold text-white">✓ User Verification Requests</h2>
+                  <p className="mt-3 text-sm text-slate-300">
+                    Review and approve/reject player verification requests (claim existing or create new profiles).
+                  </p>
+                </div>
+
+                {verificationRequests.filter(r => r.status === 'pending').length === 0 ? (
+                  <div className="rounded-2xl border border-white/20 bg-gradient-to-br from-slate-900 to-slate-950 p-8 text-center">
+                    <p className="text-slate-300">No pending verification requests</p>
+                  </div>
+                ) : (
+                  <div className="grid gap-6 lg:grid-cols-2">
+                    {/* Requests List */}
+                    <div className="space-y-4">
+                      {verificationRequests
+                        .filter(request => request.status === 'pending')
+                        .map((request) => (
+                          <button
+                            key={request.id}
+                            onClick={() => setSelectedVerificationRequest(request)}
+                            className={`w-full rounded-xl border p-4 text-left transition ${
+                              selectedVerificationRequest?.id === request.id
+                                ? "border-blue-500 bg-blue-500/10"
+                                : "border-white/20 bg-white/5 hover:border-white/40"
+                            }`}
+                            type="button"
+                          >
+                            <div className="flex items-start justify-between">
+                              <div>
+                                <h3 className="font-semibold text-white">
+                                  {request.userFirstName} {request.userLastName}
+                                </h3>
+                                <p className="text-sm text-slate-400 capitalize">{request.role}</p>
+                                <p className="text-sm text-slate-400">{request.teamName}</p>
+                                <p className="mt-2 text-xs text-slate-500">
+                                  Submitted: {request.submittedAt?.toLocaleDateString?.() || 'N/A'}
+                                </p>
+                              </div>
+                              <span className="rounded-full bg-yellow-500/20 px-3 py-1 text-xs font-semibold text-yellow-400">
+                                Pending
+                              </span>
+                            </div>
+                          </button>
+                        ))}
+                    </div>
+
+                    {/* Request Details */}
+                    {selectedVerificationRequest && (
+                      <div className="rounded-2xl border border-white/20 bg-gradient-to-br from-slate-900 to-slate-950 p-6">
+                        <h2 className="mb-6 text-2xl font-bold text-white">Review Request</h2>
+
+                        <div className="space-y-4">
+                          <div>
+                            <label className="text-sm font-medium text-slate-400">Name</label>
+                            <p className="text-white">
+                              {selectedVerificationRequest.userFirstName} {selectedVerificationRequest.userLastName}
+                            </p>
+                          </div>
+
+                          <div>
+                            <label className="text-sm font-medium text-slate-400">Phone</label>
+                            <p className="text-white">{selectedVerificationRequest.userPhone}</p>
+                          </div>
+
+                          <div>
+                            <label className="text-sm font-medium text-slate-400">Role</label>
+                            <p className="text-white capitalize">{selectedVerificationRequest.role}</p>
+                          </div>
+
+                          <div>
+                            <label className="text-sm font-medium text-slate-400">Team</label>
+                            <p className="text-white">{selectedVerificationRequest.teamName}</p>
+                          </div>
+
+                          <div>
+                            <label className="text-sm font-medium text-slate-400">Request Type</label>
+                            <p className="text-white capitalize">
+                              {selectedVerificationRequest.requestType === "claim_existing" ? "Claim Existing Player" : "Create New Player"}
+                            </p>
+                          </div>
+
+                          {selectedVerificationRequest.requestType === "claim_existing" && selectedVerificationRequest.existingPlayerName && (
+                            <div>
+                              <label className="text-sm font-medium text-slate-400">Claiming Player</label>
+                              <p className="text-white">
+                                {selectedVerificationRequest.existingPlayerName} #{selectedVerificationRequest.existingPlayerNumber}
+                              </p>
+                            </div>
+                          )}
+
+                          {selectedVerificationRequest.requestType === "create_new" && selectedVerificationRequest.newPlayerData && (
+                            <div>
+                              <label className="text-sm font-medium text-slate-400">New Player Details</label>
+                              <div className="mt-2 rounded-lg border border-white/10 bg-white/5 p-4 space-y-2">
+                                <p className="text-white">
+                                  Name: {selectedVerificationRequest.newPlayerData.firstName} {selectedVerificationRequest.newPlayerData.lastName}
+                                </p>
+                                <p className="text-slate-300 text-sm">
+                                  #{selectedVerificationRequest.newPlayerData.number}
+                                  {selectedVerificationRequest.newPlayerData.position && ` • ${selectedVerificationRequest.newPlayerData.position}`}
+                                  {selectedVerificationRequest.newPlayerData.height && ` • ${selectedVerificationRequest.newPlayerData.height}`}
+                                </p>
+                              </div>
+                            </div>
+                          )}
+
+                          {selectedVerificationRequest.idImageUrl && (
+                            <div>
+                              <label className="text-sm font-medium text-slate-400">ID Document</label>
+                              <div className="mt-2 rounded-lg border border-white/20 bg-black/30 p-2">
+                                <Image
+                                  src={selectedVerificationRequest.idImageUrl}
+                                  alt="Verification ID"
+                                  width={400}
+                                  height={300}
+                                  className="w-full rounded object-contain"
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          <div>
+                            <label className="block text-sm font-medium text-slate-400">Review Notes (Optional)</label>
+                            <textarea
+                              value={reviewNotes}
+                              onChange={(e) => setReviewNotes(e.target.value)}
+                              className="mt-1 w-full rounded-lg border border-white/20 bg-white/5 px-4 py-2 text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                              rows={3}
+                              placeholder="Add any notes about this verification..."
+                            />
+                          </div>
+
+                          <div className="flex gap-3">
+                            <button
+                              onClick={() => handleReviewVerification(selectedVerificationRequest.id, "approved")}
+                              disabled={processingReview}
+                              className="flex-1 rounded-lg bg-green-600 px-4 py-3 font-semibold text-white transition hover:bg-green-700 disabled:opacity-50"
+                              type="button"
+                            >
+                              {processingReview ? "Processing..." : "Approve"}
+                            </button>
+                            <button
+                              onClick={() => handleReviewVerification(selectedVerificationRequest.id, "rejected")}
+                              disabled={processingReview}
+                              className="flex-1 rounded-lg bg-red-600 px-4 py-3 font-semibold text-white transition hover:bg-red-700 disabled:opacity-50"
+                              type="button"
+                            >
+                              {processingReview ? "Processing..." : "Reject"}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
             </>
             )}
 

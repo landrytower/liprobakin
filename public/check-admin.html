@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Check Admin Status</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        .container {
+            background: #2a2a2a;
+            padding: 30px;
+            border-radius: 8px;
+        }
+        h1 { color: #4ade80; }
+        button {
+            background: #4ade80;
+            color: #000;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            margin: 10px 5px;
+        }
+        button:hover { background: #22c55e; }
+        .log {
+            background: #1a1a1a;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+        }
+        .success { color: #4ade80; }
+        .error { color: #f87171; }
+        .info { color: #60a5fa; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Check Admin Status</h1>
+        <p>Sign in and check what's in Firestore for bobiyatch@gmail.com</p>
+        
+        <button onclick="checkStatus()">Check Status</button>
+        
+        <div id="log" class="log"></div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-auth.js";
+        import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyApCmWDWPfmBwVAOvNAu3_CSVCqGycN5OE",
+            authDomain: "ppop-35930.firebaseapp.com",
+            projectId: "ppop-35930",
+            storageBucket: "ppop-35930.firebasestorage.app",
+            messagingSenderId: "478592036466",
+            appId: "1:478592036466:web:f149e594436026717adceb"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        window.checkStatus = async function() {
+            const logEl = document.getElementById('log');
+            logEl.innerHTML = '';
+            
+            const email = 'bobiyatch@gmail.com';
+            const password = '123456';
+            
+            try {
+                logEl.innerHTML += '🔐 Signing in...\n';
+                const userCredential = await signInWithEmailAndPassword(auth, email, password);
+                const user = userCredential.user;
+                
+                logEl.innerHTML += `✅ Signed in successfully!\n`;
+                logEl.innerHTML += `   UID: ${user.uid}\n`;
+                logEl.innerHTML += `   Email: ${user.email}\n\n`;
+                
+                // Check adminUsers collection
+                logEl.innerHTML += '📝 Checking adminUsers collection...\n';
+                const adminUsersDoc = await getDoc(doc(db, 'adminUsers', user.uid));
+                
+                if (adminUsersDoc.exists()) {
+                    logEl.innerHTML += '✅ Document EXISTS in adminUsers\n';
+                    logEl.innerHTML += 'Data:\n';
+                    logEl.innerHTML += JSON.stringify(adminUsersDoc.data(), null, 2) + '\n\n';
+                } else {
+                    logEl.innerHTML += '❌ Document DOES NOT EXIST in adminUsers\n\n';
+                }
+                
+                // Check admins collection
+                logEl.innerHTML += '📝 Checking admins collection...\n';
+                const adminsDoc = await getDoc(doc(db, 'admins', user.uid));
+                
+                if (adminsDoc.exists()) {
+                    logEl.innerHTML += '✅ Document EXISTS in admins\n';
+                    logEl.innerHTML += 'Data:\n';
+                    logEl.innerHTML += JSON.stringify(adminsDoc.data(), null, 2) + '\n';
+                } else {
+                    logEl.innerHTML += '❌ Document DOES NOT EXIST in admins\n';
+                }
+                
+                await signOut(auth);
+                
+            } catch (error) {
+                logEl.innerHTML += `❌ Error: ${error.message}\n`;
+                console.error(error);
+            }
+        };
+    </script>
+</body>
+</html>

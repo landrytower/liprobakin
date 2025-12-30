@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fix Admin Setup</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        .container {
+            background: #2a2a2a;
+            padding: 30px;
+            border-radius: 8px;
+        }
+        h1 {
+            color: #4ade80;
+        }
+        button {
+            background: #4ade80;
+            color: #000;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #22c55e;
+        }
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+        .log {
+            background: #1a1a1a;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+        .success { color: #4ade80; }
+        .error { color: #f87171; }
+        .warning { color: #fbbf24; }
+        .info { color: #60a5fa; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Fix Admin Setup</h1>
+        <p>This will sign in as bobiyatch@gmail.com and create the correct admin document in Firestore.</p>
+        
+        <button id="fixBtn" onclick="fixAdminSetup()">Fix Admin Setup</button>
+        <button onclick="clearLog()">Clear Log</button>
+        
+        <div id="log" class="log"></div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-auth.js";
+        import { getFirestore, doc, setDoc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyApCmWDWPfmBwVAOvNAu3_CSVCqGycN5OE",
+            authDomain: "ppop-35930.firebaseapp.com",
+            databaseURL: "https://ppop-35930-default-rtdb.firebaseio.com",
+            projectId: "ppop-35930",
+            storageBucket: "ppop-35930.firebasestorage.app",
+            messagingSenderId: "478592036466",
+            appId: "1:478592036466:web:f149e594436026717adceb",
+            measurementId: "G-YJY5T6TD8E",
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        function log(message, type = 'info') {
+            const logEl = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = type;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logEl.appendChild(entry);
+            logEl.scrollTop = logEl.scrollHeight;
+            console.log(message);
+        }
+
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+
+        window.fixAdminSetup = async function() {
+            const btn = document.getElementById('fixBtn');
+            btn.disabled = true;
+            clearLog();
+            
+            const email = 'bobiyatch@gmail.com';
+            const password = '123456';
+            const oldUID = 'HnP53Z1jsSanBD3Q9EbHoTyZ2EI2';
+            
+            log('🚀 Starting admin setup fix...', 'info');
+            
+            try {
+                // Step 1: Sign in to get the correct UID
+                log(`📝 Signing in as ${email}...`, 'info');
+                const userCredential = await signInWithEmailAndPassword(auth, email, password);
+                const user = userCredential.user;
+                const correctUID = user.uid;
+                
+                log(`✅ Signed in successfully!`, 'success');
+                log(`   Correct UID: ${correctUID}`, 'info');
+                
+                if (oldUID !== correctUID) {
+                    log(`⚠️  Old UID (${oldUID}) doesn't match!`, 'warning');
+                    log(`   Deleting old admin document...`, 'info');
+                    
+                    try {
+                        await deleteDoc(doc(db, 'adminUsers', oldUID));
+                        log(`✅ Deleted old admin document`, 'success');
+                    } catch (error) {
+                        log(`⚠️  Couldn't delete old document (may not exist): ${error.message}`, 'warning');
+                    }
+                    
+                    try {
+                        await deleteDoc(doc(db, 'admins', oldUID));
+                        log(`✅ Deleted old admins document`, 'success');
+                    } catch (error) {
+                        log(`⚠️  Couldn't delete old admins document (may not exist): ${error.message}`, 'warning');
+                    }
+                }
+                
+                // Step 2: Create admin document with correct UID
+                log(`📝 Creating admin document with correct UID...`, 'info');
+                
+                await setDoc(doc(db, 'adminUsers', correctUID), {
+                    uid: correctUID,
+                    email: email,
+                    displayName: 'bobiyatch',
+                    roles: ['master'],
+                    permissions: {
+                        canManageNews: true,
+                        canManageGames: true,
+                        canManageTeams: true,
+                        canManagePlayers: true,
+                        canManageAdmins: true,
+                        canViewAuditLogs: true,
+                        canManageSettings: true
+                    },
+                    isActive: true,
+                    status: 'active',
+                    isFirstLogin: false,
+                    createdAt: serverTimestamp(),
+                    lastLogin: serverTimestamp(),
+                    updatedAt: serverTimestamp()
+                }, { merge: true });
+                
+                log(`✅ Created adminUsers document`, 'success');
+                
+                // Also add to admins collection for backward compatibility
+                await setDoc(doc(db, 'admins', correctUID), {
+                    email: email,
+                    active: true,
+                    createdAt: serverTimestamp()
+                }, { merge: true });
+                
+                log(`✅ Created admins document`, 'success');
+                
+                // Sign out
+                await signOut(auth);
+                log(`✅ Signed out`, 'success');
+                
+                log('\n✨ SUCCESS! Admin setup is now complete!', 'success');
+                log(`\nYou can now log in at:`, 'info');
+                log(`  • http://localhost:3000/admin`, 'info');
+                log(`  • https://liprobakin.com/admin`, 'info');
+                log(`\nCredentials:`, 'info');
+                log(`  Email: ${email}`, 'info');
+                log(`  Password: ${password}`, 'info');
+                
+            } catch (error) {
+                log(`❌ Error: ${error.message}`, 'error');
+                console.error(error);
+            }
+            
+            btn.disabled = false;
+        };
+
+        log('Ready! Click "Fix Admin Setup" to begin.', 'info');
+    </script>
+</body>
+</html>

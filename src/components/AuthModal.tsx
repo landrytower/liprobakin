@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
+import PasswordResetModal from "./PasswordResetModal";
+import { normalizePhoneNumber, isValidPhoneNumber, getPhoneFormatHint } from "@/lib/passwordReset";
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -15,6 +17,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showResetModal, setShowResetModal] = useState(false);
 
   // Form fields
   const [email, setEmail] = useState("");
@@ -30,6 +33,10 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
     try {
       if (mode === "signup") {
+        // Validate phone number format before signup
+        if (phoneNumber && !isValidPhoneNumber(phoneNumber)) {
+          throw new Error("Please enter a valid phone number with country code (e.g., +1 for US, +44 for UK, +237 for Cameroon)");
+        }
         await signUp(email, password, firstName, lastName, phoneNumber);
         router.push("/profile-setup");
         onClose();
@@ -84,6 +91,15 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleForgotPassword = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setShowResetModal(true);
+  };
+
+  const handleResetModalClose = () => {
+    setShowResetModal(false);
   };
 
   if (!isOpen) return null;
@@ -181,6 +197,18 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
         .auth-input:focus {
           outline: none;
           border-inline: 2px solid #12B1D1;
+        }
+
+        .phone-input-container {
+          width: 100%;
+        }
+
+        .phone-hint {
+          display: block;
+          font-size: 10px;
+          color: rgb(120, 120, 120);
+          margin-top: 5px;
+          margin-left: 10px;
         }
 
         .name-grid {
@@ -364,14 +392,19 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                     placeholder="Last Name"
                   />
                 </div>
-                <input
-                  required
-                  className="auth-input"
-                  type="tel"
-                  value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value)}
-                  placeholder="Phone Number"
-                />
+                <div className="phone-input-container">
+                  <input
+                    required
+                    className="auth-input"
+                    type="tel"
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    placeholder="Phone with country code (e.g., +237...)"
+                  />
+                  <span className="phone-hint">
+                    Include country code: +1 (US), +44 (UK), +237 (Cameroon)
+                  </span>
+                </div>
               </>
             )}
 
@@ -395,7 +428,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
             {mode === "login" && (
               <span className="forgot-password">
-                <a href="#">Forgot Password?</a>
+                <a href="#" onClick={handleForgotPassword}>Forgot Password?</a>
               </span>
             )}
 
@@ -444,6 +477,12 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
           </div>
         </div>
       </div>
+
+      {/* Password Reset Modal */}
+      <PasswordResetModal 
+        isOpen={showResetModal} 
+        onClose={handleResetModalClose}
+      />
     </>
   );
 }

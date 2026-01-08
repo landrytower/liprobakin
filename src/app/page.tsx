@@ -11,6 +11,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import AuthModal from "@/components/AuthModal";
 import PlayerProfilePopup from "@/components/PlayerProfilePopup";
 import AnimatedButton from "@/components/AnimatedButton";
+import ArticleContent from "@/components/ArticleContent";
 
 import {
   conferenceStandings,
@@ -2590,17 +2591,10 @@ export default function Home() {
                                   
                                   {/* Article Body */}
                                   <div className="prose prose-invert prose-slate max-w-none">
-                                    <div className="text-base md:text-lg leading-relaxed text-slate-200 space-y-4">
-                                      {(language === 'en' && featured.summary_en ? featured.summary_en : featured.summary)
-                                        .split('\n\n')
-                                        .filter(para => para.trim())
-                                        .map((paragraph, idx) => (
-                                          <p key={idx} className="first-letter:text-3xl first-letter:font-bold first-letter:text-orange-400 first-letter:mr-1 first-letter:float-left first-letter:leading-none first-of-type:first-letter:text-5xl">
-                                            {paragraph}
-                                          </p>
-                                        ))
-                                      }
-                                    </div>
+                                    <ArticleContent 
+                                      htmlContent={language === 'en' && featured.summary_en ? featured.summary_en : featured.summary}
+                                      className="text-base md:text-lg leading-relaxed text-slate-200 space-y-4"
+                                    />
                                   </div>
 
                                   {/* Article Footer */}

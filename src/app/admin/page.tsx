@@ -30,6 +30,8 @@ import { deleteObject, getDownloadURL, ref as storageRef, uploadBytes } from "fi
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, type User } from "firebase/auth";
 import type { AdminUser, AdminRole } from "@/types/admin";
 import type { AuditLog } from "@/types/auditLog";
+import RichTextEditor from "@/components/RichTextEditor";
+import ArticleContent from "@/components/ArticleContent";
 import { 
   createAdminAccount, 
   getAllAdminUsers, 
@@ -252,7 +254,7 @@ type Referee = {
   lastName: string;
   email?: string;
   phone?: string;
-  certificationLevel?: string;
+  headshot?: string;
   createdAt: Date | null;
 };
 
@@ -261,7 +263,7 @@ type RefereeFormState = {
   firstName: string;
   lastName: string;
   phone: string;
-  certificationLevel: string;
+  headshot: string;
 };
 
 type CommitteeMember = {
@@ -742,9 +744,11 @@ export default function AdminPage() {
   const [trafficEvents, setTrafficEvents] = useState<TeamTrafficEntry[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [referees, setReferees] = useState<Referee[]>([]);
-  const [refereeForm, setRefereeForm] = useState<RefereeFormState>({ firstName: "", lastName: "", phone: "", certificationLevel: "" });
+  const [refereeForm, setRefereeForm] = useState<RefereeFormState>({ firstName: "", lastName: "", phone: "", headshot: "" });
   const [refereeFormVisible, setRefereeFormVisible] = useState(false);
   const [refereeSubmitting, setRefereeSubmitting] = useState(false);
+  const [refereeHeadshotFile, setRefereeHeadshotFile] = useState<File | null>(null);
+  const [refereeHeadshotPreview, setRefereeHeadshotPreview] = useState<string>("");
   const [committeeMembers, setCommitteeMembers] = useState<CommitteeMember[]>([]);
   const [committeeForm, setCommitteeForm] = useState<CommitteeFormState>({ firstName: "", lastName: "", role: "", email: "", phone: "" });
   const [committeeFormVisible, setCommitteeFormVisible] = useState(false);
@@ -2326,11 +2330,21 @@ export default function AdminPage() {
     setLeagueGestionStatus({ type: "info", message: "Saving referee..." });
 
     try {
+      let headshotUrl = refereeForm.headshot || null;
+
+      // Upload new headshot if file is selected
+      if (refereeHeadshotFile) {
+        const headshotPath = `referee-headshots/${Date.now()}-${sanitizeFilename(refereeHeadshotFile.name)}`;
+        const headshotRef = storageRef(firebaseStorage, headshotPath);
+        await uploadBytes(headshotRef, refereeHeadshotFile);
+        headshotUrl = await getDownloadURL(headshotRef);
+      }
+
       const baseRefereeData = {
         firstName,
         lastName,
         phone: refereeForm.phone.trim() || null,
-        certificationLevel: refereeForm.certificationLevel.trim() || null,
+        headshot: headshotUrl,
       };
 
       if (refereeForm.id) {
@@ -2348,7 +2362,9 @@ export default function AdminPage() {
         setLeagueGestionStatus({ type: "success", message: `Referee ${firstName} ${lastName} added successfully.` });
       }
 
-      setRefereeForm({ firstName: "", lastName: "", phone: "", certificationLevel: "" });
+      setRefereeForm({ firstName: "", lastName: "", phone: "", headshot: "" });
+      setRefereeHeadshotFile(null);
+      setRefereeHeadshotPreview("");
       setRefereeFormVisible(false);
     } catch (error) {
       console.error("Error saving referee:", error);
@@ -2365,8 +2381,9 @@ export default function AdminPage() {
       firstName: referee.firstName,
       lastName: referee.lastName,
       phone: referee.phone ?? "",
-      certificationLevel: referee.certificationLevel ?? "",
+      headshot: referee.headshot ?? "",
     });
+    setRefereeHeadshotPreview(referee.headshot ?? "");
     setRefereeFormVisible(true);
   };
 
@@ -4415,17 +4432,16 @@ export default function AdminPage() {
                     required
                   />
                 </label>
-                <label className="space-y-1 text-xs text-slate-300">
-                  {t.summary} *
-                  <textarea
-                    className="w-full rounded-lg border border-white/10 bg-slate-800/50 px-3 py-2 text-sm text-white focus:border-orange-500 focus:outline-none"
-                    rows={3}
-                    value={form.summary}
-                    onChange={(event) => updateFormField("summary", event.target.value)}
-                    placeholder=""
-                    required
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-slate-300">
+                    {t.summary} * <span className="text-slate-500">(Utilisez @ pour mentionner des joueurs)</span>
+                  </label>
+                  <RichTextEditor
+                    content={form.summary}
+                    onChange={(html) => updateFormField("summary", html)}
+                    placeholder="Écrivez votre article ici... Utilisez @ pour mentionner un joueur."
                   />
-                </label>
+                </div>
                 <label className="space-y-1 text-xs text-slate-300">
                   {language === 'fr' ? 'Publié par' : 'Posted By'}
                   <input
@@ -7618,11 +7634,20 @@ export default function AdminPage() {
             >
               <div className="relative z-10 flex items-center justify-between">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Module</p>
-                  <h2 className="mt-2 text-3xl font-bold text-white">League Gestion</h2>
+                  <p className="text-xs uppercase tracking-[0.4em] text-slate-400">{t.module}</p>
+                  <h2 className="mt-2 text-3xl font-bold text-white">Gestion de la Ligue</h2>
                   <p className="mt-3 text-sm text-slate-300">
-                    Manage referees, committee members, and game venues for the league.
+                    Gérer les arbitres, les membres du comité et les sites des matchs pour la ligue.
                   </p>
+                  <div
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      router.push('/admin/league-management');
+                    }}
+                    className="mt-3 inline-flex cursor-pointer items-center text-xs font-semibold text-indigo-300 hover:text-indigo-200"
+                  >
+                    → Ouvrir la page dédiée avec gestion des photos
+                  </div>
                 </div>
                 <span className="text-2xl text-white">{leagueGestionOpen ? '−' : '+'}</span>
               </div>
@@ -7644,7 +7669,9 @@ export default function AdminPage() {
                     <button
                       type="button"
                       onClick={() => {
-                        setRefereeForm({ firstName: "", lastName: "", phone: "", certificationLevel: "" });
+                        setRefereeForm({ firstName: "", lastName: "", phone: "", headshot: "" });
+                        setRefereeHeadshotFile(null);
+                        setRefereeHeadshotPreview("");
                         setRefereeFormVisible(!refereeFormVisible);
                       }}
                       className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500"
@@ -7654,44 +7681,74 @@ export default function AdminPage() {
                   </div>
 
                   {refereeFormVisible && (
-                    <form onSubmit={handleSubmitReferee} className="mb-4 grid grid-cols-2 gap-3 rounded-xl border border-white/10 bg-black/30 p-4 sm:grid-cols-4">
-                      <input
-                        type="text"
-                        required
-                        placeholder="Prénom *"
-                        value={refereeForm.firstName}
-                        onChange={(e) => setRefereeForm({ ...refereeForm, firstName: e.target.value })}
-                        className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-indigo-500 focus:outline-none"
-                      />
-                      <input
-                        type="text"
-                        required
-                        placeholder="Nom *"
-                        value={refereeForm.lastName}
-                        onChange={(e) => setRefereeForm({ ...refereeForm, lastName: e.target.value })}
-                        className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-indigo-500 focus:outline-none"
-                      />
-                      <input
-                        type="tel"
-                        placeholder="Téléphone"
-                        value={refereeForm.phone}
-                        onChange={(e) => setRefereeForm({ ...refereeForm, phone: e.target.value })}
-                        className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-indigo-500 focus:outline-none"
-                      />
-                      <input
-                        type="text"
-                        placeholder="Certification"
-                        value={refereeForm.certificationLevel}
-                        onChange={(e) => setRefereeForm({ ...refereeForm, certificationLevel: e.target.value })}
-                        className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-indigo-500 focus:outline-none"
-                      />
-                      <button
-                        type="submit"
-                        disabled={refereeSubmitting}
-                        className="col-span-2 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50"
-                      >
-                        {refereeSubmitting ? "..." : refereeForm.id ? "Modifier" : "Ajouter"}
-                      </button>
+                    <form onSubmit={handleSubmitReferee} className="mb-4 space-y-3 rounded-xl border border-white/10 bg-black/30 p-4">
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                        <input
+                          type="text"
+                          required
+                          placeholder="Prénom *"
+                          value={refereeForm.firstName}
+                          onChange={(e) => setRefereeForm({ ...refereeForm, firstName: e.target.value })}
+                          className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-indigo-500 focus:outline-none"
+                        />
+                        <input
+                          type="text"
+                          required
+                          placeholder="Nom *"
+                          value={refereeForm.lastName}
+                          onChange={(e) => setRefereeForm({ ...refereeForm, lastName: e.target.value })}
+                          className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-indigo-500 focus:outline-none"
+                        />
+                        <input
+                          type="tel"
+                          placeholder="Téléphone"
+                          value={refereeForm.phone}
+                          onChange={(e) => setRefereeForm({ ...refereeForm, phone: e.target.value })}
+                          className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-indigo-500 focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-2 block text-xs font-semibold text-slate-400">Photo du visage</label>
+                        <div className="flex items-center gap-3">
+                          {refereeHeadshotPreview && (
+                            <img src={refereeHeadshotPreview} alt="Preview" className="h-12 w-12 rounded-full object-cover" />
+                          )}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                setRefereeHeadshotFile(file);
+                                const url = URL.createObjectURL(file);
+                                setRefereeHeadshotPreview(url);
+                              }
+                            }}
+                            className="flex-1 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white file:mr-3 file:rounded file:border-0 file:bg-indigo-600 file:px-3 file:py-1 file:text-xs file:text-white hover:file:bg-indigo-500"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          type="submit"
+                          disabled={refereeSubmitting}
+                          className="flex-1 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50"
+                        >
+                          {refereeSubmitting ? "..." : refereeForm.id ? "Modifier" : "Ajouter"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRefereeForm({ firstName: "", lastName: "", phone: "", headshot: "" });
+                            setRefereeHeadshotFile(null);
+                            setRefereeHeadshotPreview("");
+                            setRefereeFormVisible(false);
+                          }}
+                          className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/5"
+                        >
+                          Annuler
+                        </button>
+                      </div>
                     </form>
                   )}
 
@@ -7700,8 +7757,8 @@ export default function AdminPage() {
                     <table className="w-full text-left text-sm">
                       <thead className="border-b border-white/10 text-xs uppercase tracking-wider text-slate-400">
                         <tr>
+                          <th className="pb-3 font-semibold">Photo</th>
                           <th className="pb-3 font-semibold">Nom</th>
-                          <th className="pb-3 font-semibold">Certification</th>
                           <th className="pb-3 font-semibold">Téléphone</th>
                           <th className="pb-3 text-right font-semibold">Actions</th>
                         </tr>
@@ -7710,8 +7767,16 @@ export default function AdminPage() {
                         {referees.length > 0 ? (
                           referees.map((referee) => (
                             <tr key={referee.id} className="group hover:bg-white/5">
+                              <td className="py-3">
+                                {referee.headshot ? (
+                                  <img src={referee.headshot} alt={`${referee.firstName} ${referee.lastName}`} className="h-10 w-10 rounded-full object-cover" />
+                                ) : (
+                                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-700 text-xs font-semibold text-slate-300">
+                                    {referee.firstName[0]}{referee.lastName[0]}
+                                  </div>
+                                )}
+                              </td>
                               <td className="py-3 text-white">{referee.firstName} {referee.lastName}</td>
-                              <td className="py-3 text-slate-400">{referee.certificationLevel || "—"}</td>
                               <td className="py-3 text-slate-400">{referee.phone || "—"}</td>
                               <td className="py-3 text-right">
                                 <button
@@ -8718,21 +8783,22 @@ export default function AdminPage() {
 
       {/* Story Preview Modal */}
       {showStoryPreview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm overflow-y-auto">
-          <div className="w-full max-w-4xl rounded-2xl border border-white/10 bg-slate-950 shadow-2xl my-8">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-2 sm:p-4 backdrop-blur-sm overflow-y-auto">
+          <div className="w-full max-w-4xl rounded-xl sm:rounded-2xl border border-white/10 bg-slate-950 shadow-2xl my-4 sm:my-8">
             {/* Preview Header */}
-            <div className="border-b border-white/10 p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-lg font-bold text-white">{t.previewStory}</h2>
-                  <p className="text-xs text-slate-400 mt-1">{t.previewDescription}</p>
+            <div className="border-b border-white/10 p-3 sm:p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-base sm:text-lg font-bold text-white truncate">{t.previewStory}</h2>
+                  <p className="text-xs text-slate-400 mt-1 hidden sm:block">{t.previewDescription}</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowStoryPreview(false)}
-                  className="text-slate-400 hover:text-white"
+                  className="flex-shrink-0 text-slate-400 hover:text-white p-1"
+                  aria-label="Close preview"
                 >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
@@ -8740,11 +8806,11 @@ export default function AdminPage() {
             </div>
 
             {/* Preview Content - Matches main page story card design */}
-            <div className="p-6">
-              <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900 to-slate-800 overflow-hidden">
+            <div className="p-3 sm:p-6">
+              <div className="rounded-xl sm:rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900 to-slate-800 overflow-hidden">
                 {/* Story Image */}
                 {(imagePreview || form.imageUrl) && (
-                  <div className="relative h-64 w-full">
+                  <div className="relative h-48 sm:h-64 w-full">
                     <Image
                       src={imagePreview || form.imageUrl || ''}
                       alt={form.title}
@@ -8757,8 +8823,8 @@ export default function AdminPage() {
                     
                     {/* Category Badge */}
                     {form.category && (
-                      <div className="absolute top-4 left-4">
-                        <span className="rounded-full bg-orange-500 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-white">
+                      <div className="absolute top-3 left-3 sm:top-4 sm:left-4">
+                        <span className="rounded-full bg-orange-500 px-2.5 py-0.5 sm:px-3 sm:py-1 text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-white">
                           {form.category}
                         </span>
                       </div>
@@ -8767,18 +8833,19 @@ export default function AdminPage() {
                 )}
 
                 {/* Story Content */}
-                <div className="p-6">
-                  <h3 className="text-2xl font-bold text-white mb-2">
+                <div className="p-4 sm:p-6">
+                  <h3 className="text-xl sm:text-2xl font-bold text-white mb-2 break-words">
                     {form.title}
                   </h3>
-                  <p className="text-sm text-orange-400 font-medium mb-3">
+                  <p className="text-sm text-orange-400 font-medium mb-3 break-words">
                     {form.headline}
                   </p>
-                  <p className="text-slate-300 leading-relaxed">
-                    {form.summary}
-                  </p>
+                  <ArticleContent 
+                    htmlContent={form.summary}
+                    className="text-slate-300 leading-relaxed text-sm sm:text-base"
+                  />
                   <div className="mt-4 flex items-center gap-2 text-xs text-slate-500">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     <span>{t.justNow}</span>
@@ -8788,11 +8855,11 @@ export default function AdminPage() {
             </div>
 
             {/* Preview Actions */}
-            <div className="border-t border-white/10 p-4 flex gap-3 justify-end">
+            <div className="border-t border-white/10 p-3 sm:p-4 flex flex-col sm:flex-row gap-2 sm:gap-3 sm:justify-end">
               <button
                 type="button"
                 onClick={() => setShowStoryPreview(false)}
-                className="rounded-lg border border-white/20 px-4 py-2 text-sm font-semibold text-slate-300 hover:bg-white/5"
+                className="w-full sm:w-auto rounded-lg border border-white/20 px-4 py-2.5 sm:py-2 text-sm font-semibold text-slate-300 hover:bg-white/5 transition-colors"
               >
                 {t.editStory}
               </button>
@@ -8800,7 +8867,7 @@ export default function AdminPage() {
                 type="button"
                 onClick={handleConfirmPublish}
                 disabled={submitting}
-                className="rounded-lg bg-orange-500 px-6 py-2 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-50"
+                className="w-full sm:w-auto rounded-lg bg-orange-500 px-6 py-2.5 sm:py-2 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-50 transition-colors"
               >
                 {submitting ? t.publishing : form.id ? t.confirmUpdate : t.confirmPublish}
               </button>

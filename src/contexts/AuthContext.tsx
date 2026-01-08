@@ -24,6 +24,7 @@ import {
   onSnapshot,
 } from "firebase/firestore";
 import { firebaseAuth, firebaseDB } from "@/lib/firebase";
+import { normalizePhoneNumber } from "@/lib/passwordReset";
 import type { UserProfile } from "@/types/user";
 
 interface AuthContextType {
@@ -150,6 +151,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     lastName: string,
     phoneNumber: string
   ) => {
+    // Normalize phone number to E.164 format for Twilio compatibility
+    const normalizedPhone = normalizePhoneNumber(phoneNumber);
+    
     // Check if email already exists in users collection
     const usersRef = collection(firebaseDB, "users");
     const emailQuery = query(usersRef, where("email", "==", email));
@@ -170,11 +174,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       displayName: `${firstName} ${lastName}`,
     });
 
-    // Create user profile document
+    // Create user profile document with normalized phone number
     const userProfile: Partial<UserProfile> = {
       uid: userCredential.user.uid,
       email,
-      phoneNumber,
+      phoneNumber: normalizedPhone, // Store normalized phone number
       firstName,
       lastName,
       createdAt: new Date(),
@@ -193,9 +197,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     // If input looks like a phone number, search for the user by phone number
     if (!emailOrPhone.includes('@')) {
+      // Normalize phone number for lookup
+      const normalizedPhone = normalizePhoneNumber(emailOrPhone);
+      
       // Search for user by phone number
       const usersRef = collection(firebaseDB, "users");
-      const phoneQuery = query(usersRef, where("phoneNumber", "==", emailOrPhone));
+      const phoneQuery = query(usersRef, where("phoneNumber", "==", normalizedPhone));
       const phoneSnapshot = await getDocs(phoneQuery);
       
       if (phoneSnapshot.empty) {

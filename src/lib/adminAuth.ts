@@ -274,7 +274,15 @@ export async function reactivateAdminUser(
  */
 export async function recordLastLogin(uid: string): Promise<void> {
   try {
-    await updateDoc(doc(firebaseDB, "adminUsers", uid), {
+    const adminDocRef = doc(firebaseDB, "adminUsers", uid);
+    const adminDoc = await getDoc(adminDocRef);
+    
+    if (!adminDoc.exists()) {
+      console.warn(`Admin document does not exist for UID: ${uid}. Skipping lastLogin update.`);
+      return;
+    }
+    
+    await updateDoc(adminDocRef, {
       lastLogin: serverTimestamp(),
       lastActivity: serverTimestamp(),
     });
@@ -288,7 +296,15 @@ export async function recordLastLogin(uid: string): Promise<void> {
  */
 export async function updateLastActivity(uid: string): Promise<void> {
   try {
-    await updateDoc(doc(firebaseDB, "adminUsers", uid), {
+    const adminDocRef = doc(firebaseDB, "adminUsers", uid);
+    const adminDoc = await getDoc(adminDocRef);
+    
+    if (!adminDoc.exists()) {
+      console.warn(`Admin document does not exist for UID: ${uid}. Skipping lastActivity update.`);
+      return;
+    }
+    
+    await updateDoc(adminDocRef, {
       lastActivity: serverTimestamp(),
     });
   } catch (error) {

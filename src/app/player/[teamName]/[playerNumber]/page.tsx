@@ -10,7 +10,6 @@ import type { RosterPlayer } from "@/data/febaco";
 import { franchises, franchisesWomen } from "@/data/febaco";
 import { countries, codeForCountryName, flagFromCode, nameForCountryCode } from "@/data/countries";
 import { useAuth } from "@/contexts/AuthContext";
-import GoogleAd from "@/components/GoogleAd";
 
 const translations = {
   en: {
@@ -491,13 +490,6 @@ export default function PlayerProfilePage() {
           </div>
         </div>
 
-        {/* Google Ad - Sidebar */}
-        <GoogleAd 
-          slot=\"4567890123\"
-          format=\"vertical\"
-          className=\"my-6\"
-          style={{ minHeight: '600px' }}
-        />
 
         {/* Player Dashboard - Only Visible to Logged-In Player */}
         {isOwnProfile && (
@@ -614,16 +606,11 @@ export default function PlayerProfilePage() {
           </div>
         )}
 
-        {/* Google Ad - Content */}
-        <GoogleAd 
-          slot=\"5678901234\"
-          format=\"auto\"
-          className=\"my-6\"
-        />
 
         {/* Stats Section */}
-        <div className=\"rounded-3xl border border-white/10 bg-slate-950/80 p-4 sm:p-6 lg:p-8\">
-          <h2 className=\"mb-4 text-lg font-bold uppercase tracking-wider text-slate-300 sm:mb-6 sm:text-xl lg:text-2xl\">\n            {t.seasonStatistics}
+        <div className="rounded-3xl border border-white/10 bg-slate-950/80 p-4 sm:p-6 lg:p-8">
+          <h2 className="mb-4 text-lg font-bold uppercase tracking-wider text-slate-300 sm:mb-6 sm:text-xl lg:text-2xl">
+            {t.seasonStatistics}
           </h2>
           <div className="grid grid-cols-2 gap-3 sm:gap-6 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/80 to-slate-900/40 p-3 sm:p-6">

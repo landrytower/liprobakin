@@ -51,7 +51,7 @@ export interface VerificationRequest {
   userFirstName: string;
   userLastName: string;
   userPhone: string;
-  requestType: "claim_existing" | "create_new";
+  requestType: "claim_existing" | "create_new" | "update_headshot" | "update_name";
   role: "player" | "coach" | "staff";
   teamId: string;
   teamName: string;
@@ -69,7 +69,32 @@ export interface VerificationRequest {
     height?: string;
     birthdate?: string;
     nationality?: string;
+    nationality2?: string | null;
+    playerLicense?: string | null;
+    headshot?: string | null;
   };
+  // For custom player creation (from profile-setup page)
+  customPlayer?: boolean;
+  customPlayerData?: {
+    firstName: string;
+    lastName: string;
+    jerseyNumber: string;
+    position: string;
+    height: string;
+    dateOfBirth: string;
+    nationality: string;
+    secondNationality?: string | null;
+    playerLicense?: string | null;
+    headshotUrl?: string | null;
+  };
+  // For headshot updates
+  newHeadshotUrl?: string;
+  previousHeadshotUrl?: string | null;
+  // For name updates
+  newFirstName?: string;
+  newLastName?: string;
+  previousFirstName?: string;
+  previousLastName?: string;
   idImageUrl?: string;
   status: VerificationStatus;
   submittedAt: Date;

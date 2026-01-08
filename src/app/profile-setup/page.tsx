@@ -7,6 +7,7 @@ import { doc, updateDoc, serverTimestamp, collection, getDocs, addDoc } from "fi
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { firebaseDB, firebaseStorage } from "@/lib/firebase";
 import type { UserRole } from "@/types/user";
+import { countries } from "@/data/countries";
 
 export default function ProfileSetup() {
   const router = useRouter();
@@ -15,8 +16,9 @@ export default function ProfileSetup() {
   const [error, setError] = useState("");
 
   // Step 1: Role selection
-  const [step, setStep] = useState<"role" | "player-staff-setup" | "fan-setup">("role");
+  const [step, setStep] = useState<"role" | "player-staff-setup" | "fan-setup" | "create-player">("role");
   const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
+  const [createOwnPlayer, setCreateOwnPlayer] = useState(false);
 
   // Player/Staff fields - ADD GENDER SELECTION
   const [selectedGender, setSelectedGender] = useState<"men" | "women" | "">("");
@@ -25,6 +27,18 @@ export default function ProfileSetup() {
   const [teamRoster, setTeamRoster] = useState<Array<{ id: string; name: string; number?: string }>>([]);
   const [selectedPersonId, setSelectedPersonId] = useState("");
   const [idImage, setIdImage] = useState<File | null>(null);
+
+  // Custom player creation fields
+  const [customFirstName, setCustomFirstName] = useState("");
+  const [customLastName, setCustomLastName] = useState("");
+  const [jerseyNumber, setJerseyNumber] = useState("");
+  const [position, setPosition] = useState("");
+  const [heightCm, setHeightCm] = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState("");
+  const [nationality, setNationality] = useState("");
+  const [secondNationality, setSecondNationality] = useState("");
+  const [playerLicense, setPlayerLicense] = useState("");
+  const [headshotPhoto, setHeadshotPhoto] = useState<File | null>(null);
 
   // Fan fields
   const [favoriteTeamMenId, setFavoriteTeamMenId] = useState("");
@@ -62,7 +76,13 @@ export default function ProfileSetup() {
     if (!loading && !user) {
       router.push("/");
     }
-  }, [user, userProfile, loading, router]);
+
+    // Pre-populate names from user profile when creating custom player
+    if (userProfile && !customFirstName && !customLastName) {
+      setCustomFirstName(userProfile.firstName || "");
+      setCustomLastName(userProfile.lastName || "");
+    }
+  }, [user, userProfile, loading, router, customFirstName, customLastName]);
 
   useEffect(() => {
     // Fetch teams when needed - FILTER BY GENDER
@@ -230,18 +250,113 @@ export default function ProfileSetup() {
         // User's firstName and lastName from sign-up are preserved and never overwritten
       });
 
-      // Create verification request
+      // Create verification request for CLAIMING EXISTING PLAYER
       await addDoc(collection(firebaseDB, "verificationRequests"), {
         userId: user.uid,
+        userEmail: user.email || userProfile?.email || "",
         userFirstName: userProfile?.firstName || "",
         userLastName: userProfile?.lastName || "",
         userPhone: userProfile?.phoneNumber || "",
         role: selectedRole,
         teamId: selectedTeamId,
         teamName: selectedTeam?.name || "",
-        selectedPersonName: selectedPerson?.name || "",
-        selectedPersonId: selectedPersonId,
+        // Claim existing player fields
+        requestType: "claim_existing",
+        existingPlayerId: selectedPersonId,
+        existingPlayerName: selectedPerson?.name || "",
         idImageUrl,
+        status: "pending",
+        submittedAt: serverTimestamp(),
+      });
+
+      await refreshUserProfile();
+      router.push("/verification-pending");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCustomPlayerSubmit = async () => {
+    if (!user || !selectedRole || !selectedTeamId || !customFirstName || !customLastName || 
+        !jerseyNumber || !position || !heightCm || !dateOfBirth || !nationality) {
+      setError("Please complete all required fields");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
+    try {
+      // Upload ID image if provided
+      let idImageUrl = "";
+      if (idImage) {
+        const storageRef = ref(firebaseStorage, `verification/${user.uid}/${idImage.name}`);
+        await uploadBytes(storageRef, idImage);
+        idImageUrl = await getDownloadURL(storageRef);
+      }
+
+      // Upload headshot photo if provided
+      let headshotUrl = "";
+      if (headshotPhoto) {
+        const headshotRef = ref(firebaseStorage, `headshots/${user.uid}/${headshotPhoto.name}`);
+        await uploadBytes(headshotRef, headshotPhoto);
+        headshotUrl = await getDownloadURL(headshotRef);
+      }
+
+      const selectedTeam = teams.find((t) => t.id === selectedTeamId);
+
+      // Update user profile
+      await updateDoc(doc(firebaseDB, "users", user.uid), {
+        role: selectedRole,
+        teamId: selectedTeamId,
+        teamName: selectedTeam?.name || "",
+        verificationStatus: "pending",
+        verificationImageUrl: idImageUrl || null,
+        verificationSubmittedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      // Create verification request for CREATING NEW PLAYER
+      await addDoc(collection(firebaseDB, "verificationRequests"), {
+        userId: user.uid,
+        userEmail: user.email || userProfile?.email || "",
+        userFirstName: userProfile?.firstName || "",
+        userLastName: userProfile?.lastName || "",
+        userPhone: userProfile?.phoneNumber || "",
+        role: selectedRole,
+        teamId: selectedTeamId,
+        teamName: selectedTeam?.name || "",
+        // Create new player fields
+        requestType: "create_new",
+        customPlayer: true,
+        customPlayerData: {
+          firstName: customFirstName,
+          lastName: customLastName,
+          jerseyNumber,
+          position,
+          height: heightCm,
+          dateOfBirth,
+          nationality,
+          secondNationality: secondNationality || null,
+          playerLicense: playerLicense || null,
+          headshotUrl: headshotUrl || null,
+        },
+        // Also store as newPlayerData for admin page compatibility
+        newPlayerData: {
+          firstName: customFirstName,
+          lastName: customLastName,
+          number: jerseyNumber,
+          position,
+          height: heightCm,
+          birthdate: dateOfBirth,
+          nationality,
+          secondNationality: secondNationality || null,
+          playerLicense: playerLicense || null,
+          headshotUrl: headshotUrl || null,
+        },
+        idImageUrl: idImageUrl || null,
         status: "pending",
         submittedAt: serverTimestamp(),
       });
@@ -312,6 +427,23 @@ export default function ProfileSetup() {
       setLoading(false);
     }
   };
+
+  // Height conversion utility
+  const cmToFeetInches = (cm: number): string => {
+    const totalInches = cm / 2.54;
+    const feet = Math.floor(totalInches / 12);
+    const inches = Math.round(totalInches % 12);
+    return `${feet}'${inches}"`;
+  };
+
+  // Basketball positions
+  const positions = [
+    "Point Guard (PG)",
+    "Shooting Guard (SG)",
+    "Small Forward (SF)",
+    "Power Forward (PF)",
+    "Center (C)",
+  ];
 
   if (!user || userProfile?.role) {
     return null;
@@ -511,7 +643,7 @@ export default function ProfileSetup() {
                   </div>
 
                   {/* STEP 3: Player/Staff Name Selection */}
-                  {selectedTeamId && (
+                  {selectedTeamId && !createOwnPlayer && (
                     <div className="group">
                       <label className="block text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wider">
                         Select Your Name from Roster
@@ -541,11 +673,269 @@ export default function ProfileSetup() {
                           </svg>
                         </div>
                       </div>
+                      
+                      {/* "Can't find your name?" option */}
+                      <div className="mt-3 text-center">
+                        <p className="text-xs text-slate-400 mb-2">Don&apos;t see your name in the roster?</p>
+                        <button
+                          onClick={() => {
+                            setCreateOwnPlayer(true);
+                            setSelectedPersonId("");
+                          }}
+                          className="text-sm text-blue-400 hover:text-blue-300 underline transition-colors"
+                          type="button"
+                        >
+                          Create your own player profile
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Custom Player Creation Form */}
+                  {selectedTeamId && createOwnPlayer && (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-semibold text-white">Create Player Profile</h3>
+                        <button
+                          onClick={() => {
+                            setCreateOwnPlayer(false);
+                            setCustomFirstName(userProfile?.firstName || "");
+                            setCustomLastName(userProfile?.lastName || "");
+                            setJerseyNumber("");
+                            setPosition("");
+                            setHeightCm("");
+                            setDateOfBirth("");
+                            setNationality("");
+                            setSecondNationality("");
+                            setPlayerLicense("");
+                            setHeadshotPhoto(null);
+                          }}
+                          className="text-xs text-green-400 hover:text-green-300 transition-colors"
+                          type="button"
+                        >
+                          ← Back to roster selection
+                        </button>
+                      </div>
+
+                      {/* Name Fields (pre-populated) */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-300 mb-2">
+                            First Name <span className="text-red-400">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={customFirstName}
+                            onChange={(e) => setCustomFirstName(e.target.value)}
+                            className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-300 mb-2">
+                            Last Name <span className="text-red-400">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={customLastName}
+                            onChange={(e) => setCustomLastName(e.target.value)}
+                            className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all"
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      {/* Jersey Number */}
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-2">
+                          Jersey # <span className="text-red-400">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={jerseyNumber}
+                          onChange={(e) => setJerseyNumber(e.target.value)}
+                          className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all"
+                          placeholder="e.g., 23"
+                          required
+                        />
+                      </div>
+
+                      {/* Position and Height */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-300 mb-2">
+                            Position <span className="text-red-400">*</span>
+                          </label>
+                          <select
+                            value={position}
+                            onChange={(e) => setPosition(e.target.value)}
+                            className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all appearance-none cursor-pointer"
+                            required
+                          >
+                            <option value="" className="bg-slate-900">Select position</option>
+                            {positions.map((pos) => (
+                              <option key={pos} value={pos} className="bg-slate-900">
+                                {pos}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-300 mb-2">
+                            Height <span className="text-red-400">*</span>
+                          </label>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              value={heightCm}
+                              onChange={(e) => setHeightCm(e.target.value)}
+                              className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 pr-16 text-white focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all"
+                              placeholder="185"
+                              required
+                            />
+                            <div className="absolute inset-y-0 right-0 flex items-center pr-4 text-xs text-slate-400 pointer-events-none">
+                              cm {heightCm && `(${cmToFeetInches(parseInt(heightCm))})`}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Date of Birth */}
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-2">
+                          Date of Birth <span className="text-red-400">*</span>
+                        </label>
+                        <input
+                          type="date"
+                          value={dateOfBirth}
+                          onChange={(e) => setDateOfBirth(e.target.value)}
+                          className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all"
+                          required
+                        />
+                      </div>
+
+                      {/* Nationality */}
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-2">
+                          Nationality <span className="text-red-400">*</span>
+                        </label>
+                        <select
+                          value={nationality}
+                          onChange={(e) => setNationality(e.target.value)}
+                          className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all appearance-none cursor-pointer"
+                          required
+                        >
+                          <option value="" className="bg-slate-900">Select nationality</option>
+                          {countries.map((country) => (
+                            <option key={country.code} value={country.code} className="bg-slate-900">
+                              {country.code} - {country.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Second Nationality (Optional) */}
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-2">
+                          Second Nationality <span className="text-xs text-slate-500">(Optional)</span>
+                        </label>
+                        <select
+                          value={secondNationality}
+                          onChange={(e) => setSecondNationality(e.target.value)}
+                          className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all appearance-none cursor-pointer"
+                        >
+                          <option value="" className="bg-slate-900">None</option>
+                          {countries.map((country) => (
+                            <option key={country.code} value={country.code} className="bg-slate-900">
+                              {country.code} - {country.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Player License (Optional) */}
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-2">
+                          Player License <span className="text-xs text-slate-500">(Optional)</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={playerLicense}
+                          onChange={(e) => setPlayerLicense(e.target.value)}
+                          className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all"
+                          placeholder="Optional"
+                        />
+                      </div>
+
+                      {/* Headshot Photo Upload */}
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-2">
+                          Headshot Photo <span className="text-xs text-slate-500">(Optional)</span>
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => setHeadshotPhoto(e.target.files?.[0] || null)}
+                            className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white file:mr-4 file:rounded-lg file:border-0 file:bg-gradient-to-r file:from-blue-500 file:to-purple-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:shadow-lg transition-all cursor-pointer focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30"
+                          />
+                        </div>
+                        <p className="mt-1 text-xs text-slate-400">Upload a professional headshot photo</p>
+                      </div>
+
+                      {/* ID Upload for Verification (Optional) */}
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-2">
+                          Upload ID for Verification <span className="text-xs text-slate-500">(Optional)</span>
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => setIdImage(e.target.files?.[0] || null)}
+                            className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white file:mr-4 file:rounded-lg file:border-0 file:bg-gradient-to-r file:from-blue-500 file:to-purple-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:shadow-lg transition-all cursor-pointer focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30"
+                          />
+                        </div>
+                        <div className="mt-2 flex items-start gap-2 text-xs text-slate-400">
+                          <svg className="h-4 w-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <p>Upload ID or badge if available for faster verification</p>
+                        </div>
+                      </div>
+
+                      {/* Submit Button for Custom Player Creation */}
+                      <button
+                        onClick={handleCustomPlayerSubmit}
+                        disabled={loading || !customFirstName || !customLastName || !jerseyNumber || !position || !heightCm || !dateOfBirth || !nationality}
+                        className="group relative w-full overflow-hidden rounded-xl bg-gradient-to-r from-blue-900 to-green-500 px-4 py-4 font-bold text-white shadow-lg shadow-green-500/50 transition-all duration-300 hover:shadow-xl hover:shadow-green-500/60 hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                        type="button"
+                      >
+                        <span className="relative z-10 flex items-center justify-center gap-2">
+                          {loading ? (
+                            <>
+                              <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                              </svg>
+                              <span>Submitting...</span>
+                            </>
+                          ) : (
+                            <>
+                              <span>Submit for Verification</span>
+                              <svg className="h-5 w-5 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                              </svg>
+                            </>
+                          )}
+                        </span>
+                        <div className="absolute inset-0 bg-gradient-to-r from-green-600 to-blue-900 opacity-0 transition-opacity group-hover:opacity-100" />
+                      </button>
                     </div>
                   )}
 
                   {/* STEP 4: ID Upload */}
-                  {selectedPersonId && (
+                  {selectedPersonId && !createOwnPlayer && (
                     <div className="group">
                       <label className="block text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wider">
                         Upload ID for Verification
@@ -577,7 +967,8 @@ export default function ProfileSetup() {
                     </div>
                   )}
 
-                  {selectedPersonId && idImage && (
+                  {/* Submit Button for Existing Roster Player */}
+                  {selectedPersonId && idImage && !createOwnPlayer && (
                     <button
                       onClick={handlePlayerStaffSubmit}
                       disabled={loading}

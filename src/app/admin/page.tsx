@@ -2706,7 +2706,168 @@ export default function AdminPage() {
         notes: reviewNotes,
       });
 
-      if (selectedVerificationRequest.requestType === "claim_existing") {
+      // Handle custom player creation (from profile-setup page)
+      if (selectedVerificationRequest.customPlayer && selectedVerificationRequest.customPlayerData) {
+        console.log("[Admin Verification] Handling custom player from profile-setup");
+        if (status === "approved") {
+          // Create new player in team roster
+          const playerData = selectedVerificationRequest.customPlayerData;
+          const rosterRef = collection(firebaseDB, "teams", selectedVerificationRequest.teamId, "roster");
+          const newPlayerDoc = await addDoc(rosterRef, {
+            firstName: playerData.firstName,
+            lastName: playerData.lastName,
+            name: `${playerData.firstName} ${playerData.lastName}`,
+            number: playerData.jerseyNumber,
+            position: playerData.position || "",
+            height: playerData.height || "",
+            birthdate: playerData.dateOfBirth || "",
+            dateOfBirth: playerData.dateOfBirth || "",
+            nationality: playerData.nationality || "",
+            nationality2: playerData.secondNationality || null,
+            secondNationality: playerData.secondNationality || null,
+            playerLicense: playerData.playerLicense || null,
+            headshot: playerData.headshotUrl || "",
+            stats: {
+              pts: "0.0",
+              reb: "0.0",
+              ast: "0.0",
+              stl: "0.0",
+              blk: "0.0",
+              two_pm: "0.0",
+              two_pa: "0.0",
+              three_pm: "0.0",
+              three_pa: "0.0",
+              ft_m: "0.0",
+              ft_a: "0.0",
+              oreb: "0.0",
+              dreb: "0.0",
+              min: "0.0",
+              pf: "0.0",
+              to: "0.0",
+            },
+            gamesPlayed: 0,
+            verificationStatus: "verified",
+            linkedUserId: selectedVerificationRequest.userId,
+            linkedUserEmail: selectedVerificationRequest.userEmail || "",
+            createdAt: serverTimestamp(),
+          });
+
+          console.log("[Admin Verification] Player created with ID:", newPlayerDoc.id);
+
+          // Update user profile with link to new player
+          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId), {
+            role: selectedVerificationRequest.role,
+            teamId: selectedVerificationRequest.teamId,
+            teamName: selectedVerificationRequest.teamName,
+            verificationStatus: status,
+            verificationReviewedAt: serverTimestamp(),
+            verificationReviewedBy: user.email,
+            verificationNotes: reviewNotes,
+            updatedAt: serverTimestamp(),
+            linkedPlayerId: newPlayerDoc.id,
+            linkedPlayerName: `${playerData.firstName} ${playerData.lastName}`,
+          });
+
+          alert(`✅ Player added to ${selectedVerificationRequest.teamName} roster!\nName: ${playerData.firstName} ${playerData.lastName}`);
+        } else {
+          // Rejected - just update user status
+          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId), {
+            verificationStatus: status,
+            verificationReviewedAt: serverTimestamp(),
+            verificationReviewedBy: user.email,
+            verificationNotes: reviewNotes,
+            updatedAt: serverTimestamp(),
+          });
+        }
+      } else if (selectedVerificationRequest.requestType === "update_headshot") {
+        if (status === "approved" && selectedVerificationRequest.existingPlayerId && selectedVerificationRequest.newHeadshotUrl) {
+          await updateDoc(
+            doc(firebaseDB, "teams", selectedVerificationRequest.teamId, "roster", selectedVerificationRequest.existingPlayerId),
+            {
+              headshot: selectedVerificationRequest.newHeadshotUrl,
+              verificationStatus: "verified",
+              linkedUserId: selectedVerificationRequest.userId,
+              linkedUserEmail: selectedVerificationRequest.userEmail || "",
+              updatedAt: serverTimestamp(),
+            }
+          );
+
+          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId), {
+            verificationStatus: status,
+            verificationReviewedAt: serverTimestamp(),
+            verificationReviewedBy: user.email,
+            verificationNotes: reviewNotes,
+            updatedAt: serverTimestamp(),
+          });
+        } else {
+          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId), {
+            verificationStatus: status,
+            verificationReviewedAt: serverTimestamp(),
+            verificationReviewedBy: user.email,
+            verificationNotes: reviewNotes,
+            updatedAt: serverTimestamp(),
+          });
+        }
+      } else if (selectedVerificationRequest.requestType === "update_headshot") {
+        if (status === "approved" && selectedVerificationRequest.existingPlayerId && selectedVerificationRequest.newHeadshotUrl) {
+          await updateDoc(
+            doc(firebaseDB, "teams", selectedVerificationRequest.teamId, "roster", selectedVerificationRequest.existingPlayerId),
+            {
+              headshot: selectedVerificationRequest.newHeadshotUrl,
+              verificationStatus: "verified",
+              linkedUserId: selectedVerificationRequest.userId,
+              linkedUserEmail: selectedVerificationRequest.userEmail || "",
+              updatedAt: serverTimestamp(),
+            }
+          );
+
+          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId), {
+            verificationStatus: status,
+            verificationReviewedAt: serverTimestamp(),
+            verificationReviewedBy: user.email,
+            verificationNotes: reviewNotes,
+            updatedAt: serverTimestamp(),
+          });
+        } else {
+          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId), {
+            verificationStatus: status,
+            verificationReviewedAt: serverTimestamp(),
+            verificationReviewedBy: user.email,
+            verificationNotes: reviewNotes,
+            updatedAt: serverTimestamp(),
+          });
+        }
+      } else if (selectedVerificationRequest.requestType === "update_name") {
+        if (status === "approved" && selectedVerificationRequest.existingPlayerId && selectedVerificationRequest.newFirstName && selectedVerificationRequest.newLastName) {
+          await updateDoc(
+            doc(firebaseDB, "teams", selectedVerificationRequest.teamId, "roster", selectedVerificationRequest.existingPlayerId),
+            {
+              firstName: selectedVerificationRequest.newFirstName,
+              lastName: selectedVerificationRequest.newLastName,
+              name: `${selectedVerificationRequest.newFirstName} ${selectedVerificationRequest.newLastName}`,
+              updatedAt: serverTimestamp(),
+            }
+          );
+
+          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId), {
+            firstName: selectedVerificationRequest.newFirstName,
+            lastName: selectedVerificationRequest.newLastName,
+            verificationStatus: status,
+            verificationReviewedAt: serverTimestamp(),
+            verificationReviewedBy: user.email,
+            verificationNotes: reviewNotes,
+            updatedAt: serverTimestamp(),
+          });
+        } else {
+          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId), {
+            verificationStatus: status,
+            verificationReviewedAt: serverTimestamp(),
+            verificationReviewedBy: user.email,
+            verificationNotes: reviewNotes,
+            updatedAt: serverTimestamp(),
+          });
+        }
+      } else if (selectedVerificationRequest.requestType === "claim_existing") {
         // CLAIM EXISTING PLAYER
         await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId), {
           role: "player",
@@ -2734,7 +2895,7 @@ export default function AdminPage() {
           );
         }
       } else if (selectedVerificationRequest.requestType === "create_new") {
-        // CREATE NEW PLAYER REQUEST
+        // CREATE NEW PLAYER REQUEST (legacy or from player-verification page)
         if (status === "approved" && selectedVerificationRequest.newPlayerData) {
           // Admin approved - create the player in the team roster
           const newPlayerData = selectedVerificationRequest.newPlayerData;
@@ -2750,7 +2911,25 @@ export default function AdminPage() {
             ...(newPlayerData.nationality2 && { nationality2: newPlayerData.nationality2 }),
             ...(newPlayerData.playerLicense && { playerLicense: newPlayerData.playerLicense }),
             headshot: newPlayerData.headshot || "",
-            stats: { pts: 0, reb: 0, ast: 0, stl: 0, blk: 0 },
+            stats: {
+              pts: "0.0",
+              reb: "0.0",
+              ast: "0.0",
+              stl: "0.0",
+              blk: "0.0",
+              two_pm: "0.0",
+              two_pa: "0.0",
+              three_pm: "0.0",
+              three_pa: "0.0",
+              ft_m: "0.0",
+              ft_a: "0.0",
+              oreb: "0.0",
+              dreb: "0.0",
+              min: "0.0",
+              pf: "0.0",
+              to: "0.0",
+            },
+            gamesPlayed: 0,
             verificationStatus: "verified",
             linkedUserId: selectedVerificationRequest.userId,
             linkedUserEmail: selectedVerificationRequest.userEmail,
@@ -5454,6 +5633,85 @@ export default function AdminPage() {
                               )}
                             </div>
                             <div className="flex items-center gap-3">
+                              {/* Add to Roster Button for Custom Players */}
+                              {user.role === 'player' && user.verificationStatus === 'approved' && user.teamId && !user.linkedPlayerId && (
+                                <button
+                                  onClick={async () => {
+                                    if (window.confirm(`Add ${user.firstName} ${user.lastName} to ${user.teamName} roster?`)) {
+                                      try {
+                                        // Get user's custom player data from verification request
+                                        const verificationQuery = query(
+                                          collection(firebaseDB, "verificationRequests"),
+                                          where("userId", "==", user.id),
+                                          where("status", "==", "approved")
+                                        );
+                                        const verificationSnapshot = await getDocs(verificationQuery);
+                                        
+                                        if (verificationSnapshot.empty) {
+                                          alert("No verification data found for this player.");
+                                          return;
+                                        }
+                                        
+                                        const verificationData = verificationSnapshot.docs[0].data();
+                                        
+                                        if (!verificationData.customPlayerData) {
+                                          alert("This player doesn't have custom player data.");
+                                          return;
+                                        }
+                                        
+                                        const playerData = verificationData.customPlayerData;
+                                        
+                                        // Create player in team roster
+                                        const rosterRef = collection(firebaseDB, "teams", user.teamId, "roster");
+                                        const newPlayerDoc = await addDoc(rosterRef, {
+                                          firstName: playerData.firstName,
+                                          lastName: playerData.lastName,
+                                          name: `${playerData.firstName} ${playerData.lastName}`,
+                                          number: playerData.jerseyNumber,
+                                          position: playerData.position || "",
+                                          height: playerData.height || "",
+                                          birthdate: playerData.dateOfBirth || "",
+                                          dateOfBirth: playerData.dateOfBirth || "",
+                                          nationality: playerData.nationality || "",
+                                          nationality2: playerData.secondNationality || null,
+                                          secondNationality: playerData.secondNationality || null,
+                                          playerLicense: playerData.playerLicense || null,
+                                          headshot: playerData.headshotUrl || "",
+                                          stats: { pts: 0, reb: 0, ast: 0, stl: 0, blk: 0 },
+                                          verificationStatus: "verified",
+                                          linkedUserId: user.id,
+                                          linkedUserEmail: user.email || "",
+                                          createdAt: serverTimestamp(),
+                                        });
+                                        
+                                        // Update user profile with link to player
+                                        await updateDoc(doc(firebaseDB, "users", user.id), {
+                                          linkedPlayerId: newPlayerDoc.id,
+                                          linkedPlayerName: `${playerData.firstName} ${playerData.lastName}`,
+                                          updatedAt: serverTimestamp(),
+                                        });
+                                        
+                                        // Refresh user list
+                                        const usersSnapshot = await getDocs(collection(firebaseDB, "users"));
+                                        setAllUsers(usersSnapshot.docs.map(d => ({ 
+                                          id: d.id, 
+                                          ...d.data(), 
+                                          createdAt: d.data().createdAt?.toDate() || new Date() 
+                                        })));
+                                        
+                                        alert(`✅ ${user.firstName} ${user.lastName} added to ${user.teamName} roster successfully!`);
+                                      } catch (error) {
+                                        console.error("Error adding player to roster:", error);
+                                        alert("Error adding player to roster. Please try again.");
+                                      }
+                                    }
+                                  }}
+                                  className="rounded-lg bg-green-600/20 px-3 py-1.5 text-xs font-semibold text-green-400 transition hover:bg-green-600/30"
+                                  type="button"
+                                >
+                                  ➕ Add to Roster
+                                </button>
+                              )}
                               <div className="text-right text-xs text-slate-500">
                                 <div>Créé le</div>
                                 <div>{user.createdAt?.toLocaleDateString('fr-FR')}</div>
@@ -7226,9 +7484,49 @@ export default function AdminPage() {
                           <div>
                             <label className="text-sm font-medium text-slate-400">Request Type</label>
                             <p className="text-white capitalize">
-                              {selectedVerificationRequest.requestType === "claim_existing" ? "Claim Existing Player" : "Create New Player"}
+                              {selectedVerificationRequest.customPlayer
+                                ? "Create Custom Player Profile"
+                                : selectedVerificationRequest.requestType === "claim_existing"
+                                ? "Claim Existing Player"
+                                : selectedVerificationRequest.requestType === "update_headshot"
+                                ? "Update Headshot"
+                                : selectedVerificationRequest.requestType === "update_name"
+                                ? "Update Name"
+                                : "Create New Player"}
                             </p>
                           </div>
+
+                          {selectedVerificationRequest.requestType === "update_name" && (
+                            <div className="space-y-2">
+                              <label className="text-sm font-medium text-slate-400">Name Change</label>
+                              <div className="rounded-lg border border-white/10 bg-white/5 p-3 text-sm text-slate-200">
+                                <p>Previous: {selectedVerificationRequest.previousFirstName} {selectedVerificationRequest.previousLastName}</p>
+                                <p>Requested: <span className="text-green-400 font-semibold">{selectedVerificationRequest.newFirstName} {selectedVerificationRequest.newLastName}</span></p>
+                              </div>
+                            </div>
+                          )}
+
+                          {selectedVerificationRequest.requestType === "update_headshot" && selectedVerificationRequest.newHeadshotUrl && (
+                            <div className="space-y-3">
+                              <label className="text-sm font-medium text-slate-400">Headshot Update</label>
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <p className="text-xs text-slate-400 mb-2">New Headshot</p>
+                                  <div className="overflow-hidden rounded-xl border border-white/10 bg-white/5">
+                                    <Image src={selectedVerificationRequest.newHeadshotUrl} alt="New headshot" width={400} height={400} className="w-full h-full object-cover" />
+                                  </div>
+                                </div>
+                                {selectedVerificationRequest.previousHeadshotUrl && (
+                                  <div>
+                                    <p className="text-xs text-slate-400 mb-2">Previous Headshot</p>
+                                    <div className="overflow-hidden rounded-xl border border-white/10 bg-white/5">
+                                      <Image src={selectedVerificationRequest.previousHeadshotUrl} alt="Previous headshot" width={400} height={400} className="w-full h-full object-cover" />
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
 
                           {selectedVerificationRequest.requestType === "claim_existing" && selectedVerificationRequest.existingPlayerName && (
                             <div>

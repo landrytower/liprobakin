@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
+import VerificationNotification from "@/components/VerificationNotification";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -46,8 +48,11 @@ export const metadata: Metadata = {
     canonical: "https://liprobakin.com",
   },
   icons: {
-    icon: "/logos/liprobakin.png",
-    shortcut: "/logos/liprobakin.png",
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/logos/liprobakin.png", type: "image/png" },
+    ],
+    shortcut: "/favicon.ico",
     apple: "/logos/liprobakin.png",
   },
   openGraph: {
@@ -100,33 +105,44 @@ export default function RootLayout({
     "name": "Liprobakin",
     "alternateName": ["Liprobakin League", "Librobakin"],
     "url": "https://liprobakin.com",
-    "logo": "https://liprobakin.com/logos/liprobakin.png",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://liprobakin.com/logos/liprobakin.png",
+      "width": "512",
+      "height": "512"
+    },
+    "image": "https://liprobakin.com/logos/liprobakin.png",
     "description": "Official Liprobakin basketball league featuring teams, players, games, and standings.",
     "sport": "Basketball",
     "sameAs": [
-      "https://liprobakin.com"
+      "https://www.facebook.com/Liprobakin-League"
     ]
   };
 
   return (
     <html lang="en">
-      <head>
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-transparent`}
+      >
+        {/* JSON-LD Schema */}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
+        
         {/* Google AdSense - Replace ca-pub-XXXXX with your AdSense ID */}
-        <script
+        <Script
           async
           src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-XXXXXXXXXXXXX"
           crossOrigin="anonymous"
+          strategy="afterInteractive"
         />
-      </head>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-transparent`}
-      >
+        
         <LanguageProvider>
-          <AuthProvider>{children}</AuthProvider>
+          <AuthProvider>
+            <VerificationNotification />
+            {children}
+          </AuthProvider>
         </LanguageProvider>
       </body>
     </html>

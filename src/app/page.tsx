@@ -11,9 +11,6 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import AuthModal from "@/components/AuthModal";
 import PlayerProfilePopup from "@/components/PlayerProfilePopup";
 import AnimatedButton from "@/components/AnimatedButton";
-import GoogleAd from "@/components/GoogleAd";
-import GoogleAd from "@/components/GoogleAd";
-import GoogleAd from "@/components/GoogleAd";
 
 import {
   conferenceStandings,
@@ -2349,14 +2346,6 @@ export default function Home() {
         </div>
       ) : null}
 
-      {/* Google Ad - Top Banner */}
-      <GoogleAd 
-        slot="1234567890"
-        format="horizontal"
-        className="my-8 max-w-6xl mx-auto"
-        style={{ minHeight: '90px' }}
-      />
-
       {/* News Section */}
       {newsArticles.length > 0 && featuredArticleId && (
         <section className="w-full">
@@ -2976,22 +2965,6 @@ export default function Home() {
         </section>
       )}
 
-      {/* Google Ad - Top Banner */}
-      <GoogleAd 
-        slot="1234567890"
-        format="horizontal"
-        className="my-8 max-w-6xl mx-auto px-4"
-        style={{ minHeight: '90px' }}
-      />
-
-      {/* Google Ad - Top Banner */}
-      <GoogleAd 
-        slot="1234567890"
-        format="horizontal"
-        className="my-8 max-w-6xl mx-auto px-4"
-        style={{ minHeight: '90px' }}
-      />
-
       <main className="mx-auto max-w-6xl space-y-20 px-4 pb-20 pt-12 md:px-8">
         <section id="stats" className="space-y-8">
           <SectionHeader
@@ -3397,13 +3370,6 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Google Ad - In-Feed */}
-        <GoogleAd 
-          slot="2345678901"
-          format="auto"
-          className="my-12"
-        />
-
         <section id="standings" className="space-y-8">
           <SectionHeader
             id="standings"
@@ -3472,13 +3438,6 @@ export default function Home() {
             </div>
           </div>
         </section>
-
-        {/* Google Ad - Content */}
-        <GoogleAd 
-          slot="3456789012"
-          format="auto"
-          className="my-12"
-        />
 
         <section id="teams" className="space-y-6 sm:space-y-8">
           <SectionHeader
@@ -3590,13 +3549,6 @@ export default function Home() {
             </button>
           </div>
         </section>
-
-        {/* Google Ad - Content */}
-        <GoogleAd 
-          slot="3456789012"
-          format="auto"
-          className="my-8"
-        />
 
         {/* Partners and Committee Sections */}
         <div className="grid gap-4 grid-cols-2">

@@ -3,15 +3,151 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { doc, updateDoc, serverTimestamp, collection, getDocs, addDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { firebaseDB, firebaseStorage } from "@/lib/firebase";
 import type { UserRole } from "@/types/user";
 import { countries } from "@/data/countries";
 
+const translations = {
+  en: {
+    completeYourProfile: "Complete Your Profile",
+    letsGetYouSetup: "Let's get you set up",
+    whatBringsYouHere: "What brings you here?",
+    chooseYourRole: "Choose your role to continue",
+    player: "Player",
+    iAmAPlayer: "I am a basketball player",
+    coachStaff: "Coach / Staff",
+    iAmACoach: "I am a coach or team staff member",
+    fan: "Fan",
+    iAmAFan: "I am a basketball fan",
+    verificationRequired: "Verification Required",
+    accountWillBeReviewed: "Your account will be reviewed by an administrator before approval.",
+    selectGender: "Select Gender",
+    chooseToSeeTeams: "Choose to see available teams",
+    men: "Men",
+    women: "Women",
+    selectYourTeam: "Select Your Team",
+    mensLeague: "Men's League",
+    womensLeague: "Women's League",
+    chooseATeam: "Choose a team...",
+    changeGender: "← Change gender",
+    selectPlayerStaff: "Select Your Name from Roster",
+    chooseYourName: "Choose your name...",
+    cantFindName: "Don't see your name in the roster?",
+    createOwnProfile: "Create your own player profile",
+    createPlayerProfile: "Create Player Profile",
+    backToRoster: "← Back to roster selection",
+    firstName: "First Name",
+    lastName: "Last Name",
+    jerseyNumber: "Jersey #",
+    position: "Position",
+    selectPosition: "Select position",
+    height: "Height",
+    dateOfBirth: "Date of Birth",
+    nationality: "Nationality",
+    selectNationality: "Select nationality",
+    secondNationality: "Second Nationality",
+    optional: "Optional",
+    none: "None",
+    playerLicense: "Player License",
+    headshotPhoto: "Headshot Photo",
+    uploadHeadshotPhoto: "Upload a professional headshot photo",
+    uploadIdVerification: "Upload ID for Verification",
+    uploadIdHelper: "Upload ID or badge if available for faster verification",
+    submitting: "Submitting...",
+    submitForVerification: "Submit for Verification",
+    uploadId: "Upload a clear photo of your official ID or badge",
+    completeAllFields: "Please complete all fields",
+    welcomeFan: "Welcome, Fan!",
+    fanWelcomeMessage: "Choose your favorite teams from men's and women's leagues. You can update these anytime from your account settings.",
+    searchFavoritePlayer: "Search for Your Favorite Player",
+    typePlayerName: "Type player name to search...",
+    playerSelected: "Player selected",
+    favoriteTeamMen: "Favorite Men's Team",
+    favoriteTeamWomen: "Favorite Women's Team",
+    typeToSearch: "Type to search teams...",
+    favoritePlayerMenTeam: "Favorite Player from Men's Team",
+    favoritePlayerWomenTeam: "Favorite Player from Women's Team",
+    typeToSearchPlayers: "Type to search players...",
+    saving: "Saving...",
+    completeSetup: "Complete Setup",
+    required: "*",
+    cm: "cm",
+  },
+  fr: {
+    completeYourProfile: "Complétez Votre Profil",
+    letsGetYouSetup: "Configurons votre compte",
+    whatBringsYouHere: "Qu'est-ce qui vous amène ici ?",
+    chooseYourRole: "Choisissez votre rôle pour continuer",
+    player: "Joueur",
+    iAmAPlayer: "Je suis un joueur de basketball",
+    coachStaff: "Entraîneur / Staff",
+    iAmACoach: "Je suis un entraîneur ou membre du staff",
+    fan: "Fan",
+    iAmAFan: "Je suis un fan de basketball",
+    verificationRequired: "Vérification Requise",
+    accountWillBeReviewed: "Votre compte sera examiné par un administrateur avant approbation.",
+    selectGender: "Sélectionnez le Genre",
+    chooseToSeeTeams: "Choisissez pour voir les équipes disponibles",
+    men: "Hommes",
+    women: "Femmes",
+    selectYourTeam: "Sélectionnez Votre Équipe",
+    mensLeague: "Ligue Masculine",
+    womensLeague: "Ligue Féminine",
+    chooseATeam: "Choisissez une équipe...",
+    changeGender: "← Changer de genre",
+    selectPlayerStaff: "Sélectionnez Votre Nom dans le Roster",
+    chooseYourName: "Choisissez votre nom...",
+    cantFindName: "Vous ne voyez pas votre nom dans le roster ?",
+    createOwnProfile: "Créez votre propre profil de joueur",
+    createPlayerProfile: "Créer un Profil de Joueur",
+    backToRoster: "← Retour à la sélection du roster",
+    firstName: "Prénom",
+    lastName: "Nom de Famille",
+    jerseyNumber: "Numéro de Maillot",
+    position: "Position",
+    selectPosition: "Sélectionnez une position",
+    height: "Taille",
+    dateOfBirth: "Date de Naissance",
+    nationality: "Nationalité",
+    selectNationality: "Sélectionnez la nationalité",
+    secondNationality: "Deuxième Nationalité",
+    optional: "Optionnel",
+    none: "Aucun",
+    playerLicense: "Licence de Joueur",
+    headshotPhoto: "Photo de Profil",
+    uploadHeadshotPhoto: "Téléchargez une photo de profil professionnelle",
+    uploadIdVerification: "Télécharger l'ID pour Vérification",
+    uploadIdHelper: "Téléchargez votre pièce d'identité ou badge si disponible pour une vérification plus rapide",
+    submitting: "Envoi en cours...",
+    submitForVerification: "Soumettre pour Vérification",
+    uploadId: "Veuillez télécharger une photo claire de votre pièce d'identité ou badge officiel",
+    completeAllFields: "Veuillez compléter tous les champs",
+    welcomeFan: "Bienvenue, Fan !",
+    fanWelcomeMessage: "Choisissez vos équipes favorites des ligues masculine et féminine. Vous pouvez les modifier à tout moment dans les paramètres de votre compte.",
+    searchFavoritePlayer: "Recherchez Votre Joueur Favori",
+    typePlayerName: "Tapez le nom du joueur pour rechercher...",
+    playerSelected: "Joueur sélectionné",
+    favoriteTeamMen: "Équipe Masculine Favorite",
+    favoriteTeamWomen: "Équipe Féminine Favorite",
+    typeToSearch: "Tapez pour rechercher des équipes...",
+    favoritePlayerMenTeam: "Joueur Favori de l'Équipe Masculine",
+    favoritePlayerWomenTeam: "Joueuse Favorite de l'Équipe Féminine",
+    typeToSearchPlayers: "Tapez pour rechercher des joueurs...",
+    saving: "Enregistrement...",
+    completeSetup: "Terminer la Configuration",
+    required: "*",
+    cm: "cm",
+  },
+};
+
 export default function ProfileSetup() {
   const router = useRouter();
   const { user, userProfile, refreshUserProfile } = useAuth();
+  const { language } = useLanguage();
+  const t = translations[language];
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -459,37 +595,37 @@ export default function ProfileSetup() {
       <div className="relative z-10 mx-auto max-w-2xl px-4 py-12 sm:py-16">
         <div className="rounded-3xl border border-white/20 bg-gradient-to-br from-white/10 via-white/5 to-transparent backdrop-blur-xl shadow-2xl shadow-black/50 p-6 sm:p-8">
           {/* Header */}
-          <div className="mb-8 text-center">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 backdrop-blur-sm border border-white/20">
-                  <svg className="h-8 w-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="mb-6 sm:mb-8 text-center">
+            <div className="mx-auto mb-4 flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 backdrop-blur-sm border border-white/20">
+                  <svg className="h-7 w-7 sm:h-8 sm:w-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
               </svg>
             </div>
-            <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2">Complete Your Profile</h1>
-            <p className="text-sm text-slate-400">Let&apos;s get you set up</p>
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-2">{t.completeYourProfile}</h1>
+            <p className="text-sm text-slate-400">{t.letsGetYouSetup}</p>
           </div>
 
           {step === "role" && (
             <div className="space-y-6">
               <div className="text-center mb-6">
-                <p className="text-lg font-semibold text-white mb-2">What brings you here?</p>
-                <p className="text-sm text-slate-400">Choose your role to continue</p>
+                <p className="text-base sm:text-lg font-semibold text-white mb-2">{t.whatBringsYouHere}</p>
+                <p className="text-sm text-slate-400">{t.chooseYourRole}</p>
               </div>
               <div className="grid gap-4">
                 <button
                   onClick={() => handleRoleSelection("player")}
-                  className="group relative overflow-hidden rounded-2xl border border-white/20 bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-sm p-6 text-left transition-all duration-300 hover:border-green-400/50 hover:shadow-lg hover:shadow-green-500/20 hover:scale-[1.02]"
+                  className="group relative overflow-hidden rounded-2xl border border-white/20 bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-sm p-5 sm:p-6 text-left transition-all duration-300 hover:border-green-400/50 hover:shadow-lg hover:shadow-green-500/20 hover:scale-[1.02]"
                   type="button"
                 >
-                  <div className="flex items-start gap-4">
-                    <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-green-500/20 to-green-600/20 backdrop-blur-sm border border-white/20 group-hover:scale-110 transition-transform">
-                      <svg className="h-6 w-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="flex items-start gap-3 sm:gap-4">
+                    <div className="flex h-10 w-10 sm:h-12 sm:w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-green-500/20 to-green-600/20 backdrop-blur-sm border border-white/20 group-hover:scale-110 transition-transform">
+                      <svg className="h-5 w-5 sm:h-6 sm:w-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                       </svg>
                     </div>
                     <div className="flex-1">
-                      <h3 className="text-xl font-bold text-white mb-1">Player</h3>
-                      <p className="text-sm text-slate-400">I am a basketball player</p>
+                      <h3 className="text-lg sm:text-xl font-bold text-white mb-1">{t.player}</h3>
+                      <p className="text-sm text-slate-400">{t.iAmAPlayer}</p>
                     </div>
                     <svg className="h-5 w-5 text-slate-400 group-hover:text-green-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -499,18 +635,18 @@ export default function ProfileSetup() {
 
                 <button
                   onClick={() => handleRoleSelection("coach")}
-                  className="group relative overflow-hidden rounded-2xl border border-white/20 bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-sm p-6 text-left transition-all duration-300 hover:border-blue-400/50 hover:shadow-lg hover:shadow-blue-500/20 hover:scale-[1.02]"
+                  className="group relative overflow-hidden rounded-2xl border border-white/20 bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-sm p-5 sm:p-6 text-left transition-all duration-300 hover:border-blue-400/50 hover:shadow-lg hover:shadow-blue-500/20 hover:scale-[1.02]"
                   type="button"
                 >
-                  <div className="flex items-start gap-4">
-                    <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-900/30 to-blue-800/20 backdrop-blur-sm border border-white/20 group-hover:scale-110 transition-transform">
-                      <svg className="h-6 w-6 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="flex items-start gap-3 sm:gap-4">
+                    <div className="flex h-10 w-10 sm:h-12 sm:w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-900/30 to-blue-800/20 backdrop-blur-sm border border-white/20 group-hover:scale-110 transition-transform">
+                      <svg className="h-5 w-5 sm:h-6 sm:w-6 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                       </svg>
                     </div>
                     <div className="flex-1">
-                      <h3 className="text-xl font-bold text-white mb-1">Coach / Staff</h3>
-                      <p className="text-sm text-slate-400">I am a coach or team staff member</p>
+                      <h3 className="text-lg sm:text-xl font-bold text-white mb-1">{t.coachStaff}</h3>
+                      <p className="text-sm text-slate-400">{t.iAmACoach}</p>
                     </div>
                     <svg className="h-5 w-5 text-slate-400 group-hover:text-blue-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -520,18 +656,18 @@ export default function ProfileSetup() {
 
                 <button
                   onClick={() => handleRoleSelection("fan")}
-                  className="group relative overflow-hidden rounded-2xl border border-white/20 bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-sm p-6 text-left transition-all duration-300 hover:border-orange-400/50 hover:shadow-lg hover:shadow-orange-500/20 hover:scale-[1.02]"
+                  className="group relative overflow-hidden rounded-2xl border border-white/20 bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-sm p-5 sm:p-6 text-left transition-all duration-300 hover:border-orange-400/50 hover:shadow-lg hover:shadow-orange-500/20 hover:scale-[1.02]"
                   type="button"
                 >
-                  <div className="flex items-start gap-4">
-                    <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500/20 to-orange-600/20 backdrop-blur-sm border border-white/20 group-hover:scale-110 transition-transform">
-                      <svg className="h-6 w-6 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="flex items-start gap-3 sm:gap-4">
+                    <div className="flex h-10 w-10 sm:h-12 sm:w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500/20 to-orange-600/20 backdrop-blur-sm border border-white/20 group-hover:scale-110 transition-transform">
+                      <svg className="h-5 w-5 sm:h-6 sm:w-6 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                       </svg>
                     </div>
                     <div className="flex-1">
-                      <h3 className="text-xl font-bold text-white mb-1">Fan</h3>
-                      <p className="text-sm text-slate-400">I am a basketball fan</p>
+                      <h3 className="text-lg sm:text-xl font-bold text-white mb-1">{t.fan}</h3>
+                      <p className="text-sm text-slate-400">{t.iAmAFan}</p>
                     </div>
                     <svg className="h-5 w-5 text-slate-400 group-hover:text-orange-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -550,8 +686,8 @@ export default function ProfileSetup() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <div className="text-sm">
-                  <p className="font-semibold text-green-300 mb-1">Verification Required</p>
-                  <p className="text-green-200/80">Your account will be reviewed by an administrator before approval.</p>
+                  <p className="font-semibold text-green-300 mb-1">{t.verificationRequired}</p>
+                  <p className="text-green-200/80">{t.accountWillBeReviewed}</p>
                 </div>
               </div>
 
@@ -559,37 +695,37 @@ export default function ProfileSetup() {
               {!selectedGender && (
                 <div className="space-y-4">
                   <div className="text-center mb-4">
-                    <h3 className="text-lg font-semibold text-white mb-1">Select Gender</h3>
-                    <p className="text-sm text-slate-400">Choose to see available teams</p>
+                    <h3 className="text-base sm:text-lg font-semibold text-white mb-1">{t.selectGender}</h3>
+                    <p className="text-sm text-slate-400">{t.chooseToSeeTeams}</p>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <button
                       onClick={() => setSelectedGender("men")}
-                      className="group rounded-xl border border-white/20 bg-gradient-to-br from-green-500/10 to-green-600/5 backdrop-blur-sm p-6 transition-all duration-300 hover:border-green-400/50 hover:shadow-lg hover:shadow-green-500/20 hover:scale-105"
+                      className="group rounded-xl border border-white/20 bg-gradient-to-br from-green-500/10 to-green-600/5 backdrop-blur-sm p-5 sm:p-6 transition-all duration-300 hover:border-green-400/50 hover:shadow-lg hover:shadow-green-500/20 hover:scale-105"
                       type="button"
                     >
                       <div className="flex flex-col items-center gap-3">
-                        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-green-500/20 backdrop-blur-sm border border-green-400/30 group-hover:scale-110 transition-transform">
-                          <svg className="h-7 w-7 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div className="flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-full bg-green-500/20 backdrop-blur-sm border border-green-400/30 group-hover:scale-110 transition-transform">
+                          <svg className="h-6 w-6 sm:h-7 sm:w-7 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                           </svg>
                         </div>
-                        <span className="text-lg font-bold text-white">Men</span>
+                        <span className="text-base sm:text-lg font-bold text-white">{t.men}</span>
                       </div>
                     </button>
 
                     <button
                       onClick={() => setSelectedGender("women")}
-                      className="group rounded-xl border border-white/20 bg-gradient-to-br from-pink-500/10 to-pink-600/5 backdrop-blur-sm p-6 transition-all duration-300 hover:border-pink-400/50 hover:shadow-lg hover:shadow-pink-500/20 hover:scale-105"
+                      className="group rounded-xl border border-white/20 bg-gradient-to-br from-pink-500/10 to-pink-600/5 backdrop-blur-sm p-5 sm:p-6 transition-all duration-300 hover:border-pink-400/50 hover:shadow-lg hover:shadow-pink-500/20 hover:scale-105"
                       type="button"
                     >
                       <div className="flex flex-col items-center gap-3">
-                        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-pink-500/20 backdrop-blur-sm border border-pink-400/30 group-hover:scale-110 transition-transform">
-                          <svg className="h-7 w-7 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div className="flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-full bg-pink-500/20 backdrop-blur-sm border border-pink-400/30 group-hover:scale-110 transition-transform">
+                          <svg className="h-6 w-6 sm:h-7 sm:w-7 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                           </svg>
                         </div>
-                        <span className="text-lg font-bold text-white">Women</span>
+                        <span className="text-base sm:text-lg font-bold text-white">{t.women}</span>
                       </div>
                     </button>
                   </div>
@@ -601,8 +737,8 @@ export default function ProfileSetup() {
                 <>
                   <div className="group">
                     <label className="block text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wider">
-                      Select Your Team
-                      <span className="ml-2 text-xs normal-case text-slate-500">({selectedGender === "men" ? "Men's" : "Women's"} League)</span>
+                      {t.selectYourTeam}
+                      <span className="ml-2 text-xs normal-case text-slate-500">({selectedGender === "men" ? t.mensLeague : t.womensLeague})</span>
                     </label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
@@ -613,10 +749,10 @@ export default function ProfileSetup() {
                       <select
                         value={selectedTeamId}
                         onChange={(e) => setSelectedTeamId(e.target.value)}
-                        aria-label="Select Your Team"
-                        className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm pl-11 pr-4 py-3 text-white focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all duration-300 appearance-none cursor-pointer"
+                        aria-label={t.selectYourTeam}
+                        className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm pl-11 pr-4 py-3 text-sm sm:text-base text-white focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all duration-300 appearance-none cursor-pointer"
                       >
-                        <option value="" className="bg-slate-900">Choose a team...</option>
+                        <option value="" className="bg-slate-900">{t.chooseATeam}</option>
                         {teams.map((team) => (
                           <option key={team.id} value={team.id} className="bg-slate-900">
                             {team.name}
@@ -638,7 +774,7 @@ export default function ProfileSetup() {
                       className="mt-2 text-xs text-green-400 hover:text-green-300 transition-colors"
                       type="button"
                     >
-                      ← Change gender
+                      {t.changeGender}
                     </button>
                   </div>
 
@@ -646,7 +782,7 @@ export default function ProfileSetup() {
                   {selectedTeamId && !createOwnPlayer && (
                     <div className="group">
                       <label className="block text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wider">
-                        Select Your Name from Roster
+                        {t.selectPlayerStaff}
                       </label>
                       <div className="relative">
                         <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
@@ -657,10 +793,10 @@ export default function ProfileSetup() {
                         <select
                           value={selectedPersonId}
                           onChange={(e) => setSelectedPersonId(e.target.value)}
-                          aria-label="Select Your Name from Roster"
-                          className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm pl-11 pr-4 py-3 text-white focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all duration-300 appearance-none cursor-pointer"
+                          aria-label={t.selectPlayerStaff}
+                          className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm pl-11 pr-4 py-3 text-sm sm:text-base text-white focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all duration-300 appearance-none cursor-pointer"
                         >
-                          <option value="" className="bg-slate-900">Choose your name...</option>
+                          <option value="" className="bg-slate-900">{t.chooseYourName}</option>
                           {teamRoster.map((person) => (
                             <option key={person.id} value={person.id} className="bg-slate-900">
                               {person.name} {person.number ? `#${person.number}` : ""}
@@ -676,7 +812,7 @@ export default function ProfileSetup() {
                       
                       {/* "Can't find your name?" option */}
                       <div className="mt-3 text-center">
-                        <p className="text-xs text-slate-400 mb-2">Don&apos;t see your name in the roster?</p>
+                        <p className="text-xs text-slate-400 mb-2">{t.cantFindName}</p>
                         <button
                           onClick={() => {
                             setCreateOwnPlayer(true);
@@ -685,7 +821,7 @@ export default function ProfileSetup() {
                           className="text-sm text-blue-400 hover:text-blue-300 underline transition-colors"
                           type="button"
                         >
-                          Create your own player profile
+                          {t.createOwnProfile}
                         </button>
                       </div>
                     </div>

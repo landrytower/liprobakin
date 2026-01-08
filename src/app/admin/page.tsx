@@ -7814,9 +7814,6 @@ export default function AdminPage() {
                         <div key={referee.id} className="rounded-lg border border-white/10 bg-black/30 p-3 min-w-0">
                           <div className="mb-2">
                             <p className="text-sm font-semibold text-white">{referee.firstName} {referee.lastName}</p>
-                            {referee.certificationLevel && (
-                              <p className="text-xs text-slate-400">{referee.certificationLevel}</p>
-                            )}
                             {referee.phone && (
                               <p className="text-xs text-slate-400">{referee.phone}</p>
                             )}

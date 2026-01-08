@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useMemo } from 'react';
+import { useEffect, useRef, useMemo, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
 import { firebaseDB } from '@/lib/firebase';
@@ -107,11 +107,11 @@ export default function ArticleContent({ htmlContent, className = '' }: ArticleC
   const renderContent = () => {
     if (!cleanText) return null;
 
-    let content: (string | JSX.Element)[] = [cleanText];
+    let content: (string | ReactNode)[] = [cleanText];
     
     // Replace each mention with a clickable span
     mentions.forEach((mention) => {
-      const newContent: (string | JSX.Element)[] = [];
+      const newContent: (string | ReactNode)[] = [];
       
       content.forEach((part) => {
         if (typeof part === 'string') {

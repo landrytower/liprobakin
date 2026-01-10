@@ -115,25 +115,18 @@ export async function POST(request: NextRequest) {
       const coachRef = db.collection('teams').doc(userData.teamId)
         .collection('coachStaff').doc(userData.linkedCoachId);
       
-      await coachRef.update({
-        linkedUserId: FieldValue.delete(),
-        linkedUserEmail: FieldValue.delete(),
-        linkedAt: FieldValue.delete(),
-        verificationStatus: 'unverified',
-      });
-      console.log(`Unlinked coach: ${userData.linkedCoachId}`);
+      // Delete the coach profile from roster completely
+      await coachRef.delete();
+      console.log(`Deleted coach profile from roster: ${userData.linkedCoachId}`);
     }
 
     if (userData?.linkedStaffId && userData?.teamId) {
       const staffRef = db.collection('teams').doc(userData.teamId)
         .collection('staff').doc(userData.linkedStaffId);
       
-      await staffRef.update({
-        linkedUserId: FieldValue.delete(),
-        linkedUserEmail: FieldValue.delete(),
-        linkedAt: FieldValue.delete(),
-      });
-      console.log(`Unlinked staff: ${userData.linkedStaffId}`);
+      // Delete the staff profile from roster completely
+      await staffRef.delete();
+      console.log(`Deleted staff profile from roster: ${userData.linkedStaffId}`);
     }
 
     // 5. Delete from Firestore users collection

@@ -4969,7 +4969,8 @@ export default function AdminPage() {
 
                     {paginatedTeams.length ? (
                       <>
-                        <div className="grid gap-2.5 grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
+                        <div className="relative overflow-x-auto overflow-y-hidden pb-4 -mx-2 px-2" style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.2) transparent' }}>
+                          <div className="flex gap-3 min-w-min">
                           {paginatedTeams.map((team, teamIndex) => {
                           const isFirestore = teams.some(t => t.id === team.id);
                           const isTemplate = !isFirestore;
@@ -4977,7 +4978,7 @@ export default function AdminPage() {
                             <article
                               key={`${team.id}-${team.gender}-${teamIndex}`}
                               onClick={() => isFirestore && router.push(`/admin/edit-team/${team.id}`)}
-                              className={`group rounded-xl border transition-all duration-200 relative overflow-hidden aspect-square ${
+                              className={`group rounded-xl border transition-all duration-200 relative overflow-hidden flex-shrink-0 w-[140px] h-[140px] sm:w-[160px] sm:h-[160px] md:w-[180px] md:h-[180px] ${
                                 isTemplate
                                   ? "border-dashed border-white/15 bg-slate-900/30"
                                   : "border-white/10 bg-slate-900/50"
@@ -5007,6 +5008,7 @@ export default function AdminPage() {
                             </article>
                           );
                         })}
+                          </div>
                       </div>
                       
                       {/* Pagination Controls */}

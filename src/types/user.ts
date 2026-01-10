@@ -51,7 +51,7 @@ export interface VerificationRequest {
   userFirstName: string;
   userLastName: string;
   userPhone: string;
-  requestType: "claim_existing" | "create_new" | "update_headshot" | "update_name";
+  requestType: "claim_existing" | "create_new" | "update_headshot" | "update_name" | "claim_existing_coach" | "create_new_coach" | "create_new_staff";
   role: "player" | "coach" | "staff";
   teamId: string;
   teamName: string;
@@ -95,6 +95,25 @@ export interface VerificationRequest {
   newLastName?: string;
   previousFirstName?: string;
   previousLastName?: string;
+  // For claiming existing coach
+  existingCoachId?: string;
+  existingCoachName?: string;
+  existingCoachRole?: "head_coach" | "assistant_coach";
+  // For creating new coach
+  newCoachData?: {
+    firstName: string;
+    lastName: string;
+    coachType: "head_coach" | "assistant_coach";
+    headshotUrl?: string | null;
+  };
+  // For creating new staff
+  newStaffData?: {
+    firstName: string;
+    lastName: string;
+    position: string;
+    showOnRoster: boolean;
+    headshotUrl?: string | null;
+  };
   idImageUrl?: string;
   status: VerificationStatus;
   submittedAt: Date;

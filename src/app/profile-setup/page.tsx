@@ -75,6 +75,42 @@ const translations = {
     completeSetup: "Complete Setup",
     required: "*",
     cm: "cm",
+    // Coach/Staff specific translations
+    coachStaffSetup: "Coach / Staff Setup",
+    selectYourRole: "What is your role?",
+    coach: "Coach",
+    iAmACoachRole: "I am a head coach or assistant coach",
+    staff: "Team Staff",
+    iAmTeamStaff: "I am a team staff member",
+    headCoach: "Head Coach",
+    assistantCoach: "Assistant Coach",
+    selectCoachType: "Select coach type",
+    claimExistingCoach: "Claim Existing Coach Profile",
+    selectCoachToClaim: "Select a coach to claim...",
+    noCoachesToClaim: "No coaches available to claim",
+    createNewCoach: "Create New Coach Profile",
+    coachPositionsFull: "Head coach and both assistant positions are filled. Please register as staff.",
+    staffRole: "Staff Role",
+    selectStaffRole: "Select your role...",
+    president: "President",
+    vicePresident: "Vice President",
+    secretary: "Secretary",
+    treasurer: "Treasurer",
+    teamManager: "Team Manager",
+    mediaManager: "Media Manager",
+    equipmentManager: "Equipment Manager",
+    medicalStaff: "Medical Staff",
+    statistician: "Statistician",
+    simpleStaff: "Staff Member",
+    showOnRoster: "Show on Team Roster?",
+    showOnRosterYes: "Yes, show my profile on the team roster",
+    showOnRosterNo: "No, keep my profile private",
+    showOnRosterNote: "Your profile visibility will be approved by an administrator",
+    backToTeamSelection: "← Back to team selection",
+    backToCoachStaffChoice: "← Back to role selection",
+    coachSelected: "Coach selected",
+    createCoachProfile: "Create Coach Profile",
+    createStaffProfile: "Create Staff Profile",
   },
   fr: {
     completeYourProfile: "Complétez Votre Profil",
@@ -140,6 +176,42 @@ const translations = {
     completeSetup: "Terminer la Configuration",
     required: "*",
     cm: "cm",
+    // Coach/Staff specific translations
+    coachStaffSetup: "Configuration Entraîneur / Staff",
+    selectYourRole: "Quel est votre rôle ?",
+    coach: "Entraîneur",
+    iAmACoachRole: "Je suis entraîneur principal ou assistant",
+    staff: "Staff d'Équipe",
+    iAmTeamStaff: "Je suis membre du staff de l'équipe",
+    headCoach: "Entraîneur Principal",
+    assistantCoach: "Assistant Entraîneur",
+    selectCoachType: "Sélectionnez le type d'entraîneur",
+    claimExistingCoach: "Réclamer un Profil d'Entraîneur Existant",
+    selectCoachToClaim: "Sélectionnez un entraîneur à réclamer...",
+    noCoachesToClaim: "Aucun entraîneur disponible à réclamer",
+    createNewCoach: "Créer un Nouveau Profil d'Entraîneur",
+    coachPositionsFull: "Le poste d'entraîneur principal et les deux postes d'assistant sont occupés. Veuillez vous inscrire en tant que staff.",
+    staffRole: "Rôle Staff",
+    selectStaffRole: "Sélectionnez votre rôle...",
+    president: "Président",
+    vicePresident: "Vice-Président",
+    secretary: "Secrétaire",
+    treasurer: "Trésorier",
+    teamManager: "Manager d'Équipe",
+    mediaManager: "Responsable Médias",
+    equipmentManager: "Responsable Équipement",
+    medicalStaff: "Personnel Médical",
+    statistician: "Statisticien",
+    simpleStaff: "Membre du Staff",
+    showOnRoster: "Afficher sur le Roster de l'Équipe ?",
+    showOnRosterYes: "Oui, afficher mon profil sur le roster",
+    showOnRosterNo: "Non, garder mon profil privé",
+    showOnRosterNote: "La visibilité de votre profil sera approuvée par un administrateur",
+    backToTeamSelection: "← Retour à la sélection d'équipe",
+    backToCoachStaffChoice: "← Retour à la sélection du rôle",
+    coachSelected: "Entraîneur sélectionné",
+    createCoachProfile: "Créer un Profil d'Entraîneur",
+    createStaffProfile: "Créer un Profil Staff",
   },
 };
 
@@ -152,7 +224,7 @@ export default function ProfileSetup() {
   const [error, setError] = useState("");
 
   // Step 1: Role selection
-  const [step, setStep] = useState<"role" | "player-staff-setup" | "fan-setup" | "create-player">("role");
+  const [step, setStep] = useState<"role" | "player-staff-setup" | "coach-staff-setup" | "fan-setup" | "create-player">("role");
   const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
   const [createOwnPlayer, setCreateOwnPlayer] = useState(false);
 
@@ -163,6 +235,40 @@ export default function ProfileSetup() {
   const [teamRoster, setTeamRoster] = useState<Array<{ id: string; name: string; number?: string }>>([]);
   const [selectedPersonId, setSelectedPersonId] = useState("");
   const [idImage, setIdImage] = useState<File | null>(null);
+
+  // Coach/Staff specific state
+  type CoachStaffRole = "head_coach" | "assistant_coach";
+  type StaffPosition = "president" | "vice_president" | "secretary" | "treasurer" | "team_manager" | "media_manager" | "equipment_manager" | "medical_staff" | "statistician" | "staff_member";
+  
+  interface TeamCoach {
+    id: string;
+    firstName: string;
+    lastName: string;
+    role: CoachStaffRole;
+    headshot?: string;
+    claimed?: boolean;
+  }
+  
+  interface TeamStaff {
+    id: string;
+    firstName: string;
+    lastName: string;
+    position: StaffPosition;
+    headshot?: string;
+    claimed?: boolean;
+  }
+  
+  const [coachOrStaffChoice, setCoachOrStaffChoice] = useState<"coach" | "staff" | "">("");
+  const [teamCoaches, setTeamCoaches] = useState<TeamCoach[]>([]);
+  const [teamStaffMembers, setTeamStaffMembers] = useState<TeamStaff[]>([]);
+  const [selectedCoachId, setSelectedCoachId] = useState("");
+  const [createNewCoach, setCreateNewCoach] = useState(false);
+  const [coachType, setCoachType] = useState<CoachStaffRole | "">("");
+  const [staffPosition, setStaffPosition] = useState<StaffPosition | "">("");
+  const [showOnRoster, setShowOnRoster] = useState(true);
+  const [coachStaffFirstName, setCoachStaffFirstName] = useState("");
+  const [coachStaffLastName, setCoachStaffLastName] = useState("");
+  const [coachStaffPhoto, setCoachStaffPhoto] = useState<File | null>(null);
 
   // Custom player creation fields
   const [customFirstName, setCustomFirstName] = useState("");
@@ -237,13 +343,53 @@ export default function ProfileSetup() {
       } else if (step === "player-staff-setup" && selectedGender) {
         // Filter by selected gender for player/staff
         setTeams(allTeams.filter((team) => team.gender === selectedGender));
+      } else if (step === "coach-staff-setup" && selectedGender) {
+        // Filter by selected gender for coach/staff
+        setTeams(allTeams.filter((team) => team.gender === selectedGender));
       }
     };
 
-    if ((step === "player-staff-setup" && selectedGender) || step === "fan-setup") {
+    if ((step === "player-staff-setup" && selectedGender) || step === "fan-setup" || (step === "coach-staff-setup" && selectedGender)) {
       fetchTeams();
     }
   }, [step, selectedGender]);
+
+  // Fetch coaches and staff when team is selected for coach/staff setup
+  useEffect(() => {
+    const fetchTeamCoachesAndStaff = async () => {
+      if (!selectedTeamId || step !== "coach-staff-setup") return;
+
+      // Fetch coaches from the team's coaches subcollection
+      const coachesRef = collection(firebaseDB, "teams", selectedTeamId, "coaches");
+      const coachesSnapshot = await getDocs(coachesRef);
+      const coaches: TeamCoach[] = coachesSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        firstName: doc.data().firstName || "",
+        lastName: doc.data().lastName || "",
+        role: doc.data().role || "assistant_coach",
+        headshot: doc.data().headshot || "",
+        claimed: doc.data().claimed || false,
+      }));
+      setTeamCoaches(coaches);
+
+      // Fetch staff from the team's staff subcollection
+      const staffRef = collection(firebaseDB, "teams", selectedTeamId, "staff");
+      const staffSnapshot = await getDocs(staffRef);
+      const staffMembers: TeamStaff[] = staffSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        firstName: doc.data().firstName || "",
+        lastName: doc.data().lastName || "",
+        position: doc.data().position || "staff_member",
+        headshot: doc.data().headshot || "",
+        claimed: doc.data().claimed || false,
+      }));
+      setTeamStaffMembers(staffMembers);
+    };
+
+    if (selectedTeamId && step === "coach-staff-setup") {
+      fetchTeamCoachesAndStaff();
+    }
+  }, [selectedTeamId, step]);
 
   useEffect(() => {
     // Fetch team roster when team is selected
@@ -349,6 +495,8 @@ export default function ProfileSetup() {
     setSelectedRole(role);
     if (role === "fan") {
       setStep("fan-setup");
+    } else if (role === "coach" || role === "staff") {
+      setStep("coach-staff-setup");
     } else {
       setStep("player-staff-setup");
     }
@@ -436,7 +584,9 @@ export default function ProfileSetup() {
       // Upload headshot photo if provided
       let headshotUrl = "";
       if (headshotPhoto) {
-        const headshotRef = ref(firebaseStorage, `headshots/${user.uid}/${headshotPhoto.name}`);
+        const playerFullName = `${customFirstName}_${customLastName}`.replace(/\s+/g, '_');
+        const fileExtension = headshotPhoto.name.split('.').pop();
+        const headshotRef = ref(firebaseStorage, `player-headshots/${playerFullName}_${Date.now()}.${fileExtension}`);
         await uploadBytes(headshotRef, headshotPhoto);
         headshotUrl = await getDownloadURL(headshotRef);
       }
@@ -563,6 +713,239 @@ export default function ProfileSetup() {
       setLoading(false);
     }
   };
+
+  // Handle claiming an existing coach profile
+  const handleClaimCoachSubmit = async () => {
+    if (!user || !selectedTeamId || !selectedCoachId || !idImage) {
+      setError("Please complete all fields including ID upload");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
+    try {
+      // Upload ID image
+      const storageRef = ref(firebaseStorage, `verification/${user.uid}/${idImage.name}`);
+      await uploadBytes(storageRef, idImage);
+      const idImageUrl = await getDownloadURL(storageRef);
+
+      const selectedTeam = teams.find((t) => t.id === selectedTeamId);
+      const selectedCoach = teamCoaches.find((c) => c.id === selectedCoachId);
+
+      // Update user profile
+      await updateDoc(doc(firebaseDB, "users", user.uid), {
+        role: "coach",
+        teamId: selectedTeamId,
+        teamName: selectedTeam?.name || "",
+        verificationStatus: "pending",
+        verificationImageUrl: idImageUrl,
+        verificationSubmittedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      // Create verification request for CLAIMING EXISTING COACH
+      await addDoc(collection(firebaseDB, "verificationRequests"), {
+        userId: user.uid,
+        userEmail: user.email || userProfile?.email || "",
+        userFirstName: userProfile?.firstName || "",
+        userLastName: userProfile?.lastName || "",
+        userPhone: userProfile?.phoneNumber || "",
+        role: "coach",
+        teamId: selectedTeamId,
+        teamName: selectedTeam?.name || "",
+        teamGender: selectedGender,
+        requestType: "claim_existing_coach",
+        existingCoachId: selectedCoachId,
+        existingCoachName: `${selectedCoach?.firstName} ${selectedCoach?.lastName}`,
+        existingCoachRole: selectedCoach?.role,
+        idImageUrl,
+        status: "pending",
+        submittedAt: serverTimestamp(),
+      });
+
+      await refreshUserProfile();
+      router.push("/verification-pending");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle creating a new coach profile
+  const handleCreateCoachSubmit = async () => {
+    if (!user || !selectedTeamId || !coachStaffFirstName || !coachStaffLastName || !coachType) {
+      setError("Please complete all required fields");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
+    try {
+      // Upload ID image if provided
+      let idImageUrl = "";
+      if (idImage) {
+        const storageRef = ref(firebaseStorage, `verification/${user.uid}/${idImage.name}`);
+        await uploadBytes(storageRef, idImage);
+        idImageUrl = await getDownloadURL(storageRef);
+      }
+
+      // Upload headshot photo if provided
+      let headshotUrl = "";
+      if (coachStaffPhoto) {
+        const coachFullName = `${userProfile.firstName}_${userProfile.lastName}`.replace(/\s+/g, '_');
+        const fileExtension = coachStaffPhoto.name.split('.').pop();
+        const headshotRef = ref(firebaseStorage, `coach-headshots/${coachFullName}_${Date.now()}.${fileExtension}`);
+        await uploadBytes(headshotRef, coachStaffPhoto);
+        headshotUrl = await getDownloadURL(headshotRef);
+      }
+
+      const selectedTeam = teams.find((t) => t.id === selectedTeamId);
+
+      // Update user profile
+      await updateDoc(doc(firebaseDB, "users", user.uid), {
+        role: "coach",
+        teamId: selectedTeamId,
+        teamName: selectedTeam?.name || "",
+        verificationStatus: "pending",
+        verificationImageUrl: idImageUrl || null,
+        verificationSubmittedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      // Create verification request for CREATING NEW COACH
+      await addDoc(collection(firebaseDB, "verificationRequests"), {
+        userId: user.uid,
+        userEmail: user.email || userProfile?.email || "",
+        userFirstName: userProfile?.firstName || "",
+        userLastName: userProfile?.lastName || "",
+        userPhone: userProfile?.phoneNumber || "",
+        role: "coach",
+        teamId: selectedTeamId,
+        teamName: selectedTeam?.name || "",
+        teamGender: selectedGender,
+        requestType: "create_new_coach",
+        newCoachData: {
+          firstName: coachStaffFirstName,
+          lastName: coachStaffLastName,
+          coachType: coachType,
+          headshotUrl: headshotUrl || null,
+        },
+        idImageUrl: idImageUrl || null,
+        status: "pending",
+        submittedAt: serverTimestamp(),
+      });
+
+      await refreshUserProfile();
+      router.push("/verification-pending");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle creating a staff profile
+  const handleCreateStaffSubmit = async () => {
+    if (!user || !selectedTeamId || !coachStaffFirstName || !coachStaffLastName || !staffPosition) {
+      setError("Please complete all required fields");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
+    try {
+      // Upload ID image if provided
+      let idImageUrl = "";
+      if (idImage) {
+        const storageRef = ref(firebaseStorage, `verification/${user.uid}/${idImage.name}`);
+        await uploadBytes(storageRef, idImage);
+        idImageUrl = await getDownloadURL(storageRef);
+      }
+
+      // Upload headshot photo if provided
+      let headshotUrl = "";
+      if (coachStaffPhoto) {
+        const staffFullName = `${userProfile.firstName}_${userProfile.lastName}`.replace(/\s+/g, '_');
+        const fileExtension = coachStaffPhoto.name.split('.').pop();
+        const headshotRef = ref(firebaseStorage, `staff-headshots/${staffFullName}_${staffPosition}_${Date.now()}.${fileExtension}`);
+        await uploadBytes(headshotRef, coachStaffPhoto);
+        headshotUrl = await getDownloadURL(headshotRef);
+      }
+
+      const selectedTeam = teams.find((t) => t.id === selectedTeamId);
+
+      // Update user profile
+      await updateDoc(doc(firebaseDB, "users", user.uid), {
+        role: "staff",
+        teamId: selectedTeamId,
+        teamName: selectedTeam?.name || "",
+        verificationStatus: "pending",
+        verificationImageUrl: idImageUrl || null,
+        verificationSubmittedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      // Create verification request for CREATING NEW STAFF
+      await addDoc(collection(firebaseDB, "verificationRequests"), {
+        userId: user.uid,
+        userEmail: user.email || userProfile?.email || "",
+        userFirstName: userProfile?.firstName || "",
+        userLastName: userProfile?.lastName || "",
+        userPhone: userProfile?.phoneNumber || "",
+        role: "staff",
+        teamId: selectedTeamId,
+        teamName: selectedTeam?.name || "",
+        teamGender: selectedGender,
+        requestType: "create_new_staff",
+        newStaffData: {
+          firstName: coachStaffFirstName,
+          lastName: coachStaffLastName,
+          position: staffPosition,
+          showOnRoster: showOnRoster,
+          headshotUrl: headshotUrl || null,
+        },
+        idImageUrl: idImageUrl || null,
+        status: "pending",
+        submittedAt: serverTimestamp(),
+      });
+
+      await refreshUserProfile();
+      router.push("/verification-pending");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Check if team has room for more coaches
+  const getAvailableCoachPositions = () => {
+    const headCoaches = teamCoaches.filter(c => c.role === "head_coach");
+    const assistantCoaches = teamCoaches.filter(c => c.role === "assistant_coach");
+    
+    const canAddHeadCoach = headCoaches.length === 0;
+    const canAddAssistant = assistantCoaches.length < 2;
+    
+    return { canAddHeadCoach, canAddAssistant, coachPositionsFull: !canAddHeadCoach && !canAddAssistant };
+  };
+
+  // Staff positions list
+  const staffPositions: { value: StaffPosition; label: string }[] = [
+    { value: "president", label: t.president },
+    { value: "vice_president", label: t.vicePresident },
+    { value: "secretary", label: t.secretary },
+    { value: "treasurer", label: t.treasurer },
+    { value: "team_manager", label: t.teamManager },
+    { value: "media_manager", label: t.mediaManager },
+    { value: "equipment_manager", label: t.equipmentManager },
+    { value: "medical_staff", label: t.medicalStaff },
+    { value: "statistician", label: t.statistician },
+    { value: "staff_member", label: t.simpleStaff },
+  ];
 
   // Height conversion utility
   const cmToFeetInches = (cm: number): string => {
@@ -1133,6 +1516,623 @@ export default function ProfileSetup() {
                     </button>
                   )}
                 </>
+              )}
+            </div>
+          )}
+
+          {step === "coach-staff-setup" && (
+            <div className="space-y-6">
+              {/* Verification Notice */}
+              <div className="rounded-xl border border-blue-400/50 bg-gradient-to-br from-blue-500/10 to-blue-600/5 backdrop-blur-sm p-4 flex items-start gap-3">
+                <svg className="h-5 w-5 text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div className="text-sm">
+                  <p className="font-semibold text-blue-300 mb-1">{t.verificationRequired}</p>
+                  <p className="text-blue-200/80">{t.accountWillBeReviewed}</p>
+                </div>
+              </div>
+
+              {/* STEP 1: Gender Selection */}
+              {!selectedGender && (
+                <div className="space-y-4">
+                  <div className="text-center mb-4">
+                    <h3 className="text-base sm:text-lg font-semibold text-white mb-1">{t.selectGender}</h3>
+                    <p className="text-sm text-slate-400">{t.chooseToSeeTeams}</p>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <button
+                      onClick={() => setSelectedGender("men")}
+                      className="group rounded-xl border border-white/20 bg-gradient-to-br from-blue-500/10 to-blue-600/5 backdrop-blur-sm p-5 sm:p-6 transition-all duration-300 hover:border-blue-400/50 hover:shadow-lg hover:shadow-blue-500/20 hover:scale-105"
+                      type="button"
+                    >
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-full bg-blue-500/20 backdrop-blur-sm border border-blue-400/30 group-hover:scale-110 transition-transform">
+                          <svg className="h-6 w-6 sm:h-7 sm:w-7 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                          </svg>
+                        </div>
+                        <span className="text-base sm:text-lg font-bold text-white">{t.men}</span>
+                      </div>
+                    </button>
+
+                    <button
+                      onClick={() => setSelectedGender("women")}
+                      className="group rounded-xl border border-white/20 bg-gradient-to-br from-pink-500/10 to-pink-600/5 backdrop-blur-sm p-5 sm:p-6 transition-all duration-300 hover:border-pink-400/50 hover:shadow-lg hover:shadow-pink-500/20 hover:scale-105"
+                      type="button"
+                    >
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-full bg-pink-500/20 backdrop-blur-sm border border-pink-400/30 group-hover:scale-110 transition-transform">
+                          <svg className="h-6 w-6 sm:h-7 sm:w-7 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                          </svg>
+                        </div>
+                        <span className="text-base sm:text-lg font-bold text-white">{t.women}</span>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 2: Team Selection for Coach/Staff */}
+              {selectedGender && !selectedTeamId && (
+                <div className="space-y-4">
+                  <div className="group">
+                    <label className="block text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wider">
+                      {t.selectYourTeam}
+                      <span className="ml-2 text-xs normal-case text-slate-500">({selectedGender === "men" ? t.mensLeague : t.womensLeague})</span>
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
+                        <svg className="h-4 w-4 text-slate-400 group-focus-within:text-blue-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                        </svg>
+                      </div>
+                      <select
+                        value={selectedTeamId}
+                        onChange={(e) => {
+                          setSelectedTeamId(e.target.value);
+                          setCoachOrStaffChoice("");
+                          setSelectedCoachId("");
+                          setCreateNewCoach(false);
+                        }}
+                        aria-label={t.selectYourTeam}
+                        className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm pl-11 pr-4 py-3 text-sm sm:text-base text-white focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all duration-300 appearance-none cursor-pointer"
+                      >
+                        <option value="" className="bg-slate-900">{t.chooseATeam}</option>
+                        {teams.map((team) => (
+                          <option key={team.id} value={team.id} className="bg-slate-900">
+                            {team.name}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none">
+                        <svg className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setSelectedGender("");
+                        setSelectedTeamId("");
+                        setCoachOrStaffChoice("");
+                      }}
+                      className="mt-2 text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                      type="button"
+                    >
+                      {t.changeGender}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 3: Coach or Staff Choice */}
+              {selectedTeamId && !coachOrStaffChoice && (
+                <div className="space-y-4">
+                  <div className="text-center mb-4">
+                    <h3 className="text-base sm:text-lg font-semibold text-white mb-1">{t.selectYourRole}</h3>
+                  </div>
+                  
+                  {/* Show coach positions status */}
+                  {(() => {
+                    const { coachPositionsFull } = getAvailableCoachPositions();
+                    return coachPositionsFull ? (
+                      <div className="rounded-xl border border-yellow-400/50 bg-gradient-to-br from-yellow-500/10 to-yellow-600/5 backdrop-blur-sm p-4 flex items-start gap-3 mb-4">
+                        <svg className="h-5 w-5 text-yellow-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        <div className="text-sm">
+                          <p className="text-yellow-200/80">{t.coachPositionsFull}</p>
+                        </div>
+                      </div>
+                    ) : null;
+                  })()}
+
+                  <div className="grid gap-4">
+                    {/* Coach Option - disabled if positions are full */}
+                    {(() => {
+                      const { coachPositionsFull } = getAvailableCoachPositions();
+                      return (
+                        <button
+                          onClick={() => !coachPositionsFull && setCoachOrStaffChoice("coach")}
+                          disabled={coachPositionsFull}
+                          className={`group relative overflow-hidden rounded-2xl border border-white/20 bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-sm p-5 sm:p-6 text-left transition-all duration-300 ${
+                            coachPositionsFull 
+                              ? "opacity-50 cursor-not-allowed" 
+                              : "hover:border-blue-400/50 hover:shadow-lg hover:shadow-blue-500/20 hover:scale-[1.02]"
+                          }`}
+                          type="button"
+                        >
+                          <div className="flex items-start gap-3 sm:gap-4">
+                            <div className="flex h-10 w-10 sm:h-12 sm:w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-600/20 backdrop-blur-sm border border-white/20 group-hover:scale-110 transition-transform">
+                              <svg className="h-5 w-5 sm:h-6 sm:w-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                              </svg>
+                            </div>
+                            <div className="flex-1">
+                              <h3 className="text-lg sm:text-xl font-bold text-white mb-1">{t.coach}</h3>
+                              <p className="text-sm text-slate-400">{t.iAmACoachRole}</p>
+                            </div>
+                            <svg className="h-5 w-5 text-slate-400 group-hover:text-blue-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          </div>
+                        </button>
+                      );
+                    })()}
+
+                    {/* Staff Option */}
+                    <button
+                      onClick={() => setCoachOrStaffChoice("staff")}
+                      className="group relative overflow-hidden rounded-2xl border border-white/20 bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-sm p-5 sm:p-6 text-left transition-all duration-300 hover:border-purple-400/50 hover:shadow-lg hover:shadow-purple-500/20 hover:scale-[1.02]"
+                      type="button"
+                    >
+                      <div className="flex items-start gap-3 sm:gap-4">
+                        <div className="flex h-10 w-10 sm:h-12 sm:w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-purple-500/20 to-purple-600/20 backdrop-blur-sm border border-white/20 group-hover:scale-110 transition-transform">
+                          <svg className="h-5 w-5 sm:h-6 sm:w-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                          </svg>
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="text-lg sm:text-xl font-bold text-white mb-1">{t.staff}</h3>
+                          <p className="text-sm text-slate-400">{t.iAmTeamStaff}</p>
+                        </div>
+                        <svg className="h-5 w-5 text-slate-400 group-hover:text-purple-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </div>
+                    </button>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setSelectedTeamId("");
+                      setCoachOrStaffChoice("");
+                    }}
+                    className="mt-2 text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                    type="button"
+                  >
+                    {t.backToTeamSelection}
+                  </button>
+                </div>
+              )}
+
+              {/* STEP 4A: Coach Setup */}
+              {selectedTeamId && coachOrStaffChoice === "coach" && (
+                <div className="space-y-4">
+                  {/* Option to claim existing coach */}
+                  {teamCoaches.filter(c => !c.claimed).length > 0 && !createNewCoach && (
+                    <div className="space-y-4">
+                      <div className="group">
+                        <label className="block text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wider">
+                          {t.claimExistingCoach}
+                        </label>
+                        <div className="relative">
+                          <select
+                            value={selectedCoachId}
+                            onChange={(e) => setSelectedCoachId(e.target.value)}
+                            aria-label={t.claimExistingCoach}
+                            className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-sm sm:text-base text-white focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all duration-300 appearance-none cursor-pointer"
+                          >
+                            <option value="" className="bg-slate-900">{t.selectCoachToClaim}</option>
+                            {teamCoaches.filter(c => !c.claimed).map((coach) => (
+                              <option key={coach.id} value={coach.id} className="bg-slate-900">
+                                {coach.firstName} {coach.lastName} - {coach.role === "head_coach" ? t.headCoach : t.assistantCoach}
+                              </option>
+                            ))}
+                          </select>
+                          <div className="absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none">
+                            <svg className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </div>
+                        </div>
+                        {selectedCoachId && (
+                          <div className="mt-2 flex items-center gap-2 text-xs text-green-400">
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                            <span>{t.coachSelected}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* ID Upload for claiming coach */}
+                      {selectedCoachId && (
+                        <div className="group">
+                          <label className="block text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wider">
+                            {t.uploadIdVerification} <span className="text-red-400">*</span>
+                          </label>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => setIdImage(e.target.files?.[0] || null)}
+                            className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white file:mr-4 file:rounded-lg file:border-0 file:bg-gradient-to-r file:from-blue-500 file:to-purple-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:shadow-lg transition-all cursor-pointer focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30"
+                          />
+                          <p className="mt-1 text-xs text-slate-400">{t.uploadIdHelper}</p>
+                        </div>
+                      )}
+
+                      {/* Submit for claiming coach */}
+                      {selectedCoachId && idImage && (
+                        <button
+                          onClick={handleClaimCoachSubmit}
+                          disabled={loading}
+                          className="group relative w-full overflow-hidden rounded-xl bg-gradient-to-r from-blue-600 to-blue-800 px-4 py-4 font-bold text-white shadow-lg shadow-blue-500/50 transition-all duration-300 hover:shadow-xl hover:shadow-blue-500/60 hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                          type="button"
+                        >
+                          <span className="relative z-10 flex items-center justify-center gap-2">
+                            {loading ? (
+                              <>
+                                <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                </svg>
+                                <span>{t.submitting}</span>
+                              </>
+                            ) : (
+                              <>
+                                <span>{t.submitForVerification}</span>
+                                <svg className="h-5 w-5 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                                </svg>
+                              </>
+                            )}
+                          </span>
+                        </button>
+                      )}
+
+                      <div className="text-center mt-4">
+                        <p className="text-xs text-slate-400 mb-2">{t.cantFindName}</p>
+                        <button
+                          onClick={() => {
+                            setCreateNewCoach(true);
+                            setSelectedCoachId("");
+                            setCoachStaffFirstName(userProfile?.firstName || "");
+                            setCoachStaffLastName(userProfile?.lastName || "");
+                          }}
+                          className="text-sm text-blue-400 hover:text-blue-300 underline transition-colors"
+                          type="button"
+                        >
+                          {t.createNewCoach}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Create New Coach Form */}
+                  {(createNewCoach || teamCoaches.filter(c => !c.claimed).length === 0) && (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-semibold text-white">{t.createCoachProfile}</h3>
+                        {teamCoaches.filter(c => !c.claimed).length > 0 && (
+                          <button
+                            onClick={() => {
+                              setCreateNewCoach(false);
+                              setCoachStaffFirstName("");
+                              setCoachStaffLastName("");
+                              setCoachType("");
+                            }}
+                            className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                            type="button"
+                          >
+                            {t.backToRoster}
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Name Fields */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-300 mb-2">
+                            {t.firstName} <span className="text-red-400">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={coachStaffFirstName}
+                            onChange={(e) => setCoachStaffFirstName(e.target.value)}
+                            className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-300 mb-2">
+                            {t.lastName} <span className="text-red-400">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={coachStaffLastName}
+                            onChange={(e) => setCoachStaffLastName(e.target.value)}
+                            className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all"
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      {/* Coach Type Selection */}
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-2">
+                          {t.selectCoachType} <span className="text-red-400">*</span>
+                        </label>
+                        <select
+                          value={coachType}
+                          onChange={(e) => setCoachType(e.target.value as CoachStaffRole)}
+                          className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all appearance-none cursor-pointer"
+                          required
+                        >
+                          <option value="" className="bg-slate-900">{t.selectCoachType}</option>
+                          {(() => {
+                            const { canAddHeadCoach, canAddAssistant } = getAvailableCoachPositions();
+                            return (
+                              <>
+                                {canAddHeadCoach && (
+                                  <option value="head_coach" className="bg-slate-900">{t.headCoach}</option>
+                                )}
+                                {canAddAssistant && (
+                                  <option value="assistant_coach" className="bg-slate-900">{t.assistantCoach}</option>
+                                )}
+                              </>
+                            );
+                          })()}
+                        </select>
+                      </div>
+
+                      {/* Headshot Photo Upload */}
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-2">
+                          {t.headshotPhoto} <span className="text-xs text-slate-500">({t.optional})</span>
+                        </label>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => setCoachStaffPhoto(e.target.files?.[0] || null)}
+                          className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white file:mr-4 file:rounded-lg file:border-0 file:bg-gradient-to-r file:from-blue-500 file:to-purple-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:shadow-lg transition-all cursor-pointer focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30"
+                        />
+                        <p className="mt-1 text-xs text-slate-400">{t.uploadHeadshotPhoto}</p>
+                      </div>
+
+                      {/* ID Upload */}
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-2">
+                          {t.uploadIdVerification} <span className="text-xs text-slate-500">({t.optional})</span>
+                        </label>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => setIdImage(e.target.files?.[0] || null)}
+                          className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white file:mr-4 file:rounded-lg file:border-0 file:bg-gradient-to-r file:from-blue-500 file:to-purple-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:shadow-lg transition-all cursor-pointer focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30"
+                        />
+                        <p className="mt-1 text-xs text-slate-400">{t.uploadIdHelper}</p>
+                      </div>
+
+                      {/* Submit Button */}
+                      <button
+                        onClick={handleCreateCoachSubmit}
+                        disabled={loading || !coachStaffFirstName || !coachStaffLastName || !coachType}
+                        className="group relative w-full overflow-hidden rounded-xl bg-gradient-to-r from-blue-600 to-blue-800 px-4 py-4 font-bold text-white shadow-lg shadow-blue-500/50 transition-all duration-300 hover:shadow-xl hover:shadow-blue-500/60 hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                        type="button"
+                      >
+                        <span className="relative z-10 flex items-center justify-center gap-2">
+                          {loading ? (
+                            <>
+                              <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                              </svg>
+                              <span>{t.submitting}</span>
+                            </>
+                          ) : (
+                            <>
+                              <span>{t.submitForVerification}</span>
+                              <svg className="h-5 w-5 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                              </svg>
+                            </>
+                          )}
+                        </span>
+                      </button>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={() => {
+                      setCoachOrStaffChoice("");
+                      setSelectedCoachId("");
+                      setCreateNewCoach(false);
+                    }}
+                    className="mt-2 text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                    type="button"
+                  >
+                    {t.backToCoachStaffChoice}
+                  </button>
+                </div>
+              )}
+
+              {/* STEP 4B: Staff Setup */}
+              {selectedTeamId && coachOrStaffChoice === "staff" && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-white">{t.createStaffProfile}</h3>
+                  </div>
+
+                  {/* Name Fields */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-2">
+                        {t.firstName} <span className="text-red-400">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={coachStaffFirstName}
+                        onChange={(e) => setCoachStaffFirstName(e.target.value)}
+                        placeholder={userProfile?.firstName || ""}
+                        className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white focus:border-purple-400/50 focus:outline-none focus:ring-2 focus:ring-purple-400/30 transition-all"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-2">
+                        {t.lastName} <span className="text-red-400">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={coachStaffLastName}
+                        onChange={(e) => setCoachStaffLastName(e.target.value)}
+                        placeholder={userProfile?.lastName || ""}
+                        className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white focus:border-purple-400/50 focus:outline-none focus:ring-2 focus:ring-purple-400/30 transition-all"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  {/* Staff Position Selection */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-2">
+                      {t.staffRole} <span className="text-red-400">*</span>
+                    </label>
+                    <select
+                      value={staffPosition}
+                      onChange={(e) => setStaffPosition(e.target.value as StaffPosition)}
+                      className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white focus:border-purple-400/50 focus:outline-none focus:ring-2 focus:ring-purple-400/30 transition-all appearance-none cursor-pointer"
+                      required
+                    >
+                      <option value="" className="bg-slate-900">{t.selectStaffRole}</option>
+                      {staffPositions.map((pos) => (
+                        <option key={pos.value} value={pos.value} className="bg-slate-900">
+                          {pos.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Show on Roster Toggle */}
+                  <div className="rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm p-4">
+                    <label className="block text-xs font-semibold text-slate-300 mb-3">
+                      {t.showOnRoster}
+                    </label>
+                    <div className="space-y-3">
+                      <label className="flex items-center gap-3 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="showOnRoster"
+                          checked={showOnRoster === true}
+                          onChange={() => setShowOnRoster(true)}
+                          className="h-4 w-4 text-purple-500 border-white/20 bg-white/5 focus:ring-purple-400"
+                        />
+                        <span className="text-sm text-white">{t.showOnRosterYes}</span>
+                      </label>
+                      <label className="flex items-center gap-3 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="showOnRoster"
+                          checked={showOnRoster === false}
+                          onChange={() => setShowOnRoster(false)}
+                          className="h-4 w-4 text-purple-500 border-white/20 bg-white/5 focus:ring-purple-400"
+                        />
+                        <span className="text-sm text-white">{t.showOnRosterNo}</span>
+                      </label>
+                    </div>
+                    <p className="mt-2 text-xs text-slate-400">{t.showOnRosterNote}</p>
+                  </div>
+
+                  {/* Headshot Photo Upload */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-2">
+                      {t.headshotPhoto} <span className="text-xs text-slate-500">({t.optional})</span>
+                    </label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setCoachStaffPhoto(e.target.files?.[0] || null)}
+                      className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white file:mr-4 file:rounded-lg file:border-0 file:bg-gradient-to-r file:from-purple-500 file:to-purple-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:shadow-lg transition-all cursor-pointer focus:border-purple-400/50 focus:outline-none focus:ring-2 focus:ring-purple-400/30"
+                    />
+                    <p className="mt-1 text-xs text-slate-400">{t.uploadHeadshotPhoto}</p>
+                  </div>
+
+                  {/* ID Upload */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-2">
+                      {t.uploadIdVerification} <span className="text-xs text-slate-500">({t.optional})</span>
+                    </label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setIdImage(e.target.files?.[0] || null)}
+                      className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white file:mr-4 file:rounded-lg file:border-0 file:bg-gradient-to-r file:from-purple-500 file:to-purple-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:shadow-lg transition-all cursor-pointer focus:border-purple-400/50 focus:outline-none focus:ring-2 focus:ring-purple-400/30"
+                    />
+                    <p className="mt-1 text-xs text-slate-400">{t.uploadIdHelper}</p>
+                  </div>
+
+                  {error && (
+                    <div className="rounded-xl border border-red-400/50 bg-red-500/10 backdrop-blur-sm p-4 flex items-start gap-3 animate-in slide-in-from-top-2 duration-300">
+                      <svg className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <p className="text-sm text-red-300">{error}</p>
+                    </div>
+                  )}
+
+                  {/* Submit Button */}
+                  <button
+                    onClick={handleCreateStaffSubmit}
+                    disabled={loading || !coachStaffFirstName || !coachStaffLastName || !staffPosition}
+                    className="group relative w-full overflow-hidden rounded-xl bg-gradient-to-r from-purple-600 to-purple-800 px-4 py-4 font-bold text-white shadow-lg shadow-purple-500/50 transition-all duration-300 hover:shadow-xl hover:shadow-purple-500/60 hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                    type="button"
+                  >
+                    <span className="relative z-10 flex items-center justify-center gap-2">
+                      {loading ? (
+                        <>
+                          <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                          </svg>
+                          <span>{t.submitting}</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>{t.submitForVerification}</span>
+                          <svg className="h-5 w-5 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                          </svg>
+                        </>
+                      )}
+                    </span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setCoachOrStaffChoice("");
+                      setStaffPosition("");
+                      setCoachStaffFirstName("");
+                      setCoachStaffLastName("");
+                    }}
+                    className="mt-2 text-xs text-purple-400 hover:text-purple-300 transition-colors"
+                    type="button"
+                  >
+                    {t.backToCoachStaffChoice}
+                  </button>
+                </div>
               )}
             </div>
           )}

@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cleanup Admin Accounts - LIPROBAKIN</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #0f0f1e 100%);
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .container {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      padding: 40px;
+      max-width: 600px;
+      width: 100%;
+      backdrop-filter: blur(10px);
+    }
+    h1 {
+      font-size: 32px;
+      margin-bottom: 10px;
+      color: #60a5fa;
+    }
+    .subtitle {
+      color: #9ca3af;
+      margin-bottom: 30px;
+    }
+    button {
+      background: #60a5fa;
+      color: #000;
+      border: none;
+      padding: 14px 32px;
+      font-size: 16px;
+      font-weight: 600;
+      border-radius: 8px;
+      cursor: pointer;
+      width: 100%;
+      transition: all 0.2s;
+      margin-top: 10px;
+    }
+    button:hover {
+      background: #3b82f6;
+      transform: translateY(-2px);
+    }
+    button:disabled {
+      background: #4b5563;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .status {
+      padding: 16px;
+      border-radius: 8px;
+      margin-top: 20px;
+      display: none;
+    }
+    .status.success {
+      background: rgba(34, 197, 94, 0.1);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      color: #86efac;
+      display: block;
+    }
+    .status.error {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #fca5a5;
+      display: block;
+    }
+    .status.info {
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      color: #93c5fd;
+      display: block;
+    }
+    pre {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 12px;
+      border-radius: 8px;
+      overflow-x: auto;
+      font-size: 12px;
+      margin-top: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🧹 Cleanup Admin Accounts</h1>
+    <p class="subtitle">Remove duplicate admin documents for bobiyatch@gmail.com</p>
+
+    <button id="cleanupBtn" onclick="cleanupAdmin()">Remove Duplicates & Fix Account</button>
+    
+    <div id="status" class="status"></div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+    import { getAuth, signInWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+    import { getFirestore, collection, query, where, getDocs, doc, setDoc, deleteDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyApCmWDWPfmBwVAOvNAu3_CSVCqGycN5OE",
+      authDomain: "ppop-35930.firebaseapp.com",
+      databaseURL: "https://ppop-35930-default-rtdb.firebaseio.com",
+      projectId: "ppop-35930",
+      storageBucket: "ppop-35930.firebasestorage.app",
+      messagingSenderId: "478592036466",
+      appId: "1:478592036466:web:f149e594436026717adceb",
+      measurementId: "G-YJY5T6TD8E"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    window.cleanupAdmin = async function() {
+      const btn = document.getElementById('cleanupBtn');
+      const statusDiv = document.getElementById('status');
+      
+      btn.disabled = true;
+      btn.textContent = 'Cleaning up...';
+      statusDiv.className = 'status info';
+      statusDiv.textContent = '⏳ Starting cleanup process...';
+
+      const email = 'bobiyatch@gmail.com';
+      const password = '123456';
+
+      try {
+        // Step 1: Sign in to get the actual user ID
+        statusDiv.textContent = '⏳ Signing in to get user ID...';
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        const userId = userCredential.user.uid;
+        
+        statusDiv.innerHTML = `⏳ Found user ID: <code>${userId}</code>`;
+
+        // Step 2: Query all adminUsers documents with this email
+        statusDiv.textContent = '⏳ Finding all admin documents...';
+        const adminQuery = query(collection(db, 'adminUsers'), where('email', '==', email));
+        const adminDocs = await getDocs(adminQuery);
+        
+        statusDiv.innerHTML = `⏳ Found ${adminDocs.size} admin document(s)<pre>${JSON.stringify(
+          adminDocs.docs.map(d => ({ id: d.id, data: d.data() })), null, 2
+        )}</pre>`;
+
+        // Step 3: Delete all documents except the one matching the actual userId
+        let deletedCount = 0;
+        for (const adminDoc of adminDocs.docs) {
+          if (adminDoc.id !== userId) {
+            await deleteDoc(doc(db, 'adminUsers', adminDoc.id));
+            deletedCount++;
+            console.log('Deleted duplicate:', adminDoc.id);
+          }
+        }
+
+        statusDiv.textContent = `⏳ Deleted ${deletedCount} duplicate(s). Creating/updating correct admin document...`;
+
+        // Step 4: Create/update the correct admin document
+        await setDoc(doc(db, 'adminUsers', userId), {
+          uid: userId,
+          email: email,
+          displayName: 'bobiyatch',
+          roles: ['master'],
+          permissions: {
+            canManageNews: true,
+            canManageGames: true,
+            canManageTeams: true,
+            canManagePlayers: true,
+            canManageAdmins: true,
+            canViewAuditLogs: true,
+            canManageSettings: true,
+            canManageReferees: true,
+            canManageVenues: true,
+            canManagePartners: true
+          },
+          status: 'active',
+          isActive: true,
+          isFirstLogin: false,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+
+        statusDiv.className = 'status success';
+        statusDiv.innerHTML = `
+          <div style="font-size: 24px; margin-bottom: 12px;">✨ Success!</div>
+          <div>Admin account cleaned up successfully.</div>
+          <div style="margin-top: 12px;">
+            <strong>User ID:</strong> ${userId}<br>
+            <strong>Email:</strong> ${email}<br>
+            <strong>Display Name:</strong> bobiyatch<br>
+            <strong>Duplicates Removed:</strong> ${deletedCount}
+          </div>
+          <div style="margin-top: 20px; padding: 12px; background: rgba(59, 130, 246, 0.1); border-radius: 8px;">
+            <strong>✓ Ready!</strong> You can now login at <a href="/admin" style="color: #60a5fa;">Admin Portal</a>
+          </div>
+        `;
+
+        btn.textContent = 'Cleanup Complete ✓';
+        btn.style.background = '#22c55e';
+
+      } catch (error) {
+        console.error('Error:', error);
+        statusDiv.className = 'status error';
+        statusDiv.innerHTML = `
+          <div style="font-size: 20px; margin-bottom: 8px;">❌ Error</div>
+          <div><strong>Code:</strong> ${error.code}</div>
+          <div><strong>Message:</strong> ${error.message}</div>
+          <pre>${error.stack}</pre>
+        `;
+        btn.disabled = false;
+        btn.textContent = 'Try Again';
+      }
+    };
+  </script>
+</body>
+</html>

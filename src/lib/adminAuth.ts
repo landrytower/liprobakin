@@ -21,6 +21,8 @@ import type { AdminUser, AdminRole } from "@/types/admin";
 import { mergePermissions } from "@/types/admin";
 import { logAuditAction } from "./auditLog";
 
+const MASTER_ADMIN_EMAIL = "bobiyatch@gmail.com";
+
 /**
  * Create a new admin user account (via API route with Firebase Admin SDK)
  * Only callable by master admins
@@ -171,8 +173,7 @@ export async function updateAdminRoles(
     
     // Log audit trail
     const currentUser = firebaseAuth.currentUser;
-    const adminDoc = await getDoc(doc(firebaseDB, "adminUsers", uid));
-    const targetEmail = adminDoc.exists() ? adminDoc.data()?.email : "unknown";
+    const targetEmail = adminData.email || "unknown";
     
     if (currentUser) {
       await logAuditAction(
@@ -202,14 +203,25 @@ export async function deactivateAdminUser(
   uid: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    await updateDoc(doc(firebaseDB, "adminUsers", uid), {
+    const adminDocRef = doc(firebaseDB, "adminUsers", uid);
+    const adminDoc = await getDoc(adminDocRef);
+
+    if (!adminDoc.exists()) {
+      return { success: false, error: "Admin user not found" };
+    }
+
+    const adminData = adminDoc.data();
+    if (adminData.email === MASTER_ADMIN_EMAIL) {
+      return { success: false, error: "Cannot deactivate the master admin" };
+    }
+
+    await updateDoc(adminDocRef, {
       isActive: false,
     });
     
     // Log audit trail
     const currentUser = firebaseAuth.currentUser;
-    const adminDoc = await getDoc(doc(firebaseDB, "adminUsers", uid));
-    const targetEmail = adminDoc.exists() ? adminDoc.data()?.email : "unknown";
+    const targetEmail = adminData.email || "unknown";
     
     if (currentUser) {
       await logAuditAction(
@@ -239,14 +251,22 @@ export async function reactivateAdminUser(
   uid: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    await updateDoc(doc(firebaseDB, "adminUsers", uid), {
+    const adminDocRef = doc(firebaseDB, "adminUsers", uid);
+    const adminDoc = await getDoc(adminDocRef);
+
+    if (!adminDoc.exists()) {
+      return { success: false, error: "Admin user not found" };
+    }
+
+    const adminData = adminDoc.data();
+
+    await updateDoc(adminDocRef, {
       isActive: true,
     });
     
     // Log audit trail
     const currentUser = firebaseAuth.currentUser;
-    const adminDoc = await getDoc(doc(firebaseDB, "adminUsers", uid));
-    const targetEmail = adminDoc.exists() ? adminDoc.data()?.email : "unknown";
+    const targetEmail = adminData.email || "unknown";
     
     if (currentUser) {
       await logAuditAction(
@@ -352,6 +372,13 @@ export async function deleteAdminUser(
       return {
         success: false,
         error: 'Cannot delete another master admin'
+      };
+    }
+
+    if (target?.email === MASTER_ADMIN_EMAIL) {
+      return {
+        success: false,
+        error: 'Cannot delete the master admin account'
       };
     }
 

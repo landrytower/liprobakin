@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diagnose Admin Login</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        .container {
+            background: #2a2a2a;
+            padding: 30px;
+            border-radius: 8px;
+        }
+        h1 { color: #4ade80; }
+        input {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            border: 1px solid #444;
+            border-radius: 6px;
+            background: #1a1a1a;
+            color: #fff;
+            font-size: 16px;
+        }
+        button {
+            background: #4ade80;
+            color: #000;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            margin: 10px 5px 10px 0;
+        }
+        button:hover { background: #22c55e; }
+        button:disabled { background: #666; cursor: not-allowed; }
+        button.secondary {
+            background: #3b82f6;
+        }
+        button.secondary:hover { background: #2563eb; }
+        button.danger {
+            background: #ef4444;
+        }
+        button.danger:hover { background: #dc2626; }
+        .log {
+            background: #1a1a1a;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 20px;
+            max-height: 500px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+        .success { color: #4ade80; }
+        .error { color: #f87171; }
+        .warning { color: #fbbf24; }
+        .info { color: #60a5fa; }
+        label { font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Diagnose Admin Login</h1>
+        <p>This tool will help identify why you can't sign in to the admin console.</p>
+        
+        <div>
+            <label>Email:</label>
+            <input type="email" id="email" value="bobiyatch@gmail.com" />
+        </div>
+        <div>
+            <label>Password:</label>
+            <input type="password" id="password" placeholder="Enter your password" />
+        </div>
+        
+        <button id="diagnoseBtn" onclick="diagnose()">🔍 Diagnose Login</button>
+        <button class="secondary" onclick="fixAdmin()">🔧 Fix Admin Document</button>
+        <button class="danger" onclick="resetPassword()">🔑 Send Password Reset Email</button>
+        <button onclick="clearLog()">Clear Log</button>
+        
+        <div id="log" class="log"></div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, signOut, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, getDocs, collection, query, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyApCmWDWPfmBwVAOvNAu3_CSVCqGycN5OE",
+            authDomain: "ppop-35930.firebaseapp.com",
+            databaseURL: "https://ppop-35930-default-rtdb.firebaseio.com",
+            projectId: "ppop-35930",
+            storageBucket: "ppop-35930.firebasestorage.app",
+            messagingSenderId: "478592036466",
+            appId: "1:478592036466:web:f149e594436026717adceb",
+            measurementId: "G-YJY5T6TD8E",
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        function log(message, type = 'info') {
+            const logEl = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = type;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logEl.appendChild(entry);
+            logEl.scrollTop = logEl.scrollHeight;
+            console.log(message);
+        }
+
+        window.clearLog = function() {
+            document.getElementById('log').innerHTML = '';
+        };
+
+        window.diagnose = async function() {
+            const btn = document.getElementById('diagnoseBtn');
+            btn.disabled = true;
+            clearLog();
+            
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            if (!email || !password) {
+                log('❌ Please enter both email and password', 'error');
+                btn.disabled = false;
+                return;
+            }
+            
+            log('🔍 Starting diagnosis...', 'info');
+            
+            try {
+                // Step 1: Try to sign in
+                log(`\n📝 Step 1: Attempting Firebase Auth sign-in...`, 'info');
+                log(`   Email: ${email}`, 'info');
+                
+                const userCredential = await signInWithEmailAndPassword(auth, email, password);
+                const user = userCredential.user;
+                
+                log(`✅ Firebase Auth: SUCCESS!`, 'success');
+                log(`   Your UID: ${user.uid}`, 'success');
+                log(`   Email verified: ${user.emailVerified}`, 'info');
+                
+                // Step 2: Check adminUsers collection
+                log(`\n📝 Step 2: Checking adminUsers collection...`, 'info');
+                
+                const adminDocRef = doc(db, 'adminUsers', user.uid);
+                const adminDocSnap = await getDoc(adminDocRef);
+                
+                if (adminDocSnap.exists()) {
+                    const adminData = adminDocSnap.data();
+                    log(`✅ Admin document EXISTS for your UID!`, 'success');
+                    log(`\n   Document contents:`, 'info');
+                    log(`   - email: ${adminData.email}`, 'info');
+                    log(`   - displayName: ${adminData.displayName}`, 'info');
+                    log(`   - roles: ${JSON.stringify(adminData.roles)}`, 'info');
+                    log(`   - isActive: ${adminData.isActive}`, adminData.isActive ? 'success' : 'error');
+                    log(`   - status: ${adminData.status}`, adminData.status === 'active' ? 'success' : 'warning');
+                    
+                    // Check for issues
+                    if (adminData.status === 'inactive') {
+                        log(`\n❌ PROBLEM FOUND: status is "inactive"`, 'error');
+                        log(`   Solution: Click "Fix Admin Document" button`, 'warning');
+                    } else if (adminData.isActive === false) {
+                        log(`\n❌ PROBLEM FOUND: isActive is false`, 'error');
+                        log(`   Solution: Click "Fix Admin Document" button`, 'warning');
+                    } else {
+                        log(`\n✅ Admin document looks OK!`, 'success');
+                        log(`   You should be able to log in now.`, 'success');
+                        log(`   Try refreshing the admin page.`, 'info');
+                    }
+                } else {
+                    log(`\n❌ PROBLEM FOUND: No admin document exists for your UID!`, 'error');
+                    log(`   Your UID: ${user.uid}`, 'info');
+                    log(`   Solution: Click "Fix Admin Document" button`, 'warning');
+                    
+                    // Check if there's an admin doc with different UID but same email
+                    log(`\n📝 Checking for admin docs with your email...`, 'info');
+                    const adminsSnap = await getDocs(collection(db, 'adminUsers'));
+                    let found = false;
+                    adminsSnap.forEach(docSnap => {
+                        const data = docSnap.data();
+                        if (data.email === email) {
+                            found = true;
+                            log(`⚠️  Found admin doc with your email but WRONG UID!`, 'warning');
+                            log(`   Document ID: ${docSnap.id}`, 'warning');
+                            log(`   Your actual UID: ${user.uid}`, 'info');
+                            log(`   This mismatch is causing the problem!`, 'error');
+                        }
+                    });
+                    if (!found) {
+                        log(`   No existing admin documents found with your email`, 'info');
+                    }
+                }
+                
+                // Sign out after diagnosis
+                await signOut(auth);
+                log(`\n✅ Signed out after diagnosis`, 'info');
+                
+            } catch (error) {
+                if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password') {
+                    log(`\n❌ PROBLEM: Wrong password!`, 'error');
+                    log(`   The password you entered is incorrect.`, 'error');
+                    log(`   Solution: Click "Send Password Reset Email" button`, 'warning');
+                } else if (error.code === 'auth/user-not-found') {
+                    log(`\n❌ PROBLEM: User not found!`, 'error');
+                    log(`   No Firebase Auth account exists for ${email}`, 'error');
+                    log(`   You need to create an account first.`, 'warning');
+                } else if (error.code === 'auth/too-many-requests') {
+                    log(`\n❌ PROBLEM: Too many failed attempts!`, 'error');
+                    log(`   Firebase has temporarily blocked login attempts.`, 'error');
+                    log(`   Wait a few minutes and try again.`, 'warning');
+                } else {
+                    log(`\n❌ Error: ${error.message}`, 'error');
+                    log(`   Error code: ${error.code}`, 'info');
+                }
+                console.error(error);
+            }
+            
+            btn.disabled = false;
+        };
+
+        window.fixAdmin = async function() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            if (!email || !password) {
+                log('❌ Please enter both email and password first', 'error');
+                return;
+            }
+            
+            log('\n🔧 Fixing admin document...', 'info');
+            
+            try {
+                const userCredential = await signInWithEmailAndPassword(auth, email, password);
+                const user = userCredential.user;
+                
+                log(`✅ Signed in, UID: ${user.uid}`, 'success');
+                
+                // Create/update admin document
+                await setDoc(doc(db, 'adminUsers', user.uid), {
+                    uid: user.uid,
+                    email: email,
+                    displayName: user.displayName || email.split('@')[0],
+                    roles: ['master'],
+                    permissions: {
+                        canManageNews: true,
+                        canManageGames: true,
+                        canManageTeams: true,
+                        canManagePlayers: true,
+                        canManageReferees: true,
+                        canManageVenues: true,
+                        canManagePartners: true,
+                        canManageCommittee: true,
+                        canManageAdmins: true
+                    },
+                    isActive: true,
+                    status: 'active',
+                    isFirstLogin: false,
+                    createdAt: serverTimestamp(),
+                    lastLogin: serverTimestamp(),
+                    updatedAt: serverTimestamp()
+                }, { merge: true });
+                
+                log(`✅ Admin document created/updated!`, 'success');
+                
+                // Also add to admins collection
+                await setDoc(doc(db, 'admins', user.uid), {
+                    email: email,
+                    active: true,
+                    createdAt: serverTimestamp()
+                }, { merge: true });
+                
+                log(`✅ Added to admins collection too`, 'success');
+                
+                await signOut(auth);
+                log(`\n✨ DONE! You can now log in at /admin`, 'success');
+                
+            } catch (error) {
+                log(`❌ Error: ${error.message}`, 'error');
+                console.error(error);
+            }
+        };
+
+        window.resetPassword = async function() {
+            const email = document.getElementById('email').value;
+            
+            if (!email) {
+                log('❌ Please enter your email first', 'error');
+                return;
+            }
+            
+            log(`\n📧 Sending password reset email to ${email}...`, 'info');
+            
+            try {
+                await sendPasswordResetEmail(auth, email);
+                log(`✅ Password reset email sent!`, 'success');
+                log(`   Check your inbox (and spam folder)`, 'info');
+            } catch (error) {
+                log(`❌ Error: ${error.message}`, 'error');
+                console.error(error);
+            }
+        };
+
+        log('Ready! Enter your credentials and click "Diagnose Login".', 'info');
+    </script>
+</body>
+</html>

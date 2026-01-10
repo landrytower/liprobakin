@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Setup Master Admin - LIPROBAKIN</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #0f0f1e 100%);
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .container {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      padding: 40px;
+      max-width: 600px;
+      width: 100%;
+      backdrop-filter: blur(10px);
+    }
+    h1 {
+      font-size: 32px;
+      margin-bottom: 10px;
+      color: #60a5fa;
+    }
+    .subtitle {
+      color: #9ca3af;
+      margin-bottom: 30px;
+    }
+    .step {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .step-number {
+      background: #60a5fa;
+      color: #000;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      margin-right: 12px;
+    }
+    .step-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+    }
+    .step-content {
+      padding-left: 44px;
+      color: #d1d5db;
+      line-height: 1.6;
+    }
+    button {
+      background: #60a5fa;
+      color: #000;
+      border: none;
+      padding: 14px 32px;
+      font-size: 16px;
+      font-weight: 600;
+      border-radius: 8px;
+      cursor: pointer;
+      width: 100%;
+      transition: all 0.2s;
+      margin-top: 10px;
+    }
+    button:hover {
+      background: #3b82f6;
+      transform: translateY(-2px);
+    }
+    button:disabled {
+      background: #4b5563;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .status {
+      padding: 16px;
+      border-radius: 8px;
+      margin-top: 20px;
+      display: none;
+    }
+    .status.success {
+      background: rgba(34, 197, 94, 0.1);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      color: #86efac;
+      display: block;
+    }
+    .status.error {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #fca5a5;
+      display: block;
+    }
+    .status.info {
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      color: #93c5fd;
+      display: block;
+    }
+    .credentials {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 16px;
+      border-radius: 8px;
+      margin-top: 16px;
+      font-family: 'Courier New', monospace;
+    }
+    .cred-row {
+      display: flex;
+      justify-content: space-between;
+      margin: 8px 0;
+    }
+    .cred-label {
+      color: #9ca3af;
+    }
+    .cred-value {
+      color: #60a5fa;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔧 Setup Master Admin</h1>
+    <p class="subtitle">Create the master admin account for bobiyatch@gmail.com</p>
+
+    <div class="step">
+      <div class="step-title">
+        <span class="step-number">1</span>
+        Firebase Configuration
+      </div>
+      <div class="step-content">
+        This tool will create a master admin account directly in Firebase.
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-title">
+        <span class="step-number">2</span>
+        Account Details
+      </div>
+      <div class="step-content">
+        <div class="credentials">
+          <div class="cred-row">
+            <span class="cred-label">Email:</span>
+            <span class="cred-value">bobiyatch@gmail.com</span>
+          </div>
+          <div class="cred-row">
+            <span class="cred-label">Password:</span>
+            <span class="cred-value">123456</span>
+          </div>
+          <div class="cred-row">
+            <span class="cred-label">Role:</span>
+            <span class="cred-value">Master Admin</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-title">
+        <span class="step-number">3</span>
+        Create Account
+      </div>
+      <div class="step-content">
+        Click the button below to create the master admin account.
+        <button id="setupBtn" onclick="setupMasterAdmin()">Create Master Admin Account</button>
+      </div>
+    </div>
+
+    <div id="status" class="status"></div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+    import { getFirestore, doc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+    // Firebase configuration from your firebase.ts
+    const firebaseConfig = {
+      apiKey: "AIzaSyApCmWDWPfmBwVAOvNAu3_CSVCqGycN5OE",
+      authDomain: "ppop-35930.firebaseapp.com",
+      databaseURL: "https://ppop-35930-default-rtdb.firebaseio.com",
+      projectId: "ppop-35930",
+      storageBucket: "ppop-35930.firebasestorage.app",
+      messagingSenderId: "478592036466",
+      appId: "1:478592036466:web:f149e594436026717adceb",
+      measurementId: "G-YJY5T6TD8E"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    window.setupMasterAdmin = async function() {
+      const btn = document.getElementById('setupBtn');
+      const statusDiv = document.getElementById('status');
+      
+      btn.disabled = true;
+      btn.textContent = 'Creating account...';
+      statusDiv.className = 'status info';
+      statusDiv.textContent = '⏳ Setting up master admin account...';
+
+      const email = 'bobiyatch@gmail.com';
+      const password = '123456';
+
+      try {
+        let userCredential;
+        let userId;
+
+        // Try to create the account
+        try {
+          statusDiv.textContent = '⏳ Creating Firebase Auth user...';
+          userCredential = await createUserWithEmailAndPassword(auth, email, password);
+          userId = userCredential.user.uid;
+          console.log('✅ User created:', userId);
+        } catch (error) {
+          if (error.code === 'auth/email-already-in-use') {
+            // User exists, try to sign in
+            statusDiv.textContent = '⏳ User exists, signing in...';
+            userCredential = await signInWithEmailAndPassword(auth, email, password);
+            userId = userCredential.user.uid;
+            console.log('✅ Signed in as existing user:', userId);
+          } else {
+            throw error;
+          }
+        }
+
+        // Update display name
+        await updateProfile(userCredential.user, {
+          displayName: 'Master Admin'
+        });
+
+        // Create adminUsers document
+        statusDiv.textContent = '⏳ Creating admin document in Firestore...';
+        await setDoc(doc(db, 'adminUsers', userId), {
+          uid: userId,
+          email: email,
+          displayName: 'Master Admin',
+          roles: ['master'],
+          permissions: {
+            canManageNews: true,
+            canManageGames: true,
+            canManageTeams: true,
+            canManagePlayers: true,
+            canManageAdmins: true,
+            canViewAuditLogs: true,
+            canManageSettings: true,
+            canManageReferees: true,
+            canManageVenues: true,
+            canManagePartners: true
+          },
+          status: 'active',
+          isActive: true,
+          isFirstLogin: false,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+
+        console.log('✅ Admin document created');
+
+        statusDiv.className = 'status success';
+        statusDiv.innerHTML = `
+          <div style="font-size: 24px; margin-bottom: 12px;">✨ Success!</div>
+          <div>Master admin account has been created successfully.</div>
+          <div class="credentials" style="margin-top: 16px;">
+            <div class="cred-row">
+              <span class="cred-label">Email:</span>
+              <span class="cred-value">${email}</span>
+            </div>
+            <div class="cred-row">
+              <span class="cred-label">Password:</span>
+              <span class="cred-value">${password}</span>
+            </div>
+            <div class="cred-row">
+              <span class="cred-label">User ID:</span>
+              <span class="cred-value">${userId}</span>
+            </div>
+          </div>
+          <div style="margin-top: 20px; padding: 12px; background: rgba(59, 130, 246, 0.1); border-radius: 8px;">
+            <strong>Next Step:</strong> Go to <a href="/admin" style="color: #60a5fa;">Admin Login</a> and sign in with the credentials above.
+          </div>
+        `;
+
+        btn.textContent = 'Account Created ✓';
+        btn.style.background = '#22c55e';
+
+      } catch (error) {
+        console.error('Error:', error);
+        statusDiv.className = 'status error';
+        statusDiv.innerHTML = `
+          <div style="font-size: 20px; margin-bottom: 8px;">❌ Error</div>
+          <div><strong>Code:</strong> ${error.code}</div>
+          <div><strong>Message:</strong> ${error.message}</div>
+          <div style="margin-top: 12px; font-size: 14px; color: #fca5a5;">
+            If the error is "auth/weak-password", Firebase requires a stronger password.
+            Please update the password in the script and try again.
+          </div>
+        `;
+        btn.disabled = false;
+        btn.textContent = 'Try Again';
+      }
+    };
+  </script>
+</body>
+</html>

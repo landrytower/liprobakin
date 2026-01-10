@@ -76,6 +76,11 @@ const translations = {
     changesPendingApproval: "Changes stay pending until an admin approves.",
     jerseyNumber: "Jersey Number",
     position: "Position",
+    editJerseyNumber: "Edit Jersey Number",
+    currentJersey: "Current Jersey",
+    newJersey: "New Jersey Number",
+    jerseyChangeRequiresApproval: "Changing your jersey number requires admin approval. Your stats and profile will stay linked to you.",
+    submitJerseyChange: "Submit Jersey Change",
   },
   fr: {
     loading: "Chargement...",
@@ -142,8 +147,11 @@ const translations = {
     requiresAdminApproval: "Approbation admin requise",
     changesPendingApproval: "Les modifications restent en attente jusqu'à l'approbation.",
     jerseyNumber: "Numéro de Maillot",
-    position: "Position",
-  },
+    position: "Position",    editJerseyNumber: "Modifier le Numéro de Maillot",
+    currentJersey: "Maillot Actuel",
+    newJersey: "Nouveau Numéro",
+    jerseyChangeRequiresApproval: "Changer votre numéro de maillot nécessite l'approbation de l'administrateur. Vos statistiques et profil resteront liés à vous.",
+    submitJerseyChange: "Soumettre le Changement",  },
 };
 
 type PlayerStats = {
@@ -195,6 +203,10 @@ export default function AccountPage() {
   const [nameSubmitting, setNameSubmitting] = useState(false);
   const [nameMessage, setNameMessage] = useState("\u00a0");
   const [nameError, setNameError] = useState("");
+  const [newJerseyNumber, setNewJerseyNumber] = useState<string>("");
+  const [jerseySubmitting, setJerseySubmitting] = useState(false);
+  const [jerseyMessage, setJerseyMessage] = useState("\u00a0");
+  const [jerseyError, setJerseyError] = useState("");
 
   useEffect(() => {
     if (!user) {
@@ -238,7 +250,9 @@ export default function AccountPage() {
     setHeadshotMessage("\u00a0");
 
     try {
-      const storageRef = ref(firebaseStorage, `headshot-updates/${user.uid}/${Date.now()}-${headshotFile.name}`);
+      const playerFullName = `${userProfile.firstName}_${userProfile.lastName}`.replace(/\s+/g, '_');
+      const fileExtension = headshotFile.name.split('.').pop();
+      const storageRef = ref(firebaseStorage, `player-headshot-updates/${playerFullName}_${Date.now()}.${fileExtension}`);
       await uploadBytes(storageRef, headshotFile);
       const newHeadshotUrl = await getDownloadURL(storageRef);
 
@@ -323,6 +337,61 @@ export default function AccountPage() {
       setNameError("Failed to submit name change. Please try again.");
     } finally {
       setNameSubmitting(false);
+    }
+  };
+
+  // Submit jersey number change request (requires admin approval)
+  const handleJerseyNumberSubmit = async () => {
+    if (!user || !userProfile || !newJerseyNumber.trim()) {
+      setJerseyError("Please enter a new jersey number.");
+      return;
+    }
+
+    if (userProfile.role !== "player" || userProfile.verificationStatus !== "approved" || !userProfile.linkedPlayerId || !userProfile.teamId) {
+      setJerseyError("Jersey number changes are available only for verified players.");
+      return;
+    }
+
+    const jerseyNum = parseInt(newJerseyNumber.trim(), 10);
+    if (isNaN(jerseyNum) || jerseyNum < 0 || jerseyNum > 99) {
+      setJerseyError("Please enter a valid jersey number (0-99).");
+      return;
+    }
+
+    if (playerData && jerseyNum === playerData.number) {
+      setJerseyError("The new jersey number is the same as your current number.");
+      return;
+    }
+
+    setJerseySubmitting(true);
+    setJerseyError("");
+    setJerseyMessage("\u00a0");
+
+    try {
+      await addDoc(collection(firebaseDB, "verificationRequests"), {
+        userId: user.uid,
+        userEmail: user.email || userProfile.email || "",
+        userFirstName: userProfile.firstName,
+        userLastName: userProfile.lastName,
+        userPhone: userProfile.phoneNumber || "",
+        teamId: userProfile.teamId,
+        teamName: userProfile.teamName || "",
+        requestType: "update_jersey",
+        existingPlayerId: userProfile.linkedPlayerId,
+        existingPlayerName: `${userProfile.firstName} ${userProfile.lastName}`,
+        previousJerseyNumber: playerData?.number || 0,
+        newJerseyNumber: jerseyNum,
+        status: "pending",
+        submittedAt: serverTimestamp(),
+      });
+
+      setJerseyMessage("Jersey number change submitted for admin approval.");
+      setNewJerseyNumber("");
+    } catch (error) {
+      console.error("Error submitting jersey change:", error);
+      setJerseyError("Failed to submit jersey change. Please try again.");
+    } finally {
+      setJerseySubmitting(false);
     }
   };
 
@@ -605,6 +674,50 @@ export default function AccountPage() {
                       <p className="text-xs text-green-400">{headshotMessage}</p>
                     )}
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* Jersey Number Change (requires admin approval) */}
+            {userProfile.role === 'player' && userProfile.verificationStatus === 'approved' && userProfile.linkedPlayerId && (
+              <div className="rounded-xl border border-purple-500/30 bg-purple-500/5 p-4 sm:p-5">
+                <label className="text-xs font-semibold text-purple-300 uppercase tracking-wider mb-2 block">{t.editJerseyNumber}</label>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-4">
+                    <div>
+                      <p className="text-xs text-slate-400 mb-1">{t.currentJersey}</p>
+                      <p className="text-2xl font-bold text-white">#{playerData?.number || '?'}</p>
+                    </div>
+                    <div className="text-slate-500 text-2xl">→</div>
+                    <div className="flex-1">
+                      <label className="text-xs text-slate-400 mb-1 block">{t.newJersey}</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="99"
+                        value={newJerseyNumber}
+                        onChange={(e) => setNewJerseyNumber(e.target.value)}
+                        placeholder="00"
+                        className="w-24 rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-lg font-bold text-white placeholder-slate-500 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs sm:text-sm text-slate-300">{t.jerseyChangeRequiresApproval}</p>
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                    <button
+                      onClick={handleJerseyNumberSubmit}
+                      disabled={jerseySubmitting || !newJerseyNumber.trim()}
+                      className="rounded-lg bg-purple-600 hover:bg-purple-700 px-4 py-2 text-xs sm:text-sm font-semibold text-white transition disabled:opacity-50 disabled:cursor-not-allowed"
+                      type="button"
+                    >
+                      {jerseySubmitting ? t.submitting : t.submitJerseyChange}
+                    </button>
+                    <p className="text-xs text-slate-400">{t.adminApprovalRequired}</p>
+                  </div>
+                  {jerseyError && <p className="text-xs text-red-400">{jerseyError}</p>}
+                  {jerseyMessage.trim() && jerseyMessage !== '\u00a0' && (
+                    <p className="text-xs text-green-400">{jerseyMessage}</p>
+                  )}
                 </div>
               </div>
             )}

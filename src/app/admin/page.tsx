@@ -44,7 +44,7 @@ import {
   updateAdminProfile,
   updateLastActivity
 } from "@/lib/adminAuth";
-import { logAuditAction, formatAuditLogDisplay, logSessionStart, logSessionEnd, logSessionActivity, generateSessionId } from "@/lib/auditLog";
+import { logAuditAction, formatAuditLogDisplay, logSessionStart, logSessionEnd, logSessionActivity } from "@/lib/auditLog";
 import { autoTranslateNewsArticle } from "@/lib/translate";
 
 type AdminNewsArticle = {
@@ -628,6 +628,7 @@ function TeamTypeahead({ label, selectedTeamId, teams, onSelect, placeholder }: 
  
 export default function AdminPage() {
   const router = useRouter();
+  const MASTER_ADMIN_EMAIL = "bobiyatch@gmail.com";
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [authForm, setAuthForm] = useState({ email: "", password: "" });
@@ -645,7 +646,6 @@ export default function AdminPage() {
   const [teamLogoPreview, setTeamLogoPreview] = useState<string>("");
   const [teamFormExpanded, setTeamFormExpanded] = useState(false);
   const [teamSubmitting, setTeamSubmitting] = useState(false);
-  const [bulkImportingTemplates, setBulkImportingTemplates] = useState(false);
   const [teamStatus, setTeamStatus] = useState<StatusCallout | null>(null);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [roster, setRoster] = useState<AdminRosterPlayer[]>([]);
@@ -704,19 +704,17 @@ export default function AdminPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordChangeStatus, setPasswordChangeStatus] = useState<StatusCallout | null>(null);
   const [editingAdminRoles, setEditingAdminRoles] = useState<AdminRole[]>([]);
-  const [storyEditorOpen, setStoryEditorOpen] = useState(false);
   const [showStoryPreview, setShowStoryPreview] = useState(false);
   const [teamAssistantOpen, setTeamAssistantOpen] = useState(false);
   const [trafficModuleOpen, setTrafficModuleOpen] = useState(false);
+  const [trafficEvents, setTrafficEvents] = useState<TeamTrafficEntry[]>([]);
   const [gamePlannerOpen, setGamePlannerOpen] = useState(false);
+  const [verificationRequests, setVerificationRequests] = useState<any[]>([]);
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [pendingVerifications, setPendingVerifications] = useState<any[]>([]);
-  const [selectedUser, setSelectedUser] = useState<any>(null);
-  const [verificationNotes, setVerificationNotes] = useState("");
-  const [processingVerification, setProcessingVerification] = useState(false);
-  const [verificationRequests, setVerificationRequests] = useState<any[]>([]);
   const [selectedVerificationRequest, setSelectedVerificationRequest] = useState<any>(null);
   const [reviewNotes, setReviewNotes] = useState("");
+  const [showOnRosterOverride, setShowOnRosterOverride] = useState<boolean>(true);
   const [processingReview, setProcessingReview] = useState(false);
   const [gameStatsAssistantOpen, setGameStatsAssistantOpen] = useState(false);
   const [showArchiveView, setShowArchiveView] = useState(false);
@@ -741,7 +739,6 @@ export default function AdminPage() {
   const [loserStatsMap, setLoserStatsMap] = useState<Record<string, { two_pm: string; two_pa: string; three_pm: string; three_pa: string; ft_m: string; ft_a: string; ast: string; oreb: string; dreb: string; reb: string; stl: string; blk: string; min: string; pf: string; to: string; fls: string }>>({});
   const [statsSubmitting, setStatsSubmitting] = useState(false);
   const [statsStatus, setStatsStatus] = useState<StatusCallout | null>(null);
-  const [trafficEvents, setTrafficEvents] = useState<TeamTrafficEntry[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [referees, setReferees] = useState<Referee[]>([]);
   const [refereeForm, setRefereeForm] = useState<RefereeFormState>({ firstName: "", lastName: "", phone: "", headshot: "" });
@@ -766,7 +763,6 @@ export default function AdminPage() {
   const [partnerLogoPreview, setPartnerLogoPreview] = useState<string>("");
   const [partnerSubmitting, setPartnerSubmitting] = useState(false);
   const [leagueGestionStatus, setLeagueGestionStatus] = useState<StatusCallout | null>(null);
-  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   const [resetSubmitting, setResetSubmitting] = useState(false);
   const [resetStatus, setResetStatus] = useState<StatusCallout | null>(null);
   const newsPreviewBlobRef = useRef<string | null>(null);
@@ -1679,7 +1675,6 @@ export default function AdminPage() {
       return;
     }
 
-    setBulkImportingTemplates(true);
     setTeamStatus({ type: "info", message: "Syncing Febaco templates to Firestore..." });
 
     try {
@@ -1699,8 +1694,6 @@ export default function AdminPage() {
     } catch (error) {
       console.error(error);
       setTeamStatus({ type: "error", message: "Unable to import template teams." });
-    } finally {
-      setBulkImportingTemplates(false);
     }
   };
 
@@ -1773,7 +1766,6 @@ export default function AdminPage() {
         type: "success", 
         message: `✓ Reset complete! Deleted ${gamesSnapshot.docs.length} games and reset ${teamsSnapshot.docs.length} teams to 0-0.` 
       });
-      setResetConfirmOpen(false);
     } catch (error) {
       console.error("Reset error:", error);
       setResetStatus({ type: "error", message: "Failed to reset stats. Check console for details." });
@@ -2884,6 +2876,34 @@ export default function AdminPage() {
             updatedAt: serverTimestamp(),
           });
         }
+      } else if (selectedVerificationRequest.requestType === "update_jersey") {
+        // UPDATE JERSEY NUMBER
+        if (status === "approved" && selectedVerificationRequest.existingPlayerId && selectedVerificationRequest.newJerseyNumber !== undefined) {
+          await updateDoc(
+            doc(firebaseDB, "teams", selectedVerificationRequest.teamId, "roster", selectedVerificationRequest.existingPlayerId),
+            {
+              number: selectedVerificationRequest.newJerseyNumber,
+              updatedAt: serverTimestamp(),
+            }
+          );
+
+          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId), {
+            playerNumber: selectedVerificationRequest.newJerseyNumber,
+            verificationStatus: status,
+            verificationReviewedAt: serverTimestamp(),
+            verificationReviewedBy: user.email,
+            verificationNotes: reviewNotes,
+            updatedAt: serverTimestamp(),
+          });
+        } else {
+          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId), {
+            verificationStatus: status,
+            verificationReviewedAt: serverTimestamp(),
+            verificationReviewedBy: user.email,
+            verificationNotes: reviewNotes,
+            updatedAt: serverTimestamp(),
+          });
+        }
       } else if (selectedVerificationRequest.requestType === "claim_existing") {
         // CLAIM EXISTING PLAYER
         await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId), {
@@ -2899,10 +2919,40 @@ export default function AdminPage() {
           linkedPlayerName: status === "approved" ? selectedVerificationRequest.existingPlayerName : null,
         });
 
-        // Link user to player roster entry
+        // Link user to player roster entry AND UPDATE NAME TO MATCH USER'S NAME
         if (status === "approved" && selectedVerificationRequest.existingPlayerId) {
           await updateDoc(
             doc(firebaseDB, "teams", selectedVerificationRequest.teamId, "roster", selectedVerificationRequest.existingPlayerId),
+            {
+              // Update player name to match user's claimed name
+              firstName: selectedVerificationRequest.userFirstName,
+              lastName: selectedVerificationRequest.userLastName,
+              name: `${selectedVerificationRequest.userFirstName} ${selectedVerificationRequest.userLastName}`,
+              verificationStatus: "verified",
+              linkedUserId: selectedVerificationRequest.userId,
+              linkedUserEmail: selectedVerificationRequest.userEmail,
+              linkedAt: serverTimestamp(),
+            }
+          );
+        }
+      } else if (selectedVerificationRequest.requestType === "claim_existing_coach") {
+        // CLAIM EXISTING COACH
+        await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId), {
+          role: "coach",
+          teamId: selectedVerificationRequest.teamId,
+          teamName: selectedVerificationRequest.teamName,
+          verificationStatus: status,
+          verificationReviewedAt: serverTimestamp(),
+          verificationReviewedBy: user.email,
+          verificationNotes: reviewNotes,
+          updatedAt: serverTimestamp(),
+          linkedCoachId: status === "approved" ? selectedVerificationRequest.existingCoachId : null,
+          linkedCoachName: status === "approved" ? selectedVerificationRequest.existingCoachName : null,
+        });
+
+        if (status === "approved" && selectedVerificationRequest.existingCoachId) {
+          await updateDoc(
+            doc(firebaseDB, "teams", selectedVerificationRequest.teamId, "coachStaff", selectedVerificationRequest.existingCoachId),
             {
               verificationStatus: "verified",
               linkedUserId: selectedVerificationRequest.userId,
@@ -2910,6 +2960,87 @@ export default function AdminPage() {
               linkedAt: serverTimestamp(),
             }
           );
+        }
+      } else if (selectedVerificationRequest.requestType === "create_new_coach") {
+        // CREATE NEW COACH PROFILE
+        if (status === "approved" && selectedVerificationRequest.newCoachData) {
+          const coachData = selectedVerificationRequest.newCoachData;
+          const coachRef = collection(firebaseDB, `teams/${selectedVerificationRequest.teamId}/coachStaff`);
+          const newCoachDoc = await addDoc(coachRef, {
+            firstName: coachData.firstName,
+            lastName: coachData.lastName,
+            role: coachData.coachType,
+            headshot: coachData.headshotUrl || "",
+            verificationStatus: "verified",
+            linkedUserId: selectedVerificationRequest.userId,
+            linkedUserEmail: selectedVerificationRequest.userEmail,
+            linkedAt: serverTimestamp(),
+            createdAt: serverTimestamp(),
+          });
+
+          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId), {
+            role: "coach",
+            teamId: selectedVerificationRequest.teamId,
+            teamName: selectedVerificationRequest.teamName,
+            verificationStatus: status,
+            verificationReviewedAt: serverTimestamp(),
+            verificationReviewedBy: user.email,
+            verificationNotes: reviewNotes,
+            updatedAt: serverTimestamp(),
+            linkedCoachId: newCoachDoc.id,
+            linkedCoachName: `${coachData.firstName} ${coachData.lastName}`,
+          });
+
+          alert(`✅ Coach added to ${selectedVerificationRequest.teamName}!\nName: ${coachData.firstName} ${coachData.lastName}`);
+        } else {
+          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId), {
+            verificationStatus: status,
+            verificationReviewedAt: serverTimestamp(),
+            verificationReviewedBy: user.email,
+            verificationNotes: reviewNotes,
+            updatedAt: serverTimestamp(),
+          });
+        }
+      } else if (selectedVerificationRequest.requestType === "create_new_staff") {
+        // CREATE NEW STAFF PROFILE
+        if (status === "approved" && selectedVerificationRequest.newStaffData) {
+          const staffData = selectedVerificationRequest.newStaffData;
+          const staffRef = collection(firebaseDB, `teams/${selectedVerificationRequest.teamId}/staff`);
+          const newStaffDoc = await addDoc(staffRef, {
+            firstName: staffData.firstName,
+            lastName: staffData.lastName,
+            position: staffData.position,
+            showOnRoster: showOnRosterOverride, // Use admin's override value
+            headshot: staffData.headshotUrl || "",
+            verificationStatus: "verified",
+            linkedUserId: selectedVerificationRequest.userId,
+            linkedUserEmail: selectedVerificationRequest.userEmail,
+            linkedAt: serverTimestamp(),
+            createdAt: serverTimestamp(),
+          });
+
+          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId), {
+            role: "staff",
+            teamId: selectedVerificationRequest.teamId,
+            teamName: selectedVerificationRequest.teamName,
+            verificationStatus: status,
+            verificationReviewedAt: serverTimestamp(),
+            verificationReviewedBy: user.email,
+            verificationNotes: reviewNotes,
+            updatedAt: serverTimestamp(),
+            linkedStaffId: newStaffDoc.id,
+            linkedStaffName: `${staffData.firstName} ${staffData.lastName}`,
+          });
+
+          alert(`✅ Staff added to ${selectedVerificationRequest.teamName}!\nName: ${staffData.firstName} ${staffData.lastName}\nPosition: ${staffData.position}\nVisible on Roster: ${showOnRosterOverride ? 'Yes' : 'No'}`);
+        } else {
+          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId), {
+            verificationStatus: status,
+            verificationReviewedAt: serverTimestamp(),
+            verificationReviewedBy: user.email,
+            verificationNotes: reviewNotes,
+            updatedAt: serverTimestamp(),
+          });
         }
       } else if (selectedVerificationRequest.requestType === "create_new") {
         // CREATE NEW PLAYER REQUEST (legacy or from player-verification page)
@@ -2990,6 +3121,18 @@ export default function AdminPage() {
       setVerificationRequests(allVerificationsData);
       const pendingOnly = allVerificationsData.filter((v: any) => v.status === 'pending');
       setPendingVerifications(pendingOnly);
+
+      // If coach was approved, refresh the coach staff list immediately
+      if (status === "approved" && selectedVerificationRequest.teamId && 
+          (selectedVerificationRequest.requestType === "claim_existing_coach" || selectedVerificationRequest.requestType === "create_new_coach")) {
+        const coachStaffQuery = query(collection(firebaseDB, "teams", selectedVerificationRequest.teamId, "coachStaff"), orderBy("firstName", "asc"));
+        const coachStaffSnapshot = await getDocs(coachStaffQuery);
+        setCoachStaffList(coachStaffSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          createdAt: doc.data().createdAt?.toDate() ?? null,
+        } as CoachStaff)));
+      }
 
       setSelectedVerificationRequest(null);
       setReviewNotes("");
@@ -3386,7 +3529,6 @@ export default function AdminPage() {
     }
   };
 
-  // Helper to check if game is locked (30+ minutes past start time)
   const isGameLocked = (date: string, time: string) => {
     try {
       const gameDateTime = new Date(`${date}T${time}`);
@@ -5734,29 +5876,36 @@ export default function AdminPage() {
                               </div>
                               <button
                                 onClick={async () => {
-                                  if (window.confirm(`Are you sure you want to delete ${user.firstName} ${user.lastName}? This action cannot be undone.`)) {
+                                  if (window.confirm(`Are you sure you want to delete ${user.firstName} ${user.lastName}? This will:\n\n• Delete their account from Firebase Auth\n• Delete all their data from Firestore\n• Delete their headshot from Storage\n• Unlink from any roster (keeping the player profile)\n\nThis action cannot be undone.`)) {
                                     try {
-                                      // Delete user document
-                                      await deleteDoc(doc(firebaseDB, "users", user.id));
-                                      
-                                      // Delete verification request if exists
-                                      const verificationQuery = query(
-                                        collection(firebaseDB, "verificationRequests"),
-                                        where("userId", "==", user.id)
-                                      );
-                                      const verificationSnapshot = await getDocs(verificationQuery);
-                                      verificationSnapshot.docs.forEach(async (docSnapshot) => {
-                                        await deleteDoc(doc(firebaseDB, "verificationRequests", docSnapshot.id));
+                                      // Call API to delete user completely
+                                      const response = await fetch('/api/admin/delete-regular-user', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                          targetUid: user.id,
+                                          deletedByUid: firebaseAuth.currentUser?.uid,
+                                        }),
                                       });
-                                      
+
+                                      const result = await response.json();
+
+                                      if (!response.ok || !result.success) {
+                                        throw new Error(result.error || 'Failed to delete user');
+                                      }
+
                                       // Refresh user list
                                       const usersSnapshot = await getDocs(collection(firebaseDB, "users"));
-                                      setAllUsers(usersSnapshot.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate() || new Date() })));
+                                      setAllUsers(usersSnapshot.docs.map(d => ({ 
+                                        id: d.id, 
+                                        ...d.data(), 
+                                        createdAt: d.data().createdAt?.toDate() || new Date() 
+                                      })));
                                       
-                                      alert("User deleted successfully");
-                                    } catch (error) {
+                                      alert(`✅ ${user.firstName} ${user.lastName} deleted successfully!\n\n• Firebase Auth account removed\n• Firestore data deleted\n• Storage files cleaned up\n• Roster unlinked (profile preserved)`);
+                                    } catch (error: any) {
                                       console.error("Error deleting user:", error);
-                                      alert("Error deleting user. Please try again.");
+                                      alert(`Error deleting user: ${error.message}\n\nPlease try again or contact support.`);
                                     }
                                   }
                                 }}
@@ -7442,7 +7591,13 @@ export default function AdminPage() {
                         .map((request) => (
                           <button
                             key={request.id}
-                            onClick={() => setSelectedVerificationRequest(request)}
+                            onClick={() => {
+                              setSelectedVerificationRequest(request);
+                              // Initialize showOnRoster toggle with the value from the request
+                              if (request.requestType === "create_new_staff" && request.newStaffData) {
+                                setShowOnRosterOverride(request.newStaffData.showOnRoster !== undefined ? request.newStaffData.showOnRoster : true);
+                              }
+                            }}
                             className={`w-full rounded-xl border p-4 text-left transition ${
                               selectedVerificationRequest?.id === request.id
                                 ? "border-blue-500 bg-blue-500/10"
@@ -7508,9 +7663,75 @@ export default function AdminPage() {
                                 ? "Update Headshot"
                                 : selectedVerificationRequest.requestType === "update_name"
                                 ? "Update Name"
+                                : selectedVerificationRequest.requestType === "update_jersey"
+                                ? "Update Jersey Number"
+                                : selectedVerificationRequest.requestType === "claim_existing_coach"
+                                ? "Claim Existing Coach"
+                                : selectedVerificationRequest.requestType === "create_new_coach"
+                                ? "Create New Coach"
+                                : selectedVerificationRequest.requestType === "create_new_staff"
+                                ? "Create New Staff Member"
                                 : "Create New Player"}
                             </p>
                           </div>
+
+                          {/* Staff-specific details */}
+                          {selectedVerificationRequest.requestType === "create_new_staff" && selectedVerificationRequest.newStaffData && (
+                            <div className="space-y-3">
+                              <div>
+                                <label className="text-sm font-medium text-slate-400">Staff Details</label>
+                                <div className="mt-2 rounded-lg border border-white/10 bg-white/5 p-4 space-y-2">
+                                  <p className="text-white">
+                                    Name: {selectedVerificationRequest.newStaffData.firstName} {selectedVerificationRequest.newStaffData.lastName}
+                                  </p>
+                                  <p className="text-slate-300 text-sm">
+                                    Position: {selectedVerificationRequest.newStaffData.position?.replace(/_/g, ' ')}
+                                  </p>
+                                </div>
+                              </div>
+                              
+                              <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-4">
+                                <label className="flex items-center gap-3 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={showOnRosterOverride}
+                                    onChange={(e) => setShowOnRosterOverride(e.target.checked)}
+                                    className="w-5 h-5 rounded border-white/20 bg-white/10 text-blue-600 focus:ring-2 focus:ring-blue-500"
+                                  />
+                                  <div>
+                                    <span className="text-sm font-medium text-white">Show on Team Roster</span>
+                                    <p className="text-xs text-slate-400 mt-1">
+                                      When enabled, this staff member will be visible on the public team roster page
+                                    </p>
+                                  </div>
+                                </label>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Coach-specific details */}
+                          {selectedVerificationRequest.requestType === "claim_existing_coach" && selectedVerificationRequest.existingCoachName && (
+                            <div>
+                              <label className="text-sm font-medium text-slate-400">Claiming Coach</label>
+                              <p className="text-white">
+                                {selectedVerificationRequest.existingCoachName} ({selectedVerificationRequest.existingCoachRole?.replace(/_/g, ' ')})
+                              </p>
+                            </div>
+                          )}
+
+                          {selectedVerificationRequest.requestType === "create_new_coach" && selectedVerificationRequest.newCoachData && (
+                            <div>
+                              <label className="text-sm font-medium text-slate-400">New Coach Details</label>
+                              <div className="mt-2 rounded-lg border border-white/10 bg-white/5 p-4 space-y-2">
+                                <p className="text-white">
+                                  Name: {selectedVerificationRequest.newCoachData.firstName} {selectedVerificationRequest.newCoachData.lastName}
+                                </p>
+                                <p className="text-slate-300 text-sm">
+                                  Position: {selectedVerificationRequest.newCoachData.coachType?.replace(/_/g, ' ')}
+                                </p>
+                              </div>
+                            </div>
+                          )}
 
                           {selectedVerificationRequest.requestType === "update_name" && (
                             <div className="space-y-2">
@@ -7518,6 +7739,28 @@ export default function AdminPage() {
                               <div className="rounded-lg border border-white/10 bg-white/5 p-3 text-sm text-slate-200">
                                 <p>Previous: {selectedVerificationRequest.previousFirstName} {selectedVerificationRequest.previousLastName}</p>
                                 <p>Requested: <span className="text-green-400 font-semibold">{selectedVerificationRequest.newFirstName} {selectedVerificationRequest.newLastName}</span></p>
+                              </div>
+                            </div>
+                          )}
+
+                          {selectedVerificationRequest.requestType === "update_jersey" && (
+                            <div className="space-y-2">
+                              <label className="text-sm font-medium text-slate-400">Jersey Number Change</label>
+                              <div className="rounded-lg border border-purple-500/20 bg-purple-500/5 p-4">
+                                <div className="flex items-center gap-4 justify-center">
+                                  <div className="text-center">
+                                    <p className="text-xs text-slate-400 mb-1">Current</p>
+                                    <p className="text-3xl font-bold text-white">#{selectedVerificationRequest.previousJerseyNumber}</p>
+                                  </div>
+                                  <div className="text-2xl text-slate-500">→</div>
+                                  <div className="text-center">
+                                    <p className="text-xs text-purple-300 mb-1">Requested</p>
+                                    <p className="text-3xl font-bold text-purple-400">#{selectedVerificationRequest.newJerseyNumber}</p>
+                                  </div>
+                                </div>
+                                <p className="text-xs text-slate-400 text-center mt-3">
+                                  Player: {selectedVerificationRequest.existingPlayerName || `${selectedVerificationRequest.userFirstName} ${selectedVerificationRequest.userLastName}`}
+                                </p>
                               </div>
                             </div>
                           )}
@@ -7565,6 +7808,28 @@ export default function AdminPage() {
                                   {selectedVerificationRequest.newPlayerData.position && ` • ${selectedVerificationRequest.newPlayerData.position}`}
                                   {selectedVerificationRequest.newPlayerData.height && ` • ${selectedVerificationRequest.newPlayerData.height}`}
                                 </p>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* User's Headshot (from verification request) */}
+                          {(selectedVerificationRequest.headshotUrl || selectedVerificationRequest.newPlayerData?.headshotUrl || selectedVerificationRequest.newCoachData?.headshotUrl || selectedVerificationRequest.newStaffData?.headshotUrl) && (
+                            <div>
+                              <label className="text-sm font-medium text-slate-400">Applicant Headshot</label>
+                              <div className="mt-2 rounded-lg border border-white/20 bg-black/30 p-2">
+                                <Image
+                                  src={
+                                    selectedVerificationRequest.headshotUrl || 
+                                    selectedVerificationRequest.newPlayerData?.headshotUrl || 
+                                    selectedVerificationRequest.newCoachData?.headshotUrl || 
+                                    selectedVerificationRequest.newStaffData?.headshotUrl || 
+                                    ""
+                                  }
+                                  alt="Applicant Headshot"
+                                  width={300}
+                                  height={300}
+                                  className="w-full rounded object-cover max-w-xs mx-auto"
+                                />
                               </div>
                             </div>
                           )}
@@ -8587,6 +8852,10 @@ export default function AdminPage() {
                                       setAdminStatus({ type: 'error', message: 'You cannot deactivate yourself' });
                                       return;
                                     }
+                                    if (admin.email === MASTER_ADMIN_EMAIL) {
+                                      setAdminStatus({ type: 'error', message: 'The master admin cannot be deactivated' });
+                                      return;
+                                    }
                                     setAdminSubmitting(true);
                                     const result = admin.isActive 
                                       ? await deactivateAdminUser(admin.id)
@@ -8603,7 +8872,7 @@ export default function AdminPage() {
                                     }
                                     setAdminSubmitting(false);
                                   }}
-                                  disabled={adminSubmitting}
+                                  disabled={adminSubmitting || admin.email === MASTER_ADMIN_EMAIL}
                                   className={`rounded-full border px-3 py-1 text-xs uppercase tracking-wider hover:opacity-80 disabled:opacity-40 ${ 
                                     admin.isActive
                                       ? 'border-rose-500/40 text-rose-200 hover:bg-rose-500/10'

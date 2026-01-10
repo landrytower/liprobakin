@@ -3127,11 +3127,21 @@ export default function AdminPage() {
           (selectedVerificationRequest.requestType === "claim_existing_coach" || selectedVerificationRequest.requestType === "create_new_coach")) {
         const coachStaffQuery = query(collection(firebaseDB, "teams", selectedVerificationRequest.teamId, "coachStaff"), orderBy("firstName", "asc"));
         const coachStaffSnapshot = await getDocs(coachStaffQuery);
-        setCoachStaffList(coachStaffSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          createdAt: doc.data().createdAt?.toDate() ?? null,
-        } as CoachStaff)));
+        setCoachStaffList(coachStaffSnapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            firstName: data.firstName || "",
+            lastName: data.lastName || "",
+            role: data.role || "",
+            headshot: data.headshot,
+            verificationStatus: data.verificationStatus,
+            linkedUserId: data.linkedUserId,
+            linkedUserEmail: data.linkedUserEmail,
+            linkedAt: data.linkedAt,
+            createdAt: data.createdAt?.toDate() ?? null,
+          } as CoachStaff;
+        }));
       }
 
       setSelectedVerificationRequest(null);

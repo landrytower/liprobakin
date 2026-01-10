@@ -171,9 +171,13 @@ export async function updateAdminRoles(
       permissions,
     });
     
+    // Get admin data for audit log
+    const adminDoc = await getDoc(doc(firebaseDB, "adminUsers", uid));
+    const adminData = adminDoc.data();
+    
     // Log audit trail
     const currentUser = firebaseAuth.currentUser;
-    const targetEmail = adminData.email || "unknown";
+    const targetEmail = adminData?.email || "unknown";
     
     if (currentUser) {
       await logAuditAction(

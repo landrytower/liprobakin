@@ -794,7 +794,7 @@ export default function ProfileSetup() {
 
       // Upload headshot photo if provided
       let headshotUrl = "";
-      if (coachStaffPhoto) {
+      if (coachStaffPhoto && userProfile) {
         const coachFullName = `${userProfile.firstName}_${userProfile.lastName}`.replace(/\s+/g, '_');
         const fileExtension = coachStaffPhoto.name.split('.').pop();
         const headshotRef = ref(firebaseStorage, `coach-headshots/${coachFullName}_${Date.now()}.${fileExtension}`);
@@ -868,7 +868,7 @@ export default function ProfileSetup() {
 
       // Upload headshot photo if provided
       let headshotUrl = "";
-      if (coachStaffPhoto) {
+      if (coachStaffPhoto && userProfile) {
         const staffFullName = `${userProfile.firstName}_${userProfile.lastName}`.replace(/\s+/g, '_');
         const fileExtension = coachStaffPhoto.name.split('.').pop();
         const headshotRef = ref(firebaseStorage, `staff-headshots/${staffFullName}_${staffPosition}_${Date.now()}.${fileExtension}`);

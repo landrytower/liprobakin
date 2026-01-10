@@ -7711,9 +7711,9 @@ export default function AdminPage() {
                                     className="w-5 h-5 rounded border-white/20 bg-white/10 text-blue-600 focus:ring-2 focus:ring-blue-500"
                                   />
                                   <div>
-                                    <span className="text-sm font-medium text-white">Show on Team Roster</span>
+                                    <span className="text-sm font-medium text-white">👁️ Make Profile Visible to Public</span>
                                     <p className="text-xs text-slate-400 mt-1">
-                                      When enabled, this staff member will be visible on the public team roster page
+                                      <strong>Admin Control:</strong> You decide if this staff member appears on the public team roster. Users cannot change this setting.
                                     </p>
                                   </div>
                                 </label>

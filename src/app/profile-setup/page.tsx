@@ -265,7 +265,6 @@ export default function ProfileSetup() {
   const [createNewCoach, setCreateNewCoach] = useState(false);
   const [coachType, setCoachType] = useState<CoachStaffRole | "">("");
   const [staffPosition, setStaffPosition] = useState<StaffPosition | "">("");
-  const [showOnRoster, setShowOnRoster] = useState(true);
   const [coachStaffFirstName, setCoachStaffFirstName] = useState("");
   const [coachStaffLastName, setCoachStaffLastName] = useState("");
   const [coachStaffPhoto, setCoachStaffPhoto] = useState<File | null>(null);
@@ -905,7 +904,7 @@ export default function ProfileSetup() {
           firstName: coachStaffFirstName,
           lastName: coachStaffLastName,
           position: staffPosition,
-          showOnRoster: showOnRoster,
+          showOnRoster: true, // Admin decides visibility during verification
           headshotUrl: headshotUrl || null,
         },
         idImageUrl: idImageUrl || null,
@@ -2024,36 +2023,6 @@ export default function ProfileSetup() {
                         </option>
                       ))}
                     </select>
-                  </div>
-
-                  {/* Show on Roster Toggle */}
-                  <div className="rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm p-4">
-                    <label className="block text-xs font-semibold text-slate-300 mb-3">
-                      {t.showOnRoster}
-                    </label>
-                    <div className="space-y-3">
-                      <label className="flex items-center gap-3 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="showOnRoster"
-                          checked={showOnRoster === true}
-                          onChange={() => setShowOnRoster(true)}
-                          className="h-4 w-4 text-purple-500 border-white/20 bg-white/5 focus:ring-purple-400"
-                        />
-                        <span className="text-sm text-white">{t.showOnRosterYes}</span>
-                      </label>
-                      <label className="flex items-center gap-3 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="showOnRoster"
-                          checked={showOnRoster === false}
-                          onChange={() => setShowOnRoster(false)}
-                          className="h-4 w-4 text-purple-500 border-white/20 bg-white/5 focus:ring-purple-400"
-                        />
-                        <span className="text-sm text-white">{t.showOnRosterNo}</span>
-                      </label>
-                    </div>
-                    <p className="mt-2 text-xs text-slate-400">{t.showOnRosterNote}</p>
                   </div>
 
                   {/* Headshot Photo Upload */}

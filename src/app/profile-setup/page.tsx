@@ -264,6 +264,8 @@ export default function ProfileSetup() {
   const [teamCoaches, setTeamCoaches] = useState<TeamCoach[]>([]);
   const [teamStaffMembers, setTeamStaffMembers] = useState<TeamStaff[]>([]);
   const [claimedStaffPositions, setClaimedStaffPositions] = useState<StaffPosition[]>([]);
+  const [headCoachTaken, setHeadCoachTaken] = useState(false);
+  const [assistantCoachCount, setAssistantCoachCount] = useState(0);
   const [selectedCoachId, setSelectedCoachId] = useState("");
   const [createNewCoach, setCreateNewCoach] = useState(false);
   const [coachType, setCoachType] = useState<CoachStaffRole | "">("");
@@ -394,6 +396,12 @@ export default function ProfileSetup() {
         .filter(staff => staff.position && staff.position !== "staff_member")
         .map(staff => staff.position);
       setClaimedStaffPositions(filledPositions);
+
+      // Track coach positions that are taken
+      const headCoaches = coaches.filter(c => c.role === "head_coach");
+      const assistantCoaches = coaches.filter(c => c.role === "assistant_coach");
+      setHeadCoachTaken(headCoaches.length > 0);
+      setAssistantCoachCount(assistantCoaches.length);
     };
 
     if (selectedTeamId && step === "coach-staff-setup") {
@@ -2100,9 +2108,17 @@ export default function ProfileSetup() {
                       })}
                     </select>
                     {claimedStaffPositions.length > 0 && (
-                      <p className="mt-1 text-xs text-amber-400/80">
-                        ⚠️ {language === 'fr' ? 'Certains postes sont déjà pris par d\'autres membres' : 'Some positions are already claimed by other members'}
-                      </p>
+                      <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+                        <p className="text-xs font-medium text-amber-400 mb-2">
+                          ⚠️ {language === 'fr' ? 'Postes déjà pris :' : 'Positions already claimed:'}
+                        </p>
+                        <ul className="text-xs text-amber-300/80 space-y-1">
+                          {claimedStaffPositions.map((pos) => {
+                            const posLabel = staffPositions.find(p => p.value === pos)?.label || pos;
+                            return <li key={pos}>• {posLabel}</li>;
+                          })}
+                        </ul>
+                      </div>
                     )}
                   </div>
 

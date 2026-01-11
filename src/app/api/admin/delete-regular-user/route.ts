@@ -99,34 +99,64 @@ export async function POST(request: NextRequest) {
 
     // 4. If user is linked to a player/coach/staff, remove the link but keep the roster entry
     if (userData?.linkedPlayerId && userData?.teamId) {
-      const playerRef = db.collection('teams').doc(userData.teamId)
-        .collection('roster').doc(userData.linkedPlayerId);
-      
-      await playerRef.update({
-        linkedUserId: FieldValue.delete(),
-        linkedUserEmail: FieldValue.delete(),
-        linkedAt: FieldValue.delete(),
-        verificationStatus: 'unverified',
-      });
-      console.log(`Unlinked player: ${userData.linkedPlayerId}`);
+      try {
+        const playerRef = db.collection('teams').doc(userData.teamId)
+          .collection('roster').doc(userData.linkedPlayerId);
+        
+        const playerDoc = await playerRef.get();
+        if (playerDoc.exists) {
+          await playerRef.update({
+            linkedUserId: FieldValue.delete(),
+            linkedUserEmail: FieldValue.delete(),
+            linkedAt: FieldValue.delete(),
+            verificationStatus: 'unverified',
+          });
+          console.log(`Unlinked player: ${userData.linkedPlayerId}`);
+        } else {
+          console.log(`Player profile not found: ${userData.linkedPlayerId}`);
+        }
+      } catch (playerError) {
+        console.error('Error unlinking player:', playerError);
+        // Continue with deletion even if unlinking fails
+      }
     }
 
     if (userData?.linkedCoachId && userData?.teamId) {
-      const coachRef = db.collection('teams').doc(userData.teamId)
-        .collection('coachStaff').doc(userData.linkedCoachId);
-      
-      // Delete the coach profile from roster completely
-      await coachRef.delete();
-      console.log(`Deleted coach profile from roster: ${userData.linkedCoachId}`);
+      try {
+        const coachRef = db.collection('teams').doc(userData.teamId)
+          .collection('coachStaff').doc(userData.linkedCoachId);
+        
+        const coachDoc = await coachRef.get();
+        if (coachDoc.exists) {
+          // Delete the coach profile from roster completely
+          await coachRef.delete();
+          console.log(`Deleted coach profile from roster: ${userData.linkedCoachId}`);
+        } else {
+          console.log(`Coach profile not found: ${userData.linkedCoachId}`);
+        }
+      } catch (coachError) {
+        console.error('Error deleting coach:', coachError);
+        // Continue with deletion even if coach deletion fails
+      }
     }
 
     if (userData?.linkedStaffId && userData?.teamId) {
-      const staffRef = db.collection('teams').doc(userData.teamId)
-        .collection('staff').doc(userData.linkedStaffId);
-      
-      // Delete the staff profile from roster completely
-      await staffRef.delete();
-      console.log(`Deleted staff profile from roster: ${userData.linkedStaffId}`);
+      try {
+        const staffRef = db.collection('teams').doc(userData.teamId)
+          .collection('staff').doc(userData.linkedStaffId);
+        
+        const staffDoc = await staffRef.get();
+        if (staffDoc.exists) {
+          // Delete the staff profile from roster completely
+          await staffRef.delete();
+          console.log(`Deleted staff profile from roster: ${userData.linkedStaffId}`);
+        } else {
+          console.log(`Staff profile not found: ${userData.linkedStaffId}`);
+        }
+      } catch (staffError) {
+        console.error('Error deleting staff:', staffError);
+        // Continue with deletion even if staff deletion fails
+      }
     }
 
     // 5. Delete from Firestore users collection

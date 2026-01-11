@@ -2703,17 +2703,17 @@ export default function Home() {
               {userProfile.favoriteTeamMenId && (
                 <button
                   onClick={() => setShowMenTeamFavorite(!showMenTeamFavorite)}
-                  className="group relative flex flex-col items-center gap-2 p-4 rounded-2xl border border-white/20 bg-white/5 backdrop-blur-xl transition-all duration-300 hover:border-white/40 hover:bg-white/10 hover:scale-105"
+                  className="group relative flex flex-col items-center gap-1.5 p-2.5 rounded-xl border border-white/20 bg-white/5 backdrop-blur-xl transition-all duration-300 hover:border-white/40 hover:bg-white/10 hover:scale-100"
                   type="button"
                   aria-label="Toggle men's favorite team"
                 >
-                  <svg className="h-8 w-8 text-white/80" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                  <svg className="h-6 w-6 text-white/80" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
                     <circle cx="12" cy="12" r="9" strokeWidth="2"/>
                     <path d="M12 3c0 3-3 6-3 9s3 6 3 9" />
                     <path d="M21 12c-3 0-6-3-9-3s-6 3-9 3" />
                   </svg>
                   <svg 
-                    className={`h-6 w-6 text-white/80 transition-transform duration-300 ${showMenTeamFavorite ? 'rotate-180' : ''}`}
+                    className={`h-4 w-4 text-white/80 transition-transform duration-300 ${showMenTeamFavorite ? 'rotate-180' : ''}`}
                     fill="none" 
                     stroke="currentColor" 
                     viewBox="0 0 24 24"
@@ -2727,17 +2727,17 @@ export default function Home() {
               {userProfile.favoriteTeamWomenId && (
                 <button
                   onClick={() => setShowWomenTeamFavorite(!showWomenTeamFavorite)}
-                  className="group relative flex flex-col items-center gap-2 p-4 rounded-2xl border border-white/20 bg-white/5 backdrop-blur-xl transition-all duration-300 hover:border-white/40 hover:bg-white/10 hover:scale-105"
+                  className="group relative flex flex-col items-center gap-1.5 p-2.5 rounded-xl border border-white/20 bg-white/5 backdrop-blur-xl transition-all duration-300 hover:border-white/40 hover:bg-white/10 hover:scale-100"
                   type="button"
                   aria-label="Toggle women's favorite team"
                 >
-                  <svg className="h-8 w-8 text-white/80" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                  <svg className="h-6 w-6 text-white/80" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
                     <circle cx="12" cy="12" r="9" strokeWidth="2"/>
                     <path d="M12 3c0 3-3 6-3 9s3 6 3 9" />
                     <path d="M21 12c-3 0-6-3-9-3s-6 3-9 3" />
                   </svg>
                   <svg 
-                    className={`h-6 w-6 text-white/80 transition-transform duration-300 ${showWomenTeamFavorite ? 'rotate-180' : ''}`}
+                    className={`h-4 w-4 text-white/80 transition-transform duration-300 ${showWomenTeamFavorite ? 'rotate-180' : ''}`}
                     fill="none" 
                     stroke="currentColor" 
                     viewBox="0 0 24 24"

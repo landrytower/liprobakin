@@ -111,6 +111,7 @@ const translations = {
     coachSelected: "Coach selected",
     createCoachProfile: "Create Coach Profile",
     createStaffProfile: "Create Staff Profile",
+    alreadyClaimed: "(Already Claimed)",
   },
   fr: {
     completeYourProfile: "Complétez Votre Profil",
@@ -212,6 +213,7 @@ const translations = {
     coachSelected: "Entraîneur sélectionné",
     createCoachProfile: "Créer un Profil d'Entraîneur",
     createStaffProfile: "Créer un Profil Staff",
+    alreadyClaimed: "(Déjà Pris)",
   },
 };
 
@@ -261,6 +263,7 @@ export default function ProfileSetup() {
   const [coachOrStaffChoice, setCoachOrStaffChoice] = useState<"coach" | "staff" | "">("");
   const [teamCoaches, setTeamCoaches] = useState<TeamCoach[]>([]);
   const [teamStaffMembers, setTeamStaffMembers] = useState<TeamStaff[]>([]);
+  const [claimedStaffPositions, setClaimedStaffPositions] = useState<StaffPosition[]>([]);
   const [selectedCoachId, setSelectedCoachId] = useState("");
   const [createNewCoach, setCreateNewCoach] = useState(false);
   const [coachType, setCoachType] = useState<CoachStaffRole | "">("");
@@ -358,31 +361,39 @@ export default function ProfileSetup() {
     const fetchTeamCoachesAndStaff = async () => {
       if (!selectedTeamId || step !== "coach-staff-setup") return;
 
-      // Fetch coaches from the team's coaches subcollection
-      const coachesRef = collection(firebaseDB, "teams", selectedTeamId, "coaches");
-      const coachesSnapshot = await getDocs(coachesRef);
-      const coaches: TeamCoach[] = coachesSnapshot.docs.map((doc) => ({
-        id: doc.id,
-        firstName: doc.data().firstName || "",
-        lastName: doc.data().lastName || "",
-        role: doc.data().role || "assistant_coach",
-        headshot: doc.data().headshot || "",
-        claimed: doc.data().claimed || false,
-      }));
+      // Fetch coaches from the team's coachStaff subcollection
+      const coachStaffRef = collection(firebaseDB, "teams", selectedTeamId, "coachStaff");
+      const coachStaffSnapshot = await getDocs(coachStaffRef);
+      const coaches: TeamCoach[] = coachStaffSnapshot.docs
+        .filter((doc) => doc.data().role === "head_coach" || doc.data().role === "assistant_coach")
+        .map((doc) => ({
+          id: doc.id,
+          firstName: doc.data().firstName || "",
+          lastName: doc.data().lastName || "",
+          role: doc.data().role || "assistant_coach",
+          headshot: doc.data().headshot || "",
+          claimed: doc.data().linkedUserId ? true : false, // Check if linked to a user account
+        }));
       setTeamCoaches(coaches);
 
-      // Fetch staff from the team's staff subcollection
-      const staffRef = collection(firebaseDB, "teams", selectedTeamId, "staff");
-      const staffSnapshot = await getDocs(staffRef);
-      const staffMembers: TeamStaff[] = staffSnapshot.docs.map((doc) => ({
-        id: doc.id,
-        firstName: doc.data().firstName || "",
-        lastName: doc.data().lastName || "",
-        position: doc.data().position || "staff_member",
-        headshot: doc.data().headshot || "",
-        claimed: doc.data().claimed || false,
-      }));
+      // Fetch staff from the team's coachStaff subcollection (role === "staff")
+      const staffMembers: TeamStaff[] = coachStaffSnapshot.docs
+        .filter((doc) => doc.data().role === "staff")
+        .map((doc) => ({
+          id: doc.id,
+          firstName: doc.data().firstName || "",
+          lastName: doc.data().lastName || "",
+          position: doc.data().position || "staff_member",
+          headshot: doc.data().headshot || "",
+          claimed: doc.data().linkedUserId ? true : false, // Check if linked to a user account
+        }));
       setTeamStaffMembers(staffMembers);
+
+      // Track positions that are already filled (exclude staff_member as it allows multiple)
+      const filledPositions = staffMembers
+        .filter(staff => staff.position && staff.position !== "staff_member")
+        .map(staff => staff.position);
+      setClaimedStaffPositions(filledPositions);
     };
 
     if (selectedTeamId && step === "coach-staff-setup") {
@@ -925,11 +936,21 @@ export default function ProfileSetup() {
   const getAvailableCoachPositions = () => {
     const headCoaches = teamCoaches.filter(c => c.role === "head_coach");
     const assistantCoaches = teamCoaches.filter(c => c.role === "assistant_coach");
+    const claimedHeadCoaches = headCoaches.filter(c => c.claimed);
+    const claimedAssistantCoaches = assistantCoaches.filter(c => c.claimed);
     
-    const canAddHeadCoach = headCoaches.length === 0;
-    const canAddAssistant = assistantCoaches.length < 2;
+    const canAddHeadCoach = claimedHeadCoaches.length === 0;
+    const canAddAssistant = claimedAssistantCoaches.length < 2;
     
-    return { canAddHeadCoach, canAddAssistant, coachPositionsFull: !canAddHeadCoach && !canAddAssistant };
+    return { 
+      canAddHeadCoach, 
+      canAddAssistant, 
+      coachPositionsFull: !canAddHeadCoach && !canAddAssistant,
+      headCoaches,
+      assistantCoaches,
+      claimedHeadCoaches,
+      claimedAssistantCoaches
+    };
   };
 
   // Staff positions list
@@ -1678,7 +1699,9 @@ export default function ProfileSetup() {
                             </div>
                             <div className="flex-1">
                               <h3 className="text-lg sm:text-xl font-bold text-white mb-1">{t.coach}</h3>
-                              <p className="text-sm text-slate-400">{t.iAmACoachRole}</p>
+                              <p className="text-sm text-slate-400">
+                                {coachPositionsFull ? "All coach positions are filled" : t.iAmACoachRole}
+                              </p>
                             </div>
                             <svg className="h-5 w-5 text-slate-400 group-hover:text-blue-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -1733,7 +1756,7 @@ export default function ProfileSetup() {
               {selectedTeamId && coachOrStaffChoice === "coach" && (
                 <div className="space-y-4">
                   {/* Option to claim existing coach */}
-                  {teamCoaches.filter(c => !c.claimed).length > 0 && !createNewCoach && (
+                  {teamCoaches.length > 0 && !createNewCoach && (teamCoaches.filter(c => !c.claimed).length > 0) && (
                     <div className="space-y-4">
                       <div className="group">
                         <label className="block text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wider">
@@ -1747,9 +1770,15 @@ export default function ProfileSetup() {
                             className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-sm sm:text-base text-white focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all duration-300 appearance-none cursor-pointer"
                           >
                             <option value="" className="bg-slate-900">{t.selectCoachToClaim}</option>
-                            {teamCoaches.filter(c => !c.claimed).map((coach) => (
-                              <option key={coach.id} value={coach.id} className="bg-slate-900">
+                            {teamCoaches.map((coach) => (
+                              <option 
+                                key={coach.id} 
+                                value={coach.id} 
+                                disabled={coach.claimed}
+                                className={coach.claimed ? "bg-slate-900 text-slate-500 opacity-50" : "bg-slate-900"}
+                              >
                                 {coach.firstName} {coach.lastName} - {coach.role === "head_coach" ? t.headCoach : t.assistantCoach}
+                                {coach.claimed ? " (already created)" : ""}
                               </option>
                             ))}
                           </select>
@@ -1886,27 +1915,54 @@ export default function ProfileSetup() {
                         <label className="block text-xs font-semibold text-slate-300 mb-2">
                           {t.selectCoachType} <span className="text-red-400">*</span>
                         </label>
-                        <select
-                          value={coachType}
-                          onChange={(e) => setCoachType(e.target.value as CoachStaffRole)}
-                          className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all appearance-none cursor-pointer"
-                          required
-                        >
-                          <option value="" className="bg-slate-900">{t.selectCoachType}</option>
-                          {(() => {
-                            const { canAddHeadCoach, canAddAssistant } = getAvailableCoachPositions();
-                            return (
-                              <>
+                        {(() => {
+                          const { canAddHeadCoach, claimedAssistantCoaches, claimedHeadCoaches } = getAvailableCoachPositions();
+                          const assistantsAvailable = 2 - claimedAssistantCoaches.length;
+                          const hasUnavailablePositions = !canAddHeadCoach || assistantsAvailable < 2;
+                          
+                          return (
+                            <>
+                              {hasUnavailablePositions && (
+                                <div className="mb-3 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3">
+                                  <p className="text-xs font-medium text-yellow-400 mb-1">Positions Already Filled:</p>
+                                  <ul className="text-xs text-yellow-300/80 space-y-1">
+                                    {!canAddHeadCoach && <li>• Head Coach (claimed)</li>}
+                                    {assistantsAvailable === 0 && <li>• Assistant Coach 1 & 2 (both claimed)</li>}
+                                    {assistantsAvailable === 1 && <li>• Assistant Coach 1 (claimed)</li>}
+                                  </ul>
+                                </div>
+                              )}
+                              <select
+                                value={coachType}
+                                onChange={(e) => setCoachType(e.target.value as CoachStaffRole)}
+                                className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all appearance-none cursor-pointer"
+                                required
+                              >
+                                <option value="" className="bg-slate-900">{t.selectCoachType}</option>
                                 {canAddHeadCoach && (
-                                  <option value="head_coach" className="bg-slate-900">{t.headCoach}</option>
+                                  <option value="head_coach" className="bg-slate-900">
+                                    {t.headCoach}
+                                  </option>
                                 )}
-                                {canAddAssistant && (
-                                  <option value="assistant_coach" className="bg-slate-900">{t.assistantCoach}</option>
+                                {assistantsAvailable >= 1 && (
+                                  <option value="assistant_coach" className="bg-slate-900">
+                                    {t.assistantCoach} 1
+                                  </option>
                                 )}
-                              </>
-                            );
-                          })()}
-                        </select>
+                                {assistantsAvailable >= 2 && (
+                                  <option value="assistant_coach" className="bg-slate-900">
+                                    {t.assistantCoach} 2
+                                  </option>
+                                )}
+                                {!canAddHeadCoach && assistantsAvailable === 0 && (
+                                  <option value="" disabled className="bg-slate-900 text-slate-500">
+                                    All positions filled
+                                  </option>
+                                )}
+                              </select>
+                            </>
+                          );
+                        })()}
                       </div>
 
                       {/* Headshot Photo Upload */}
@@ -2029,12 +2085,25 @@ export default function ProfileSetup() {
                       required
                     >
                       <option value="" className="bg-slate-900">{t.selectStaffRole}</option>
-                      {staffPositions.map((pos) => (
-                        <option key={pos.value} value={pos.value} className="bg-slate-900">
-                          {pos.label}
-                        </option>
-                      ))}
+                      {staffPositions.map((pos) => {
+                        const isClaimed = claimedStaffPositions.includes(pos.value);
+                        return (
+                          <option 
+                            key={pos.value} 
+                            value={pos.value} 
+                            className={`bg-slate-900 ${isClaimed ? 'text-slate-500' : ''}`}
+                            disabled={isClaimed}
+                          >
+                            {pos.label}{isClaimed ? ` ${t.alreadyClaimed}` : ''}
+                          </option>
+                        );
+                      })}
                     </select>
+                    {claimedStaffPositions.length > 0 && (
+                      <p className="mt-1 text-xs text-amber-400/80">
+                        ⚠️ {language === 'fr' ? 'Certains postes sont déjà pris par d\'autres membres' : 'Some positions are already claimed by other members'}
+                      </p>
+                    )}
                   </div>
 
                   {/* Headshot Photo Upload */}

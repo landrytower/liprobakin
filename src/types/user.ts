@@ -27,6 +27,10 @@ export interface UserProfile {
   linkedPlayerId?: string; // The actual player ID in team roster
   linkedPlayerName?: string; // The official player name from roster
   
+  // Linked coach/staff data (set when verification is approved)
+  linkedCoachId?: string; // The actual coach/staff ID in team coachStaff
+  linkedCoachName?: string; // The official coach/staff name from coachStaff
+  
   // Fan specific fields
   favoriteTeamId?: string;
   favoriteTeamName?: string;

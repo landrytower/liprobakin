@@ -240,8 +240,20 @@ export default function AccountPage() {
       return;
     }
 
-    if (userProfile.role !== "player" || userProfile.verificationStatus !== "approved" || !userProfile.linkedPlayerId || !userProfile.teamId) {
+    // For players
+    if (userProfile.role === "player" && (userProfile.verificationStatus !== "approved" || !userProfile.linkedPlayerId || !userProfile.teamId)) {
       setHeadshotError("Headshot updates are available only for verified players.");
+      return;
+    }
+
+    // For coaches/staff
+    if ((userProfile.role === "coach" || userProfile.role === "staff") && (userProfile.verificationStatus !== "approved" || !userProfile.linkedCoachId || !userProfile.teamId)) {
+      setHeadshotError("Headshot updates are available only for verified coaches/staff.");
+      return;
+    }
+
+    if (userProfile.role !== "player" && userProfile.role !== "coach" && userProfile.role !== "staff") {
+      setHeadshotError("Headshot updates are not available for your role.");
       return;
     }
 
@@ -250,29 +262,54 @@ export default function AccountPage() {
     setHeadshotMessage("\u00a0");
 
     try {
-      const playerFullName = `${userProfile.firstName}_${userProfile.lastName}`.replace(/\s+/g, '_');
+      const fullName = `${userProfile.firstName}_${userProfile.lastName}`.replace(/\s+/g, '_');
       const fileExtension = headshotFile.name.split('.').pop();
-      const storageRef = ref(firebaseStorage, `player-headshot-updates/${playerFullName}_${Date.now()}.${fileExtension}`);
+      const storagePath = userProfile.role === "player" 
+        ? `player-headshot-updates/${fullName}_${Date.now()}.${fileExtension}`
+        : `coach-staff-headshots/${fullName}.${fileExtension}`; // Store with coach name, no timestamp
+      const storageRef = ref(firebaseStorage, storagePath);
       await uploadBytes(storageRef, headshotFile);
       const newHeadshotUrl = await getDownloadURL(storageRef);
 
-      await addDoc(collection(firebaseDB, "verificationRequests"), {
-        userId: user.uid,
-        userEmail: user.email || userProfile.email || "",
-        userFirstName: userProfile.firstName,
-        userLastName: userProfile.lastName,
-        userPhone: userProfile.phoneNumber || "",
-        role: "player",
-        teamId: userProfile.teamId,
-        teamName: userProfile.teamName || "",
-        requestType: "update_headshot",
-        existingPlayerId: userProfile.linkedPlayerId,
-        existingPlayerName: `${userProfile.firstName} ${userProfile.lastName}`,
-        previousHeadshotUrl: playerData?.headshot || null,
-        newHeadshotUrl,
-        status: "pending",
-        submittedAt: serverTimestamp(),
-      });
+      // For players
+      if (userProfile.role === "player") {
+        await addDoc(collection(firebaseDB, "verificationRequests"), {
+          userId: user.uid,
+          userEmail: user.email || userProfile.email || "",
+          userFirstName: userProfile.firstName,
+          userLastName: userProfile.lastName,
+          userPhone: userProfile.phoneNumber || "",
+          role: "player",
+          teamId: userProfile.teamId,
+          teamName: userProfile.teamName || "",
+          requestType: "update_headshot",
+          existingPlayerId: userProfile.linkedPlayerId,
+          existingPlayerName: `${userProfile.firstName} ${userProfile.lastName}`,
+          previousHeadshotUrl: playerData?.headshot || null,
+          newHeadshotUrl,
+          status: "pending",
+          submittedAt: serverTimestamp(),
+        });
+      } else {
+        // For coaches/staff
+        await addDoc(collection(firebaseDB, "verificationRequests"), {
+          userId: user.uid,
+          userEmail: user.email || userProfile.email || "",
+          userFirstName: userProfile.firstName,
+          userLastName: userProfile.lastName,
+          userPhone: userProfile.phoneNumber || "",
+          role: userProfile.role,
+          teamId: userProfile.teamId,
+          teamName: userProfile.teamName || "",
+          requestType: "update_headshot",
+          existingCoachId: userProfile.linkedCoachId,
+          existingCoachName: `${userProfile.firstName} ${userProfile.lastName}`,
+          previousHeadshotUrl: null, // Will be fetched from coachStaff collection
+          newHeadshotUrl,
+          status: "pending",
+          submittedAt: serverTimestamp(),
+        });
+      }
 
       setHeadshotMessage("Headshot submitted for admin approval.");
       setHeadshotFile(null);
@@ -633,7 +670,7 @@ export default function AccountPage() {
               </div>
             )}
 
-            {/* Headshot update (requires admin approval) */}
+            {/* Headshot Change for Players (requires admin approval) */}
             {userProfile.role === 'player' && userProfile.verificationStatus === 'approved' && userProfile.linkedPlayerId && (
               <div className="rounded-xl border border-blue-500/30 bg-blue-500/5 p-4 sm:p-5">
                 <label className="text-xs font-semibold text-blue-300 uppercase tracking-wider mb-2 block">{t.headshot}</label>
@@ -663,6 +700,51 @@ export default function AccountPage() {
                         onClick={handleHeadshotSubmit}
                         disabled={headshotSubmitting || !headshotFile}
                         className="rounded-lg bg-blue-600 hover:bg-blue-700 px-4 py-2 text-xs sm:text-sm font-semibold text-white transition disabled:opacity-50 disabled:cursor-not-allowed"
+                        type="button"
+                      >
+                        {headshotSubmitting ? t.submitting : t.submitForApproval}
+                      </button>
+                      <p className="text-xs text-slate-400">{t.adminApprovalRequired}</p>
+                    </div>
+                    {headshotError && <p className="text-xs text-red-400">{headshotError}</p>}
+                    {headshotMessage.trim() && headshotMessage !== '\u00a0' && (
+                      <p className="text-xs text-green-400">{headshotMessage}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Headshot Change for Coaches/Staff (requires admin approval) */}
+            {(userProfile.role === 'coach' || userProfile.role === 'staff') && userProfile.verificationStatus === 'approved' && userProfile.linkedCoachId && (
+              <div className="rounded-xl border border-purple-500/30 bg-purple-500/5 p-4 sm:p-5">
+                <label className="text-xs font-semibold text-purple-300 uppercase tracking-wider mb-2 block">{t.headshot}</label>
+                <div className="flex flex-col sm:flex-row items-start gap-4">
+                  <div className="w-20 h-20 sm:w-24 sm:h-24 overflow-hidden rounded-xl border border-white/10 bg-white/5 flex items-center justify-center flex-shrink-0">
+                    {headshotPreview ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={headshotPreview}
+                        alt={t.headshotPreview}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-xs text-slate-400 text-center px-2">{t.noHeadshot}</span>
+                    )}
+                  </div>
+                  <div className="flex-1 space-y-3 w-full">
+                    <p className="text-xs sm:text-sm text-slate-300">{t.uploadNewHeadshot}</p>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setHeadshotFile(e.target.files?.[0] || null)}
+                      className="w-full text-xs sm:text-sm text-slate-200 file:mr-2 sm:file:mr-4 file:rounded-lg file:border-0 file:bg-gradient-to-r file:from-purple-600 file:to-pink-500 file:px-3 sm:file:px-4 file:py-1.5 sm:file:py-2 file:text-xs sm:file:text-sm file:font-semibold file:text-white hover:file:shadow-lg cursor-pointer"
+                    />
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                      <button
+                        onClick={handleHeadshotSubmit}
+                        disabled={headshotSubmitting || !headshotFile}
+                        className="rounded-lg bg-purple-600 hover:bg-purple-700 px-4 py-2 text-xs sm:text-sm font-semibold text-white transition disabled:opacity-50 disabled:cursor-not-allowed"
                         type="button"
                       >
                         {headshotSubmitting ? t.submitting : t.submitForApproval}

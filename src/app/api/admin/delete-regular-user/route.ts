@@ -128,6 +128,26 @@ export async function POST(request: NextRequest) {
         
         const coachDoc = await coachRef.get();
         if (coachDoc.exists) {
+          const coachData = coachDoc.data();
+          // Delete the coach's headshot from Firebase Storage if it exists
+          if (coachData?.headshot) {
+            try {
+              const bucket = getStorage().bucket();
+              const headshotUrl = coachData.headshot;
+              // Extract file path from storage URL
+              if (headshotUrl && headshotUrl.includes('/o/')) {
+                const filePath = decodeURIComponent(headshotUrl.split('/o/')[1]?.split('?')[0] || '');
+                if (filePath) {
+                  await bucket.file(filePath).delete();
+                  console.log(`Deleted coach headshot file: ${filePath}`);
+                }
+              }
+            } catch (storageError) {
+              console.log('Note: Could not delete coach headshot from storage:', storageError);
+              // Continue with coach deletion even if headshot deletion fails
+            }
+          }
+          
           // Delete the coach profile from roster completely
           await coachRef.delete();
           console.log(`Deleted coach profile from roster: ${userData.linkedCoachId}`);
@@ -142,11 +162,40 @@ export async function POST(request: NextRequest) {
 
     if (userData?.linkedStaffId && userData?.teamId) {
       try {
-        const staffRef = db.collection('teams').doc(userData.teamId)
-          .collection('staff').doc(userData.linkedStaffId);
+        // Try coachStaff collection first (new location)
+        let staffRef = db.collection('teams').doc(userData.teamId)
+          .collection('coachStaff').doc(userData.linkedStaffId);
         
-        const staffDoc = await staffRef.get();
+        let staffDoc = await staffRef.get();
+        
+        // If not found in coachStaff, try the old staff collection
+        if (!staffDoc.exists) {
+          staffRef = db.collection('teams').doc(userData.teamId)
+            .collection('staff').doc(userData.linkedStaffId);
+          staffDoc = await staffRef.get();
+        }
+        
         if (staffDoc.exists) {
+          const staffData = staffDoc.data();
+          // Delete the staff's headshot from Firebase Storage if it exists
+          if (staffData?.headshot) {
+            try {
+              const bucket = getStorage().bucket();
+              const headshotUrl = staffData.headshot;
+              // Extract file path from storage URL
+              if (headshotUrl && headshotUrl.includes('/o/')) {
+                const filePath = decodeURIComponent(headshotUrl.split('/o/')[1]?.split('?')[0] || '');
+                if (filePath) {
+                  await bucket.file(filePath).delete();
+                  console.log(`Deleted staff headshot file: ${filePath}`);
+                }
+              }
+            } catch (storageError) {
+              console.log('Note: Could not delete staff headshot from storage:', storageError);
+              // Continue with staff deletion even if headshot deletion fails
+            }
+          }
+          
           // Delete the staff profile from roster completely
           await staffRef.delete();
           console.log(`Deleted staff profile from roster: ${userData.linkedStaffId}`);

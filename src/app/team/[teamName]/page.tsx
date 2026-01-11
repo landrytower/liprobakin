@@ -98,7 +98,9 @@ type StaffMember = {
   firstName: string;
   lastName: string;
   role: "head_coach" | "assistant_coach" | "staff";
+  position?: string;
   headshot?: string;
+  showOnRoster?: boolean;
 };
 
 export default function TeamPage() {
@@ -111,6 +113,8 @@ export default function TeamPage() {
   const [teamData, setTeamData] = useState<TeamData | null>(null);
   const [roster, setRoster] = useState<EnhancedRosterPlayer[]>([]);
   const [staff, setStaff] = useState<StaffMember[]>([]);
+  const [coaches, setCoaches] = useState<StaffMember[]>([]);
+  const [teamStaff, setTeamStaff] = useState<StaffMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 
@@ -232,7 +236,9 @@ export default function TeamPage() {
             firstName: data.firstName || "",
             lastName: data.lastName || "",
             role: data.role || "staff",
+            position: data.position,
             headshot: data.headshot,
+            showOnRoster: data.showOnRoster ?? true,
           };
         });
         
@@ -241,7 +247,18 @@ export default function TeamPage() {
         staffData.sort((a, b) => roleOrder[a.role] - roleOrder[b.role]);
         
         console.log("Staff data to set:", staffData);
+        
+        // Separate coaches and staff
+        const coachesOnly = staffData.filter(member => 
+          member.role === "head_coach" || member.role === "assistant_coach"
+        );
+        const staffOnly = staffData.filter(member => 
+          member.role === "staff" && member.showOnRoster !== false
+        );
+        
         setStaff(staffData);
+        setCoaches(coachesOnly);
+        setTeamStaff(staffOnly);
         setLoading(false);
       } catch (error) {
         console.error("Error fetching team data:", error);
@@ -492,18 +509,18 @@ export default function TeamPage() {
         <div className="mx-auto max-w-7xl px-4 pb-12 sm:px-6 lg:px-8">
           <h2 className="text-3xl font-bold mb-8">{t.coachingStaff}</h2>
           
-          {staff.length === 0 ? (
+          {coaches.length === 0 ? (
             <div className="text-center py-12 text-slate-400">
               <p>{t.noStaff}</p>
             </div>
           ) : (
           <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-            {staff.map((member) => {
+            {coaches.map((member) => {
               const staffImage = member.headshot || "/players/default-avatar.png";
               const fullName = `${member.firstName} ${member.lastName}`.trim();
               
               // Format role for display
-              const roleDisplay = member.role
+              const roleDisplay = member.position || member.role
                 .split("_")
                 .map(word => word.charAt(0).toUpperCase() + word.slice(1))
                 .join(" ");
@@ -544,6 +561,55 @@ export default function TeamPage() {
           )}
         </div>
       }
+
+      {/* Staff Section */}
+      {teamStaff.length > 0 && (
+        <div className="mx-auto max-w-7xl px-4 pb-12 sm:px-6 lg:px-8">
+          <h2 className="text-3xl font-bold mb-8">{language === 'fr' ? 'Staff' : 'Staff'}</h2>
+          
+          <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+            {teamStaff.map((member) => {
+              const staffImage = member.headshot || "/players/default-avatar.png";
+              const fullName = `${member.firstName} ${member.lastName}`.trim();
+              
+              // Display position instead of role
+              const positionDisplay = member.position || "Staff Member";
+              
+              return (
+                <div
+                  key={member.id}
+                  className="relative rounded-lg border border-white/10 bg-slate-900/60 overflow-hidden"
+                >
+                  <div className="aspect-[3/4] relative">
+                    <Image
+                      src={staffImage}
+                      alt={fullName}
+                      fill
+                      className="object-cover"
+                    />
+                    {!member.headshot && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-slate-800">
+                        <span className="text-2xl md:text-xl font-bold text-slate-500">
+                          {member.firstName?.charAt(0) || ""}{member.lastName?.charAt(0) || ""}
+                        </span>
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent"></div>
+                    <div className="absolute bottom-0 left-0 right-0 p-2 sm:p-1.5">
+                      <p className="text-xs sm:text-[10px] uppercase tracking-wide text-green-400 font-semibold mb-0.5">
+                        {positionDisplay}
+                      </p>
+                      <h3 className="text-sm sm:text-xs font-semibold text-white leading-tight">
+                        {fullName}
+                      </h3>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

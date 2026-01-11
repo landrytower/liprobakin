@@ -711,6 +711,9 @@ export default function AdminPage() {
   const [gamePlannerOpen, setGamePlannerOpen] = useState(false);
   const [verificationRequests, setVerificationRequests] = useState<any[]>([]);
   const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [editingUser, setEditingUser] = useState<any>(null);
+  const [editUserForm, setEditUserForm] = useState({ firstName: '', lastName: '', showOnRoster: true });
+  const [savingUserEdit, setSavingUserEdit] = useState(false);
   const [pendingVerifications, setPendingVerifications] = useState<any[]>([]);
   const [selectedVerificationRequest, setSelectedVerificationRequest] = useState<any>(null);
   const [reviewNotes, setReviewNotes] = useState("");
@@ -1174,6 +1177,59 @@ export default function AdminPage() {
     const interval = setInterval(fetchUsersAndVerifications, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  // Handle saving user edits (name, showOnRoster)
+  const handleSaveUserEdit = async () => {
+    if (!editingUser) return;
+    
+    setSavingUserEdit(true);
+    try {
+      // Update user document
+      await updateDoc(doc(firebaseDB, "users", editingUser.id), {
+        firstName: editUserForm.firstName,
+        lastName: editUserForm.lastName,
+        updatedAt: serverTimestamp(),
+      });
+
+      // If user is linked to a player/coach/staff, update their roster entry too
+      if (editingUser.linkedPlayerId && editingUser.teamId) {
+        const rosterRef = doc(firebaseDB, "teams", editingUser.teamId, "roster", editingUser.linkedPlayerId);
+        await updateDoc(rosterRef, {
+          firstName: editUserForm.firstName,
+          lastName: editUserForm.lastName,
+          name: `${editUserForm.firstName} ${editUserForm.lastName}`,
+          showOnRoster: editUserForm.showOnRoster,
+          updatedAt: serverTimestamp(),
+        });
+      }
+      
+      if (editingUser.linkedCoachId && editingUser.teamId) {
+        const coachRef = doc(firebaseDB, "teams", editingUser.teamId, "coachStaff", editingUser.linkedCoachId);
+        await updateDoc(coachRef, {
+          firstName: editUserForm.firstName,
+          lastName: editUserForm.lastName,
+          showOnRoster: editUserForm.showOnRoster,
+          updatedAt: serverTimestamp(),
+        });
+      }
+
+      // Refresh user list
+      const usersSnapshot = await getDocs(collection(firebaseDB, "users"));
+      setAllUsers(usersSnapshot.docs.map(d => ({ 
+        id: d.id, 
+        ...d.data(), 
+        createdAt: d.data().createdAt?.toDate() || new Date() 
+      })));
+
+      setEditingUser(null);
+      alert(`✅ ${editUserForm.firstName} ${editUserForm.lastName} updated successfully!`);
+    } catch (error: any) {
+      console.error("Error updating user:", error);
+      alert(`Error updating user: ${error.message}`);
+    } finally {
+      setSavingUserEdit(false);
+    }
+  };
 
   useEffect(() => {
     const refereesQuery = query(collection(firebaseDB, "referees"), orderBy("lastName", "asc"));
@@ -3005,10 +3061,11 @@ export default function AdminPage() {
         // CREATE NEW STAFF PROFILE
         if (status === "approved" && selectedVerificationRequest.newStaffData) {
           const staffData = selectedVerificationRequest.newStaffData;
-          const staffRef = collection(firebaseDB, `teams/${selectedVerificationRequest.teamId}/staff`);
+          const staffRef = collection(firebaseDB, `teams/${selectedVerificationRequest.teamId}/coachStaff`);
           const newStaffDoc = await addDoc(staffRef, {
             firstName: staffData.firstName,
             lastName: staffData.lastName,
+            role: "staff",
             position: staffData.position,
             showOnRoster: showOnRosterOverride, // Use admin's override value
             headshot: staffData.headshotUrl || "",
@@ -3028,8 +3085,8 @@ export default function AdminPage() {
             verificationReviewedBy: user.email,
             verificationNotes: reviewNotes,
             updatedAt: serverTimestamp(),
-            linkedStaffId: newStaffDoc.id,
-            linkedStaffName: `${staffData.firstName} ${staffData.lastName}`,
+            linkedCoachId: newStaffDoc.id,
+            linkedCoachName: `${staffData.firstName} ${staffData.lastName}`,
           });
 
           alert(`✅ Staff added to ${selectedVerificationRequest.teamName}!\nName: ${staffData.firstName} ${staffData.lastName}\nPosition: ${staffData.position}\nVisible on Roster: ${showOnRosterOverride ? 'Yes' : 'No'}`);
@@ -5768,7 +5825,15 @@ export default function AdminPage() {
                       allUsers.map((user: any) => (
                         <div
                           key={user.id}
-                          className="rounded-lg border border-white/10 bg-slate-800/30 p-4 transition hover:bg-slate-800/50"
+                          className="rounded-lg border border-white/10 bg-slate-800/30 p-4 transition hover:bg-slate-800/50 cursor-pointer"
+                          onClick={() => {
+                            setEditingUser(user);
+                            setEditUserForm({
+                              firstName: user.firstName || '',
+                              lastName: user.lastName || '',
+                              showOnRoster: user.showOnRoster !== false, // Default to true
+                            });
+                          }}
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex-1">
@@ -5803,10 +5868,27 @@ export default function AdminPage() {
                               )}
                             </div>
                             <div className="flex items-center gap-3">
+                              {/* Edit Button */}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingUser(user);
+                                  setEditUserForm({
+                                    firstName: user.firstName || '',
+                                    lastName: user.lastName || '',
+                                    showOnRoster: user.showOnRoster !== false,
+                                  });
+                                }}
+                                className="rounded-lg bg-blue-600/20 px-3 py-1.5 text-xs font-semibold text-blue-400 transition hover:bg-blue-600/30"
+                                type="button"
+                              >
+                                ✏️ Edit
+                              </button>
                               {/* Add to Roster Button for Custom Players */}
                               {user.role === 'player' && user.verificationStatus === 'approved' && user.teamId && !user.linkedPlayerId && (
                                 <button
-                                  onClick={async () => {
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
                                     if (window.confirm(`Add ${user.firstName} ${user.lastName} to ${user.teamName} roster?`)) {
                                       try {
                                         // Get user's custom player data from verification request
@@ -5887,7 +5969,8 @@ export default function AdminPage() {
                                 <div>{user.createdAt?.toLocaleDateString('fr-FR')}</div>
                               </div>
                               <button
-                                onClick={async () => {
+                                onClick={async (e) => {
+                                  e.stopPropagation();
                                   if (window.confirm(`Are you sure you want to delete ${user.firstName} ${user.lastName}? This will:\n\n• Delete their account from Firebase Auth\n• Delete all their data from Firestore\n• Delete their headshot from Storage\n• Unlink from any roster (keeping the player profile)\n\nThis action cannot be undone.`)) {
                                     try {
                                       // Call API to delete user completely
@@ -5935,6 +6018,139 @@ export default function AdminPage() {
                 </div>
               </div>
             </div>
+
+            {/* Edit User Modal */}
+            {editingUser && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+                <div className="relative w-full max-w-md rounded-2xl border border-white/20 bg-gradient-to-br from-slate-900 to-slate-950 p-6 shadow-2xl">
+                  <button
+                    onClick={() => setEditingUser(null)}
+                    className="absolute right-4 top-4 text-slate-400 hover:text-white transition"
+                    type="button"
+                  >
+                    ✕
+                  </button>
+                  
+                  <h3 className="text-xl font-bold text-white mb-6">✏️ Modifier le compte</h3>
+                  
+                  {/* User Info Header */}
+                  <div className="mb-6 p-4 rounded-xl bg-slate-800/50 border border-white/10">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold text-lg">
+                        {editingUser.firstName?.[0]}{editingUser.lastName?.[0]}
+                      </div>
+                      <div>
+                        <p className="text-white font-semibold">{editingUser.email}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          {editingUser.role && (
+                            <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                              editingUser.role === 'player' ? 'bg-blue-500/20 text-blue-400' :
+                              editingUser.role === 'coach' || editingUser.role === 'staff' ? 'bg-purple-500/20 text-purple-400' :
+                              'bg-green-500/20 text-green-400'
+                            }`}>
+                              {editingUser.role}
+                            </span>
+                          )}
+                          {editingUser.teamName && (
+                            <span className="text-xs text-slate-400">🏀 {editingUser.teamName}</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Edit Form */}
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-400 mb-1">Prénom</label>
+                        <input
+                          type="text"
+                          value={editUserForm.firstName}
+                          onChange={(e) => setEditUserForm(prev => ({ ...prev, firstName: e.target.value }))}
+                          className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-white focus:border-purple-400/50 focus:outline-none focus:ring-2 focus:ring-purple-400/30"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-400 mb-1">Nom</label>
+                        <input
+                          type="text"
+                          value={editUserForm.lastName}
+                          onChange={(e) => setEditUserForm(prev => ({ ...prev, lastName: e.target.value }))}
+                          className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-white focus:border-purple-400/50 focus:outline-none focus:ring-2 focus:ring-purple-400/30"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Show on Roster Toggle - Only for players/coaches/staff */}
+                    {(editingUser.role === 'player' || editingUser.role === 'coach' || editingUser.role === 'staff') && (editingUser.linkedPlayerId || editingUser.linkedCoachId) && (
+                      <div className="p-4 rounded-xl bg-slate-800/30 border border-white/10">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-white font-medium">Afficher sur le Roster</p>
+                            <p className="text-xs text-slate-400 mt-1">
+                              {editUserForm.showOnRoster 
+                                ? "Le profil est visible sur la page de l'équipe" 
+                                : "Le profil est masqué de la page de l'équipe"}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setEditUserForm(prev => ({ ...prev, showOnRoster: !prev.showOnRoster }))}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                              editUserForm.showOnRoster ? 'bg-green-500' : 'bg-slate-600'
+                            }`}
+                          >
+                            <span
+                              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                editUserForm.showOnRoster ? 'translate-x-6' : 'translate-x-1'
+                              }`}
+                            />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Info notice for fans */}
+                    {editingUser.role === 'fan' && (
+                      <div className="p-3 rounded-lg bg-slate-800/30 border border-white/10">
+                        <p className="text-xs text-slate-400">
+                          ℹ️ Les fans n&apos;apparaissent pas sur les rosters d&apos;équipe.
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Info notice if not linked */}
+                    {(editingUser.role === 'player' || editingUser.role === 'coach' || editingUser.role === 'staff') && !editingUser.linkedPlayerId && !editingUser.linkedCoachId && (
+                      <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                        <p className="text-xs text-amber-400">
+                          ⚠️ Ce compte n&apos;est pas encore lié à un profil de roster. L&apos;option &quot;Afficher sur le Roster&quot; sera disponible une fois le profil ajouté au roster.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="mt-6 flex gap-3">
+                    <button
+                      onClick={() => setEditingUser(null)}
+                      className="flex-1 rounded-xl border border-white/20 bg-transparent px-4 py-2.5 text-sm font-semibold text-slate-300 transition hover:bg-white/5"
+                      type="button"
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      onClick={handleSaveUserEdit}
+                      disabled={savingUserEdit || !editUserForm.firstName || !editUserForm.lastName}
+                      className="flex-1 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:shadow-lg hover:shadow-purple-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                      type="button"
+                    >
+                      {savingUserEdit ? 'Enregistrement...' : 'Enregistrer'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
             </>
             )}
 

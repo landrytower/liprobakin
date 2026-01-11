@@ -136,18 +136,31 @@ export default function AdminVerification() {
           });
         }
       } else if (selectedRequest.requestType === "update_headshot") {
-        if (status === "approved" && selectedRequest.existingPlayerId && selectedRequest.newHeadshotUrl) {
-          // Update roster headshot
-          await updateDoc(
-            doc(firebaseDB, "teams", selectedRequest.teamId, "roster", selectedRequest.existingPlayerId),
-            {
-              headshot: selectedRequest.newHeadshotUrl,
-              verificationStatus: "verified",
-              linkedUserId: selectedRequest.userId,
-              linkedUserEmail: selectedRequest.userEmail || "",
-              updatedAt: serverTimestamp(),
-            }
-          );
+        if (status === "approved" && selectedRequest.newHeadshotUrl) {
+          // Update player headshot
+          if (selectedRequest.existingPlayerId && selectedRequest.role === "player") {
+            await updateDoc(
+              doc(firebaseDB, "teams", selectedRequest.teamId, "roster", selectedRequest.existingPlayerId),
+              {
+                headshot: selectedRequest.newHeadshotUrl,
+                verificationStatus: "verified",
+                linkedUserId: selectedRequest.userId,
+                linkedUserEmail: selectedRequest.userEmail || "",
+                updatedAt: serverTimestamp(),
+              }
+            );
+          }
+          
+          // Update coach/staff headshot
+          if (selectedRequest.existingCoachId && (selectedRequest.role === "coach" || selectedRequest.role === "staff")) {
+            await updateDoc(
+              doc(firebaseDB, "teams", selectedRequest.teamId, "coachStaff", selectedRequest.existingCoachId),
+              {
+                headshot: selectedRequest.newHeadshotUrl,
+                updatedAt: serverTimestamp(),
+              }
+            );
+          }
 
           // Update user profile timestamps
           await updateDoc(doc(firebaseDB, "users", selectedRequest.userId), {
@@ -261,6 +274,78 @@ export default function AdminVerification() {
             updatedAt: serverTimestamp(),
             linkedPlayerId: newPlayerDoc.id,
             linkedPlayerName: `${newPlayerData.firstName} ${newPlayerData.lastName}`,
+          });
+        } else {
+          // Rejected - just update user status
+          await updateDoc(doc(firebaseDB, "users", selectedRequest.userId), {
+            verificationStatus: status,
+            verificationReviewedAt: serverTimestamp(),
+            verificationReviewedBy: user.email,
+            verificationNotes: reviewNotes,
+            updatedAt: serverTimestamp(),
+          });
+        }
+      } else if (selectedRequest.requestType === "claim_existing_coach") {
+        // CLAIM EXISTING COACH/STAFF
+        await updateDoc(doc(firebaseDB, "users", selectedRequest.userId), {
+          role: selectedRequest.role,
+          teamId: selectedRequest.teamId,
+          teamName: selectedRequest.teamName,
+          verificationStatus: status,
+          verificationReviewedAt: serverTimestamp(),
+          verificationReviewedBy: user.email,
+          verificationNotes: reviewNotes,
+          updatedAt: serverTimestamp(),
+          linkedCoachId: status === "approved" ? selectedRequest.existingCoachId : null,
+          linkedCoachName: status === "approved" ? selectedRequest.existingCoachName : null,
+        });
+
+        // Link user to coach staff entry
+        if (status === "approved" && selectedRequest.existingCoachId) {
+          await updateDoc(
+            doc(firebaseDB, "teams", selectedRequest.teamId, "coachStaff", selectedRequest.existingCoachId),
+            {
+              linkedUserId: selectedRequest.userId,
+              linkedUserEmail: selectedRequest.userEmail,
+              linkedAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            }
+          );
+        }
+      } else if (selectedRequest.requestType === "create_new_coach" || selectedRequest.requestType === "create_new_staff") {
+        // CREATE NEW COACH/STAFF REQUEST
+        const isStaff = selectedRequest.requestType === "create_new_staff";
+        const coachStaffData = isStaff ? selectedRequest.newStaffData : selectedRequest.newCoachData;
+        
+        if (status === "approved" && coachStaffData) {
+          // Admin approved - create the coach/staff in the team coachStaff
+          const coachRef = collection(firebaseDB, "teams", selectedRequest.teamId, "coachStaff");
+          const newCoachDoc = await addDoc(coachRef, {
+            firstName: coachStaffData.firstName,
+            lastName: coachStaffData.lastName,
+            role: isStaff ? "staff" : (coachStaffData as any).coachType,
+            position: isStaff ? (coachStaffData as any).position : "",
+            headshot: coachStaffData.headshotUrl || "",
+            showOnRoster: isStaff ? (coachStaffData as any).showOnRoster ?? true : true,
+            linkedUserId: selectedRequest.userId,
+            linkedUserEmail: selectedRequest.userEmail,
+            linkedAt: serverTimestamp(),
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+
+          // Update user profile with new coach link
+          await updateDoc(doc(firebaseDB, "users", selectedRequest.userId), {
+            role: selectedRequest.role,
+            teamId: selectedRequest.teamId,
+            teamName: selectedRequest.teamName,
+            verificationStatus: status,
+            verificationReviewedAt: serverTimestamp(),
+            verificationReviewedBy: user.email,
+            verificationNotes: reviewNotes,
+            updatedAt: serverTimestamp(),
+            linkedCoachId: newCoachDoc.id,
+            linkedCoachName: `${coachStaffData.firstName} ${coachStaffData.lastName}`,
           });
         } else {
           // Rejected - just update user status
@@ -392,6 +477,12 @@ export default function AdminVerification() {
                         ? "Create Custom Player Profile"
                         : selectedRequest.requestType === "claim_existing"
                         ? "Claim Existing Player"
+                        : selectedRequest.requestType === "claim_existing_coach"
+                        ? "Claim Existing Coach/Staff"
+                        : selectedRequest.requestType === "create_new_coach"
+                        ? "Create New Coach"
+                        : selectedRequest.requestType === "create_new_staff"
+                        ? "Create New Staff"
                         : selectedRequest.requestType === "update_headshot"
                         ? "Update Headshot"
                         : selectedRequest.requestType === "update_name"
@@ -441,6 +532,15 @@ export default function AdminVerification() {
                     </div>
                   )}
 
+                  {selectedRequest.requestType === "claim_existing_coach" && selectedRequest.existingCoachName && (
+                    <div>
+                      <label className="text-sm font-medium text-slate-400">Claiming Coach/Staff</label>
+                      <p className="text-white">
+                        {selectedRequest.existingCoachName}
+                      </p>
+                    </div>
+                  )}
+
                   {/* Custom Player Data (from profile-setup) */}
                   {selectedRequest.customPlayer && selectedRequest.customPlayerData && (
                     <div>
@@ -478,6 +578,33 @@ export default function AdminVerification() {
                           {selectedRequest.newPlayerData.position && ` • ${selectedRequest.newPlayerData.position}`}
                           {selectedRequest.newPlayerData.height && ` • ${selectedRequest.newPlayerData.height}`}
                         </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {(selectedRequest.requestType === "create_new_coach" || selectedRequest.requestType === "create_new_staff") && (selectedRequest.newCoachData || selectedRequest.newStaffData) && (
+                    <div>
+                      <label className="text-sm font-medium text-slate-400">New Coach/Staff Details</label>
+                      <div className="mt-2 rounded-lg border border-white/10 bg-white/5 p-4 space-y-2">
+                        <p className="text-white">
+                          Name: {(selectedRequest.newCoachData || selectedRequest.newStaffData)?.firstName} {(selectedRequest.newCoachData || selectedRequest.newStaffData)?.lastName}
+                        </p>
+                        <p className="text-slate-300 text-sm capitalize">
+                          Role: {selectedRequest.newCoachData ? (selectedRequest.newCoachData as any).coachType?.replace("_", " ") : "Staff"}
+                        </p>
+                        {selectedRequest.newStaffData?.position && (
+                          <p className="text-slate-300 text-sm">
+                            Position: {selectedRequest.newStaffData?.position}
+                          </p>
+                        )}
+                        {(selectedRequest.newCoachData || selectedRequest.newStaffData)?.headshotUrl && (
+                          <div className="mt-3">
+                            <p className="text-xs text-slate-400 mb-2">Headshot</p>
+                            <div className="overflow-hidden rounded-xl border border-white/10 bg-white/5 w-32 h-32">
+                              <Image src={(selectedRequest.newCoachData || selectedRequest.newStaffData)?.headshotUrl || ""} alt="Coach/Staff headshot" width={200} height={200} className="w-full h-full object-cover" />
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}

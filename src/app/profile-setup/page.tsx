@@ -1654,7 +1654,14 @@ export default function ProfileSetup() {
                       const { coachPositionsFull } = getAvailableCoachPositions();
                       return (
                         <button
-                          onClick={() => !coachPositionsFull && setCoachOrStaffChoice("coach")}
+                          onClick={() => {
+                            if (!coachPositionsFull) {
+                              setCoachOrStaffChoice("coach");
+                              // Auto-populate names from user profile
+                              setCoachStaffFirstName(userProfile?.firstName || "");
+                              setCoachStaffLastName(userProfile?.lastName || "");
+                            }
+                          }}
                           disabled={coachPositionsFull}
                           className={`group relative overflow-hidden rounded-2xl border border-white/20 bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-sm p-5 sm:p-6 text-left transition-all duration-300 ${
                             coachPositionsFull 
@@ -1683,7 +1690,12 @@ export default function ProfileSetup() {
 
                     {/* Staff Option */}
                     <button
-                      onClick={() => setCoachOrStaffChoice("staff")}
+                      onClick={() => {
+                        setCoachOrStaffChoice("staff");
+                        // Auto-populate names from user profile
+                        setCoachStaffFirstName(userProfile?.firstName || "");
+                        setCoachStaffLastName(userProfile?.lastName || "");
+                      }}
                       className="group relative overflow-hidden rounded-2xl border border-white/20 bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-sm p-5 sm:p-6 text-left transition-all duration-300 hover:border-purple-400/50 hover:shadow-lg hover:shadow-purple-500/20 hover:scale-[1.02]"
                       type="button"
                     >

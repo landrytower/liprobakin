@@ -692,6 +692,7 @@ export default function AccountPage() {
                     <input
                       type="file"
                       accept="image/*"
+                      title="Upload headshot"
                       onChange={(e) => setHeadshotFile(e.target.files?.[0] || null)}
                       className="w-full text-xs sm:text-sm text-slate-200 file:mr-2 sm:file:mr-4 file:rounded-lg file:border-0 file:bg-gradient-to-r file:from-blue-600 file:to-green-500 file:px-3 sm:file:px-4 file:py-1.5 sm:file:py-2 file:text-xs sm:file:text-sm file:font-semibold file:text-white hover:file:shadow-lg cursor-pointer"
                     />
@@ -737,6 +738,7 @@ export default function AccountPage() {
                     <input
                       type="file"
                       accept="image/*"
+                      title="Upload headshot"
                       onChange={(e) => setHeadshotFile(e.target.files?.[0] || null)}
                       className="w-full text-xs sm:text-sm text-slate-200 file:mr-2 sm:file:mr-4 file:rounded-lg file:border-0 file:bg-gradient-to-r file:from-purple-600 file:to-pink-500 file:px-3 sm:file:px-4 file:py-1.5 sm:file:py-2 file:text-xs sm:file:text-sm file:font-semibold file:text-white hover:file:shadow-lg cursor-pointer"
                     />

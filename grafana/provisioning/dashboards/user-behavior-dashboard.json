@@ -593,6 +593,7 @@
             "type": "choropleth",
             "name": "Pageviews by country",
             "config": {
+              "location": { "mode": "country" },
               "dataLayer": {
                 "type": "table",
                 "labelField": "country",

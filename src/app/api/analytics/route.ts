@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
-// Persistent metrics file path
-const METRICS_FILE = join(process.cwd(), '.analytics-metrics.json');
+// Persistent metrics file path (use /tmp on Vercel to avoid read-only FS)
+const METRICS_FILE = process.env.ANALYTICS_METRICS_FILE
+  || (process.env.VERCEL ? '/tmp/analytics-metrics.json' : join(process.cwd(), '.analytics-metrics.json'));
 
 // Type definitions
 type AnalyticsEvent = {

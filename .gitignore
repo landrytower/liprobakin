@@ -46,3 +46,6 @@ next-env.d.ts
 
 # Analytics metrics persistence
 .analytics-metrics.json
+
+# Firestore backups
+backups/

@@ -5050,8 +5050,7 @@ export default function AdminPage() {
 
                     {paginatedTeams.length ? (
                       <>
-                        <div className="relative overflow-x-auto overflow-y-hidden pb-4 -mx-2 px-2 [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.2)_transparent]">
-                          <div className="flex gap-3 min-w-min">
+                        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-4">
                           {paginatedTeams.map((team, teamIndex) => {
                           const isFirestore = teams.some(t => t.id === team.id);
                           const isTemplate = !isFirestore;
@@ -5059,23 +5058,30 @@ export default function AdminPage() {
                             <article
                               key={`${team.id}-${team.gender}-${teamIndex}`}
                               onClick={() => isFirestore && router.push(`/admin/edit-team/${team.id}`)}
-                              className={`group rounded-xl border transition-all duration-200 relative overflow-hidden flex-shrink-0 w-[140px] h-[140px] sm:w-[160px] sm:h-[160px] md:w-[180px] md:h-[180px] bg-cover bg-center bg-no-repeat ${
+                              className={`group rounded-2xl border transition-all duration-300 relative overflow-hidden aspect-square ${
                                 isTemplate
-                                  ? "border-dashed border-white/15 bg-slate-900/30"
-                                  : "border-white/10 bg-slate-900/50"
-                              } ${isFirestore ? "cursor-pointer hover:border-white/30 hover:scale-[1.02]" : ""}`}
-                              {...(team.logo ? { style: { backgroundImage: `url(${team.logo})` } } : {})}
+                                  ? "border-dashed border-white/20 bg-slate-900/40"
+                                  : "border-white/20 bg-slate-900/60"
+                              } ${isFirestore ? "cursor-pointer hover:border-cyan-400/60 hover:shadow-lg hover:shadow-cyan-500/20 hover:scale-105" : ""}`}
                             >
-                              {team.logo && (
-                                <div className="absolute inset-0 bg-gradient-to-br from-slate-900/70 via-slate-900/60 to-slate-900/70" />
+                              {team.logo ? (
+                                <>
+                                  <div 
+                                    className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+                                    style={{ backgroundImage: `url(${team.logo})` }}
+                                  />
+                                  <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/50 to-black/80" />
+                                </>
+                              ) : (
+                                <div className="absolute inset-0 bg-gradient-to-br from-slate-800/50 to-slate-900/80" />
                               )}
-                              <div className="relative z-10 p-[10px] h-full flex items-center justify-center">
-                                <div className="text-center px-2 py-1 rounded bg-black/20">
-                                  <p className="text-base font-bold text-white uppercase tracking-wider drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)] [text-shadow:_0_1px_2px_rgb(0_0_0_/_80%),_0_2px_4px_rgb(0_0_0_/_60%)]">
+                              <div className="relative z-10 h-full flex flex-col items-center justify-center p-3">
+                                <div className="text-center">
+                                  <p className="text-sm md:text-base lg:text-lg font-bold text-white uppercase tracking-wide leading-tight line-clamp-2 drop-shadow-2xl">
                                     {team.name}
                                   </p>
                                   {isTemplate && (
-                                    <span className="inline-block mt-1 rounded-full border border-white/40 bg-white/10 px-2 py-[2px] text-[9px] uppercase tracking-[0.4em] text-white drop-shadow-lg">
+                                    <span className="inline-block mt-2 rounded-full border border-amber-400/50 bg-amber-500/20 px-2 py-1 text-[9px] uppercase tracking-widest text-amber-200 font-semibold">
                                       Template
                                     </span>
                                   )}
@@ -5084,8 +5090,7 @@ export default function AdminPage() {
                             </article>
                           );
                         })}
-                          </div>
-                      </div>
+                        </div>
                       
                       {/* Pagination Controls */}
                       {totalTeamPages > 1 && (
@@ -5326,7 +5331,7 @@ export default function AdminPage() {
                       </form>
                       ) : null}
 
-                      <div className="space-y-3">
+                      <div className="hidden lg:block space-y-3">
                         {roster.length ? (
                           roster.map((player) => (
                             <div key={player.id} className="rounded-2xl border border-white/10 bg-slate-900/60 p-4">

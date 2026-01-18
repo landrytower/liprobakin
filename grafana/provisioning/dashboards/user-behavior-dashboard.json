@@ -1,0 +1,454 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "gridPos": { "h": 2, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "options": {
+        "code": { "language": "plaintext", "showLineNumbers": false, "showMiniMap": false },
+        "content": "# 🏀 Liprobakin - User Behavior Analytics\n\nReal-time insights into how users interact with liprobakin.com - page views, clicks, time spent, scroll depth, and errors.",
+        "mode": "markdown"
+      },
+      "pluginVersion": "10.0.0",
+      "title": "",
+      "transparent": true,
+      "type": "text"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null } ] },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 2 },
+      "id": 1,
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "center", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "targets": [
+        { "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "expr": "liprobakin_total_pageviews", "legendFormat": "Total", "refId": "A" }
+      ],
+      "title": "👀 Total Page Views",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "blue", "value": null } ] },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 2 },
+      "id": 2,
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "center", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "targets": [
+        { "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "expr": "liprobakin_active_sessions", "legendFormat": "Active", "refId": "A" }
+      ],
+      "title": "👥 Active Sessions",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "purple", "value": null } ] },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 2 },
+      "id": 3,
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "center", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "targets": [
+        { "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "expr": "sum(liprobakin_clicks_total)", "legendFormat": "Total Clicks", "refId": "A" }
+      ],
+      "title": "🖱️ Total Clicks",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 5 }, { "color": "red", "value": 10 } ] },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 2 },
+      "id": 4,
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "center", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "targets": [
+        { "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "expr": "sum(liprobakin_errors_total)", "legendFormat": "Errors", "refId": "A" }
+      ],
+      "title": "❌ Total Errors",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "opacity",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "off" }
+          },
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null } ] },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "id": 5,
+      "options": {
+        "legend": { "calcs": ["sum", "mean"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        { "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "expr": "liprobakin_pageviews_total", "legendFormat": "{{page}}", "refId": "A" }
+      ],
+      "title": "📊 Page Views by Page",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "off" }
+          },
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null } ] },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "id": 6,
+      "options": {
+        "legend": { "calcs": ["mean"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        { "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "expr": "liprobakin_time_on_page_seconds_avg", "legendFormat": "{{page}}", "refId": "A" }
+      ],
+      "title": "⏱️ Average Time on Page (seconds)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "hideFrom": { "legend": false, "tooltip": false, "viz": false } },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 14 },
+      "id": 7,
+      "options": {
+        "displayLabels": ["name", "value"],
+        "legend": { "displayMode": "table", "placement": "right", "showLegend": true, "values": ["value", "percent"] },
+        "pieType": "donut",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        { "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "expr": "topk(10, liprobakin_pageviews_total)", "legendFormat": "{{page}}", "refId": "A" }
+      ],
+      "title": "🔝 Top Pages by Views",
+      "type": "piechart"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "yellow", "value": 50 }, { "color": "green", "value": 75 } ] },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 14 },
+      "id": 8,
+      "options": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
+        "orientation": "horizontal",
+        "reduceOptions": { "calcs": ["mean"], "fields": "", "values": false },
+        "showThresholdLabels": true,
+        "showThresholdMarkers": true,
+        "sizing": "auto"
+      },
+      "targets": [
+        { "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "expr": "avg(liprobakin_scroll_depth_avg)", "legendFormat": "Avg Scroll Depth", "refId": "A" }
+      ],
+      "title": "📜 Average Scroll Depth",
+      "type": "gauge"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "hideFrom": { "legend": false, "tooltip": false, "viz": false } },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 14 },
+      "id": 9,
+      "options": {
+        "displayLabels": ["name", "value"],
+        "legend": { "displayMode": "table", "placement": "right", "showLegend": true, "values": ["value"] },
+        "pieType": "pie",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        { "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "expr": "topk(10, sum by (element) (liprobakin_clicks_total))", "legendFormat": "{{element}}", "refId": "A" }
+      ],
+      "title": "🖱️ Clicks by Element Type",
+      "type": "piechart"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "custom": {
+            "align": "auto",
+            "cellOptions": { "type": "auto" },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null } ] }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Value" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "mode": "gradient", "type": "gauge" } },
+              { "id": "color", "value": { "mode": "continuous-BlPu" } }
+            ]
+          }
+        ]
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 22 },
+      "id": 10,
+      "options": {
+        "cellHeight": "sm",
+        "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false },
+        "showHeader": true,
+        "sortBy": [{ "desc": true, "displayName": "Value" }]
+      },
+      "targets": [
+        { "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "expr": "topk(15, liprobakin_clicks_total)", "format": "table", "instant": true, "legendFormat": "__auto", "refId": "A" }
+      ],
+      "title": "🔥 Most Clicked Elements",
+      "transformations": [
+        { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true }, "indexByName": {}, "renameByName": { "page": "Page", "element": "Element", "Value": "Clicks" } } }
+      ],
+      "type": "table"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "custom": {
+            "align": "auto",
+            "cellOptions": { "type": "auto" },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null } ] }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Value" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "mode": "gradient", "type": "gauge" } },
+              { "id": "color", "value": { "mode": "continuous-GrYlRd" } },
+              { "id": "unit", "value": "s" }
+            ]
+          }
+        ]
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 22 },
+      "id": 11,
+      "options": {
+        "cellHeight": "sm",
+        "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false },
+        "showHeader": true,
+        "sortBy": [{ "desc": true, "displayName": "Value" }]
+      },
+      "targets": [
+        { "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "expr": "topk(15, liprobakin_time_on_page_seconds_avg)", "format": "table", "instant": true, "legendFormat": "__auto", "refId": "A" }
+      ],
+      "title": "⏰ Pages with Longest Engagement",
+      "transformations": [
+        { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true }, "indexByName": {}, "renameByName": { "page": "Page", "Value": "Avg Time (s)" } } }
+      ],
+      "type": "table"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "custom": {
+            "align": "auto",
+            "cellOptions": { "type": "auto" },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null } ] }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Value" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "mode": "gradient", "type": "gauge" } },
+              { "id": "color", "value": { "mode": "continuous-RdYlGr" } }
+            ]
+          }
+        ]
+      },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 30 },
+      "id": 12,
+      "options": {
+        "cellHeight": "sm",
+        "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false },
+        "showHeader": true,
+        "sortBy": [{ "desc": true, "displayName": "Value" }]
+      },
+      "targets": [
+        { "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "expr": "liprobakin_errors_total", "format": "table", "instant": true, "legendFormat": "__auto", "refId": "A" }
+      ],
+      "title": "🚨 Errors by Page",
+      "transformations": [
+        { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true }, "indexByName": {}, "renameByName": { "page": "Page", "message": "Error Message", "Value": "Count" } } }
+      ],
+      "type": "table"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "custom": {
+            "align": "auto",
+            "cellOptions": { "type": "auto" },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null } ] }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Value" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "mode": "gradient", "type": "gauge" } },
+              { "id": "color", "value": { "mode": "continuous-BlPu" } },
+              { "id": "unit", "value": "percent" }
+            ]
+          }
+        ]
+      },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 38 },
+      "id": 13,
+      "options": {
+        "cellHeight": "sm",
+        "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false },
+        "showHeader": true,
+        "sortBy": [{ "desc": true, "displayName": "Value" }]
+      },
+      "targets": [
+        { "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "expr": "liprobakin_scroll_depth_avg", "format": "table", "instant": true, "legendFormat": "__auto", "refId": "A" }
+      ],
+      "title": "📜 Scroll Depth by Page",
+      "transformations": [
+        { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true }, "indexByName": {}, "renameByName": { "page": "Page", "Value": "Scroll Depth %" } } }
+      ],
+      "type": "table"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "tags": ["liprobakin", "analytics", "user-behavior"],
+  "templating": { "list": [] },
+  "time": { "from": "now-24h", "to": "now" },
+  "timepicker": { "refresh_intervals": ["10s", "30s", "1m", "5m", "15m"] },
+  "timezone": "browser",
+  "title": "🏀 Liprobakin User Behavior",
+  "uid": "liprobakin-behavior",
+  "version": 1,
+  "weekStart": ""
+}

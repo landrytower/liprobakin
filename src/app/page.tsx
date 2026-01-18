@@ -3433,16 +3433,16 @@ export default function Home() {
             )}
           </div>
           
-          <div className={`relative mt-6 sm:mt-8 ${teamSearch ? 'flex justify-center px-4' : 'px-1 sm:px-0 md:w-screen md:left-1/2 md:right-1/2 md:-ml-[50vw] md:-mr-[50vw] md:px-0 md:relative'}`}>
+          <div className={`relative mt-6 sm:mt-8 ${teamSearch ? 'px-1 sm:px-4' : 'px-1 sm:px-0 md:w-screen md:left-1/2 md:right-1/2 md:-ml-[50vw] md:-mr-[50vw] md:px-0 md:relative'}`}>
             <div 
               ref={teamsScrollRef}
-              className={`overflow-x-auto overflow-y-hidden pb-2 teams-scroller ${teamSearch ? '' : 'pl-2.5 md:pl-4'}`}
+              className={`overflow-x-auto overflow-y-hidden pb-2 teams-scroller ${teamSearch ? 'pl-2.5' : 'pl-2.5 md:pl-4'}`}
               style={{ 
                 scrollBehavior: 'smooth'
               }}
             >
               <div className={teamSearch 
-                ? "flex flex-wrap justify-center gap-3 pb-2 sm:gap-4" 
+                ? "flex gap-3 pb-2 sm:gap-4" 
                 : "grid grid-flow-col grid-rows-2 auto-cols-[180px] gap-3 pb-2 sm:auto-cols-[220px] md:auto-cols-[260px] lg:auto-cols-[300px] sm:gap-4"
               }>
                 {filteredFranchises.map((team) => {
@@ -3451,11 +3451,11 @@ export default function Home() {
                     <Link
                       key={fullName}
                       href={`/team/${encodeURIComponent(fullName)}`}
-                      className="group relative rounded-xl sm:rounded-2xl border border-white/10 bg-gradient-to-br from-slate-800/40 via-slate-900/60 to-slate-950/80 p-4 sm:p-6 text-left transition-all duration-300 active:scale-95 sm:hover:scale-[1.02] hover:border-white/30 sm:hover:shadow-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 overflow-hidden"
+                      className="group relative rounded-xl sm:rounded-2xl border border-white/10 bg-gradient-to-br from-slate-800/40 via-slate-900/60 to-slate-950/80 p-4 sm:p-6 text-left transition-all duration-300 active:scale-95 sm:hover:scale-[1.02] hover:border-white/30 sm:hover:shadow-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 overflow-hidden flex-shrink-0"
                       style={{
                         backgroundImage: `linear-gradient(135deg, ${team.colors[0]}15, ${team.colors[1]}08)`,
-                        width: teamSearch ? '180px' : undefined,
-                        minWidth: teamSearch ? '180px' : undefined
+                        width: '180px',
+                        minWidth: '180px'
                       }}
                     >
                       {/* Glow effect on hover */}

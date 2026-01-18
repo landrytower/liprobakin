@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { createContext, useContext, useSyncExternalStore, useCallback, ReactNode } from "react";
 
 export type Locale = "en" | "fr";
 
@@ -11,22 +11,33 @@ interface LanguageContextType {
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
+const STORAGE_KEY = "liprobakin-language";
+
+function getSnapshot(): Locale {
+  if (typeof window === "undefined") return "fr";
+  const saved = localStorage.getItem(STORAGE_KEY);
+  return saved === "en" || saved === "fr" ? saved : "fr";
+}
+
+function getServerSnapshot(): Locale {
+  return "fr";
+}
+
+function subscribe(callback: () => void): () => void {
+  if (typeof window === "undefined") return () => undefined;
+  window.addEventListener("storage", callback);
+  return () => window.removeEventListener("storage", callback);
+}
+
 export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [language, setLanguage] = useState<Locale>("fr");
+  const language = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
-  // Load language from localStorage on mount
-  useEffect(() => {
-    const saved = localStorage.getItem("liprobakin-language");
-    if (saved === "en" || saved === "fr") {
-      setLanguage(saved);
-    }
+  const handleSetLanguage = useCallback((lang: Locale) => {
+    if (typeof window === "undefined") return;
+    localStorage.setItem(STORAGE_KEY, lang);
+    // Dispatch storage event to trigger re-render
+    window.dispatchEvent(new StorageEvent("storage", { key: STORAGE_KEY }));
   }, []);
-
-  // Save language to localStorage when it changes
-  const handleSetLanguage = (lang: Locale) => {
-    setLanguage(lang);
-    localStorage.setItem("liprobakin-language", lang);
-  };
 
   return (
     <LanguageContext.Provider value={{ language, setLanguage: handleSetLanguage }}>

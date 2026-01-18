@@ -51,6 +51,32 @@ body {
   display: none;
 }
 
+/* Teams section custom scrollbar */
+.teams-scroller {
+  scrollbar-width: thin;
+  scrollbar-color: #38bdf8 #1e293b;
+}
+
+.teams-scroller::-webkit-scrollbar {
+  height: 6px;
+}
+
+.teams-scroller::-webkit-scrollbar-track {
+  background: #1e293b;
+  border-radius: 10px;
+  margin: 0 30%;
+}
+
+.teams-scroller::-webkit-scrollbar-thumb {
+  background: linear-gradient(90deg, #38bdf8, #22d3ee);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.teams-scroller::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(90deg, #22d3ee, #38bdf8);
+}
+
 @keyframes scroll-left {
   0% {
     transform: translateX(0);

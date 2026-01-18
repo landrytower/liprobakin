@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
@@ -60,7 +60,7 @@ type SectionHeaderProps = {
 };
 
 const SectionHeader = ({ id, eyebrow, title, description, actions }: SectionHeaderProps) => (
-  <div aria-labelledby={`${id}-title`} className="space-y-4">
+  <div aria-labelledby={`${id}-title`} className={actions ? "space-y-0" : "space-y-4"}>
     <div className="flex flex-wrap items-end justify-between gap-4">
       <div>
         {eyebrow ? (
@@ -546,7 +546,7 @@ const GenderToggle = ({ value, onChange, language }: { value: Gender; onChange: 
   <div className="inline-flex overflow-hidden rounded-full border border-white/20 bg-white/5 text-[11px] font-semibold uppercase tracking-[0.25em]" role="group" aria-label="Gender filter">
     {(
       [
-        { key: "men" as Gender, label: language === 'fr' ? "Messieurs" : "Gentlemen", short: "G" },
+        { key: "men" as Gender, label: language === 'fr' ? "Messieur" : "Gentlemen", short: "G" },
         { key: "women" as Gender, label: language === 'fr' ? "Dames" : "Ladies", short: "L" },
       ]
     ).map((option) => {
@@ -1038,6 +1038,7 @@ export default function Home() {
   const [showProfilePopup, setShowProfilePopup] = useState(false);
   const [scheduleStartIndex, setScheduleStartIndex] = useState(0);
   const scheduleScrollRef = useRef<HTMLDivElement>(null);
+  const teamsScrollRef = useRef<HTMLDivElement>(null);
   
   // Fan favorites state
   const [showFavoritePlayer, setShowFavoritePlayer] = useState(false);
@@ -1053,11 +1054,19 @@ export default function Home() {
     "Standings",
     "Teams",
   ];
+  const [standingsGender, setStandingsGender] = useState<Gender>("men");
+  const [franchiseGender, setFranchiseGender] = useState<Gender>("men");
+  const [playersGender, setPlayersGender] = useState<Gender>("men");
+  const [teamSearch, setTeamSearch] = useState<string>("");
   // Removed static roster - RosterModal now fetches from Firestore
-  const genderPlayers = gender === "men" ? spotlightPlayers : spotlightPlayersWomen;
+  const genderPlayers = playersGender === "men" ? spotlightPlayers : spotlightPlayersWomen;
   // Always use dynamic standings calculated from games - no fallback to static data
-  const genderStandings = dynamicStandings.filter(s => s.gender === gender);
-  const genderFranchises = gender === "men" ? menTeams : womenTeams;
+  const genderStandings = dynamicStandings.filter((s) => s.gender === standingsGender);
+  const genderFranchises = franchiseGender === "men" ? menTeams : womenTeams;
+  const filteredFranchises = genderFranchises.filter(team => {
+    const fullName = [team.city, team.name].filter(Boolean).join(" ").trim().toLowerCase();
+    return fullName.includes(teamSearch.toLowerCase());
+  });
   const allFranchises = [...menTeams, ...womenTeams];
   const playerLeaders = [...genderPlayers].sort(
     (a, b) => b.leaderboard[playerMetric] - a.leaderboard[playerMetric]
@@ -1080,6 +1089,8 @@ export default function Home() {
       sessionStorage.setItem('selectedGender', gender);
     }
   }, [gender]);
+
+  // Teams section now static – no auto-scroll animations
 
   // Save scroll position before navigating away
   useEffect(() => {
@@ -2036,60 +2047,7 @@ export default function Home() {
   //   }
   // }, [user, userProfile]);
 
-  // Auto-scroll for teams section
-  useEffect(() => {
-    const container = document.querySelector('#teams .overflow-x-auto') as HTMLElement;
-    if (!container) return;
-
-    let scrollInterval: NodeJS.Timeout;
-    let isHovered = false;
-    let isPaused = false;
-
-    const startAutoScroll = () => {
-      scrollInterval = setInterval(() => {
-        if (!isHovered && !isPaused) {
-          const maxScroll = container.scrollWidth - container.clientWidth;
-          
-          if (container.scrollLeft >= maxScroll) {
-            // Reset to beginning
-            container.scrollLeft = 0;
-          } else {
-            // Scroll right by 1 pixel for smooth movement
-            container.scrollLeft += 1;
-          }
-        }
-      }, 30); // 30ms interval for smooth animation
-    };
-
-    const handleMouseEnter = () => {
-      isHovered = true;
-    };
-
-    const handleMouseLeave = () => {
-      isHovered = false;
-    };
-
-    const handleUserScroll = () => {
-      isPaused = true;
-      // Resume auto-scroll after 3 seconds of no user interaction
-      setTimeout(() => {
-        isPaused = false;
-      }, 3000);
-    };
-
-    container.addEventListener('mouseenter', handleMouseEnter);
-    container.addEventListener('mouseleave', handleMouseLeave);
-    container.addEventListener('scroll', handleUserScroll);
-
-    startAutoScroll();
-
-    return () => {
-      clearInterval(scrollInterval);
-      container.removeEventListener('mouseenter', handleMouseEnter);
-      container.removeEventListener('mouseleave', handleMouseLeave);
-      container.removeEventListener('scroll', handleUserScroll);
-    };
-  }, [genderFranchises]); // Re-run when teams change
+  // Teams section is completely static - no auto-scroll
 
   return (
     <div className="relative isolate min-h-screen bg-gradient-to-b from-[#050816] via-[#050816] to-[#020407] text-white overflow-x-hidden w-full max-w-[100vw]">
@@ -3237,6 +3195,7 @@ export default function Home() {
             id="players"
             eyebrow={sectionCopy.players.eyebrow}
             title={sectionCopy.players.title}
+            actions={<GenderToggle value={playersGender} onChange={setPlayersGender} language={language} />}
           />
           <div className="rounded-3xl border border-white/10 bg-slate-950/80 p-6 overflow-hidden">
             <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
@@ -3260,7 +3219,7 @@ export default function Home() {
             </div>
             <div className="mt-6 flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
               {[...leagueTopPlayers]
-                .filter((player) => player.teamGender === gender)
+                .filter((player) => player.teamGender === playersGender)
                 .sort((a, b) => {
                   const statA = playerMetric === "pts" ? a.stats.pts
                     : playerMetric === "reb" ? a.stats.reb
@@ -3369,6 +3328,7 @@ export default function Home() {
             id="standings"
             eyebrow={sectionCopy.standings.eyebrow}
             title={sectionCopy.standings.title}
+            actions={<GenderToggle value={standingsGender} onChange={setStandingsGender} language={language} />}
           />
           <div className="overflow-hidden rounded-2xl border border-white/5">
             <div className="max-sm:overflow-x-auto max-h-[280px] overflow-y-auto">
@@ -3433,23 +3393,59 @@ export default function Home() {
           </div>
         </section>
 
-        <section id="teams" className="space-y-6 sm:space-y-8">
+        <section id="teams" className="space-y-0">
           <SectionHeader
             id="teams"
             eyebrow={sectionCopy.teams.eyebrow}
             title={sectionCopy.teams.title}
+            actions={<GenderToggle value={franchiseGender} onChange={setFranchiseGender} language={language} />}
           />
-          <div className="relative px-1 sm:px-0">
+          
+          {/* Search bar */}
+          <div className="max-w-2xl mx-auto px-1 sm:px-0 -mt-px">
+            <div className="relative">
+              <input
+                type="text"
+                value={teamSearch}
+                onChange={(e) => setTeamSearch(e.target.value)}
+                placeholder={language === 'en' ? 'Choose your team...' : 'Choisissez votre équipe...'}
+                className="w-full px-3.5 py-2.5 bg-slate-900/50 border-2 border-blue-500/50 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all text-[0.85rem]"
+                style={{
+                  fontFamily: 'system-ui, -apple-system, sans-serif'
+                }}
+              />
+              {teamSearch && (
+                <button
+                  onClick={() => setTeamSearch('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
+                  aria-label="Clear search"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+            {teamSearch && filteredFranchises.length === 0 && (
+              <p className="mt-2 text-sm text-slate-400 text-center">
+                {language === 'en' ? 'No teams found' : 'Aucune équipe trouvée'}
+              </p>
+            )}
+          </div>
+          
+          <div className={`relative mt-6 sm:mt-8 ${teamSearch ? 'flex justify-center px-4' : 'px-1 sm:px-0 md:w-screen md:left-1/2 md:right-1/2 md:-ml-[50vw] md:-mr-[50vw] md:px-0 md:relative'}`}>
             <div 
-              className="overflow-x-auto overflow-y-hidden pb-6 -mx-1 px-1" 
+              ref={teamsScrollRef}
+              className={`overflow-x-auto overflow-y-hidden pb-2 teams-scroller ${teamSearch ? '' : 'pl-2.5 md:pl-4'}`}
               style={{ 
-                scrollbarWidth: 'none', 
-                msOverflowStyle: 'none',
-                WebkitOverflowScrolling: 'touch'
+                scrollBehavior: 'smooth'
               }}
             >
-              <div className="grid grid-flow-col grid-rows-2 auto-cols-[minmax(180px,1fr)] gap-3 pb-2 sm:auto-cols-[minmax(220px,1fr)] md:auto-cols-[minmax(260px,1fr)] lg:auto-cols-[minmax(300px,1fr)] sm:gap-4">
-                {genderFranchises.map((team) => {
+              <div className={teamSearch 
+                ? "flex flex-wrap justify-center gap-3 pb-2 sm:gap-4" 
+                : "grid grid-flow-col grid-rows-2 auto-cols-[180px] gap-3 pb-2 sm:auto-cols-[220px] md:auto-cols-[260px] lg:auto-cols-[300px] sm:gap-4"
+              }>
+                {filteredFranchises.map((team) => {
                   const fullName = [team.city, team.name].filter(Boolean).join(" ").trim();
                   return (
                     <Link
@@ -3457,7 +3453,9 @@ export default function Home() {
                       href={`/team/${encodeURIComponent(fullName)}`}
                       className="group relative rounded-xl sm:rounded-2xl border border-white/10 bg-gradient-to-br from-slate-800/40 via-slate-900/60 to-slate-950/80 p-4 sm:p-6 text-left transition-all duration-300 active:scale-95 sm:hover:scale-[1.02] hover:border-white/30 sm:hover:shadow-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 overflow-hidden"
                       style={{
-                        backgroundImage: `linear-gradient(135deg, ${team.colors[0]}15, ${team.colors[1]}08)`
+                        backgroundImage: `linear-gradient(135deg, ${team.colors[0]}15, ${team.colors[1]}08)`,
+                        width: teamSearch ? '180px' : undefined,
+                        minWidth: teamSearch ? '180px' : undefined
                       }}
                     >
                       {/* Glow effect on hover */}
@@ -3514,33 +3512,6 @@ export default function Home() {
                 })}
               </div>
             </div>
-            {/* Navigation buttons - hidden on mobile, visible on tablet+ */}
-            <button
-              type="button"
-              onClick={(e) => {
-                const container = e.currentTarget.parentElement?.querySelector('.overflow-x-auto');
-                if (container) container.scrollBy({ left: -400, behavior: 'smooth' });
-              }}
-              className="hidden sm:flex absolute left-0 top-1/2 z-10 -translate-y-1/2 h-12 w-12 lg:h-14 lg:w-14 items-center justify-center rounded-full bg-gradient-to-br from-orange-600 to-orange-700 text-white shadow-xl transition-all hover:scale-110 hover:from-orange-500 hover:to-orange-600 hover:shadow-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 active:scale-95"
-              aria-label="Scroll left"
-            >
-              <svg className="h-6 w-6 lg:h-7 lg:w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              onClick={(e) => {
-                const container = e.currentTarget.parentElement?.querySelector('.overflow-x-auto');
-                if (container) container.scrollBy({ left: 400, behavior: 'smooth' });
-              }}
-              className="hidden sm:flex absolute right-0 top-1/2 z-10 -translate-y-1/2 h-12 w-12 lg:h-14 lg:w-14 items-center justify-center rounded-full bg-gradient-to-br from-orange-600 to-orange-700 text-white shadow-xl transition-all hover:scale-110 hover:from-orange-500 hover:to-orange-600 hover:shadow-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 active:scale-95"
-              aria-label="Scroll right"
-            >
-              <svg className="h-6 w-6 lg:h-7 lg:w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
           </div>
         </section>
 

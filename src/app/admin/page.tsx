@@ -735,6 +735,9 @@ export default function AdminPage() {
   const [editingUser, setEditingUser] = useState<Record<string, unknown> | null>(null);
   const [editUserForm, setEditUserForm] = useState({ firstName: '', lastName: '', showOnRoster: true });
   const [savingUserEdit, setSavingUserEdit] = useState(false);
+  const [accountRoleFilter, setAccountRoleFilter] = useState<'all' | 'player' | 'coach' | 'fan' | 'staff'>('all');
+  const [accountSearchQuery, setAccountSearchQuery] = useState('');
+  const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
   const [selectedVerificationRequest, setSelectedVerificationRequest] = useState<Record<string, unknown> | null>(null);
   const [reviewNotes, setReviewNotes] = useState("");
   const [showOnRosterOverride, setShowOnRosterOverride] = useState<boolean>(true);
@@ -5821,224 +5824,395 @@ export default function AdminPage() {
                   </p>
                 </div>
 
-                {/* Statistics Cards */}
-                <div className="grid gap-4 sm:grid-cols-3 mb-8">
-                  <div className="rounded-xl border border-white/10 bg-blue-500/10 p-4">
+                {/* Statistics Cards - Clickable Filters */}
+                <div className="grid gap-4 sm:grid-cols-4 mb-6">
+                  <button
+                    type="button"
+                    onClick={() => setAccountRoleFilter('all')}
+                    className={`rounded-xl border p-4 text-left transition-all ${accountRoleFilter === 'all' ? 'border-white/40 bg-white/10 ring-2 ring-white/20' : 'border-white/10 bg-blue-500/10 hover:border-white/20'}`}
+                  >
                     <div className="text-sm text-slate-400">Total Utilisateurs</div>
                     <div className="mt-2 text-3xl font-bold text-blue-400">{allUsers.length}</div>
-                  </div>
-                  <div className="rounded-xl border border-white/10 bg-green-500/10 p-4">
-                    <div className="text-sm text-slate-400">Joueurs/Coachs</div>
-                    <div className="mt-2 text-3xl font-bold text-green-400">
-                      {allUsers.filter(u => u.role === 'player' || u.role === 'coach' || u.role === 'staff').length}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAccountRoleFilter('player')}
+                    className={`rounded-xl border p-4 text-left transition-all ${accountRoleFilter === 'player' ? 'border-cyan-400/60 bg-cyan-500/20 ring-2 ring-cyan-400/30' : 'border-white/10 bg-cyan-500/10 hover:border-white/20'}`}
+                  >
+                    <div className="text-sm text-slate-400">Joueurs</div>
+                    <div className="mt-2 text-3xl font-bold text-cyan-400">
+                      {allUsers.filter(u => u.role === 'player').length}
                     </div>
-                  </div>
-                  <div className="rounded-xl border border-white/10 bg-orange-500/10 p-4">
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAccountRoleFilter('coach')}
+                    className={`rounded-xl border p-4 text-left transition-all ${accountRoleFilter === 'coach' ? 'border-purple-400/60 bg-purple-500/20 ring-2 ring-purple-400/30' : 'border-white/10 bg-purple-500/10 hover:border-white/20'}`}
+                  >
+                    <div className="text-sm text-slate-400">Coachs/Staff</div>
+                    <div className="mt-2 text-3xl font-bold text-purple-400">
+                      {allUsers.filter(u => u.role === 'coach' || u.role === 'staff').length}
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAccountRoleFilter('fan')}
+                    className={`rounded-xl border p-4 text-left transition-all ${accountRoleFilter === 'fan' ? 'border-orange-400/60 bg-orange-500/20 ring-2 ring-orange-400/30' : 'border-white/10 bg-orange-500/10 hover:border-white/20'}`}
+                  >
                     <div className="text-sm text-slate-400">Fans</div>
                     <div className="mt-2 text-3xl font-bold text-orange-400">
                       {allUsers.filter(u => u.role === 'fan').length}
                     </div>
-                  </div>
+                  </button>
+                </div>
+
+                {/* Search Bar */}
+                <div className="mb-6 relative">
+                  <input
+                    type="text"
+                    placeholder="🔍 Rechercher par nom, email, téléphone ou équipe..."
+                    value={accountSearchQuery}
+                    onChange={(e) => setAccountSearchQuery(e.target.value)}
+                    className="w-full rounded-xl border border-white/20 bg-slate-800/60 px-4 py-3 text-white placeholder-slate-400 focus:border-cyan-400/60 focus:outline-none focus:ring-2 focus:ring-cyan-400/20 transition"
+                  />
+                  {accountSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setAccountSearchQuery('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                {/* Filter Pills */}
+                <div className="flex flex-wrap gap-2 mb-6">
+                  {['all', 'player', 'coach', 'fan'].map((filter) => (
+                    <button
+                      key={filter}
+                      type="button"
+                      onClick={() => setAccountRoleFilter(filter as any)}
+                      className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wider transition ${
+                        accountRoleFilter === filter
+                          ? 'bg-white text-black'
+                          : 'border border-white/20 text-white hover:border-white/40'
+                      }`}
+                    >
+                      {filter === 'all' ? 'Tous' : filter === 'player' ? 'Joueurs' : filter === 'coach' ? 'Coachs' : 'Fans'}
+                    </button>
+                  ))}
                 </div>
 
                 {/* All Users List */}
                 <div className="rounded-2xl border border-white/10 bg-slate-900/30 p-6">
-                  <h3 className="text-lg font-bold text-white mb-4">Tous les utilisateurs</h3>
-                  <div className="space-y-2">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-bold text-white">
+                      {accountRoleFilter === 'all' ? 'Tous les utilisateurs' : 
+                       accountRoleFilter === 'player' ? 'Joueurs' :
+                       accountRoleFilter === 'coach' ? 'Coachs & Staff' : 'Fans'}
+                    </h3>
+                    <span className="text-sm text-slate-400">
+                      {(() => {
+                        const filtered = allUsers.filter(u => {
+                          const matchesRole = accountRoleFilter === 'all' || 
+                            (accountRoleFilter === 'coach' ? (u.role === 'coach' || u.role === 'staff') : u.role === accountRoleFilter);
+                          const searchLower = accountSearchQuery.toLowerCase();
+                          const matchesSearch = !accountSearchQuery || 
+                            `${u.firstName} ${u.lastName}`.toLowerCase().includes(searchLower) ||
+                            (u.email as string)?.toLowerCase().includes(searchLower) ||
+                            (u.phoneNumber as string)?.includes(searchLower) ||
+                            (u.teamName as string)?.toLowerCase().includes(searchLower);
+                          return matchesRole && matchesSearch;
+                        });
+                        return `${filtered.length} compte${filtered.length !== 1 ? 's' : ''}`;
+                      })()}
+                    </span>
+                  </div>
+                  <div className="space-y-3">
                     {allUsers.length === 0 ? (
                       <p className="text-center text-slate-400 py-8">Aucun utilisateur enregistré</p>
                     ) : (
-                      allUsers.map((user: any) => (
+                      allUsers
+                        .filter(u => {
+                          const matchesRole = accountRoleFilter === 'all' || 
+                            (accountRoleFilter === 'coach' ? (u.role === 'coach' || u.role === 'staff') : u.role === accountRoleFilter);
+                          const searchLower = accountSearchQuery.toLowerCase();
+                          const matchesSearch = !accountSearchQuery || 
+                            `${u.firstName} ${u.lastName}`.toLowerCase().includes(searchLower) ||
+                            (u.email as string)?.toLowerCase().includes(searchLower) ||
+                            (u.phoneNumber as string)?.includes(searchLower) ||
+                            (u.teamName as string)?.toLowerCase().includes(searchLower);
+                          return matchesRole && matchesSearch;
+                        })
+                        .map((user: any) => (
                         <div
                           key={user.id}
-                          className="rounded-lg border border-white/10 bg-slate-800/30 p-4 transition hover:bg-slate-800/50 cursor-pointer"
-                          onClick={() => {
-                            setEditingUser(user);
-                            setEditUserForm({
-                              firstName: user.firstName || '',
-                              lastName: user.lastName || '',
-                              showOnRoster: user.showOnRoster !== false, // Default to true
-                            });
-                          }}
+                          className={`rounded-xl border transition-all ${expandedUserId === user.id ? 'border-cyan-400/40 bg-slate-800/60' : 'border-white/10 bg-slate-800/30 hover:border-white/20'}`}
                         >
-                          <div className="flex items-center justify-between">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-3">
-                                <h4 className="font-semibold text-white">
-                                  {user.firstName} {user.lastName}
-                                </h4>
-                                {user.role && (
-                                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                                    user.role === 'player' ? 'bg-blue-500/20 text-blue-400' :
-                                    user.role === 'coach' || user.role === 'staff' ? 'bg-purple-500/20 text-purple-400' :
-                                    'bg-green-500/20 text-green-400'
-                                  }`}>
-                                    {user.role}
-                                  </span>
-                                )}
-                                {user.verificationStatus === 'approved' && (
-                                  <span className="rounded-full px-2 py-0.5 text-xs font-semibold bg-green-500/20 text-green-400">
-                                    ✓ Vérifié
-                                  </span>
-                                )}
-                              </div>
-                              <div className="mt-1 flex items-center gap-4 text-sm text-slate-400">
-                                <span>📧 {user.email || 'N/A'}</span>
-                                <span>📱 {user.phoneNumber}</span>
-                                {user.teamName && <span>🏀 {user.teamName}</span>}
-                              </div>
-                              {user.favoriteTeamName && (
-                                <div className="mt-1 text-xs text-slate-500">
-                                  ⭐ Équipe favorite: {user.favoriteTeamName}
+                          {/* User Card Header - Always Visible */}
+                          <div 
+                            className="p-4 cursor-pointer"
+                            onClick={() => setExpandedUserId(expandedUserId === user.id ? null : user.id)}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-4">
+                                {/* Avatar */}
+                                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold ${
+                                  user.role === 'player' ? 'bg-gradient-to-br from-cyan-500 to-blue-600' :
+                                  user.role === 'coach' || user.role === 'staff' ? 'bg-gradient-to-br from-purple-500 to-pink-600' :
+                                  'bg-gradient-to-br from-orange-500 to-amber-600'
+                                } text-white`}>
+                                  {user.firstName?.[0]}{user.lastName?.[0]}
                                 </div>
-                              )}
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <h4 className="font-semibold text-white text-lg">
+                                      {user.firstName} {user.lastName}
+                                    </h4>
+                                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                                      user.role === 'player' ? 'bg-cyan-500/20 text-cyan-400' :
+                                      user.role === 'coach' || user.role === 'staff' ? 'bg-purple-500/20 text-purple-400' :
+                                      'bg-orange-500/20 text-orange-400'
+                                    }`}>
+                                      {user.role === 'coach' ? 'Coach' : user.role === 'staff' ? 'Staff' : user.role === 'player' ? 'Joueur' : 'Fan'}
+                                    </span>
+                                    {user.verificationStatus === 'approved' && (
+                                      <span className="rounded-full px-2 py-0.5 text-xs font-semibold bg-green-500/20 text-green-400">
+                                        ✓ Vérifié
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="mt-1 flex items-center gap-3 text-sm text-slate-400">
+                                    <span>📧 {user.email || 'N/A'}</span>
+                                    <span>📱 {user.phoneNumber || 'N/A'}</span>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                {user.teamName && (
+                                  <span className="hidden sm:inline-flex items-center gap-1 rounded-lg bg-white/5 px-3 py-1.5 text-sm text-slate-300">
+                                    🏀 {user.teamName}
+                                  </span>
+                                )}
+                                <svg 
+                                  className={`w-5 h-5 text-slate-400 transition-transform ${expandedUserId === user.id ? 'rotate-180' : ''}`}
+                                  fill="none" 
+                                  viewBox="0 0 24 24" 
+                                  stroke="currentColor"
+                                >
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-3">
-                              {/* Edit Button */}
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setEditingUser(user);
-                                  setEditUserForm({
-                                    firstName: user.firstName || '',
-                                    lastName: user.lastName || '',
-                                    showOnRoster: user.showOnRoster !== false,
-                                  });
-                                }}
-                                className="rounded-lg bg-blue-600/20 px-3 py-1.5 text-xs font-semibold text-blue-400 transition hover:bg-blue-600/30"
-                                type="button"
-                              >
-                                ✏️ Edit
-                              </button>
-                              {/* Add to Roster Button for Custom Players */}
-                              {user.role === 'player' && user.verificationStatus === 'approved' && user.teamId && !user.linkedPlayerId && (
+                          </div>
+
+                          {/* Expanded Details */}
+                          {expandedUserId === user.id && (
+                            <div className="border-t border-white/10 p-4 space-y-4">
+                              {/* Full Details Grid */}
+                              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                                <div className="rounded-lg bg-slate-900/50 p-3">
+                                  <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Email</p>
+                                  <p className="text-white font-medium">{user.email || 'Non renseigné'}</p>
+                                </div>
+                                <div className="rounded-lg bg-slate-900/50 p-3">
+                                  <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Téléphone</p>
+                                  <p className="text-white font-medium">{user.phoneNumber || 'Non renseigné'}</p>
+                                </div>
+                                <div className="rounded-lg bg-slate-900/50 p-3">
+                                  <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Rôle</p>
+                                  <p className="text-white font-medium capitalize">{user.role || 'Non défini'}</p>
+                                </div>
+                                <div className="rounded-lg bg-slate-900/50 p-3">
+                                  <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Équipe</p>
+                                  <p className="text-white font-medium">{user.teamName || 'Aucune équipe'}</p>
+                                </div>
+                                <div className="rounded-lg bg-slate-900/50 p-3">
+                                  <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Équipe Favorite</p>
+                                  <p className="text-white font-medium">{user.favoriteTeamName || 'Non renseignée'}</p>
+                                </div>
+                                <div className="rounded-lg bg-slate-900/50 p-3">
+                                  <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Date d&apos;inscription</p>
+                                  <p className="text-white font-medium">{user.createdAt?.toLocaleDateString('fr-FR') || 'Inconnue'}</p>
+                                </div>
+                                <div className="rounded-lg bg-slate-900/50 p-3">
+                                  <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Statut Vérification</p>
+                                  <p className={`font-medium ${user.verificationStatus === 'approved' ? 'text-green-400' : user.verificationStatus === 'pending' ? 'text-amber-400' : 'text-slate-400'}`}>
+                                    {user.verificationStatus === 'approved' ? '✓ Approuvé' : user.verificationStatus === 'pending' ? '⏳ En attente' : 'Non vérifié'}
+                                  </p>
+                                </div>
+                                <div className="rounded-lg bg-slate-900/50 p-3">
+                                  <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Lié au Roster</p>
+                                  <p className={`font-medium ${user.linkedPlayerId || user.linkedCoachId ? 'text-green-400' : 'text-slate-400'}`}>
+                                    {user.linkedPlayerId ? `✓ Joueur #${user.linkedPlayerId.slice(-6)}` : user.linkedCoachId ? `✓ Coach #${user.linkedCoachId.slice(-6)}` : 'Non lié'}
+                                  </p>
+                                </div>
+                                <div className="rounded-lg bg-slate-900/50 p-3">
+                                  <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Visible sur Roster</p>
+                                  <p className={`font-medium ${user.showOnRoster !== false ? 'text-green-400' : 'text-rose-400'}`}>
+                                    {user.showOnRoster !== false ? '✓ Oui' : '✕ Non'}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* User ID */}
+                              <div className="rounded-lg bg-slate-900/50 p-3">
+                                <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">User ID</p>
+                                <p className="text-white font-mono text-sm">{user.id}</p>
+                              </div>
+
+                              {/* Action Buttons */}
+                              <div className="flex flex-wrap gap-2 pt-2">
                                 <button
-                                  onClick={async (e) => {
-                                    e.stopPropagation();
-                                    if (window.confirm(`Add ${user.firstName} ${user.lastName} to ${user.teamName} roster?`)) {
+                                  onClick={() => {
+                                    setEditingUser(user);
+                                    setEditUserForm({
+                                      firstName: user.firstName || '',
+                                      lastName: user.lastName || '',
+                                      showOnRoster: user.showOnRoster !== false,
+                                    });
+                                  }}
+                                  className="rounded-lg bg-cyan-600/20 px-4 py-2 text-sm font-semibold text-cyan-400 transition hover:bg-cyan-600/30"
+                                  type="button"
+                                >
+                                  ✏️ Modifier le profil
+                                </button>
+                                {/* Add to Roster Button for Custom Players */}
+                                {user.role === 'player' && user.verificationStatus === 'approved' && user.teamId && !user.linkedPlayerId && (
+                                  <button
+                                    onClick={async () => {
+                                      if (window.confirm(`Add ${user.firstName} ${user.lastName} to ${user.teamName} roster?`)) {
+                                        try {
+                                          const verificationQuery = query(
+                                            collection(firebaseDB, "verificationRequests"),
+                                            where("userId", "==", user.id),
+                                            where("status", "==", "approved")
+                                          );
+                                          const verificationSnapshot = await getDocs(verificationQuery);
+                                          
+                                          if (verificationSnapshot.empty) {
+                                            alert("No verification data found for this player.");
+                                            return;
+                                          }
+                                          
+                                          const verificationData = verificationSnapshot.docs[0].data();
+                                          
+                                          if (!verificationData.customPlayerData) {
+                                            alert("This player doesn't have custom player data.");
+                                            return;
+                                          }
+                                          
+                                          const playerData = verificationData.customPlayerData;
+                                          
+                                          const rosterRef = collection(firebaseDB, "teams", user.teamId, "roster");
+                                          const newPlayerDoc = await addDoc(rosterRef, {
+                                            firstName: playerData.firstName,
+                                            lastName: playerData.lastName,
+                                            name: `${playerData.firstName} ${playerData.lastName}`,
+                                            number: playerData.jerseyNumber,
+                                            position: playerData.position || "",
+                                            height: playerData.height || "",
+                                            birthdate: playerData.dateOfBirth || "",
+                                            dateOfBirth: playerData.dateOfBirth || "",
+                                            nationality: playerData.nationality || "",
+                                            nationality2: playerData.secondNationality || null,
+                                            secondNationality: playerData.secondNationality || null,
+                                            playerLicense: playerData.playerLicense || null,
+                                            headshot: playerData.headshotUrl || "",
+                                            stats: { pts: 0, reb: 0, ast: 0, stl: 0, blk: 0 },
+                                            verificationStatus: "verified",
+                                            linkedUserId: user.id,
+                                            linkedUserEmail: user.email || "",
+                                            createdAt: serverTimestamp(),
+                                          });
+                                          
+                                          await updateDoc(doc(firebaseDB, "users", user.id), {
+                                            linkedPlayerId: newPlayerDoc.id,
+                                            linkedPlayerName: `${playerData.firstName} ${playerData.lastName}`,
+                                            updatedAt: serverTimestamp(),
+                                          });
+                                          
+                                          const usersSnapshot = await getDocs(collection(firebaseDB, "users"));
+                                          setAllUsers(usersSnapshot.docs.map(d => ({ 
+                                            id: d.id, 
+                                            ...d.data(), 
+                                            createdAt: d.data().createdAt?.toDate() || new Date() 
+                                          })));
+                                          
+                                          alert(`✅ ${user.firstName} ${user.lastName} added to ${user.teamName} roster successfully!`);
+                                        } catch (error) {
+                                          console.error("Error adding player to roster:", error);
+                                          alert("Error adding player to roster. Please try again.");
+                                        }
+                                      }
+                                    }}
+                                    className="rounded-lg bg-green-600/20 px-4 py-2 text-sm font-semibold text-green-400 transition hover:bg-green-600/30"
+                                    type="button"
+                                  >
+                                    ➕ Ajouter au Roster
+                                  </button>
+                                )}
+                                <button
+                                  onClick={async () => {
+                                    if (window.confirm(`Êtes-vous sûr de vouloir supprimer ${user.firstName} ${user.lastName}?\n\nCette action:\n• Supprimera le compte Firebase Auth\n• Supprimera les données Firestore\n• Supprimera les photos du Storage\n• Déliera du roster (profil conservé)\n\nCette action est irréversible.`)) {
                                       try {
-                                        // Get user's custom player data from verification request
-                                        const verificationQuery = query(
-                                          collection(firebaseDB, "verificationRequests"),
-                                          where("userId", "==", user.id),
-                                          where("status", "==", "approved")
-                                        );
-                                        const verificationSnapshot = await getDocs(verificationQuery);
-                                        
-                                        if (verificationSnapshot.empty) {
-                                          alert("No verification data found for this player.");
-                                          return;
-                                        }
-                                        
-                                        const verificationData = verificationSnapshot.docs[0].data();
-                                        
-                                        if (!verificationData.customPlayerData) {
-                                          alert("This player doesn't have custom player data.");
-                                          return;
-                                        }
-                                        
-                                        const playerData = verificationData.customPlayerData;
-                                        
-                                        // Create player in team roster
-                                        const rosterRef = collection(firebaseDB, "teams", user.teamId, "roster");
-                                        const newPlayerDoc = await addDoc(rosterRef, {
-                                          firstName: playerData.firstName,
-                                          lastName: playerData.lastName,
-                                          name: `${playerData.firstName} ${playerData.lastName}`,
-                                          number: playerData.jerseyNumber,
-                                          position: playerData.position || "",
-                                          height: playerData.height || "",
-                                          birthdate: playerData.dateOfBirth || "",
-                                          dateOfBirth: playerData.dateOfBirth || "",
-                                          nationality: playerData.nationality || "",
-                                          nationality2: playerData.secondNationality || null,
-                                          secondNationality: playerData.secondNationality || null,
-                                          playerLicense: playerData.playerLicense || null,
-                                          headshot: playerData.headshotUrl || "",
-                                          stats: { pts: 0, reb: 0, ast: 0, stl: 0, blk: 0 },
-                                          verificationStatus: "verified",
-                                          linkedUserId: user.id,
-                                          linkedUserEmail: user.email || "",
-                                          createdAt: serverTimestamp(),
+                                        const response = await fetch('/api/admin/delete-regular-user', {
+                                          method: 'POST',
+                                          headers: { 'Content-Type': 'application/json' },
+                                          body: JSON.stringify({
+                                            targetUid: user.id,
+                                            deletedByUid: firebaseAuth.currentUser?.uid,
+                                          }),
                                         });
-                                        
-                                        // Update user profile with link to player
-                                        await updateDoc(doc(firebaseDB, "users", user.id), {
-                                          linkedPlayerId: newPlayerDoc.id,
-                                          linkedPlayerName: `${playerData.firstName} ${playerData.lastName}`,
-                                          updatedAt: serverTimestamp(),
-                                        });
-                                        
-                                        // Refresh user list
+
+                                        const result = await response.json();
+
+                                        if (!response.ok || !result.success) {
+                                          throw new Error(result.error || 'Failed to delete user');
+                                        }
+
                                         const usersSnapshot = await getDocs(collection(firebaseDB, "users"));
                                         setAllUsers(usersSnapshot.docs.map(d => ({ 
                                           id: d.id, 
                                           ...d.data(), 
                                           createdAt: d.data().createdAt?.toDate() || new Date() 
                                         })));
+                                        setExpandedUserId(null);
                                         
-                                        alert(`✅ ${user.firstName} ${user.lastName} added to ${user.teamName} roster successfully!`);
-                                      } catch (error) {
-                                        console.error("Error adding player to roster:", error);
-                                        alert("Error adding player to roster. Please try again.");
+                                        alert(`✅ ${user.firstName} ${user.lastName} supprimé avec succès!`);
+                                      } catch (error: any) {
+                                        console.error("Error deleting user:", error);
+                                        alert(`Erreur lors de la suppression: ${error.message}`);
                                       }
                                     }
                                   }}
-                                  className="rounded-lg bg-green-600/20 px-3 py-1.5 text-xs font-semibold text-green-400 transition hover:bg-green-600/30"
+                                  className="rounded-lg bg-rose-600/20 px-4 py-2 text-sm font-semibold text-rose-400 transition hover:bg-rose-600/30"
                                   type="button"
                                 >
-                                  ➕ Add to Roster
+                                  🗑️ Supprimer le compte
                                 </button>
-                              )}
-                              <div className="text-right text-xs text-slate-500">
-                                <div>Créé le</div>
-                                <div>{user.createdAt?.toLocaleDateString('fr-FR')}</div>
                               </div>
-                              <button
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  if (window.confirm(`Are you sure you want to delete ${user.firstName} ${user.lastName}? This will:\n\n• Delete their account from Firebase Auth\n• Delete all their data from Firestore\n• Delete their headshot from Storage\n• Unlink from any roster (keeping the player profile)\n\nThis action cannot be undone.`)) {
-                                    try {
-                                      // Call API to delete user completely
-                                      const response = await fetch('/api/admin/delete-regular-user', {
-                                        method: 'POST',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({
-                                          targetUid: user.id,
-                                          deletedByUid: firebaseAuth.currentUser?.uid,
-                                        }),
-                                      });
-
-                                      const result = await response.json();
-
-                                      if (!response.ok || !result.success) {
-                                        throw new Error(result.error || 'Failed to delete user');
-                                      }
-
-                                      // Refresh user list
-                                      const usersSnapshot = await getDocs(collection(firebaseDB, "users"));
-                                      setAllUsers(usersSnapshot.docs.map(d => ({ 
-                                        id: d.id, 
-                                        ...d.data(), 
-                                        createdAt: d.data().createdAt?.toDate() || new Date() 
-                                      })));
-                                      
-                                      alert(`✅ ${user.firstName} ${user.lastName} deleted successfully!\n\n• Firebase Auth account removed\n• Firestore data deleted\n• Storage files cleaned up\n• Roster unlinked (profile preserved)`);
-                                    } catch (error: any) {
-                                      console.error("Error deleting user:", error);
-                                      alert(`Error deleting user: ${error.message}\n\nPlease try again or contact support.`);
-                                    }
-                                  }
-                                }}
-                                className="rounded-lg bg-red-600/20 px-3 py-1.5 text-xs font-semibold text-red-400 transition hover:bg-red-600/30"
-                                type="button"
-                              >
-                                🗑️ Delete
-                              </button>
                             </div>
-                          </div>
+                          )}
                         </div>
                       ))
+                    )}
+                    {allUsers.filter(u => {
+                      const matchesRole = accountRoleFilter === 'all' || 
+                        (accountRoleFilter === 'coach' ? (u.role === 'coach' || u.role === 'staff') : u.role === accountRoleFilter);
+                      const searchLower = accountSearchQuery.toLowerCase();
+                      const matchesSearch = !accountSearchQuery || 
+                        `${u.firstName} ${u.lastName}`.toLowerCase().includes(searchLower) ||
+                        (u.email as string)?.toLowerCase().includes(searchLower) ||
+                        (u.phoneNumber as string)?.includes(searchLower) ||
+                        (u.teamName as string)?.toLowerCase().includes(searchLower);
+                      return matchesRole && matchesSearch;
+                    }).length === 0 && allUsers.length > 0 && (
+                      <p className="text-center text-slate-400 py-8">
+                        Aucun utilisateur trouvé pour &quot;{accountSearchQuery}&quot;
+                        {accountRoleFilter !== 'all' && ` dans la catégorie ${accountRoleFilter === 'player' ? 'Joueurs' : accountRoleFilter === 'coach' ? 'Coachs' : 'Fans'}`}
+                      </p>
                     )}
                   </div>
                 </div>
@@ -6047,8 +6221,8 @@ export default function AdminPage() {
 
             {/* Edit User Modal */}
             {editingUser && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-                <div className="relative w-full max-w-md rounded-2xl border border-white/20 bg-gradient-to-br from-slate-900 to-slate-950 p-6 shadow-2xl">
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+                <div className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-white/20 bg-gradient-to-br from-slate-900 to-slate-950 p-6 shadow-2xl">
                   <button
                     onClick={() => setEditingUser(null)}
                     className="absolute right-4 top-4 text-slate-400 hover:text-white transition"

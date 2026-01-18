@@ -570,6 +570,51 @@
         { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true }, "renameByName": { "page": "Page", "Value": "Scroll Depth %" } } }
       ],
       "type": "table"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null } ] },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 70 },
+      "id": 21,
+      "options": {
+        "basemap": { "type": "carto" },
+        "controls": { "mouseWheelZoom": true },
+        "view": { "lat": 10, "lon": 0, "zoom": 1.1 },
+        "layers": [
+          {
+            "type": "choropleth",
+            "name": "Pageviews by country",
+            "config": {
+              "dataLayer": {
+                "type": "table",
+                "labelField": "country",
+                "valueField": "Value"
+              },
+              "style": {
+                "colorMode": "palette-classic",
+                "opacity": 0.8,
+                "palette": "Turbo"
+              }
+            }
+          }
+        ]
+      },
+      "targets": [
+        { "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "expr": "liprobakin_pageviews_country_total", "format": "table", "instant": true, "legendFormat": "__auto", "refId": "A" }
+      ],
+      "title": "🌍 Pageviews by country (last scrape)",
+      "transformations": [
+        { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true }, "renameByName": { "Value": "Value" } } }
+      ],
+      "type": "geomap"
     }
   ],
   "refresh": "30s",

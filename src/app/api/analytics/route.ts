@@ -31,6 +31,7 @@ type MetricsData = {
   active_sessions: string[];
   last_event_time: number;
   pageViewsByPage: Record<string, number>;
+  pageViewsByCountry: Record<string, number>;
   clicksByElement: Record<string, number>;
   timeOnPageByPage: Record<string, { sum: number; count: number }>;
   scrollDepthByPage: Record<string, { sum: number; count: number }>;
@@ -41,7 +42,9 @@ function loadMetrics(): MetricsData {
   try {
     if (existsSync(METRICS_FILE)) {
       const data = readFileSync(METRICS_FILE, 'utf-8');
-      return JSON.parse(data);
+      const parsed = JSON.parse(data);
+      parsed.pageViewsByCountry = parsed.pageViewsByCountry || {};
+      return parsed;
     }
   } catch (error) {
     console.error('Error loading metrics:', error);
@@ -58,6 +61,7 @@ function loadMetrics(): MetricsData {
     active_sessions: [],
     last_event_time: Date.now(),
     pageViewsByPage: {},
+    pageViewsByCountry: {},
     clicksByElement: {},
     timeOnPageByPage: {},
     scrollDepthByPage: {},
@@ -80,6 +84,37 @@ let persistentMetrics = loadMetrics();
 const activeSessionsSet = new Set<string>(persistentMetrics.active_sessions);
 const recentEvents: AnalyticsEvent[] = [];
 
+// Simple in-memory IP -> country cache to reduce remote lookups
+const geoCache = new Map<string, { country: string; expires: number }>();
+
+function getClientIp(req: NextRequest): string | null {
+  const forwarded = req.headers.get('x-forwarded-for') || '';
+  const first = forwarded.split(',')[0]?.trim();
+  if (first) return first;
+  const cf = req.headers.get('cf-connecting-ip');
+  if (cf) return cf;
+  return null;
+}
+
+async function lookupCountry(ip: string): Promise<string> {
+  const now = Date.now();
+  const cached = geoCache.get(ip);
+  if (cached && cached.expires > now) return cached.country;
+
+  try {
+    const res = await fetch(`https://ipapi.co/${encodeURIComponent(ip)}/country/`, { next: { revalidate: 3600 } });
+    if (res.ok) {
+      const country = (await res.text()).trim() || 'unknown';
+      geoCache.set(ip, { country, expires: now + 60 * 60 * 1000 });
+      return country;
+    }
+  } catch (error) {
+    console.error('Geo lookup failed', error);
+  }
+
+  return 'unknown';
+}
+
 // Clean up stale sessions (older than 30 minutes)
 function cleanupStaleSessions() {
   const now = Date.now();
@@ -99,6 +134,8 @@ export async function POST(request: NextRequest) {
     const data = body.data || {};
     const value = data.seconds || data.depth || body.value || 0;
     const element = data.element || body.element || 'unknown';
+    const clientIp = getClientIp(request);
+    const country = eventType === 'pageview' && clientIp ? await lookupCountry(clientIp) : 'unknown';
 
     // Update last event time
     persistentMetrics.last_event_time = Date.now();
@@ -112,6 +149,8 @@ export async function POST(request: NextRequest) {
       }
       // Track by page
       persistentMetrics.pageViewsByPage[page] = (persistentMetrics.pageViewsByPage[page] || 0) + 1;
+      // Track by country
+      persistentMetrics.pageViewsByCountry[country] = (persistentMetrics.pageViewsByCountry[country] || 0) + 1;
     } else if (eventType === 'click') {
       persistentMetrics.clicks_total++;
       // Track by element type
@@ -194,6 +233,11 @@ export async function GET() {
     pageViewsMetrics += `liprobakin_pageviews_total{page="${page}"} ${count}\n`;
   }
 
+  let countryViewsMetrics = '';
+  for (const [country, count] of Object.entries(persistentMetrics.pageViewsByCountry)) {
+    countryViewsMetrics += `liprobakin_pageviews_country_total{country="${country}"} ${count}\n`;
+  }
+
   let clicksMetrics = '';
   for (const [element, count] of Object.entries(persistentMetrics.clicksByElement)) {
     clicksMetrics += `liprobakin_clicks_total{element="${element}"} ${count}\n`;
@@ -219,6 +263,9 @@ liprobakin_total_pageviews ${persistentMetrics.pageviews_total}
 # TYPE liprobakin_pageviews_total counter
 liprobakin_pageviews_total ${persistentMetrics.pageviews_total}
 ${pageViewsMetrics}
+# HELP liprobakin_pageviews_country_total Total number of pageviews by country
+# TYPE liprobakin_pageviews_country_total counter
+${countryViewsMetrics}
 # HELP liprobakin_clicks_total Total number of clicks by element
 # TYPE liprobakin_clicks_total counter
 liprobakin_clicks_total ${persistentMetrics.clicks_total}

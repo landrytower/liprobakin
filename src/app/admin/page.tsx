@@ -1210,10 +1210,11 @@ export default function AdminPage() {
     
     setSavingUserEdit(true);
     try {
-      // Update user document
+      // Update user document (including showOnRoster for immediate UI feedback)
       await updateDoc(doc(firebaseDB, "users", editingUser.id as string), {
         firstName: editUserForm.firstName,
         lastName: editUserForm.lastName,
+        showOnRoster: editUserForm.showOnRoster,
         updatedAt: serverTimestamp(),
       });
 
@@ -1239,19 +1240,23 @@ export default function AdminPage() {
         });
       }
 
-      // Refresh user list
-      const usersSnapshot = await getDocs(collection(firebaseDB, "users"));
-      setAllUsers(usersSnapshot.docs.map(d => ({ 
-        id: d.id, 
-        ...d.data(), 
-        createdAt: d.data().createdAt?.toDate() || new Date() 
-      })));
+      // Update local state immediately for instant UI feedback
+      setAllUsers(prev => prev.map(u => 
+        u.id === editingUser.id 
+          ? { 
+              ...u, 
+              firstName: editUserForm.firstName, 
+              lastName: editUserForm.lastName, 
+              showOnRoster: editUserForm.showOnRoster 
+            } 
+          : u
+      ));
 
       setEditingUser(null);
-      alert(`✅ ${editUserForm.firstName} ${editUserForm.lastName} updated successfully!`);
+      alert(`✅ ${editUserForm.firstName} ${editUserForm.lastName} mis à jour avec succès!`);
     } catch (error: any) {
       console.error("Error updating user:", error);
-      alert(`Error updating user: ${error.message}`);
+      alert(`Erreur lors de la mise à jour: ${error.message}`);
     } finally {
       setSavingUserEdit(false);
     }

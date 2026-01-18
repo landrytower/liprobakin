@@ -1267,10 +1267,11 @@ export default function ProfileSetup() {
                       {/* Name Fields (pre-populated) */}
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-xs font-semibold text-slate-300 mb-2">
+                          <label htmlFor="customFirstName" className="block text-xs font-semibold text-slate-300 mb-2">
                             First Name <span className="text-red-400">*</span>
                           </label>
                           <input
+                            id="customFirstName"
                             type="text"
                             value={customFirstName}
                             onChange={(e) => setCustomFirstName(e.target.value)}
@@ -1279,10 +1280,11 @@ export default function ProfileSetup() {
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-semibold text-slate-300 mb-2">
+                          <label htmlFor="customLastName" className="block text-xs font-semibold text-slate-300 mb-2">
                             Last Name <span className="text-red-400">*</span>
                           </label>
                           <input
+                            id="customLastName"
                             type="text"
                             value={customLastName}
                             onChange={(e) => setCustomLastName(e.target.value)}
@@ -1310,10 +1312,11 @@ export default function ProfileSetup() {
                       {/* Position and Height */}
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-xs font-semibold text-slate-300 mb-2">
+                          <label htmlFor="position" className="block text-xs font-semibold text-slate-300 mb-2">
                             Position <span className="text-red-400">*</span>
                           </label>
                           <select
+                            id="position"
                             value={position}
                             onChange={(e) => setPosition(e.target.value)}
                             className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all appearance-none cursor-pointer"
@@ -1349,10 +1352,11 @@ export default function ProfileSetup() {
 
                       {/* Date of Birth */}
                       <div>
-                        <label className="block text-xs font-semibold text-slate-300 mb-2">
+                        <label htmlFor="dateOfBirth" className="block text-xs font-semibold text-slate-300 mb-2">
                           Date of Birth <span className="text-red-400">*</span>
                         </label>
                         <input
+                          id="dateOfBirth"
                           type="date"
                           value={dateOfBirth}
                           onChange={(e) => setDateOfBirth(e.target.value)}
@@ -1363,10 +1367,11 @@ export default function ProfileSetup() {
 
                       {/* Nationality */}
                       <div>
-                        <label className="block text-xs font-semibold text-slate-300 mb-2">
+                        <label htmlFor="nationality" className="block text-xs font-semibold text-slate-300 mb-2">
                           Nationality <span className="text-red-400">*</span>
                         </label>
                         <select
+                          id="nationality"
                           value={nationality}
                           onChange={(e) => setNationality(e.target.value)}
                           className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all appearance-none cursor-pointer"
@@ -1383,10 +1388,11 @@ export default function ProfileSetup() {
 
                       {/* Second Nationality (Optional) */}
                       <div>
-                        <label className="block text-xs font-semibold text-slate-300 mb-2">
+                        <label htmlFor="secondNationality" className="block text-xs font-semibold text-slate-300 mb-2">
                           Second Nationality <span className="text-xs text-slate-500">(Optional)</span>
                         </label>
                         <select
+                          id="secondNationality"
                           value={secondNationality}
                           onChange={(e) => setSecondNationality(e.target.value)}
                           className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all appearance-none cursor-pointer"
@@ -1416,11 +1422,12 @@ export default function ProfileSetup() {
 
                       {/* Headshot Photo Upload */}
                       <div>
-                        <label className="block text-xs font-semibold text-slate-300 mb-2">
+                        <label htmlFor="headshotPhoto" className="block text-xs font-semibold text-slate-300 mb-2">
                           Headshot Photo <span className="text-xs text-slate-500">(Optional)</span>
                         </label>
                         <div className="relative">
                           <input
+                            id="headshotPhoto"
                             type="file"
                             accept="image/*"
                             onChange={(e) => setHeadshotPhoto(e.target.files?.[0] || null)}
@@ -1432,11 +1439,12 @@ export default function ProfileSetup() {
 
                       {/* ID Upload for Verification (Optional) */}
                       <div>
-                        <label className="block text-xs font-semibold text-slate-300 mb-2">
+                        <label htmlFor="idImage" className="block text-xs font-semibold text-slate-300 mb-2">
                           Upload ID for Verification <span className="text-xs text-slate-500">(Optional)</span>
                         </label>
                         <div className="relative">
                           <input
+                            id="idImage"
                             type="file"
                             accept="image/*"
                             onChange={(e) => setIdImage(e.target.files?.[0] || null)}
@@ -1809,10 +1817,11 @@ export default function ProfileSetup() {
                       {/* ID Upload for claiming coach */}
                       {selectedCoachId && (
                         <div className="group">
-                          <label className="block text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wider">
+                          <label htmlFor="coachIdImage" className="block text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wider">
                             {t.uploadIdVerification} <span className="text-red-400">*</span>
                           </label>
                           <input
+                            id="coachIdImage"
                             type="file"
                             accept="image/*"
                             onChange={(e) => setIdImage(e.target.files?.[0] || null)}
@@ -1893,10 +1902,11 @@ export default function ProfileSetup() {
                       {/* Name Fields */}
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-xs font-semibold text-slate-300 mb-2">
+                          <label htmlFor="coachStaffFirstName" className="block text-xs font-semibold text-slate-300 mb-2">
                             {t.firstName} <span className="text-red-400">*</span>
                           </label>
                           <input
+                            id="coachStaffFirstName"
                             type="text"
                             value={coachStaffFirstName}
                             onChange={(e) => setCoachStaffFirstName(e.target.value)}
@@ -1905,10 +1915,11 @@ export default function ProfileSetup() {
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-semibold text-slate-300 mb-2">
+                          <label htmlFor="coachStaffLastName" className="block text-xs font-semibold text-slate-300 mb-2">
                             {t.lastName} <span className="text-red-400">*</span>
                           </label>
                           <input
+                            id="coachStaffLastName"
                             type="text"
                             value={coachStaffLastName}
                             onChange={(e) => setCoachStaffLastName(e.target.value)}
@@ -1920,7 +1931,7 @@ export default function ProfileSetup() {
 
                       {/* Coach Type Selection */}
                       <div>
-                        <label className="block text-xs font-semibold text-slate-300 mb-2">
+                        <label htmlFor="coachType" className="block text-xs font-semibold text-slate-300 mb-2">
                           {t.selectCoachType} <span className="text-red-400">*</span>
                         </label>
                         {(() => {
@@ -1941,6 +1952,7 @@ export default function ProfileSetup() {
                                 </div>
                               )}
                               <select
+                                id="coachType"
                                 value={coachType}
                                 onChange={(e) => setCoachType(e.target.value as CoachStaffRole)}
                                 className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all appearance-none cursor-pointer"
@@ -1975,10 +1987,11 @@ export default function ProfileSetup() {
 
                       {/* Headshot Photo Upload */}
                       <div>
-                        <label className="block text-xs font-semibold text-slate-300 mb-2">
+                        <label htmlFor="newCoachHeadshot" className="block text-xs font-semibold text-slate-300 mb-2">
                           {t.headshotPhoto} <span className="text-xs text-slate-500">({t.optional})</span>
                         </label>
                         <input
+                          id="newCoachHeadshot"
                           type="file"
                           accept="image/*"
                           onChange={(e) => setCoachStaffPhoto(e.target.files?.[0] || null)}
@@ -1989,10 +2002,11 @@ export default function ProfileSetup() {
 
                       {/* ID Upload */}
                       <div>
-                        <label className="block text-xs font-semibold text-slate-300 mb-2">
+                        <label htmlFor="staffIdImage" className="block text-xs font-semibold text-slate-300 mb-2">
                           {t.uploadIdVerification} <span className="text-xs text-slate-500">({t.optional})</span>
                         </label>
                         <input
+                          id="staffIdImage"
                           type="file"
                           accept="image/*"
                           onChange={(e) => setIdImage(e.target.files?.[0] || null)}
@@ -2083,10 +2097,11 @@ export default function ProfileSetup() {
 
                   {/* Staff Position Selection */}
                   <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-2">
+                    <label htmlFor="staffPosition" className="block text-xs font-semibold text-slate-300 mb-2">
                       {t.staffRole} <span className="text-red-400">*</span>
                     </label>
                     <select
+                      id="staffPosition"
                       value={staffPosition}
                       onChange={(e) => setStaffPosition(e.target.value as StaffPosition)}
                       className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white focus:border-purple-400/50 focus:outline-none focus:ring-2 focus:ring-purple-400/30 transition-all appearance-none cursor-pointer"
@@ -2124,10 +2139,11 @@ export default function ProfileSetup() {
 
                   {/* Headshot Photo Upload */}
                   <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-2">
+                    <label htmlFor="coachStaffPhoto" className="block text-xs font-semibold text-slate-300 mb-2">
                       {t.headshotPhoto} <span className="text-xs text-slate-500">({t.optional})</span>
                     </label>
                     <input
+                      id="coachStaffPhoto"
                       type="file"
                       accept="image/*"
                       onChange={(e) => setCoachStaffPhoto(e.target.files?.[0] || null)}
@@ -2138,10 +2154,11 @@ export default function ProfileSetup() {
 
                   {/* ID Upload */}
                   <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-2">
+                    <label htmlFor="staffBottomIdImage" className="block text-xs font-semibold text-slate-300 mb-2">
                       {t.uploadIdVerification} <span className="text-xs text-slate-500">({t.optional})</span>
                     </label>
                     <input
+                      id="staffBottomIdImage"
                       type="file"
                       accept="image/*"
                       onChange={(e) => setIdImage(e.target.files?.[0] || null)}
@@ -2245,6 +2262,7 @@ export default function ProfileSetup() {
                       }}
                       className="absolute inset-y-0 right-0 flex items-center pr-4 z-10"
                       type="button"
+                      aria-label="Clear search"
                     >
                       <svg className="h-4 w-4 text-slate-400 hover:text-orange-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -2342,6 +2360,7 @@ export default function ProfileSetup() {
                       }}
                       className="absolute inset-y-0 right-0 flex items-center pr-4 z-10"
                       type="button"
+                      aria-label="Clear team search"
                     >
                       <svg className="h-4 w-4 text-slate-400 hover:text-orange-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -2404,6 +2423,7 @@ export default function ProfileSetup() {
                         }}
                         className="absolute inset-y-0 right-0 flex items-center pr-4 z-10"
                         type="button"
+                        aria-label="Clear player search"
                       >
                         <svg className="h-4 w-4 text-slate-400 hover:text-orange-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -2467,6 +2487,7 @@ export default function ProfileSetup() {
                       }}
                       className="absolute inset-y-0 right-0 flex items-center pr-4 z-10"
                       type="button"
+                      aria-label="Clear team search"
                     >
                       <svg className="h-4 w-4 text-slate-400 hover:text-orange-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -2529,6 +2550,7 @@ export default function ProfileSetup() {
                         }}
                         className="absolute inset-y-0 right-0 flex items-center pr-4 z-10"
                         type="button"
+                        aria-label="Clear player search"
                       >
                         <svg className="h-4 w-4 text-slate-400 hover:text-orange-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

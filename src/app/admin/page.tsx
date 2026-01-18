@@ -58,6 +58,28 @@ type AdminNewsArticle = {
   author?: string;
 };
 
+type GameEntry = {
+  id: string;
+  date: string;
+  time: string;
+  venue?: string;
+  gender: string;
+  spotlight?: boolean;
+  week?: number | string;
+  awayTeamId: string;
+  homeTeamId: string;
+  awayTeamName: string;
+  homeTeamName: string;
+  awayTeamLogo?: string;
+  homeTeamLogo?: string;
+  winnerScore?: number;
+  loserScore?: number;
+  loserTeamId?: string;
+  refereeHomeTeam1?: string;
+  refereeHomeTeam2?: string;
+  refereeAwayTeam?: string;
+};
+
 type NewsFormState = {
   id?: string;
   title: string;
@@ -707,15 +729,13 @@ export default function AdminPage() {
   const [showStoryPreview, setShowStoryPreview] = useState(false);
   const [teamAssistantOpen, setTeamAssistantOpen] = useState(false);
   const [trafficModuleOpen, setTrafficModuleOpen] = useState(false);
-  const [trafficEvents, setTrafficEvents] = useState<TeamTrafficEntry[]>([]);
   const [gamePlannerOpen, setGamePlannerOpen] = useState(false);
-  const [verificationRequests, setVerificationRequests] = useState<any[]>([]);
-  const [allUsers, setAllUsers] = useState<any[]>([]);
-  const [editingUser, setEditingUser] = useState<any>(null);
+  const [verificationRequests, setVerificationRequests] = useState<Record<string, unknown>[]>([]);
+  const [allUsers, setAllUsers] = useState<Record<string, unknown>[]>([]);
+  const [editingUser, setEditingUser] = useState<Record<string, unknown> | null>(null);
   const [editUserForm, setEditUserForm] = useState({ firstName: '', lastName: '', showOnRoster: true });
   const [savingUserEdit, setSavingUserEdit] = useState(false);
-  const [pendingVerifications, setPendingVerifications] = useState<any[]>([]);
-  const [selectedVerificationRequest, setSelectedVerificationRequest] = useState<any>(null);
+  const [selectedVerificationRequest, setSelectedVerificationRequest] = useState<Record<string, unknown> | null>(null);
   const [reviewNotes, setReviewNotes] = useState("");
   const [showOnRosterOverride, setShowOnRosterOverride] = useState<boolean>(true);
   const [processingReview, setProcessingReview] = useState(false);
@@ -1008,7 +1028,8 @@ export default function AdminPage() {
     );
     
     return () => unsubscribe();
-  }, [currentAdminUser]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentAdminUser, activeTab]);
 
   // Track session activity every 5 minutes
   useEffect(() => {
@@ -1026,7 +1047,7 @@ export default function AdminPage() {
     }, 5 * 60 * 1000); // 5 minutes
 
     return () => clearInterval(interval);
-  }, [currentAdminUser]);
+  }, [currentAdminUser, activeTab]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -1077,6 +1098,7 @@ export default function AdminPage() {
                perms.canManageAdmins) {
       setActiveTab('admins');
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentAdminUser]);
 
   useEffect(() => {
@@ -1115,13 +1137,14 @@ export default function AdminPage() {
     return () => unsubscribe();
   }, []);
 
-  useEffect(() => {
-    const trafficQuery = query(collection(firebaseDB, "teamTraffic"), orderBy("createdAt", "desc"), limit(100));
-    const unsubscribe = onSnapshot(trafficQuery, (snapshot) => {
-      setTrafficEvents(snapshot.docs.map(mapSnapshotToTrafficEntry));
-    });
-    return () => unsubscribe();
-  }, []);
+  // Unused traffic events tracking - commented out
+  // useEffect(() => {
+  //   const trafficQuery = query(collection(firebaseDB, "teamTraffic"), orderBy("createdAt", "desc"), limit(100));
+  //   const unsubscribe = onSnapshot(trafficQuery, (snapshot) => {
+  //     setTrafficEvents(snapshot.docs.map(mapSnapshotToTrafficEntry));
+  //   });
+  //   return () => unsubscribe();
+  // }, []);
 
   // Sync audit logs
   useEffect(() => {
@@ -1164,8 +1187,8 @@ export default function AdminPage() {
         setVerificationRequests(allVerificationsData as any);
 
         // Filter pending ones for notification badge
-        const pendingOnly = allVerificationsData.filter((v: any) => v.status === 'pending');
-        setPendingVerifications(pendingOnly);
+        // const pendingOnly = allVerificationsData.filter((v: any) => v.status === 'pending');
+        // setPendingVerifications(pendingOnly);
       } catch (error) {
         console.error("Error fetching users/verifications:", error);
       }
@@ -1185,7 +1208,7 @@ export default function AdminPage() {
     setSavingUserEdit(true);
     try {
       // Update user document
-      await updateDoc(doc(firebaseDB, "users", editingUser.id), {
+      await updateDoc(doc(firebaseDB, "users", editingUser.id as string), {
         firstName: editUserForm.firstName,
         lastName: editUserForm.lastName,
         updatedAt: serverTimestamp(),
@@ -1193,7 +1216,7 @@ export default function AdminPage() {
 
       // If user is linked to a player/coach/staff, update their roster entry too
       if (editingUser.linkedPlayerId && editingUser.teamId) {
-        const rosterRef = doc(firebaseDB, "teams", editingUser.teamId, "roster", editingUser.linkedPlayerId);
+        const rosterRef = doc(firebaseDB, "teams", editingUser.teamId as string, "roster", editingUser.linkedPlayerId as string);
         await updateDoc(rosterRef, {
           firstName: editUserForm.firstName,
           lastName: editUserForm.lastName,
@@ -1204,7 +1227,7 @@ export default function AdminPage() {
       }
       
       if (editingUser.linkedCoachId && editingUser.teamId) {
-        const coachRef = doc(firebaseDB, "teams", editingUser.teamId, "coachStaff", editingUser.linkedCoachId);
+        const coachRef = doc(firebaseDB, "teams", editingUser.teamId as string, "coachStaff", editingUser.linkedCoachId as string);
         await updateDoc(coachRef, {
           firstName: editUserForm.firstName,
           lastName: editUserForm.lastName,
@@ -2776,8 +2799,8 @@ export default function AdminPage() {
         console.log("[Admin Verification] Handling custom player from profile-setup");
         if (status === "approved") {
           // Create new player in team roster
-          const playerData = selectedVerificationRequest.customPlayerData;
-          const rosterRef = collection(firebaseDB, "teams", selectedVerificationRequest.teamId, "roster");
+          const playerData = selectedVerificationRequest.customPlayerData as Record<string, unknown>;
+          const rosterRef = collection(firebaseDB, "teams", selectedVerificationRequest.teamId as string as string, "roster");
           const newPlayerDoc = await addDoc(rosterRef, {
             firstName: playerData.firstName,
             lastName: playerData.lastName,
@@ -2812,7 +2835,7 @@ export default function AdminPage() {
             },
             gamesPlayed: 0,
             verificationStatus: "verified",
-            linkedUserId: selectedVerificationRequest.userId,
+            linkedUserId: selectedVerificationRequest.userId as string,
             linkedUserEmail: selectedVerificationRequest.userEmail || "",
             createdAt: serverTimestamp(),
           });
@@ -2820,9 +2843,9 @@ export default function AdminPage() {
           console.log("[Admin Verification] Player created with ID:", newPlayerDoc.id);
 
           // Update user profile with link to new player
-          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId), {
+          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId as string as string), {
             role: selectedVerificationRequest.role,
-            teamId: selectedVerificationRequest.teamId,
+            teamId: selectedVerificationRequest.teamId as string,
             teamName: selectedVerificationRequest.teamName,
             verificationStatus: status,
             verificationReviewedAt: serverTimestamp(),
@@ -2836,7 +2859,7 @@ export default function AdminPage() {
           alert(`✅ Player added to ${selectedVerificationRequest.teamName} roster!\nName: ${playerData.firstName} ${playerData.lastName}`);
         } else {
           // Rejected - just update user status
-          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId), {
+          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId as string as string), {
             verificationStatus: status,
             verificationReviewedAt: serverTimestamp(),
             verificationReviewedBy: user.email,
@@ -2845,19 +2868,19 @@ export default function AdminPage() {
           });
         }
       } else if (selectedVerificationRequest.requestType === "update_headshot") {
-        if (status === "approved" && selectedVerificationRequest.existingPlayerId && selectedVerificationRequest.newHeadshotUrl) {
+        if (status === "approved" && selectedVerificationRequest.existingPlayerId as string && selectedVerificationRequest.newHeadshotUrl as string) {
           await updateDoc(
-            doc(firebaseDB, "teams", selectedVerificationRequest.teamId, "roster", selectedVerificationRequest.existingPlayerId),
+            doc(firebaseDB, "teams", selectedVerificationRequest.teamId as string, "roster", selectedVerificationRequest.existingPlayerId as string),
             {
-              headshot: selectedVerificationRequest.newHeadshotUrl,
+              headshot: selectedVerificationRequest.newHeadshotUrl as string,
               verificationStatus: "verified",
-              linkedUserId: selectedVerificationRequest.userId,
+              linkedUserId: selectedVerificationRequest.userId as string,
               linkedUserEmail: selectedVerificationRequest.userEmail || "",
               updatedAt: serverTimestamp(),
             }
           );
 
-          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId), {
+          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId as string as string), {
             verificationStatus: status,
             verificationReviewedAt: serverTimestamp(),
             verificationReviewedBy: user.email,
@@ -2865,7 +2888,7 @@ export default function AdminPage() {
             updatedAt: serverTimestamp(),
           });
         } else {
-          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId), {
+          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId as string as string), {
             verificationStatus: status,
             verificationReviewedAt: serverTimestamp(),
             verificationReviewedBy: user.email,
@@ -2874,19 +2897,19 @@ export default function AdminPage() {
           });
         }
       } else if (selectedVerificationRequest.requestType === "update_headshot") {
-        if (status === "approved" && selectedVerificationRequest.existingPlayerId && selectedVerificationRequest.newHeadshotUrl) {
+        if (status === "approved" && selectedVerificationRequest.existingPlayerId as string && selectedVerificationRequest.newHeadshotUrl as string) {
           await updateDoc(
-            doc(firebaseDB, "teams", selectedVerificationRequest.teamId, "roster", selectedVerificationRequest.existingPlayerId),
+            doc(firebaseDB, "teams", selectedVerificationRequest.teamId as string, "roster", selectedVerificationRequest.existingPlayerId as string),
             {
-              headshot: selectedVerificationRequest.newHeadshotUrl,
+              headshot: selectedVerificationRequest.newHeadshotUrl as string,
               verificationStatus: "verified",
-              linkedUserId: selectedVerificationRequest.userId,
+              linkedUserId: selectedVerificationRequest.userId as string,
               linkedUserEmail: selectedVerificationRequest.userEmail || "",
               updatedAt: serverTimestamp(),
             }
           );
 
-          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId), {
+          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId as string as string), {
             verificationStatus: status,
             verificationReviewedAt: serverTimestamp(),
             verificationReviewedBy: user.email,
@@ -2894,7 +2917,7 @@ export default function AdminPage() {
             updatedAt: serverTimestamp(),
           });
         } else {
-          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId), {
+          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId as string as string), {
             verificationStatus: status,
             verificationReviewedAt: serverTimestamp(),
             verificationReviewedBy: user.email,
@@ -2903,9 +2926,9 @@ export default function AdminPage() {
           });
         }
       } else if (selectedVerificationRequest.requestType === "update_name") {
-        if (status === "approved" && selectedVerificationRequest.existingPlayerId && selectedVerificationRequest.newFirstName && selectedVerificationRequest.newLastName) {
+        if (status === "approved" && selectedVerificationRequest.existingPlayerId as string && selectedVerificationRequest.newFirstName && selectedVerificationRequest.newLastName) {
           await updateDoc(
-            doc(firebaseDB, "teams", selectedVerificationRequest.teamId, "roster", selectedVerificationRequest.existingPlayerId),
+            doc(firebaseDB, "teams", selectedVerificationRequest.teamId as string, "roster", selectedVerificationRequest.existingPlayerId as string),
             {
               firstName: selectedVerificationRequest.newFirstName,
               lastName: selectedVerificationRequest.newLastName,
@@ -2914,7 +2937,7 @@ export default function AdminPage() {
             }
           );
 
-          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId), {
+          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId as string as string), {
             firstName: selectedVerificationRequest.newFirstName,
             lastName: selectedVerificationRequest.newLastName,
             verificationStatus: status,
@@ -2924,7 +2947,7 @@ export default function AdminPage() {
             updatedAt: serverTimestamp(),
           });
         } else {
-          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId), {
+          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId as string as string), {
             verificationStatus: status,
             verificationReviewedAt: serverTimestamp(),
             verificationReviewedBy: user.email,
@@ -2934,16 +2957,16 @@ export default function AdminPage() {
         }
       } else if (selectedVerificationRequest.requestType === "update_jersey") {
         // UPDATE JERSEY NUMBER
-        if (status === "approved" && selectedVerificationRequest.existingPlayerId && selectedVerificationRequest.newJerseyNumber !== undefined) {
+        if (status === "approved" && selectedVerificationRequest.existingPlayerId as string && selectedVerificationRequest.newJerseyNumber !== undefined) {
           await updateDoc(
-            doc(firebaseDB, "teams", selectedVerificationRequest.teamId, "roster", selectedVerificationRequest.existingPlayerId),
+            doc(firebaseDB, "teams", selectedVerificationRequest.teamId as string, "roster", selectedVerificationRequest.existingPlayerId as string),
             {
               number: selectedVerificationRequest.newJerseyNumber,
               updatedAt: serverTimestamp(),
             }
           );
 
-          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId), {
+          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId as string as string), {
             playerNumber: selectedVerificationRequest.newJerseyNumber,
             verificationStatus: status,
             verificationReviewedAt: serverTimestamp(),
@@ -2952,7 +2975,7 @@ export default function AdminPage() {
             updatedAt: serverTimestamp(),
           });
         } else {
-          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId), {
+          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId as string as string), {
             verificationStatus: status,
             verificationReviewedAt: serverTimestamp(),
             verificationReviewedBy: user.email,
@@ -2962,30 +2985,30 @@ export default function AdminPage() {
         }
       } else if (selectedVerificationRequest.requestType === "claim_existing") {
         // CLAIM EXISTING PLAYER
-        await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId), {
+        await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId as string as string), {
           role: "player",
-          teamId: selectedVerificationRequest.teamId,
+          teamId: selectedVerificationRequest.teamId as string,
           teamName: selectedVerificationRequest.teamName,
           verificationStatus: status,
           verificationReviewedAt: serverTimestamp(),
           verificationReviewedBy: user.email,
           verificationNotes: reviewNotes,
           updatedAt: serverTimestamp(),
-          linkedPlayerId: status === "approved" ? selectedVerificationRequest.existingPlayerId : null,
+          linkedPlayerId: status === "approved" ? selectedVerificationRequest.existingPlayerId as string : null,
           linkedPlayerName: status === "approved" ? selectedVerificationRequest.existingPlayerName : null,
         });
 
         // Link user to player roster entry AND UPDATE NAME TO MATCH USER'S NAME
-        if (status === "approved" && selectedVerificationRequest.existingPlayerId) {
+        if (status === "approved" && selectedVerificationRequest.existingPlayerId as string) {
           await updateDoc(
-            doc(firebaseDB, "teams", selectedVerificationRequest.teamId, "roster", selectedVerificationRequest.existingPlayerId),
+            doc(firebaseDB, "teams", selectedVerificationRequest.teamId as string, "roster", selectedVerificationRequest.existingPlayerId as string),
             {
               // Update player name to match user's claimed name
               firstName: selectedVerificationRequest.userFirstName,
               lastName: selectedVerificationRequest.userLastName,
               name: `${selectedVerificationRequest.userFirstName} ${selectedVerificationRequest.userLastName}`,
               verificationStatus: "verified",
-              linkedUserId: selectedVerificationRequest.userId,
+              linkedUserId: selectedVerificationRequest.userId as string,
               linkedUserEmail: selectedVerificationRequest.userEmail,
               linkedAt: serverTimestamp(),
             }
@@ -2993,25 +3016,25 @@ export default function AdminPage() {
         }
       } else if (selectedVerificationRequest.requestType === "claim_existing_coach") {
         // CLAIM EXISTING COACH
-        await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId), {
+        await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId as string as string), {
           role: "coach",
-          teamId: selectedVerificationRequest.teamId,
+          teamId: selectedVerificationRequest.teamId as string,
           teamName: selectedVerificationRequest.teamName,
           verificationStatus: status,
           verificationReviewedAt: serverTimestamp(),
           verificationReviewedBy: user.email,
           verificationNotes: reviewNotes,
           updatedAt: serverTimestamp(),
-          linkedCoachId: status === "approved" ? selectedVerificationRequest.existingCoachId : null,
+          linkedCoachId: status === "approved" ? selectedVerificationRequest.existingCoachId as string : null,
           linkedCoachName: status === "approved" ? selectedVerificationRequest.existingCoachName : null,
         });
 
-        if (status === "approved" && selectedVerificationRequest.existingCoachId) {
+        if (status === "approved" && selectedVerificationRequest.existingCoachId as string) {
           await updateDoc(
-            doc(firebaseDB, "teams", selectedVerificationRequest.teamId, "coachStaff", selectedVerificationRequest.existingCoachId),
+            doc(firebaseDB, "teams", selectedVerificationRequest.teamId as string, "coachStaff", selectedVerificationRequest.existingCoachId as string),
             {
               verificationStatus: "verified",
-              linkedUserId: selectedVerificationRequest.userId,
+              linkedUserId: selectedVerificationRequest.userId as string,
               linkedUserEmail: selectedVerificationRequest.userEmail,
               linkedAt: serverTimestamp(),
             }
@@ -3020,23 +3043,23 @@ export default function AdminPage() {
       } else if (selectedVerificationRequest.requestType === "create_new_coach") {
         // CREATE NEW COACH PROFILE
         if (status === "approved" && selectedVerificationRequest.newCoachData) {
-          const coachData = selectedVerificationRequest.newCoachData;
-          const coachRef = collection(firebaseDB, `teams/${selectedVerificationRequest.teamId}/coachStaff`);
+          const coachData = selectedVerificationRequest.newCoachData as Record<string, unknown>;
+          const coachRef = collection(firebaseDB, `teams/${selectedVerificationRequest.teamId as string}/coachStaff`);
           const newCoachDoc = await addDoc(coachRef, {
             firstName: coachData.firstName,
             lastName: coachData.lastName,
             role: coachData.coachType,
             headshot: coachData.headshotUrl || "",
             verificationStatus: "verified",
-            linkedUserId: selectedVerificationRequest.userId,
+            linkedUserId: selectedVerificationRequest.userId as string,
             linkedUserEmail: selectedVerificationRequest.userEmail,
             linkedAt: serverTimestamp(),
             createdAt: serverTimestamp(),
           });
 
-          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId), {
+          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId as string as string), {
             role: "coach",
-            teamId: selectedVerificationRequest.teamId,
+            teamId: selectedVerificationRequest.teamId as string,
             teamName: selectedVerificationRequest.teamName,
             verificationStatus: status,
             verificationReviewedAt: serverTimestamp(),
@@ -3049,7 +3072,7 @@ export default function AdminPage() {
 
           alert(`✅ Coach added to ${selectedVerificationRequest.teamName}!\nName: ${coachData.firstName} ${coachData.lastName}`);
         } else {
-          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId), {
+          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId as string as string), {
             verificationStatus: status,
             verificationReviewedAt: serverTimestamp(),
             verificationReviewedBy: user.email,
@@ -3060,8 +3083,8 @@ export default function AdminPage() {
       } else if (selectedVerificationRequest.requestType === "create_new_staff") {
         // CREATE NEW STAFF PROFILE
         if (status === "approved" && selectedVerificationRequest.newStaffData) {
-          const staffData = selectedVerificationRequest.newStaffData;
-          const staffRef = collection(firebaseDB, `teams/${selectedVerificationRequest.teamId}/coachStaff`);
+          const staffData = selectedVerificationRequest.newStaffData as Record<string, unknown>;
+          const staffRef = collection(firebaseDB, `teams/${selectedVerificationRequest.teamId as string}/coachStaff`);
           const newStaffDoc = await addDoc(staffRef, {
             firstName: staffData.firstName,
             lastName: staffData.lastName,
@@ -3070,15 +3093,15 @@ export default function AdminPage() {
             showOnRoster: showOnRosterOverride, // Use admin's override value
             headshot: staffData.headshotUrl || "",
             verificationStatus: "verified",
-            linkedUserId: selectedVerificationRequest.userId,
+            linkedUserId: selectedVerificationRequest.userId as string,
             linkedUserEmail: selectedVerificationRequest.userEmail,
             linkedAt: serverTimestamp(),
             createdAt: serverTimestamp(),
           });
 
-          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId), {
+          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId as string as string), {
             role: "staff",
-            teamId: selectedVerificationRequest.teamId,
+            teamId: selectedVerificationRequest.teamId as string,
             teamName: selectedVerificationRequest.teamName,
             verificationStatus: status,
             verificationReviewedAt: serverTimestamp(),
@@ -3091,7 +3114,7 @@ export default function AdminPage() {
 
           alert(`✅ Staff added to ${selectedVerificationRequest.teamName}!\nName: ${staffData.firstName} ${staffData.lastName}\nPosition: ${staffData.position}\nVisible on Roster: ${showOnRosterOverride ? 'Yes' : 'No'}`);
         } else {
-          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId), {
+          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId as string as string), {
             verificationStatus: status,
             verificationReviewedAt: serverTimestamp(),
             verificationReviewedBy: user.email,
@@ -3103,8 +3126,8 @@ export default function AdminPage() {
         // CREATE NEW PLAYER REQUEST (legacy or from player-verification page)
         if (status === "approved" && selectedVerificationRequest.newPlayerData) {
           // Admin approved - create the player in the team roster
-          const newPlayerData = selectedVerificationRequest.newPlayerData;
-          const playerRef = collection(firebaseDB, `teams/${selectedVerificationRequest.teamId}/roster`);
+          const newPlayerData = selectedVerificationRequest.newPlayerData as Record<string, unknown>;
+          const playerRef = collection(firebaseDB, `teams/${selectedVerificationRequest.teamId as string}/roster`);
           const newPlayerDoc = await addDoc(playerRef, {
             firstName: newPlayerData.firstName,
             lastName: newPlayerData.lastName,
@@ -3113,8 +3136,8 @@ export default function AdminPage() {
             height: newPlayerData.height || "",
             birthdate: newPlayerData.birthdate || "",
             nationality: newPlayerData.nationality || "",
-            ...(newPlayerData.nationality2 && { nationality2: newPlayerData.nationality2 }),
-            ...(newPlayerData.playerLicense && { playerLicense: newPlayerData.playerLicense }),
+            ...(newPlayerData.nationality2 ? { nationality2: newPlayerData.nationality2 as string } : {}),
+            ...(newPlayerData.playerLicense ? { playerLicense: newPlayerData.playerLicense as string } : {}),
             headshot: newPlayerData.headshot || "",
             stats: {
               pts: "0.0",
@@ -3136,16 +3159,16 @@ export default function AdminPage() {
             },
             gamesPlayed: 0,
             verificationStatus: "verified",
-            linkedUserId: selectedVerificationRequest.userId,
+            linkedUserId: selectedVerificationRequest.userId as string,
             linkedUserEmail: selectedVerificationRequest.userEmail,
             linkedAt: serverTimestamp(),
             createdAt: serverTimestamp(),
           });
 
           // Update user profile with new player link
-          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId), {
+          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId as string as string), {
             role: "player",
-            teamId: selectedVerificationRequest.teamId,
+            teamId: selectedVerificationRequest.teamId as string,
             teamName: selectedVerificationRequest.teamName,
             verificationStatus: status,
             verificationReviewedAt: serverTimestamp(),
@@ -3157,7 +3180,7 @@ export default function AdminPage() {
           });
         } else {
           // Rejected - just update user status
-          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId), {
+          await updateDoc(doc(firebaseDB, "users", selectedVerificationRequest.userId as string as string), {
             verificationStatus: status,
             verificationReviewedAt: serverTimestamp(),
             verificationReviewedBy: user.email,
@@ -3176,13 +3199,13 @@ export default function AdminPage() {
         reviewedAt: doc.data().reviewedAt?.toDate(),
       }));
       setVerificationRequests(allVerificationsData);
-      const pendingOnly = allVerificationsData.filter((v: any) => v.status === 'pending');
-      setPendingVerifications(pendingOnly);
+      // const pendingOnly = allVerificationsData.filter((v: any) => v.status === 'pending');
+      // setPendingVerifications(pendingOnly);
 
       // If coach was approved, refresh the coach staff list immediately
-      if (status === "approved" && selectedVerificationRequest.teamId && 
+      if (status === "approved" && selectedVerificationRequest.teamId as string && 
           (selectedVerificationRequest.requestType === "claim_existing_coach" || selectedVerificationRequest.requestType === "create_new_coach")) {
-        const coachStaffQuery = query(collection(firebaseDB, "teams", selectedVerificationRequest.teamId, "coachStaff"), orderBy("firstName", "asc"));
+        const coachStaffQuery = query(collection(firebaseDB, "teams", selectedVerificationRequest.teamId as string as string, "coachStaff"), orderBy("firstName", "asc"));
         const coachStaffSnapshot = await getDocs(coachStaffQuery);
         setCoachStaffList(coachStaffSnapshot.docs.map(doc => {
           const data = doc.data();
@@ -3375,19 +3398,19 @@ export default function AdminPage() {
     setGameTeamSearch("");
   };
 
-  const handleEditGame = (game: AdminGame) => {
+  const handleEditGame = (game: GameEntry) => {
     setGameForm({
       id: game.id,
-      gender: game.gender,
-      week: game.week || 1,
+      gender: game.gender as "men" | "women",
+      week: typeof game.week === 'number' ? game.week : (game.week ? parseInt(game.week as string) : 1),
       homeTeamId: game.homeTeamId,
       awayTeamId: game.awayTeamId,
       date: game.date,
       time: game.time,
-      venue: game.venue,
-      refereeHomeTeam1: game.refereeHomeTeam1 ?? "",
-      refereeHomeTeam2: game.refereeHomeTeam2 ?? "",
-      refereeAwayTeam: game.refereeAwayTeam ?? "",
+      venue: game.venue || "",
+      refereeHomeTeam1: "",
+      refereeHomeTeam2: "",
+      refereeAwayTeam: "",
     });
     setGameFormVisible(true);
     setGameStatus({ type: "info", message: `Editing game.` });
@@ -3466,7 +3489,7 @@ export default function AdminPage() {
     }
   };
 
-  const handleDeleteGame = async (game: AdminGame) => {
+  const handleDeleteGame = async (game: GameEntry) => {
     if (!user) {
       setGameStatus({ type: "error", message: "Sign in to delete games." });
       return;
@@ -4217,7 +4240,7 @@ export default function AdminPage() {
             </form>
 
             <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-4 text-xs text-blue-200">
-              <strong>Note:</strong> You can change your password anytime using the "Change Password" button in the dashboard.
+              <strong>Note:</strong> You can change your password anytime using the &quot;Change Password&quot; button in the dashboard.
             </div>
           </div>
         </div>
@@ -4662,8 +4685,9 @@ export default function AdminPage() {
                 </label>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1">
-                    <label className="text-xs text-slate-300">{t.coverPhoto}</label>
+                    <label htmlFor="coverPhoto" className="text-xs text-slate-300">{t.coverPhoto}</label>
                     <input
+                      id="coverPhoto"
                       type="file"
                       accept="image/*"
                       onChange={handleImageChange}
@@ -5026,7 +5050,7 @@ export default function AdminPage() {
 
                     {paginatedTeams.length ? (
                       <>
-                        <div className="relative overflow-x-auto overflow-y-hidden pb-4 -mx-2 px-2" style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.2) transparent' }}>
+                        <div className="relative overflow-x-auto overflow-y-hidden pb-4 -mx-2 px-2 [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.2)_transparent]">
                           <div className="flex gap-3 min-w-min">
                           {paginatedTeams.map((team, teamIndex) => {
                           const isFirestore = teams.some(t => t.id === team.id);
@@ -5035,17 +5059,12 @@ export default function AdminPage() {
                             <article
                               key={`${team.id}-${team.gender}-${teamIndex}`}
                               onClick={() => isFirestore && router.push(`/admin/edit-team/${team.id}`)}
-                              className={`group rounded-xl border transition-all duration-200 relative overflow-hidden flex-shrink-0 w-[140px] h-[140px] sm:w-[160px] sm:h-[160px] md:w-[180px] md:h-[180px] ${
+                              className={`group rounded-xl border transition-all duration-200 relative overflow-hidden flex-shrink-0 w-[140px] h-[140px] sm:w-[160px] sm:h-[160px] md:w-[180px] md:h-[180px] bg-cover bg-center bg-no-repeat ${
                                 isTemplate
                                   ? "border-dashed border-white/15 bg-slate-900/30"
                                   : "border-white/10 bg-slate-900/50"
                               } ${isFirestore ? "cursor-pointer hover:border-white/30 hover:scale-[1.02]" : ""}`}
-                              style={team.logo ? {
-                                backgroundImage: `url(${team.logo})`,
-                                backgroundSize: 'cover',
-                                backgroundPosition: 'center',
-                                backgroundRepeat: 'no-repeat'
-                              } : {}}
+                              {...(team.logo ? { style: { backgroundImage: `url(${team.logo})` } } : {})}
                             >
                               {team.logo && (
                                 <div className="absolute inset-0 bg-gradient-to-br from-slate-900/70 via-slate-900/60 to-slate-900/70" />
@@ -5463,8 +5482,9 @@ export default function AdminPage() {
                             </div>
 
                             <div>
-                              <label className="block text-xs text-slate-300 mb-1">Headshot (optional)</label>
+                              <label htmlFor="coachHeadshot" className="block text-xs text-slate-300 mb-1">Headshot (optional)</label>
                               <input
+                                id="coachHeadshot"
                                 type="file"
                                 accept="image/*"
                                 onChange={handleCoachHeadshotChange}
@@ -5578,8 +5598,9 @@ export default function AdminPage() {
                     <p className="text-sm text-slate-300 mb-4">
                       You are about to transfer <span className="font-semibold text-white">{transferPlayerName}</span> from <span className="font-semibold text-white">{transferSourceTeamName}</span> to another team.
                     </p>
-                    <label className="block text-xs text-slate-400 mb-2">Select destination team:</label>
+                    <label htmlFor="transferTargetTeam" className="block text-xs text-slate-400 mb-2">Select destination team:</label>
                     <select
+                      id="transferTargetTeam"
                       value={transferTargetTeamId}
                       onChange={(e) => setTransferTargetTeamId(e.target.value)}
                       className="w-full rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-sm text-white mb-6 focus:border-white"
@@ -5704,10 +5725,10 @@ export default function AdminPage() {
                   <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-6 text-center">
                     <p className="text-sm text-yellow-400 mb-3">⚠️ No activity recorded yet.</p>
                     <p className="text-xs text-slate-400 mb-4">
-                      The audit log tracks all admin actions automatically. Try performing an action (create/update/delete) or click "Test Log" above to verify the system is working.
+                      The audit log tracks all admin actions automatically. Try performing an action (create/update/delete) or click &quot;Test Log&quot; above to verify the system is working.
                     </p>
                     <p className="text-xs text-slate-500">
-                      💡 If logs still don't appear after actions, check the browser console for errors.
+                      💡 If logs still don&apos;t appear after actions, check the browser console for errors.
                     </p>
                   </div>
                 ) : (
@@ -6037,22 +6058,22 @@ export default function AdminPage() {
                   <div className="mb-6 p-4 rounded-xl bg-slate-800/50 border border-white/10">
                     <div className="flex items-center gap-3">
                       <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold text-lg">
-                        {editingUser.firstName?.[0]}{editingUser.lastName?.[0]}
+                        {(editingUser.firstName as string)?.[0]}{(editingUser.lastName as string)?.[0]}
                       </div>
                       <div>
-                        <p className="text-white font-semibold">{editingUser.email}</p>
+                        <p className="text-white font-semibold">{editingUser.email as string}</p>
                         <div className="flex items-center gap-2 mt-1">
-                          {editingUser.role && (
+                          {(editingUser.role as string) && (
                             <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                              editingUser.role === 'player' ? 'bg-blue-500/20 text-blue-400' :
-                              editingUser.role === 'coach' || editingUser.role === 'staff' ? 'bg-purple-500/20 text-purple-400' :
+                              (editingUser.role as string) === 'player' ? 'bg-blue-500/20 text-blue-400' :
+                              (editingUser.role as string) === 'coach' || (editingUser.role as string) === 'staff' ? 'bg-purple-500/20 text-purple-400' :
                               'bg-green-500/20 text-green-400'
                             }`}>
-                              {editingUser.role}
+                              {editingUser.role as string}
                             </span>
                           )}
-                          {editingUser.teamName && (
-                            <span className="text-xs text-slate-400">🏀 {editingUser.teamName}</span>
+                          {(editingUser.teamName as string) && (
+                            <span className="text-xs text-slate-400">🏀 {editingUser.teamName as string}</span>
                           )}
                         </div>
                       </div>
@@ -6063,8 +6084,9 @@ export default function AdminPage() {
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-xs font-semibold text-slate-400 mb-1">Prénom</label>
+                        <label htmlFor="editUserFirstName" className="block text-xs font-semibold text-slate-400 mb-1">Prénom</label>
                         <input
+                          id="editUserFirstName"
                           type="text"
                           value={editUserForm.firstName}
                           onChange={(e) => setEditUserForm(prev => ({ ...prev, firstName: e.target.value }))}
@@ -6072,8 +6094,9 @@ export default function AdminPage() {
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold text-slate-400 mb-1">Nom</label>
+                        <label htmlFor="editUserLastName" className="block text-xs font-semibold text-slate-400 mb-1">Nom</label>
                         <input
+                          id="editUserLastName"
                           type="text"
                           value={editUserForm.lastName}
                           onChange={(e) => setEditUserForm(prev => ({ ...prev, lastName: e.target.value }))}
@@ -6083,7 +6106,7 @@ export default function AdminPage() {
                     </div>
 
                     {/* Show on Roster Toggle - Only for players/coaches/staff */}
-                    {(editingUser.role === 'player' || editingUser.role === 'coach' || editingUser.role === 'staff') && (editingUser.linkedPlayerId || editingUser.linkedCoachId) && (
+                    {((editingUser.role as string) === 'player' || (editingUser.role as string) === 'coach' || (editingUser.role as string) === 'staff') && ((editingUser.linkedPlayerId as string) || (editingUser.linkedCoachId as string)) && (
                       <div className="p-4 rounded-xl bg-slate-800/30 border border-white/10">
                         <div className="flex items-center justify-between">
                           <div>
@@ -6421,8 +6444,8 @@ export default function AdminPage() {
 
                   <div className="space-y-3">
                     {gamesWithSpotlight.length > 0 ? (
-                      gamesWithSpotlight.map((game) => {
-                        const isCompleted = !!(game as any).winnerScore && !!(game as any).loserScore;
+                      gamesWithSpotlight.map((game: GameEntry) => {
+                        const isCompleted = !!game.winnerScore && !!game.loserScore;
                         const isLocked = !isCompleted && isGameLocked(game.date, game.time);
                         return (
                         <div
@@ -6441,9 +6464,9 @@ export default function AdminPage() {
                           <div className="space-y-2">
                             {/* Badges Row */}
                             <div className="flex gap-1.5 flex-wrap">
-                              {(game as any).week && (
+                              {game.week && (
                                 <span className="inline-block rounded-full bg-indigo-500/20 px-1.5 py-0.5 text-[8px] sm:text-[9px] font-semibold uppercase tracking-wider text-indigo-300">
-                                  J{(game as any).week}
+                                  J{game.week}
                                 </span>
                               )}
                               {game.spotlight && !isCompleted && (
@@ -6474,16 +6497,16 @@ export default function AdminPage() {
                                 <span className={`text-[11px] sm:text-xs font-semibold ${isCompleted || isLocked ? 'text-slate-400' : 'text-white'} truncate`}>
                                   {game.awayTeamName}
                                 </span>
-                                {(isCompleted || (isLocked && (game as any).winnerScore)) && (
-                                  <span className="text-[11px] sm:text-xs font-bold text-slate-300 flex-shrink-0">{(game as any).loserTeamId === game.awayTeamId ? (game as any).loserScore : (game as any).winnerScore}</span>
+                                {(isCompleted || (isLocked && game.winnerScore)) && (
+                                  <span className="text-[11px] sm:text-xs font-bold text-slate-300 flex-shrink-0">{game.loserTeamId === game.awayTeamId ? game.loserScore : game.winnerScore}</span>
                                 )}
                               </div>
                               
                               <span className="text-[10px] text-slate-500 flex-shrink-0">@</span>
                               
                               <div className="flex items-center gap-1.5 min-w-0 flex-1 justify-end">
-                                {(isCompleted || (isLocked && (game as any).winnerScore)) && (
-                                  <span className="text-[11px] sm:text-xs font-bold text-slate-300 flex-shrink-0">{(game as any).loserTeamId === game.homeTeamId ? (game as any).loserScore : (game as any).winnerScore}</span>
+                                {(isCompleted || (isLocked && game.winnerScore)) && (
+                                  <span className="text-[11px] sm:text-xs font-bold text-slate-300 flex-shrink-0">{game.loserTeamId === game.homeTeamId ? game.loserScore : game.winnerScore}</span>
                                 )}
                                 <span className={`text-[11px] sm:text-xs font-semibold ${isCompleted || isLocked ? 'text-slate-400' : 'text-white'} truncate text-right`}>
                                   {game.homeTeamName}
@@ -6508,7 +6531,7 @@ export default function AdminPage() {
                                   <span>📅 {game.date}</span>
                                   <span>🕐 {game.time}</span>
                                   <span>📍 {game.venue}</span>
-                                  <span className="uppercase text-slate-600">{game.gender + "'s"}</span>
+                                  <span className="uppercase text-slate-600">{game.gender + "&apos;s"}</span>
                                 </div>
                                 
                                 {/* Action Buttons - Compact */}
@@ -6604,9 +6627,11 @@ export default function AdminPage() {
                     <p className="text-xs text-slate-400 mt-1">Choose a week to view all games</p>
                   </div>
                   <select
+                    id="archiveWeek"
                     value={selectedArchiveWeek}
                     onChange={(e) => setSelectedArchiveWeek(parseInt(e.target.value))}
                     className="rounded-lg border border-white/20 bg-slate-900/60 px-4 py-2.5 text-white font-medium focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition"
+                    aria-label="Select week"
                   >
                     {Array.from({ length: 30 }, (_, i) => i + 1).map((week) => (
                       <option key={week} value={week}>
@@ -7189,6 +7214,7 @@ export default function AdminPage() {
                               setLoserStatsMap({});
                             }}
                             className="rounded bg-slate-800 p-2 text-slate-400 hover:bg-slate-700 hover:text-white transition"
+                            aria-label="Close game stats"
                           >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -7818,12 +7844,12 @@ export default function AdminPage() {
                         .filter(request => request.status === 'pending')
                         .map((request) => (
                           <button
-                            key={request.id}
+                            key={request.id as string}
                             onClick={() => {
                               setSelectedVerificationRequest(request);
                               // Initialize showOnRoster toggle with the value from the request
                               if (request.requestType === "create_new_staff" && request.newStaffData) {
-                                setShowOnRosterOverride(request.newStaffData.showOnRoster !== undefined ? request.newStaffData.showOnRoster : true);
+                                setShowOnRosterOverride((request.newStaffData as Record<string, unknown>).showOnRoster !== undefined ? (request.newStaffData as Record<string, unknown>).showOnRoster as boolean : true);
                               }
                             }}
                             className={`w-full rounded-xl border p-4 text-left transition ${
@@ -7836,12 +7862,12 @@ export default function AdminPage() {
                             <div className="flex items-start justify-between">
                               <div>
                                 <h3 className="font-semibold text-white">
-                                  {request.userFirstName} {request.userLastName}
+                                  {request.userFirstName as string} {request.userLastName as string}
                                 </h3>
-                                <p className="text-sm text-slate-400 capitalize">{request.role}</p>
-                                <p className="text-sm text-slate-400">{request.teamName}</p>
+                                <p className="text-sm text-slate-400 capitalize">{request.role as string}</p>
+                                <p className="text-sm text-slate-400">{request.teamName as string}</p>
                                 <p className="mt-2 text-xs text-slate-500">
-                                  Submitted: {request.submittedAt?.toLocaleDateString?.() || 'N/A'}
+                                  Submitted: {(request.submittedAt as Date)?.toLocaleDateString?.() || 'N/A'}
                                 </p>
                               </div>
                               <span className="rounded-full bg-yellow-500/20 px-3 py-1 text-xs font-semibold text-yellow-400">
@@ -7861,23 +7887,23 @@ export default function AdminPage() {
                           <div>
                             <label className="text-sm font-medium text-slate-400">Name</label>
                             <p className="text-white">
-                              {selectedVerificationRequest.userFirstName} {selectedVerificationRequest.userLastName}
+                              {String(selectedVerificationRequest.userFirstName || '')} {String(selectedVerificationRequest.userLastName || '')}
                             </p>
                           </div>
 
                           <div>
                             <label className="text-sm font-medium text-slate-400">Phone</label>
-                            <p className="text-white">{selectedVerificationRequest.userPhone}</p>
+                            <p className="text-white">{String(selectedVerificationRequest.userPhone || '')}</p>
                           </div>
 
                           <div>
                             <label className="text-sm font-medium text-slate-400">Role</label>
-                            <p className="text-white capitalize">{selectedVerificationRequest.role}</p>
+                            <p className="text-white capitalize">{String(selectedVerificationRequest.role || '')}</p>
                           </div>
 
                           <div>
                             <label className="text-sm font-medium text-slate-400">Team</label>
-                            <p className="text-white">{selectedVerificationRequest.teamName}</p>
+                            <p className="text-white">{String(selectedVerificationRequest.teamName || '')}</p>
                           </div>
 
                           <div>
@@ -7904,16 +7930,16 @@ export default function AdminPage() {
                           </div>
 
                           {/* Staff-specific details */}
-                          {selectedVerificationRequest.requestType === "create_new_staff" && selectedVerificationRequest.newStaffData && (
+                          {selectedVerificationRequest.requestType === "create_new_staff" && !!(selectedVerificationRequest.newStaffData) && (
                             <div className="space-y-3">
                               <div>
                                 <label className="text-sm font-medium text-slate-400">Staff Details</label>
                                 <div className="mt-2 rounded-lg border border-white/10 bg-white/5 p-4 space-y-2">
                                   <p className="text-white">
-                                    Name: {selectedVerificationRequest.newStaffData.firstName} {selectedVerificationRequest.newStaffData.lastName}
+                                    Name: {(selectedVerificationRequest.newStaffData as Record<string, unknown>).firstName as string} {(selectedVerificationRequest.newStaffData as Record<string, unknown>).lastName as string}
                                   </p>
                                   <p className="text-slate-300 text-sm">
-                                    Position: {selectedVerificationRequest.newStaffData.position?.replace(/_/g, ' ')}
+                                    Position: {String((selectedVerificationRequest.newStaffData as Record<string, unknown>).position || '').replace(/_/g, ' ')}
                                   </p>
                                 </div>
                               </div>
@@ -7938,24 +7964,24 @@ export default function AdminPage() {
                           )}
 
                           {/* Coach-specific details */}
-                          {selectedVerificationRequest.requestType === "claim_existing_coach" && selectedVerificationRequest.existingCoachName && (
+                          {selectedVerificationRequest.requestType === "claim_existing_coach" && !!(selectedVerificationRequest.existingCoachName) && (
                             <div>
                               <label className="text-sm font-medium text-slate-400">Claiming Coach</label>
                               <p className="text-white">
-                                {selectedVerificationRequest.existingCoachName} ({selectedVerificationRequest.existingCoachRole?.replace(/_/g, ' ')})
+                                {String(selectedVerificationRequest.existingCoachName)} ({String(selectedVerificationRequest.existingCoachRole || '').replace(/_/g, ' ')})
                               </p>
                             </div>
                           )}
 
-                          {selectedVerificationRequest.requestType === "create_new_coach" && selectedVerificationRequest.newCoachData && (
+                          {selectedVerificationRequest.requestType === "create_new_coach" && !!(selectedVerificationRequest.newCoachData) && (
                             <div>
                               <label className="text-sm font-medium text-slate-400">New Coach Details</label>
                               <div className="mt-2 rounded-lg border border-white/10 bg-white/5 p-4 space-y-2">
                                 <p className="text-white">
-                                  Name: {selectedVerificationRequest.newCoachData.firstName} {selectedVerificationRequest.newCoachData.lastName}
+                                  Name: {(selectedVerificationRequest.newCoachData as Record<string, unknown>).firstName as string} {(selectedVerificationRequest.newCoachData as Record<string, unknown>).lastName as string}
                                 </p>
                                 <p className="text-slate-300 text-sm">
-                                  Position: {selectedVerificationRequest.newCoachData.coachType?.replace(/_/g, ' ')}
+                                  Position: {String((selectedVerificationRequest.newCoachData as Record<string, unknown>).coachType || '').replace(/_/g, ' ')}
                                 </p>
                               </div>
                             </div>
@@ -7965,8 +7991,8 @@ export default function AdminPage() {
                             <div className="space-y-2">
                               <label className="text-sm font-medium text-slate-400">Name Change</label>
                               <div className="rounded-lg border border-white/10 bg-white/5 p-3 text-sm text-slate-200">
-                                <p>Previous: {selectedVerificationRequest.previousFirstName} {selectedVerificationRequest.previousLastName}</p>
-                                <p>Requested: <span className="text-green-400 font-semibold">{selectedVerificationRequest.newFirstName} {selectedVerificationRequest.newLastName}</span></p>
+                                <p>Previous: {String(selectedVerificationRequest.previousFirstName || '')} {String(selectedVerificationRequest.previousLastName || '')}</p>
+                                <p>Requested: <span className="text-green-400 font-semibold">{String(selectedVerificationRequest.newFirstName || '')} {String(selectedVerificationRequest.newLastName || '')}</span></p>
                               </div>
                             </div>
                           )}
@@ -7978,36 +8004,36 @@ export default function AdminPage() {
                                 <div className="flex items-center gap-4 justify-center">
                                   <div className="text-center">
                                     <p className="text-xs text-slate-400 mb-1">Current</p>
-                                    <p className="text-3xl font-bold text-white">#{selectedVerificationRequest.previousJerseyNumber}</p>
+                                    <p className="text-3xl font-bold text-white">#{String(selectedVerificationRequest.previousJerseyNumber || '')}</p>
                                   </div>
                                   <div className="text-2xl text-slate-500">→</div>
                                   <div className="text-center">
                                     <p className="text-xs text-purple-300 mb-1">Requested</p>
-                                    <p className="text-3xl font-bold text-purple-400">#{selectedVerificationRequest.newJerseyNumber}</p>
+                                    <p className="text-3xl font-bold text-purple-400">#{String(selectedVerificationRequest.newJerseyNumber || '')}</p>
                                   </div>
                                 </div>
                                 <p className="text-xs text-slate-400 text-center mt-3">
-                                  Player: {selectedVerificationRequest.existingPlayerName || `${selectedVerificationRequest.userFirstName} ${selectedVerificationRequest.userLastName}`}
+                                  Player: {String(selectedVerificationRequest.existingPlayerName || `${String(selectedVerificationRequest.userFirstName || '')} ${String(selectedVerificationRequest.userLastName || '')}`)}
                                 </p>
                               </div>
                             </div>
                           )}
 
-                          {selectedVerificationRequest.requestType === "update_headshot" && selectedVerificationRequest.newHeadshotUrl && (
+                          {selectedVerificationRequest.requestType === "update_headshot" && !!(selectedVerificationRequest.newHeadshotUrl as string) && (
                             <div className="space-y-3">
                               <label className="text-sm font-medium text-slate-400">Headshot Update</label>
                               <div className="grid grid-cols-2 gap-4">
                                 <div>
                                   <p className="text-xs text-slate-400 mb-2">New Headshot</p>
                                   <div className="overflow-hidden rounded-xl border border-white/10 bg-white/5">
-                                    <Image src={selectedVerificationRequest.newHeadshotUrl} alt="New headshot" width={400} height={400} className="w-full h-full object-cover" />
+                                    <Image src={selectedVerificationRequest.newHeadshotUrl as string} alt="New headshot" width={400} height={400} className="w-full h-full object-cover" />
                                   </div>
                                 </div>
-                                {selectedVerificationRequest.previousHeadshotUrl && (
+                                {!!(selectedVerificationRequest.previousHeadshotUrl as string) && (
                                   <div>
                                     <p className="text-xs text-slate-400 mb-2">Previous Headshot</p>
                                     <div className="overflow-hidden rounded-xl border border-white/10 bg-white/5">
-                                      <Image src={selectedVerificationRequest.previousHeadshotUrl} alt="Previous headshot" width={400} height={400} className="w-full h-full object-cover" />
+                                      <Image src={selectedVerificationRequest.previousHeadshotUrl as string} alt="Previous headshot" width={400} height={400} className="w-full h-full object-cover" />
                                     </div>
                                   </div>
                                 )}
@@ -8015,43 +8041,43 @@ export default function AdminPage() {
                             </div>
                           )}
 
-                          {selectedVerificationRequest.requestType === "claim_existing" && selectedVerificationRequest.existingPlayerName && (
+                          {selectedVerificationRequest.requestType === "claim_existing" && !!(selectedVerificationRequest.existingPlayerName as string) && (
                             <div>
                               <label className="text-sm font-medium text-slate-400">Claiming Player</label>
                               <p className="text-white">
-                                {selectedVerificationRequest.existingPlayerName} #{selectedVerificationRequest.existingPlayerNumber}
+                                {String(selectedVerificationRequest.existingPlayerName)} #{String(selectedVerificationRequest.existingPlayerNumber || '')}
                               </p>
                             </div>
                           )}
 
-                          {selectedVerificationRequest.requestType === "create_new" && selectedVerificationRequest.newPlayerData && (
+                          {selectedVerificationRequest.requestType === "create_new" && !!(selectedVerificationRequest.newPlayerData) && (
                             <div>
                               <label className="text-sm font-medium text-slate-400">New Player Details</label>
                               <div className="mt-2 rounded-lg border border-white/10 bg-white/5 p-4 space-y-2">
                                 <p className="text-white">
-                                  Name: {selectedVerificationRequest.newPlayerData.firstName} {selectedVerificationRequest.newPlayerData.lastName}
+                                  Name: {(selectedVerificationRequest.newPlayerData as Record<string, unknown>).firstName as string} {(selectedVerificationRequest.newPlayerData as Record<string, unknown>).lastName as string}
                                 </p>
                                 <p className="text-slate-300 text-sm">
-                                  #{selectedVerificationRequest.newPlayerData.number}
-                                  {selectedVerificationRequest.newPlayerData.position && ` • ${selectedVerificationRequest.newPlayerData.position}`}
-                                  {selectedVerificationRequest.newPlayerData.height && ` • ${selectedVerificationRequest.newPlayerData.height}`}
+                                  #{(selectedVerificationRequest.newPlayerData as Record<string, unknown>).number as string}
+                                  {(selectedVerificationRequest.newPlayerData as Record<string, unknown>).position ? ` • ${String((selectedVerificationRequest.newPlayerData as Record<string, unknown>).position)}` : ''}
+                                  {(selectedVerificationRequest.newPlayerData as Record<string, unknown>).height ? ` • ${String((selectedVerificationRequest.newPlayerData as Record<string, unknown>).height)}` : ''}
                                 </p>
                               </div>
                             </div>
                           )}
 
                           {/* User's Headshot (from verification request) */}
-                          {(selectedVerificationRequest.headshotUrl || selectedVerificationRequest.newPlayerData?.headshotUrl || selectedVerificationRequest.newCoachData?.headshotUrl || selectedVerificationRequest.newStaffData?.headshotUrl) && (
+                          {!!(selectedVerificationRequest.headshotUrl || (selectedVerificationRequest.newPlayerData as Record<string, unknown> | undefined)?.headshotUrl || (selectedVerificationRequest.newCoachData as Record<string, unknown> | undefined)?.headshotUrl || (selectedVerificationRequest.newStaffData as Record<string, unknown> | undefined)?.headshotUrl) && (
                             <div>
                               <label className="text-sm font-medium text-slate-400">Applicant Headshot</label>
                               <div className="mt-2 rounded-lg border border-white/20 bg-black/30 p-2">
                                 <Image
                                   src={
-                                    selectedVerificationRequest.headshotUrl || 
-                                    selectedVerificationRequest.newPlayerData?.headshotUrl || 
-                                    selectedVerificationRequest.newCoachData?.headshotUrl || 
-                                    selectedVerificationRequest.newStaffData?.headshotUrl || 
-                                    ""
+                                    (selectedVerificationRequest.headshotUrl || 
+                                    (selectedVerificationRequest.newPlayerData as Record<string, unknown> | undefined)?.headshotUrl || 
+                                    (selectedVerificationRequest.newCoachData as Record<string, unknown> | undefined)?.headshotUrl || 
+                                    (selectedVerificationRequest.newStaffData as Record<string, unknown> | undefined)?.headshotUrl || 
+                                    "") as string
                                   }
                                   alt="Applicant Headshot"
                                   width={300}
@@ -8062,12 +8088,12 @@ export default function AdminPage() {
                             </div>
                           )}
 
-                          {selectedVerificationRequest.idImageUrl && (
+                          {!!(selectedVerificationRequest.idImageUrl) && (
                             <div>
                               <label className="text-sm font-medium text-slate-400">ID Document</label>
                               <div className="mt-2 rounded-lg border border-white/20 bg-black/30 p-2">
                                 <Image
-                                  src={selectedVerificationRequest.idImageUrl}
+                                  src={selectedVerificationRequest.idImageUrl as string}
                                   alt="Verification ID"
                                   width={400}
                                   height={300}
@@ -8090,7 +8116,7 @@ export default function AdminPage() {
 
                           <div className="flex gap-3">
                             <button
-                              onClick={() => handleReviewVerification(selectedVerificationRequest.id, "approved")}
+                              onClick={() => handleReviewVerification(selectedVerificationRequest.id as string, "approved")}
                               disabled={processingReview}
                               className="flex-1 rounded-lg bg-green-600 px-4 py-3 font-semibold text-white transition hover:bg-green-700 disabled:opacity-50"
                               type="button"
@@ -8098,7 +8124,7 @@ export default function AdminPage() {
                               {processingReview ? "Processing..." : "Approve"}
                             </button>
                             <button
-                              onClick={() => handleReviewVerification(selectedVerificationRequest.id, "rejected")}
+                              onClick={() => handleReviewVerification(selectedVerificationRequest.id as string, "rejected")}
                               disabled={processingReview}
                               className="flex-1 rounded-lg bg-red-600 px-4 py-3 font-semibold text-white transition hover:bg-red-700 disabled:opacity-50"
                               type="button"
@@ -8201,12 +8227,13 @@ export default function AdminPage() {
                         />
                       </div>
                       <div>
-                        <label className="mb-2 block text-xs font-semibold text-slate-400">Photo du visage</label>
+                        <label htmlFor="refereeHeadshot" className="mb-2 block text-xs font-semibold text-slate-400">Photo du visage</label>
                         <div className="flex items-center gap-3">
                           {refereeHeadshotPreview && (
                             <img src={refereeHeadshotPreview} alt="Preview" className="h-12 w-12 rounded-full object-cover" />
                           )}
                           <input
+                            id="refereeHeadshot"
                             type="file"
                             accept="image/*"
                             onChange={(e) => {
@@ -8394,7 +8421,9 @@ export default function AdminPage() {
                           onChange={(e) => setCommitteeForm({ ...committeeForm, phone: e.target.value })}
                           className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-violet-500 focus:outline-none"
                         />
+                        <label htmlFor="committeePhoto" className="sr-only">Photo du comité</label>
                         <input
+                          id="committeePhoto"
                           type="file"
                           accept="image/*"
                           onChange={handleCommitteePhotoChange}
@@ -8661,7 +8690,9 @@ export default function AdminPage() {
                         onChange={(e) => setPartnerForm({ ...partnerForm, name: e.target.value })}
                         className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-amber-500 focus:outline-none"
                       />
+                      <label htmlFor="partnerLogo" className="sr-only">Logo du partenaire</label>
                       <input
+                        id="partnerLogo"
                         type="file"
                         accept="image/*"
                         required={!partnerForm.id}
@@ -9372,3 +9403,5 @@ export default function AdminPage() {
     </div>
   );
 }
+
+

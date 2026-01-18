@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
     try {
       await auth.deleteUser(targetUid);
       console.log(`Deleted user from Firebase Auth: ${targetUid}`);
-    } catch (authError: any) {
+    } catch (authError: unknown) {
       console.error('Auth deletion error:', authError);
       // Continue even if auth deletion fails (user might already be deleted)
     }
@@ -250,10 +250,11 @@ export async function POST(request: NextRequest) {
         name: userName,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error deleting user:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
     return NextResponse.json(
-      { success: false, error: error.message || 'Internal server error' },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }

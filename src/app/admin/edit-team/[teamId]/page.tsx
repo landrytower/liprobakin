@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { collection, doc, getDoc, getDocs, updateDoc, addDoc, deleteDoc, setDoc, query, where, orderBy, onSnapshot } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, updateDoc, addDoc, deleteDoc, query, orderBy } from "firebase/firestore";
 import { firebaseDB, firebaseAuth, firebaseStorage } from "@/lib/firebase";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged, User } from "firebase/auth";
 import { getAdminUser } from "@/lib/adminAuth";
 import type { AdminUser } from "@/types/admin";
 import Image from "next/image";
@@ -75,7 +75,7 @@ export default function EditTeamPage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [adminUser, setAdminUser] = useState<AdminUser | null>(null);
   const [team, setTeam] = useState<Team | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
@@ -338,7 +338,7 @@ export default function EditTeamPage() {
         const gamesSnapshot = await getDocs(collection(firebaseDB, "games"));
         const gameUpdates = gamesSnapshot.docs.map(async (gameDoc) => {
           const gameData = gameDoc.data();
-          const updates: any = {};
+          const updates: Record<string, unknown> = {};
           
           if (gameData.homeTeamId === team.id) {
             updates.homeTeamName = newTeamName;
@@ -754,6 +754,7 @@ export default function EditTeamPage() {
                   value={teamForm.gender}
                   onChange={(e) => setTeamForm({ ...teamForm, gender: e.target.value })}
                   className="w-full rounded-lg border border-white/20 bg-white/5 px-4 py-2 text-white"
+                  aria-label="Team gender"
                 >
                   <option value="Males">Males</option>
                   <option value="Females">Females</option>
@@ -770,6 +771,7 @@ export default function EditTeamPage() {
                     accept="image/*"
                     onChange={(e) => setTeamLogoFile(e.target.files?.[0] || null)}
                     className="hidden"
+                    aria-label="Upload team logo"
                   />
                   <label
                     htmlFor="team-logo-upload"
@@ -1012,6 +1014,7 @@ export default function EditTeamPage() {
                     value={newPlayerForm.position}
                     onChange={(e) => setNewPlayerForm({ ...newPlayerForm, position: e.target.value })}
                     className="w-full rounded border border-white/20 bg-slate-800 px-3 py-2 text-white text-sm cursor-pointer hover:border-white/40 focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 focus:outline-none transition-colors appearance-none bg-no-repeat bg-right pr-10"
+                    aria-label="Player position"
                     style={{
                       backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='rgba(255,255,255,0.4)'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
                       backgroundSize: '1.5rem',
@@ -1039,7 +1042,7 @@ export default function EditTeamPage() {
                   >
                     <span>{heightCm} cm</span>
                     <span className="text-slate-400">
-                      {cmToFeetInches(heightCm).feet}'{cmToFeetInches(heightCm).inches}"
+                      {cmToFeetInches(heightCm).feet}&apos;{cmToFeetInches(heightCm).inches}&quot;
                     </span>
                   </div>
                   
@@ -1073,7 +1076,7 @@ export default function EditTeamPage() {
                                 }`}
                               >
                                 <span>{cm} cm</span>
-                                <span className="text-slate-400">{feet}'{inches}"</span>
+                                <span className="text-slate-400">{feet}&apos;{inches}&quot;</span>
                               </button>
                             );
                           })}
@@ -1249,6 +1252,7 @@ export default function EditTeamPage() {
                   accept="image/*"
                   onChange={(e) => setPlayerHeadshotFile(e.target.files?.[0] || null)}
                   className="hidden"
+                  aria-label="Upload player headshot"
                 />
                 {playerHeadshotFile ? (
                   <div className="space-y-2">
@@ -1603,6 +1607,7 @@ export default function EditTeamPage() {
               value={transferTargetTeamId}
               onChange={(e) => setTransferTargetTeamId(e.target.value)}
               className="w-full rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-sm text-white mb-6 focus:border-white"
+              aria-label="Destination team"
             >
               <option value="">-- Select team --</option>
               {allTeams
@@ -1674,6 +1679,7 @@ function PlayerEditForm({
             value={form.number}
             onChange={(e) => setForm({ ...form, number: parseInt(e.target.value) })}
             className="w-full rounded border border-white/20 bg-white/5 px-3 py-2 text-white text-sm"
+            aria-label="Jersey number"
           />
         </div>
         <div>
@@ -1683,6 +1689,7 @@ function PlayerEditForm({
             value={form.firstName}
             onChange={(e) => setForm({ ...form, firstName: e.target.value })}
             className="w-full rounded border border-white/20 bg-white/5 px-3 py-2 text-white text-sm"
+            aria-label="First name"
           />
         </div>
         <div>
@@ -1692,6 +1699,7 @@ function PlayerEditForm({
             value={form.lastName}
             onChange={(e) => setForm({ ...form, lastName: e.target.value })}
             className="w-full rounded border border-white/20 bg-white/5 px-3 py-2 text-white text-sm"
+            aria-label="Last name"
           />
         </div>
         <div>
@@ -1701,6 +1709,7 @@ function PlayerEditForm({
             value={form.position}
             onChange={(e) => setForm({ ...form, position: e.target.value })}
             className="w-full rounded border border-white/20 bg-white/5 px-3 py-2 text-white text-sm"
+            aria-label="Position"
           />
         </div>
         <div>
@@ -1710,6 +1719,7 @@ function PlayerEditForm({
             value={form.height}
             onChange={(e) => setForm({ ...form, height: e.target.value })}
             className="w-full rounded border border-white/20 bg-white/5 px-3 py-2 text-white text-sm"
+            aria-label="Height"
           />
         </div>
         <div>
@@ -1719,6 +1729,7 @@ function PlayerEditForm({
             value={form.dateOfBirth}
             onChange={(e) => setForm({ ...form, dateOfBirth: e.target.value })}
             className="w-full rounded border border-white/20 bg-white/5 px-3 py-2 text-white text-sm"
+            aria-label="Date of birth"
           />
         </div>
         <div className="relative">
@@ -1921,6 +1932,7 @@ function PlayerEditForm({
               accept="image/*"
               onChange={handleHeadshotChange}
               className="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-500/10 file:text-blue-300 hover:file:bg-blue-500/20 file:cursor-pointer"
+              aria-label="Upload player headshot photo"
             />
             <p className="mt-1 text-xs text-slate-500">Upload a new headshot image (JPG, PNG)</p>
           </div>
@@ -1935,6 +1947,7 @@ function PlayerEditForm({
             value={form.stats.pts}
             onChange={(e) => setForm({ ...form, stats: { ...form.stats, pts: e.target.value } })}
             className="w-full rounded border border-white/20 bg-white/5 px-3 py-2 text-white text-sm"
+            aria-label="Points per game"
           />
         </div>
         <div>
@@ -1944,6 +1957,7 @@ function PlayerEditForm({
             value={form.stats.reb}
             onChange={(e) => setForm({ ...form, stats: { ...form.stats, reb: e.target.value } })}
             className="w-full rounded border border-white/20 bg-white/5 px-3 py-2 text-white text-sm"
+            aria-label="Rebounds per game"
           />
         </div>
         <div>
@@ -1953,6 +1967,7 @@ function PlayerEditForm({
             value={form.stats.ast}
             onChange={(e) => setForm({ ...form, stats: { ...form.stats, ast: e.target.value } })}
             className="w-full rounded border border-white/20 bg-white/5 px-3 py-2 text-white text-sm"
+            aria-label="Assists per game"
           />
         </div>
         <div>
@@ -1962,6 +1977,7 @@ function PlayerEditForm({
             value={form.stats.stl}
             onChange={(e) => setForm({ ...form, stats: { ...form.stats, stl: e.target.value } })}
             className="w-full rounded border border-white/20 bg-white/5 px-3 py-2 text-white text-sm"
+            aria-label="Steals per game"
           />
         </div>
         <div>
@@ -1971,6 +1987,7 @@ function PlayerEditForm({
             value={form.stats.blk}
             onChange={(e) => setForm({ ...form, stats: { ...form.stats, blk: e.target.value } })}
             className="w-full rounded border border-white/20 bg-white/5 px-3 py-2 text-white text-sm"
+            aria-label="Blocks per game"
           />
         </div>
         <div>
@@ -1980,6 +1997,7 @@ function PlayerEditForm({
             value={form.stats.gp}
             onChange={(e) => setForm({ ...form, stats: { ...form.stats, gp: e.target.value } })}
             className="w-full rounded border border-white/20 bg-white/5 px-3 py-2 text-white text-sm"
+            aria-label="Games played"
           />
         </div>
       </div>

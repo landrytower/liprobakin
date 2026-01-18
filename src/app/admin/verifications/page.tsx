@@ -5,13 +5,13 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { collection, query, where, getDocs, doc, updateDoc, serverTimestamp, addDoc } from "firebase/firestore";
-import { onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged, type User } from "firebase/auth";
 import { firebaseAuth, firebaseDB } from "@/lib/firebase";
 import type { VerificationRequest } from "@/types/user";
 
 export default function AdminVerification() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [verificationRequests, setVerificationRequests] = useState<VerificationRequest[]>([]);
   const [selectedRequest, setSelectedRequest] = useState<VerificationRequest | null>(null);
@@ -54,7 +54,7 @@ export default function AdminVerification() {
   };
 
   const handleReview = async (requestId: string, status: "approved" | "rejected") => {
-    if (!selectedRequest) return;
+    if (!selectedRequest || !user) return;
 
     setProcessing(true);
     try {

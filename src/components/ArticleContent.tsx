@@ -42,7 +42,7 @@ export default function ArticleContent({ htmlContent, className = '' }: ArticleC
     if (!htmlContent) return [];
     
     // Handle both escaped and unescaped HTML
-    let text = htmlContent.includes('&lt;') ? unescapeHtml(htmlContent) : htmlContent;
+    const text = htmlContent.includes('&lt;') ? unescapeHtml(htmlContent) : htmlContent;
     
     // Match mention spans
     const mentionRegex = /data-id="([^"]*)"[^>]*data-label="([^"]*)"/g;

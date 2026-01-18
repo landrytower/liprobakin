@@ -4,12 +4,17 @@ import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
 // Initialize Firebase Admin (only once)
-if (!getApps().length && process.env.FIREBASE_PROJECT_ID) {
+if (
+  !getApps().length &&
+  process.env.FIREBASE_PROJECT_ID &&
+  process.env.FIREBASE_CLIENT_EMAIL &&
+  process.env.FIREBASE_PRIVATE_KEY
+) {
   initializeApp({
     credential: cert({
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+      projectId: process.env.FIREBASE_PROJECT_ID as string,
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL as string,
+      privateKey: (process.env.FIREBASE_PRIVATE_KEY as string).replace(/\\n/g, '\n'),
     }),
   });
 }
@@ -57,7 +62,7 @@ export async function POST(request: NextRequest) {
     // Delete from Firebase Auth
     try {
       await auth.deleteUser(targetUid);
-    } catch (authError: any) {
+    } catch (authError: unknown) {
       console.error('Auth deletion error:', authError);
       // Continue even if auth deletion fails (user might already be deleted)
     }
@@ -100,10 +105,11 @@ export async function POST(request: NextRequest) {
       success: true,
       message: 'Admin user deleted successfully',
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error deleting admin user:', error);
+    const message = error instanceof Error ? error.message : 'Failed to delete user';
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to delete user' },
+      { success: false, error: message },
       { status: 500 }
     );
   }

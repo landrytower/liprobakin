@@ -1,6 +1,5 @@
 import { firebaseAuth, firebaseDB } from "./firebase";
 import { 
-  createUserWithEmailAndPassword, 
   sendPasswordResetEmail,
   updateProfile,
   type User 

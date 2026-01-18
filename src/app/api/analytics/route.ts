@@ -88,11 +88,18 @@ const recentEvents: AnalyticsEvent[] = [];
 const geoCache = new Map<string, { country: string; expires: number }>();
 
 function getClientIp(req: NextRequest): string | null {
+  const vercelCountry = req.headers.get('x-vercel-ip-country');
+  if (vercelCountry) return `vercel-${vercelCountry}`; // use country header directly
+
   const forwarded = req.headers.get('x-forwarded-for') || '';
   const first = forwarded.split(',')[0]?.trim();
   if (first) return first;
   const cf = req.headers.get('cf-connecting-ip');
   if (cf) return cf;
+  const real = req.headers.get('x-real-ip');
+  if (real) return real;
+  // NextRequest.ip is available on Vercel runtimes
+  if ((req as any).ip) return (req as any).ip as string;
   return null;
 }
 
@@ -100,6 +107,13 @@ async function lookupCountry(ip: string): Promise<string> {
   const now = Date.now();
   const cached = geoCache.get(ip);
   if (cached && cached.expires > now) return cached.country;
+
+  // If the IP already encodes a country (vercel-XX), short-circuit
+  if (ip.startsWith('vercel-')) {
+    const country = ip.replace('vercel-', '') || 'unknown';
+    geoCache.set(ip, { country, expires: now + 60 * 60 * 1000 });
+    return country;
+  }
 
   try {
     const res = await fetch(`https://ipapi.co/${encodeURIComponent(ip)}/country/`, { next: { revalidate: 3600 } });

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/firebase';
+import { firebaseDB } from '@/lib/firebase';
 import bcrypt from 'bcryptjs';
+import { collection, query, where, getDocs, doc, getDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,16 +18,16 @@ export async function POST(request: NextRequest) {
     console.log('🔐 Processing password reset with token:', token);
 
     // Query Firestore for the reset token
-    const resetTokensRef = db.collection('passwordResetTokens');
-    const tokenQuery = await resetTokensRef.where('token', '==', token).get();
+    const resetTokensRef = collection(firebaseDB, 'passwordResetTokens');
+    const tokenQuerySnapshot = await getDocs(query(resetTokensRef, where('token', '==', token)));
 
-    if (tokenQuery.empty) {
+    if (tokenQuerySnapshot.empty) {
       console.log('❌ Reset token not found');
       return NextResponse.json({ error: 'Invalid reset token' }, { status: 404 });
     }
 
-    const tokenDoc = tokenQuery.docs[0];
-    const tokenData = tokenDoc.data();
+    const tokenDocSnap = tokenQuerySnapshot.docs[0];
+    const tokenData = tokenDocSnap.data();
 
     // Check if token has expired
     const now = new Date();
@@ -35,17 +36,17 @@ export async function POST(request: NextRequest) {
     if (now > expiresAt) {
       console.log('⏰ Reset token has expired');
       // Delete expired token
-      await tokenDoc.ref.delete();
+      await deleteDoc(tokenDocSnap.ref);
       return NextResponse.json({ error: 'Reset token has expired' }, { status: 410 });
     }
 
     const userId = tokenData.userId;
 
     // Get the user document
-    const userRef = db.collection('users').doc(userId);
-    const userDoc = await userRef.get();
+    const userRef = doc(firebaseDB, 'users', userId);
+    const userDocSnap = await getDoc(userRef);
 
-    if (!userDoc.exists) {
+    if (!userDocSnap.exists()) {
       console.log('❌ User not found:', userId);
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
@@ -55,13 +56,13 @@ export async function POST(request: NextRequest) {
     const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
 
     // Update the user's password
-    await userRef.update({
+    await updateDoc(userRef, {
       password: hashedPassword,
       updatedAt: new Date()
     });
 
     // Delete the used token
-    await tokenDoc.ref.delete();
+    await deleteDoc(tokenDocSnap.ref);
 
     console.log('✅ Password reset successfully for user:', userId);
 

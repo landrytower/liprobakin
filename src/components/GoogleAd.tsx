@@ -18,7 +18,7 @@ export default function GoogleAd({
   style,
   className = ''
 }: GoogleAdProps) {
-  const adRef = useRef<HTMLDivElement | null>(null);
+  const adRef = useRef<HTMLModElement | null>(null);
 
   useEffect(() => {
     try {
@@ -126,7 +126,7 @@ export default function GoogleAd({
   return (
     <div className={className} style={style}>
       <ins
-        ref={adRef as React.RefObject<HTMLDivElement>}
+        ref={adRef}
         className="adsbygoogle"
         style={{ display: 'block', ...style }}
         data-ad-client="ca-pub-6159195090622597"

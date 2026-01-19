@@ -6647,7 +6647,7 @@ export default function AdminPage() {
                         <p className="text-xs text-slate-500 mt-0.5">✓ Utilise Twilio pour SMS et email</p>
                       </div>
                       <div className="flex gap-2">
-                        {editingUser.email && (
+                        {Boolean(editingUser.email) && (
                           <button
                             onClick={() => handleSendPasswordReset('email')}
                             disabled={sendingPasswordReset}
@@ -6657,7 +6657,7 @@ export default function AdminPage() {
                             {sendingPasswordReset ? '⏳' : '📧 Email'}
                           </button>
                         )}
-                        {editingUser.phoneNumber && (
+                        {Boolean(editingUser.phoneNumber) && (
                           <button
                             onClick={() => handleSendPasswordReset('sms')}
                             disabled={sendingPasswordReset}

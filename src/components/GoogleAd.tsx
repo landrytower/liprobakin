@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import Image from 'next/image';
 
 interface GoogleAdProps {
@@ -18,10 +18,16 @@ export default function GoogleAd({
   style,
   className = ''
 }: GoogleAdProps) {
+  const adRef = useRef<HTMLDivElement | null>(null);
+
   useEffect(() => {
     try {
-      // @ts-expect-error - AdSense script
-      (window.adsbygoogle = window.adsbygoogle || []).push({});
+      // Prevent pushing twice on the same <ins> which triggers "already have ads" errors
+      const el = adRef.current as (HTMLDivElement & { dataset?: { adStatus?: string } }) | null;
+      if (el && !el.dataset?.adStatus) {
+        // @ts-expect-error - AdSense script
+        (window.adsbygoogle = window.adsbygoogle || []).push({});
+      }
     } catch (err) {
       console.error('AdSense error:', err);
     }
@@ -120,9 +126,10 @@ export default function GoogleAd({
   return (
     <div className={className} style={style}>
       <ins
+        ref={adRef as React.RefObject<HTMLDivElement>}
         className="adsbygoogle"
         style={{ display: 'block', ...style }}
-        data-ad-client="ca-pub-XXXXXXXXXXXXX"
+        data-ad-client="ca-pub-6159195090622597"
         data-ad-slot={slot}
         data-ad-format={format}
         data-full-width-responsive={responsive ? 'true' : 'false'}

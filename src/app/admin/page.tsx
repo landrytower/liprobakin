@@ -27,7 +27,7 @@ import {
 } from "firebase/firestore";
 import type { DocumentData, DocumentSnapshot } from "firebase/firestore";
 import { deleteObject, getDownloadURL, ref as storageRef, uploadBytes } from "firebase/storage";
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut, type User } from "firebase/auth";
+import { onAuthStateChanged, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, type User } from "firebase/auth";
 import type { AdminUser, AdminRole } from "@/types/admin";
 import type { AuditLog } from "@/types/auditLog";
 import RichTextEditor from "@/components/RichTextEditor";
@@ -733,8 +733,21 @@ export default function AdminPage() {
   const [verificationRequests, setVerificationRequests] = useState<Record<string, unknown>[]>([]);
   const [allUsers, setAllUsers] = useState<Record<string, unknown>[]>([]);
   const [editingUser, setEditingUser] = useState<Record<string, unknown> | null>(null);
-  const [editUserForm, setEditUserForm] = useState({ firstName: '', lastName: '', showOnRoster: true });
+  const [editUserForm, setEditUserForm] = useState({ 
+    firstName: '', 
+    lastName: '', 
+    showOnRoster: true,
+    role: '' as 'player' | 'coach' | 'staff' | 'fan' | '',
+    teamId: '',
+    teamName: '',
+    favoriteTeamId: '',
+    favoriteTeamName: '',
+    headshot: '',
+  });
+  const [editUserHeadshotFile, setEditUserHeadshotFile] = useState<File | null>(null);
+  const [editUserHeadshotPreview, setEditUserHeadshotPreview] = useState<string>('');
   const [savingUserEdit, setSavingUserEdit] = useState(false);
+  const [sendingPasswordReset, setSendingPasswordReset] = useState(false);
   const [accountRoleFilter, setAccountRoleFilter] = useState<'all' | 'player' | 'coach' | 'fan' | 'staff'>('all');
   const [accountSearchQuery, setAccountSearchQuery] = useState('');
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
@@ -1204,38 +1217,97 @@ export default function AdminPage() {
     return () => clearInterval(interval);
   }, []);
 
-  // Handle saving user edits (name, showOnRoster)
+  // Handle sending password reset email/SMS
+  const handleSendPasswordReset = async (sendType: 'email' | 'sms') => {
+    if (!editingUser) return;
+    
+    const userEmail = editingUser.email as string;
+    const userPhone = editingUser.phoneNumber as string;
+    
+    const sendTo = sendType === 'email' ? userEmail : userPhone;
+    const sendTypeLabel = sendType === 'email' ? 'email' : 'SMS';
+    
+    if (!sendTo) {
+      alert(`Aucune ${sendType === 'email' ? 'adresse email' : 'numéro de téléphone'} trouvé pour cet utilisateur.`);
+      return;
+    }
+    
+    if (!window.confirm(`Envoyer un lien de réinitialisation par ${sendTypeLabel} à ${sendTo} ?`)) {
+      return;
+    }
+    
+    setSendingPasswordReset(true);
+    try {
+      const response = await fetch('/api/auth/send-reset-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emailOrPhone: sendTo }),
+      });
+      
+      const result = await response.json();
+      
+      if (response.ok) {
+        alert(`✅ ${result.message}\nEnvoyé à: ${result.maskedInfo || sendTo}`);
+      } else {
+        throw new Error(result.error || 'Failed to send reset link');
+      }
+    } catch (error: any) {
+      console.error('Error sending password reset link:', error);
+      alert('Erreur lors de l\'envoi du lien de réinitialisation: ' + error.message);
+    } finally {
+      setSendingPasswordReset(false);
+    }
+  };
+
+  // Handle saving user edits (name, showOnRoster, role, team, favoriteTeam, headshot)
   const handleSaveUserEdit = async () => {
     if (!editingUser) return;
     
     setSavingUserEdit(true);
     try {
-      // Update user document (including showOnRoster for immediate UI feedback)
+      let headshotUrl = editUserForm.headshot;
+
+      // Upload new headshot if selected
+      if (editUserHeadshotFile) {
+        const headshotStorageRef = storageRef(firebaseStorage, `user-headshots/${editingUser.id}/${Date.now()}_${editUserHeadshotFile.name}`);
+        const uploadResult = await uploadBytes(headshotStorageRef, editUserHeadshotFile);
+        headshotUrl = await getDownloadURL(uploadResult.ref);
+      }
+
+      // Update user document with all fields
       await updateDoc(doc(firebaseDB, "users", editingUser.id as string), {
         firstName: editUserForm.firstName,
         lastName: editUserForm.lastName,
         showOnRoster: editUserForm.showOnRoster,
+        role: editUserForm.role,
+        teamId: editUserForm.teamId || null,
+        teamName: editUserForm.teamName || null,
+        favoriteTeamId: editUserForm.favoriteTeamId || null,
+        favoriteTeamName: editUserForm.favoriteTeamName || null,
+        headshot: headshotUrl || null,
         updatedAt: serverTimestamp(),
       });
 
       // If user is linked to a player/coach/staff, update their roster entry too
-      if (editingUser.linkedPlayerId && editingUser.teamId) {
-        const rosterRef = doc(firebaseDB, "teams", editingUser.teamId as string, "roster", editingUser.linkedPlayerId as string);
+      if (editingUser.linkedPlayerId && editUserForm.teamId) {
+        const rosterRef = doc(firebaseDB, "teams", editUserForm.teamId as string, "roster", editingUser.linkedPlayerId as string);
         await updateDoc(rosterRef, {
           firstName: editUserForm.firstName,
           lastName: editUserForm.lastName,
           name: `${editUserForm.firstName} ${editUserForm.lastName}`,
           showOnRoster: editUserForm.showOnRoster,
+          headshot: headshotUrl || null,
           updatedAt: serverTimestamp(),
         });
       }
       
-      if (editingUser.linkedCoachId && editingUser.teamId) {
-        const coachRef = doc(firebaseDB, "teams", editingUser.teamId as string, "coachStaff", editingUser.linkedCoachId as string);
+      if (editingUser.linkedCoachId && editUserForm.teamId) {
+        const coachRef = doc(firebaseDB, "teams", editUserForm.teamId as string, "coachStaff", editingUser.linkedCoachId as string);
         await updateDoc(coachRef, {
           firstName: editUserForm.firstName,
           lastName: editUserForm.lastName,
           showOnRoster: editUserForm.showOnRoster,
+          headshot: headshotUrl || null,
           updatedAt: serverTimestamp(),
         });
       }
@@ -1247,12 +1319,20 @@ export default function AdminPage() {
               ...u, 
               firstName: editUserForm.firstName, 
               lastName: editUserForm.lastName, 
-              showOnRoster: editUserForm.showOnRoster 
+              showOnRoster: editUserForm.showOnRoster,
+              role: editUserForm.role,
+              teamId: editUserForm.teamId,
+              teamName: editUserForm.teamName,
+              favoriteTeamId: editUserForm.favoriteTeamId,
+              favoriteTeamName: editUserForm.favoriteTeamName,
+              headshot: headshotUrl,
             } 
           : u
       ));
 
       setEditingUser(null);
+      setEditUserHeadshotFile(null);
+      setEditUserHeadshotPreview('');
       alert(`✅ ${editUserForm.firstName} ${editUserForm.lastName} mis à jour avec succès!`);
     } catch (error: any) {
       console.error("Error updating user:", error);
@@ -6076,13 +6156,100 @@ export default function AdminPage() {
                                       firstName: user.firstName || '',
                                       lastName: user.lastName || '',
                                       showOnRoster: user.showOnRoster !== false,
+                                      role: user.role || '',
+                                      teamId: user.teamId || '',
+                                      teamName: user.teamName || '',
+                                      favoriteTeamId: user.favoriteTeamId || '',
+                                      favoriteTeamName: user.favoriteTeamName || '',
+                                      headshot: user.headshot || '',
                                     });
+                                    console.log('User headshot:', user.headshot);
+                                    setEditUserHeadshotPreview(user.headshot || '');
+                                    console.log('Setting editUserHeadshotPreview to:', user.headshot || '');
+                                    setEditUserHeadshotFile(null);
                                   }}
                                   className="rounded-lg bg-cyan-600/20 px-4 py-2 text-sm font-semibold text-cyan-400 transition hover:bg-cyan-600/30"
                                   type="button"
                                 >
                                   ✏️ Modifier le profil
                                 </button>
+                                {/* Reset Password Buttons */}
+                                {user.email && (
+                                  <button
+                                    onClick={async () => {
+                                      const userEmail = user.email as string;
+                                      
+                                      if (!window.confirm(`Envoyer un lien de réinitialisation par email à ${userEmail} ?`)) {
+                                        return;
+                                      }
+                                      
+                                      setSendingPasswordReset(true);
+                                      try {
+                                        const response = await fetch('/api/auth/send-reset-link', {
+                                          method: 'POST',
+                                          headers: { 'Content-Type': 'application/json' },
+                                          body: JSON.stringify({ emailOrPhone: userEmail }),
+                                        });
+                                        
+                                        const result = await response.json();
+                                        
+                                        if (response.ok) {
+                                          alert(`✅ ${result.message}\nEnvoyé à: ${result.maskedInfo || userEmail}`);
+                                        } else {
+                                          throw new Error(result.error || 'Failed to send reset link');
+                                        }
+                                      } catch (error: any) {
+                                        console.error('Error sending password reset link:', error);
+                                        alert('Erreur lors de l\'envoi du lien de réinitialisation: ' + error.message);
+                                      } finally {
+                                        setSendingPasswordReset(false);
+                                      }
+                                    }}
+                                    disabled={sendingPasswordReset}
+                                    className="rounded-lg bg-blue-600/20 px-3 py-2 text-sm font-semibold text-blue-400 transition hover:bg-blue-600/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    type="button"
+                                  >
+                                    {sendingPasswordReset ? '⏳' : '📧 Email'}
+                                  </button>
+                                )}
+                                {user.phoneNumber && (
+                                  <button
+                                    onClick={async () => {
+                                      const userPhone = user.phoneNumber as string;
+                                      
+                                      if (!window.confirm(`Envoyer un lien de réinitialisation par SMS à ${userPhone} ?`)) {
+                                        return;
+                                      }
+                                      
+                                      setSendingPasswordReset(true);
+                                      try {
+                                        const response = await fetch('/api/auth/send-reset-link', {
+                                          method: 'POST',
+                                          headers: { 'Content-Type': 'application/json' },
+                                          body: JSON.stringify({ emailOrPhone: userPhone }),
+                                        });
+                                        
+                                        const result = await response.json();
+                                        
+                                        if (response.ok) {
+                                          alert(`✅ ${result.message}\nEnvoyé à: ${result.maskedInfo || userPhone}`);
+                                        } else {
+                                          throw new Error(result.error || 'Failed to send reset link');
+                                        }
+                                      } catch (error: any) {
+                                        console.error('Error sending password reset link:', error);
+                                        alert('Erreur lors de l\'envoi du lien de réinitialisation: ' + error.message);
+                                      } finally {
+                                        setSendingPasswordReset(false);
+                                      }
+                                    }}
+                                    disabled={sendingPasswordReset}
+                                    className="rounded-lg bg-green-600/20 px-3 py-2 text-sm font-semibold text-green-400 transition hover:bg-green-600/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    type="button"
+                                  >
+                                    {sendingPasswordReset ? '⏳' : '📱 SMS'}
+                                  </button>
+                                )}
                                 {/* Add to Roster Button for Custom Players */}
                                 {user.role === 'player' && user.verificationStatus === 'approved' && user.teamId && !user.linkedPlayerId && (
                                   <button
@@ -6227,9 +6394,13 @@ export default function AdminPage() {
             {/* Edit User Modal */}
             {editingUser && (
               <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-                <div className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-white/20 bg-gradient-to-br from-slate-900 to-slate-950 p-6 shadow-2xl">
+                <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-white/20 bg-gradient-to-br from-slate-900 to-slate-950 p-6 shadow-2xl">
                   <button
-                    onClick={() => setEditingUser(null)}
+                    onClick={() => {
+                      setEditingUser(null);
+                      setEditUserHeadshotFile(null);
+                      setEditUserHeadshotPreview('');
+                    }}
                     className="absolute right-4 top-4 text-slate-400 hover:text-white transition"
                     type="button"
                   >
@@ -6238,26 +6409,86 @@ export default function AdminPage() {
                   
                   <h3 className="text-xl font-bold text-white mb-6">✏️ Modifier le compte</h3>
                   
-                  {/* User Info Header */}
+                  {/* User Info Header with Headshot */}
                   <div className="mb-6 p-4 rounded-xl bg-slate-800/50 border border-white/10">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold text-lg">
-                        {(editingUser.firstName as string)?.[0]}{(editingUser.lastName as string)?.[0]}
+                    <div className="flex items-start gap-4">
+                      {/* Headshot Preview & Upload */}
+                      <div className="flex-shrink-0">
+                        <div className="relative w-20 h-20 rounded-full overflow-hidden border-2 border-white/20 bg-gradient-to-br from-purple-500 to-pink-500">
+                          {editUserHeadshotPreview ? (
+                            <Image src={editUserHeadshotPreview} alt="Headshot" fill className="object-cover" unoptimized />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-white font-bold text-2xl">
+                              {(editingUser.firstName as string)?.[0]}{(editingUser.lastName as string)?.[0]}
+                            </div>
+                          )}
+                          {/* Debug info */}
+                          {process.env.NODE_ENV === 'development' && (
+                            <div className="absolute -bottom-8 left-0 text-xs text-cyan-400">
+                              Preview: {editUserHeadshotPreview ? 'Y' : 'N'}
+                            </div>
+                          )}
+                        </div>
+                        
+                        {/* Headshot Control Buttons */}
+                        <div className="mt-3 space-y-2">
+                          <div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const fileInput = document.getElementById('headshot-file-input') as HTMLInputElement;
+                                fileInput?.click();
+                              }}
+                              className="w-full rounded-lg bg-cyan-600/20 border border-cyan-600/30 px-3 py-2 text-xs font-semibold text-cyan-400 hover:bg-cyan-600/30 hover:border-cyan-600/50 transition cursor-pointer"
+                            >
+                              📷 {editUserHeadshotPreview ? 'Changer Photo' : 'Ajouter Photo'}
+                            </button>
+                            <input
+                              id="headshot-file-input"
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  setEditUserHeadshotFile(file);
+                                  setEditUserHeadshotPreview(URL.createObjectURL(file));
+                                }
+                              }}
+                            />
+                          </div>
+                          {editUserHeadshotPreview && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (window.confirm('Êtes-vous sûr de vouloir supprimer la photo de profil ?')) {
+                                  setEditUserHeadshotFile(null);
+                                  setEditUserHeadshotPreview('');
+                                  setEditUserForm(prev => ({ ...prev, headshot: '' }));
+                                }
+                              }}
+                              className="w-full rounded-lg bg-rose-600/20 border border-rose-600/30 px-3 py-2 text-xs font-semibold text-rose-400 hover:bg-rose-600/30 hover:border-rose-600/50 transition"
+                            >
+                              🗑️ Supprimer Photo
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      <div>
+                      <div className="flex-1">
                         <p className="text-white font-semibold">{editingUser.email as string}</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          {(editingUser.role as string) && (
+                        <p className="text-xs text-slate-500 mt-1">ID: {editingUser.id as string}</p>
+                        <div className="flex items-center gap-2 mt-2">
+                          {editUserForm.role && (
                             <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                              (editingUser.role as string) === 'player' ? 'bg-blue-500/20 text-blue-400' :
-                              (editingUser.role as string) === 'coach' || (editingUser.role as string) === 'staff' ? 'bg-purple-500/20 text-purple-400' :
-                              'bg-green-500/20 text-green-400'
+                              editUserForm.role === 'player' ? 'bg-cyan-500/20 text-cyan-400' :
+                              editUserForm.role === 'coach' || editUserForm.role === 'staff' ? 'bg-purple-500/20 text-purple-400' :
+                              'bg-orange-500/20 text-orange-400'
                             }`}>
-                              {editingUser.role as string}
+                              {editUserForm.role === 'player' ? 'Joueur' : editUserForm.role === 'coach' ? 'Coach' : editUserForm.role === 'staff' ? 'Staff' : 'Fan'}
                             </span>
                           )}
-                          {(editingUser.teamName as string) && (
-                            <span className="text-xs text-slate-400">🏀 {editingUser.teamName as string}</span>
+                          {editUserForm.teamName && (
+                            <span className="text-xs text-slate-400">🏀 {editUserForm.teamName}</span>
                           )}
                         </div>
                       </div>
@@ -6266,6 +6497,7 @@ export default function AdminPage() {
 
                   {/* Edit Form */}
                   <div className="space-y-4">
+                    {/* Name Fields */}
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label htmlFor="editUserFirstName" className="block text-xs font-semibold text-slate-400 mb-1">Prénom</label>
@@ -6289,8 +6521,77 @@ export default function AdminPage() {
                       </div>
                     </div>
 
+                    {/* Role Selection */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-400 mb-2">Rôle</label>
+                      <div className="flex flex-wrap gap-2">
+                        {['player', 'coach', 'staff', 'fan'].map((role) => (
+                          <button
+                            key={role}
+                            type="button"
+                            onClick={() => setEditUserForm(prev => ({ ...prev, role: role as any }))}
+                            className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wider transition ${
+                              editUserForm.role === role
+                                ? role === 'player' ? 'bg-cyan-500 text-white' :
+                                  role === 'coach' || role === 'staff' ? 'bg-purple-500 text-white' :
+                                  'bg-orange-500 text-white'
+                                : 'border border-white/20 text-slate-300 hover:border-white/40'
+                            }`}
+                          >
+                            {role === 'player' ? 'Joueur' : role === 'coach' ? 'Coach' : role === 'staff' ? 'Staff' : 'Fan'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Team Selection */}
+                    <div>
+                      <label htmlFor="editUserTeam" className="block text-xs font-semibold text-slate-400 mb-1">Équipe</label>
+                      <select
+                        id="editUserTeam"
+                        value={editUserForm.teamId}
+                        onChange={(e) => {
+                          const selectedTeam = teams.find(t => t.id === e.target.value);
+                          setEditUserForm(prev => ({
+                            ...prev,
+                            teamId: e.target.value,
+                            teamName: selectedTeam?.name || ''
+                          }));
+                        }}
+                        className="w-full rounded-lg border border-white/20 bg-slate-800 px-3 py-2 text-white focus:border-purple-400/50 focus:outline-none focus:ring-2 focus:ring-purple-400/30"
+                      >
+                        <option value="">-- Aucune équipe --</option>
+                        {teams.map(team => (
+                          <option key={team.id} value={team.id}>{team.name} ({team.gender === 'men' ? 'M' : 'F'})</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Favorite Team Selection */}
+                    <div>
+                      <label htmlFor="editUserFavoriteTeam" className="block text-xs font-semibold text-slate-400 mb-1">Équipe Favorite</label>
+                      <select
+                        id="editUserFavoriteTeam"
+                        value={editUserForm.favoriteTeamId}
+                        onChange={(e) => {
+                          const selectedTeam = teams.find(t => t.id === e.target.value);
+                          setEditUserForm(prev => ({
+                            ...prev,
+                            favoriteTeamId: e.target.value,
+                            favoriteTeamName: selectedTeam?.name || ''
+                          }));
+                        }}
+                        className="w-full rounded-lg border border-white/20 bg-slate-800 px-3 py-2 text-white focus:border-purple-400/50 focus:outline-none focus:ring-2 focus:ring-purple-400/30"
+                      >
+                        <option value="">-- Aucune équipe favorite --</option>
+                        {teams.map(team => (
+                          <option key={team.id} value={team.id}>{team.name} ({team.gender === 'men' ? 'M' : 'F'})</option>
+                        ))}
+                      </select>
+                    </div>
+
                     {/* Show on Roster Toggle - Only for players/coaches/staff */}
-                    {((editingUser.role as string) === 'player' || (editingUser.role as string) === 'coach' || (editingUser.role as string) === 'staff') && ((editingUser.linkedPlayerId as string) || (editingUser.linkedCoachId as string)) && (
+                    {(editUserForm.role === 'player' || editUserForm.role === 'coach' || editUserForm.role === 'staff') && ((editingUser.linkedPlayerId as string) || (editingUser.linkedCoachId as string)) && (
                       <div className="p-4 rounded-xl bg-slate-800/30 border border-white/10">
                         <div className="flex items-center justify-between">
                           <div>
@@ -6319,7 +6620,7 @@ export default function AdminPage() {
                     )}
 
                     {/* Info notice for fans */}
-                    {editingUser.role === 'fan' && (
+                    {editUserForm.role === 'fan' && (
                       <div className="p-3 rounded-lg bg-slate-800/30 border border-white/10">
                         <p className="text-xs text-slate-400">
                           ℹ️ Les fans n&apos;apparaissent pas sur les rosters d&apos;équipe.
@@ -6328,7 +6629,7 @@ export default function AdminPage() {
                     )}
 
                     {/* Info notice if not linked */}
-                    {(editingUser.role === 'player' || editingUser.role === 'coach' || editingUser.role === 'staff') && !editingUser.linkedPlayerId && !editingUser.linkedCoachId && (
+                    {(editUserForm.role === 'player' || editUserForm.role === 'coach' || editUserForm.role === 'staff') && !editingUser.linkedPlayerId && !editingUser.linkedCoachId && (
                       <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
                         <p className="text-xs text-amber-400">
                           ⚠️ Ce compte n&apos;est pas encore lié à un profil de roster. L&apos;option &quot;Afficher sur le Roster&quot; sera disponible une fois le profil ajouté au roster.
@@ -6337,10 +6638,47 @@ export default function AdminPage() {
                     )}
                   </div>
 
+                  {/* Reset Password Section */}
+                  <div className="mt-6 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-amber-400 font-medium text-sm">🔐 Réinitialisation du mot de passe</p>
+                        <p className="text-xs text-slate-400 mt-1">Envoie un lien de réinitialisation</p>
+                        <p className="text-xs text-slate-500 mt-0.5">✓ Utilise Twilio pour SMS et email</p>
+                      </div>
+                      <div className="flex gap-2">
+                        {editingUser.email && (
+                          <button
+                            onClick={() => handleSendPasswordReset('email')}
+                            disabled={sendingPasswordReset}
+                            className="rounded-lg bg-blue-600/20 border border-blue-600/30 px-3 py-2 text-xs font-semibold text-blue-400 hover:bg-blue-600/30 hover:border-blue-600/50 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                            type="button"
+                          >
+                            {sendingPasswordReset ? '⏳' : '📧 Email'}
+                          </button>
+                        )}
+                        {editingUser.phoneNumber && (
+                          <button
+                            onClick={() => handleSendPasswordReset('sms')}
+                            disabled={sendingPasswordReset}
+                            className="rounded-lg bg-green-600/20 border border-green-600/30 px-3 py-2 text-xs font-semibold text-green-400 hover:bg-green-600/30 hover:border-green-600/50 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                            type="button"
+                          >
+                            {sendingPasswordReset ? '⏳' : '📱 SMS'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Action Buttons */}
                   <div className="mt-6 flex gap-3">
                     <button
-                      onClick={() => setEditingUser(null)}
+                      onClick={() => {
+                        setEditingUser(null);
+                        setEditUserHeadshotFile(null);
+                        setEditUserHeadshotPreview('');
+                      }}
                       className="flex-1 rounded-xl border border-white/20 bg-transparent px-4 py-2.5 text-sm font-semibold text-slate-300 transition hover:bg-white/5"
                       type="button"
                     >

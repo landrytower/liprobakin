@@ -3291,35 +3291,6 @@ export default function Home() {
                 );
               })}
             </div>
-            {leagueTopPlayers.length > 3 && (
-              <div className="mt-6 flex justify-center">
-                <button
-                  type="button"
-                  onClick={() => setLeagueLeadersExpanded(!leagueLeadersExpanded)}
-                  className="group relative overflow-hidden rounded-xl border border-white/20 bg-white/5 backdrop-blur-md px-5 py-2.5 text-sm font-medium text-white transition-all hover:border-white/40 hover:bg-white/10 active:scale-95"
-                >
-                  <span className="relative z-10 flex items-center gap-2">
-                    {leagueLeadersExpanded ? (
-                      <>
-                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
-                        </svg>
-                        Show Less
-                      </>
-                    ) : (
-                      <>
-                        Show Top 10
-                        <svg className="h-4 w-4 transition-transform group-hover:translate-x-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </>
-                    )}
-                  </span>
-                  {/* Subtle shimmer on hover */}
-                  <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/10 to-transparent transition-transform duration-1000 group-hover:translate-x-full" />
-                </button>
-              </div>
-            )}
           </div>
         </section>
 
@@ -3442,8 +3413,8 @@ export default function Home() {
               }}
             >
               <div className={teamSearch 
-                ? "flex gap-3 pb-2 sm:gap-4" 
-                : "grid grid-flow-col grid-rows-2 auto-cols-[180px] gap-3 pb-2 sm:auto-cols-[220px] md:auto-cols-[260px] lg:auto-cols-[300px] sm:gap-4"
+                ? "flex gap-2 pb-2 sm:gap-2.5" 
+                : "grid grid-flow-col grid-rows-2 auto-cols-[280px] gap-2 pb-2 sm:auto-cols-[300px] md:auto-cols-[300px] lg:auto-cols-[300px] sm:gap-2.5"
               }>
                 {filteredFranchises.map((team) => {
                   const fullName = [team.city, team.name].filter(Boolean).join(" ").trim();
@@ -3451,11 +3422,11 @@ export default function Home() {
                     <Link
                       key={fullName}
                       href={`/team/${encodeURIComponent(fullName)}`}
-                      className="group relative rounded-xl sm:rounded-2xl border border-white/10 bg-gradient-to-br from-slate-800/40 via-slate-900/60 to-slate-950/80 p-4 sm:p-6 text-left transition-all duration-300 active:scale-95 sm:hover:scale-[1.02] hover:border-white/30 sm:hover:shadow-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 overflow-hidden flex-shrink-0"
+                      className="group relative rounded-2xl border border-white/10 bg-gradient-to-br from-slate-800/40 via-slate-900/60 to-slate-950/80 p-5 sm:p-6 text-left transition-all duration-300 active:scale-95 sm:hover:scale-[1.02] hover:border-white/30 sm:hover:shadow-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 overflow-hidden flex-shrink-0"
                       style={{
                         backgroundImage: `linear-gradient(135deg, ${team.colors[0]}15, ${team.colors[1]}08)`,
-                        width: '180px',
-                        minWidth: '180px'
+                        width: '280px',
+                        minWidth: '280px'
                       }}
                     >
                       {/* Glow effect on hover */}
@@ -3468,7 +3439,7 @@ export default function Home() {
                       
                       <div className="relative z-10">
                         {team.logo ? (
-                          <div className="mb-3 sm:mb-4 flex items-center gap-2 sm:gap-3">
+                          <div className="mb-4 flex items-center gap-3">
                             <div className="relative flex-shrink-0">
                               <div 
                                 className="absolute inset-0 rounded-full blur-md opacity-50 sm:group-hover:opacity-80 transition-opacity"
@@ -3477,30 +3448,30 @@ export default function Home() {
                               <Image
                                 src={team.logo}
                                 alt={`${fullName} logo`}
-                                width={56}
-                                height={56}
-                                className="relative h-11 w-11 sm:h-14 sm:w-14 rounded-full border-2 border-white/30 object-cover shadow-lg"
+                                width={64}
+                                height={64}
+                                className="relative h-14 w-14 sm:h-16 sm:w-16 rounded-full border-2 border-white/30 object-cover shadow-lg"
                               />
                             </div>
-                            <p className="text-sm sm:text-lg font-bold text-white tracking-tight leading-tight line-clamp-2">{fullName}</p>
+                            <p className="text-base sm:text-lg font-bold text-white tracking-tight leading-tight line-clamp-2">{fullName}</p>
                           </div>
                         ) : (
-                          <p className="text-sm sm:text-lg font-bold text-white mb-3 sm:mb-4 line-clamp-2">{fullName}</p>
+                          <p className="text-base sm:text-lg font-bold text-white mb-4 line-clamp-2">{fullName}</p>
                         )}
                         
                         {/* Color bars with enhanced styling */}
-                        <div className="mt-4 sm:mt-5 flex gap-2 sm:gap-2.5">
+                        <div className="mt-5 flex gap-2">
                           {team.colors.map((color, idx) => (
                             <div key={`${fullName}-${color}`} className="flex-1 relative">
                               <div
-                                className="h-2 sm:h-2.5 rounded-full shadow-md transition-all duration-300 sm:group-hover:h-3 sm:group-hover:shadow-lg"
+                                className="h-2.5 rounded-full shadow-md transition-all duration-300 sm:group-hover:h-3 sm:group-hover:shadow-lg"
                                 style={{ 
                                   backgroundColor: color,
                                   boxShadow: `0 0 8px ${color}40, 0 0 12px ${color}30`
                                 }}
                               />
                               <div
-                                className="absolute inset-0 h-2 sm:h-2.5 rounded-full opacity-0 sm:group-hover:opacity-100 transition-opacity duration-300 blur-sm pointer-events-none"
+                                className="absolute inset-0 h-2.5 rounded-full opacity-0 sm:group-hover:opacity-100 transition-opacity duration-300 blur-sm pointer-events-none"
                                 style={{ backgroundColor: color }}
                               />
                             </div>

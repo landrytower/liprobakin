@@ -9,6 +9,7 @@ import { firebaseDB } from "@/lib/firebase";
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { RosterPlayer } from "@/data/febaco";
 import { flagFromCode } from "@/data/countries";
+import GoogleAd from "@/components/GoogleAd";
 
 const translations = {
   en: {
@@ -308,7 +309,14 @@ export default function TeamPage() {
       <header className="sticky top-0 z-50 border-b border-white/10 bg-slate-950/80 backdrop-blur-md">
         <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
-            <Link href="/" className="text-2xl font-bold text-white hover:text-slate-200 transition-colors">
+            <Link href="/" className="flex items-center gap-3 text-2xl font-bold text-white hover:text-slate-200 transition-colors">
+              <Image
+                src="/logos/liprobakin.png"
+                alt="Liprobakin"
+                width={40}
+                height={40}
+                className="h-10 w-10 object-contain"
+              />
               LIPROBAKIN
             </Link>
             <div className="flex items-center gap-3">
@@ -335,6 +343,16 @@ export default function TeamPage() {
           </div>
         </div>
       </header>
+
+      {/* Google Ad banner */}
+      <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
+        <GoogleAd
+          slot="1234567890"
+          format="horizontal"
+          className="w-full"
+          style={{ minHeight: "120px" }}
+        />
+      </div>
 
       {/* Team Header */}
       <div 

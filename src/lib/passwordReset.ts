@@ -22,14 +22,11 @@
 export function normalizePhoneNumber(phone: string): string {
   if (!phone) return '';
   
-  // Remove all non-digit characters except leading +
-  let cleaned = phone.trim();
-  
   // Check if starts with + (has country code)
-  const hasCountryCode = cleaned.startsWith('+');
+  const hasCountryCode = phone.trim().startsWith('+');
   
   // Remove all non-digit characters
-  const digitsOnly = cleaned.replace(/\D/g, '');
+  const digitsOnly = phone.trim().replace(/\D/g, '');
   
   // If it started with +, add it back
   if (hasCountryCode) {

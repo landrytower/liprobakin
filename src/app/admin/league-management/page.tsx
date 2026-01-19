@@ -407,48 +407,36 @@ export default function LeagueManagementPage() {
 
   if (loading) {
     return (
-      <div style={{ padding: "40px", textAlign: "center" }}>
+      <div className="p-10 text-center">
         <p>Loading...</p>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: "20px", maxWidth: "1200px", margin: "0 auto" }}>
-      <div style={{ marginBottom: "30px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h1 style={{ fontSize: "28px", fontWeight: "bold", color: "#1089D3" }}>
+    <div className="p-5 max-w-6xl mx-auto">
+      <div className="mb-8 flex justify-between items-center">
+        <h1 className="text-3xl font-bold text-[#1089D3]">
           League Management
         </h1>
         <button
           onClick={() => router.push("/admin")}
-          style={{
-            padding: "10px 20px",
-            background: "#666",
-            color: "white",
-            border: "none",
-            borderRadius: "8px",
-            cursor: "pointer",
-          }}
+          className="px-5 py-2.5 bg-gray-500 text-white rounded-lg cursor-pointer hover:bg-gray-600 transition"
         >
           ← Back to Admin
         </button>
       </div>
 
       {/* Tabs */}
-      <div style={{ display: "flex", gap: "10px", marginBottom: "30px", borderBottom: "2px solid #eee" }}>
+      <div className="flex gap-2.5 mb-8 border-b-2 border-gray-200">
         {permissions?.canManageReferees && (
           <button
             onClick={() => setActiveTab("referees")}
-            style={{
-              padding: "12px 24px",
-              background: activeTab === "referees" ? "#1089D3" : "transparent",
-              color: activeTab === "referees" ? "white" : "#666",
-              border: "none",
-              borderBottom: activeTab === "referees" ? "3px solid #1089D3" : "none",
-              cursor: "pointer",
-              fontSize: "16px",
-              fontWeight: activeTab === "referees" ? "bold" : "normal",
-            }}
+            className={`px-6 py-3 text-base cursor-pointer transition ${
+              activeTab === "referees"
+                ? "bg-[#1089D3] text-white font-bold border-b-[3px] border-[#1089D3]"
+                : "bg-transparent text-gray-500"
+            }`}
           >
             Referees ({referees.length})
           </button>
@@ -456,16 +444,11 @@ export default function LeagueManagementPage() {
         {permissions?.canManageVenues && (
           <button
             onClick={() => setActiveTab("venues")}
-            style={{
-              padding: "12px 24px",
-              background: activeTab === "venues" ? "#1089D3" : "transparent",
-              color: activeTab === "venues" ? "white" : "#666",
-              border: "none",
-              borderBottom: activeTab === "venues" ? "3px solid #1089D3" : "none",
-              cursor: "pointer",
-              fontSize: "16px",
-              fontWeight: activeTab === "venues" ? "bold" : "normal",
-            }}
+            className={`px-6 py-3 text-base cursor-pointer transition ${
+              activeTab === "venues"
+                ? "bg-[#1089D3] text-white font-bold border-b-[3px] border-[#1089D3]"
+                : "bg-transparent text-gray-500"
+            }`}
           >
             Venues ({venues.length})
           </button>
@@ -475,22 +458,14 @@ export default function LeagueManagementPage() {
       {/* Referees Tab */}
       {activeTab === "referees" && permissions?.canManageReferees && (
         <div>
-          <div style={{ marginBottom: "20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <h2 style={{ fontSize: "22px", fontWeight: "bold" }}>Referees</h2>
+          <div className="mb-5 flex justify-between items-center">
+            <h2 className="text-xl font-bold">Referees</h2>
             <button
               onClick={() => {
                 setRefereeForm({ firstName: "", lastName: "", phone: "" });
                 setRefereeFormVisible(true);
               }}
-              style={{
-                padding: "10px 20px",
-                background: "#1089D3",
-                color: "white",
-                border: "none",
-                borderRadius: "8px",
-                cursor: "pointer",
-                fontWeight: "bold",
-              }}
+              className="px-5 py-2.5 bg-[#1089D3] text-white rounded-lg cursor-pointer font-bold hover:bg-[#0d7ac0] transition"
             >
               + Add Referee
             </button>
@@ -498,45 +473,27 @@ export default function LeagueManagementPage() {
 
           {refereeStatus && (
             <div
-              style={{
-                padding: "12px",
-                marginBottom: "20px",
-                borderRadius: "8px",
-                background:
-                  refereeStatus.type === "success"
-                    ? "#d4edda"
-                    : refereeStatus.type === "error"
-                    ? "#f8d7da"
-                    : "#d1ecf1",
-                color:
-                  refereeStatus.type === "success"
-                    ? "#155724"
-                    : refereeStatus.type === "error"
-                    ? "#721c24"
-                    : "#0c5460",
-              }}
+              className={`p-3 mb-5 rounded-lg ${
+                refereeStatus.type === "success"
+                  ? "bg-green-100 text-green-800"
+                  : refereeStatus.type === "error"
+                  ? "bg-red-100 text-red-800"
+                  : "bg-blue-100 text-blue-800"
+              }`}
             >
               {refereeStatus.message}
             </div>
           )}
 
           {refereeFormVisible && (
-            <div
-              style={{
-                background: "#f8f9fa",
-                padding: "20px",
-                borderRadius: "12px",
-                marginBottom: "30px",
-                border: "2px solid #1089D3",
-              }}
-            >
-              <h3 style={{ marginBottom: "15px", fontSize: "18px", fontWeight: "bold" }}>
+            <div className="bg-gray-50 p-5 rounded-xl mb-8 border-2 border-[#1089D3]">
+              <h3 className="mb-4 text-lg font-bold">
                 {refereeForm.id ? "Edit Referee" : "Add New Referee"}
               </h3>
               <form onSubmit={handleSubmitReferee}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", marginBottom: "15px" }}>
+                <div className="grid grid-cols-2 gap-4 mb-4">
                   <div>
-                    <label style={{ display: "block", marginBottom: "5px", fontWeight: "bold", fontSize: "14px" }}>
+                    <label className="block mb-1 font-bold text-sm">
                       First Name *
                     </label>
                     <input
@@ -544,17 +501,11 @@ export default function LeagueManagementPage() {
                       value={refereeForm.firstName}
                       onChange={(e) => setRefereeForm({ ...refereeForm, firstName: e.target.value })}
                       required
-                      style={{
-                        width: "100%",
-                        padding: "10px",
-                        borderRadius: "8px",
-                        border: "1px solid #ccc",
-                        fontSize: "14px",
-                      }}
+                      className="w-full p-2.5 rounded-lg border border-gray-300 text-sm"
                     />
                   </div>
                   <div>
-                    <label style={{ display: "block", marginBottom: "5px", fontWeight: "bold", fontSize: "14px" }}>
+                    <label className="block mb-1 font-bold text-sm">
                       Last Name *
                     </label>
                     <input
@@ -562,19 +513,13 @@ export default function LeagueManagementPage() {
                       value={refereeForm.lastName}
                       onChange={(e) => setRefereeForm({ ...refereeForm, lastName: e.target.value })}
                       required
-                      style={{
-                        width: "100%",
-                        padding: "10px",
-                        borderRadius: "8px",
-                        border: "1px solid #ccc",
-                        fontSize: "14px",
-                      }}
+                      className="w-full p-2.5 rounded-lg border border-gray-300 text-sm"
                     />
                   </div>
                 </div>
 
-                <div style={{ marginBottom: "15px" }}>
-                  <label style={{ display: "block", marginBottom: "5px", fontWeight: "bold", fontSize: "14px" }}>
+                <div className="mb-4">
+                  <label className="block mb-1 font-bold text-sm">
                     Phone Number
                   </label>
                   <input
@@ -582,21 +527,15 @@ export default function LeagueManagementPage() {
                     value={refereeForm.phone}
                     onChange={(e) => setRefereeForm({ ...refereeForm, phone: e.target.value })}
                     placeholder="+237 XXX XXX XXX"
-                    style={{
-                      width: "100%",
-                      padding: "10px",
-                      borderRadius: "8px",
-                      border: "1px solid #ccc",
-                      fontSize: "14px",
-                    }}
+                    className="w-full p-2.5 rounded-lg border border-gray-300 text-sm"
                   />
-                  <small style={{ color: "#666", fontSize: "12px" }}>
+                  <small className="text-gray-500 text-xs">
                     Include country code (e.g., +1 for US, +237 for Cameroon)
                   </small>
                 </div>
 
-                <div style={{ marginBottom: "15px" }}>
-                  <label style={{ display: "block", marginBottom: "5px", fontWeight: "bold", fontSize: "14px" }}>
+                <div className="mb-4">
+                  <label className="block mb-1 font-bold text-sm">
                     Headshot Photo
                   </label>
                   <input
@@ -606,29 +545,17 @@ export default function LeagueManagementPage() {
                       const file = e.target.files?.[0];
                       setRefereeForm({ ...refereeForm, headshotFile: file });
                     }}
-                    style={{
-                      width: "100%",
-                      padding: "10px",
-                      borderRadius: "8px",
-                      border: "1px solid #ccc",
-                      fontSize: "14px",
-                    }}
+                    className="w-full p-2.5 rounded-lg border border-gray-300 text-sm"
                   />
                 </div>
 
-                <div style={{ display: "flex", gap: "10px" }}>
+                <div className="flex gap-2.5">
                   <button
                     type="submit"
                     disabled={refereeSubmitting}
-                    style={{
-                      padding: "12px 24px",
-                      background: refereeSubmitting ? "#ccc" : "#1089D3",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "8px",
-                      cursor: refereeSubmitting ? "not-allowed" : "pointer",
-                      fontWeight: "bold",
-                    }}
+                    className={`px-6 py-3 text-white rounded-lg font-bold transition ${
+                      refereeSubmitting ? "bg-gray-400 cursor-not-allowed" : "bg-[#1089D3] cursor-pointer hover:bg-[#0d7ac0]"
+                    }`}
                   >
                     {refereeSubmitting ? "Saving..." : refereeForm.id ? "Update Referee" : "Add Referee"}
                   </button>
@@ -638,14 +565,7 @@ export default function LeagueManagementPage() {
                       setRefereeForm({ firstName: "", lastName: "", phone: "" });
                       setRefereeFormVisible(false);
                     }}
-                    style={{
-                      padding: "12px 24px",
-                      background: "#666",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "8px",
-                      cursor: "pointer",
-                    }}
+                    className="px-6 py-3 bg-gray-500 text-white rounded-lg cursor-pointer hover:bg-gray-600 transition"
                   >
                     Cancel
                   </button>
@@ -655,92 +575,57 @@ export default function LeagueManagementPage() {
           )}
 
           {/* Referees List */}
-          <div style={{ background: "white", borderRadius: "12px", padding: "20px", boxShadow: "0 2px 8px rgba(0,0,0,0.1)" }}>
+          <div className="bg-white rounded-xl p-5 shadow-md">
             {referees.length === 0 ? (
-              <p style={{ textAlign: "center", color: "#666", padding: "40px" }}>
-                No referees added yet. Click "Add Referee" to get started.
+              <p className="text-center text-gray-500 py-10">
+                No referees added yet. Click &quot;Add Referee&quot; to get started.
               </p>
             ) : (
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse">
                   <thead>
-                    <tr style={{ borderBottom: "2px solid #eee" }}>
-                      <th style={{ padding: "12px", textAlign: "left", fontWeight: "bold" }}>Photo</th>
-                      <th style={{ padding: "12px", textAlign: "left", fontWeight: "bold" }}>Name</th>
-                      <th style={{ padding: "12px", textAlign: "left", fontWeight: "bold" }}>Phone</th>
-                      <th style={{ padding: "12px", textAlign: "left", fontWeight: "bold" }}>Added</th>
-                      <th style={{ padding: "12px", textAlign: "right", fontWeight: "bold" }}>Actions</th>
+                    <tr className="border-b-2 border-gray-200">
+                      <th className="p-3 text-left font-bold">Photo</th>
+                      <th className="p-3 text-left font-bold">Name</th>
+                      <th className="p-3 text-left font-bold">Phone</th>
+                      <th className="p-3 text-left font-bold">Added</th>
+                      <th className="p-3 text-right font-bold">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {referees.map((referee) => (
-                      <tr key={referee.id} style={{ borderBottom: "1px solid #eee" }}>
-                        <td style={{ padding: "12px" }}>
+                      <tr key={referee.id} className="border-b border-gray-200">
+                        <td className="p-3">
                           {referee.headshotUrl ? (
                             <img
                               src={referee.headshotUrl}
                               alt={`${referee.firstName} ${referee.lastName}`}
-                              style={{
-                                width: "50px",
-                                height: "50px",
-                                borderRadius: "50%",
-                                objectFit: "cover",
-                              }}
+                              className="w-12 h-12 rounded-full object-cover"
                             />
                           ) : (
-                            <div
-                              style={{
-                                width: "50px",
-                                height: "50px",
-                                borderRadius: "50%",
-                                background: "#ddd",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                fontSize: "20px",
-                                fontWeight: "bold",
-                                color: "#666",
-                              }}
-                            >
+                            <div className="w-12 h-12 rounded-full bg-gray-300 flex items-center justify-center text-xl font-bold text-gray-600">
                               {referee.firstName[0]}
                               {referee.lastName[0]}
                             </div>
                           )}
                         </td>
-                        <td style={{ padding: "12px" }}>
+                        <td className="p-3">
                           {referee.firstName} {referee.lastName}
                         </td>
-                        <td style={{ padding: "12px" }}>{referee.phone || "-"}</td>
-                        <td style={{ padding: "12px" }}>
+                        <td className="p-3">{referee.phone || "-"}</td>
+                        <td className="p-3">
                           {referee.createdAt ? referee.createdAt.toLocaleDateString() : "-"}
                         </td>
-                        <td style={{ padding: "12px", textAlign: "right" }}>
+                        <td className="p-3 text-right">
                           <button
                             onClick={() => handleEditReferee(referee)}
-                            style={{
-                              padding: "6px 12px",
-                              background: "#1089D3",
-                              color: "white",
-                              border: "none",
-                              borderRadius: "6px",
-                              cursor: "pointer",
-                              marginRight: "8px",
-                              fontSize: "14px",
-                            }}
+                            className="px-3 py-1.5 bg-[#1089D3] text-white rounded-md cursor-pointer mr-2 text-sm hover:bg-[#0d7ac0] transition"
                           >
                             Edit
                           </button>
                           <button
                             onClick={() => handleDeleteReferee(referee)}
-                            style={{
-                              padding: "6px 12px",
-                              background: "#dc3545",
-                              color: "white",
-                              border: "none",
-                              borderRadius: "6px",
-                              cursor: "pointer",
-                              fontSize: "14px",
-                            }}
+                            className="px-3 py-1.5 bg-red-500 text-white rounded-md cursor-pointer text-sm hover:bg-red-600 transition"
                           >
                             Delete
                           </button>
@@ -758,22 +643,14 @@ export default function LeagueManagementPage() {
       {/* Venues Tab */}
       {activeTab === "venues" && permissions?.canManageVenues && (
         <div>
-          <div style={{ marginBottom: "20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <h2 style={{ fontSize: "22px", fontWeight: "bold" }}>Venues</h2>
+          <div className="mb-5 flex justify-between items-center">
+            <h2 className="text-xl font-bold">Venues</h2>
             <button
               onClick={() => {
                 setVenueForm({ name: "", address: "", city: "", capacity: "" });
                 setVenueFormVisible(true);
               }}
-              style={{
-                padding: "10px 20px",
-                background: "#1089D3",
-                color: "white",
-                border: "none",
-                borderRadius: "8px",
-                cursor: "pointer",
-                fontWeight: "bold",
-              }}
+              className="px-5 py-2.5 bg-[#1089D3] text-white rounded-lg cursor-pointer font-bold hover:bg-[#0d7ac0] transition"
             >
               + Add Venue
             </button>
@@ -781,44 +658,26 @@ export default function LeagueManagementPage() {
 
           {venueStatus && (
             <div
-              style={{
-                padding: "12px",
-                marginBottom: "20px",
-                borderRadius: "8px",
-                background:
-                  venueStatus.type === "success"
-                    ? "#d4edda"
-                    : venueStatus.type === "error"
-                    ? "#f8d7da"
-                    : "#d1ecf1",
-                color:
-                  venueStatus.type === "success"
-                    ? "#155724"
-                    : venueStatus.type === "error"
-                    ? "#721c24"
-                    : "#0c5460",
-              }}
+              className={`p-3 mb-5 rounded-lg ${
+                venueStatus.type === "success"
+                  ? "bg-green-100 text-green-800"
+                  : venueStatus.type === "error"
+                  ? "bg-red-100 text-red-800"
+                  : "bg-blue-100 text-blue-800"
+              }`}
             >
               {venueStatus.message}
             </div>
           )}
 
           {venueFormVisible && (
-            <div
-              style={{
-                background: "#f8f9fa",
-                padding: "20px",
-                borderRadius: "12px",
-                marginBottom: "30px",
-                border: "2px solid #1089D3",
-              }}
-            >
-              <h3 style={{ marginBottom: "15px", fontSize: "18px", fontWeight: "bold" }}>
+            <div className="bg-gray-50 p-5 rounded-xl mb-8 border-2 border-[#1089D3]">
+              <h3 className="mb-4 text-lg font-bold">
                 {venueForm.id ? "Edit Venue" : "Add New Venue"}
               </h3>
               <form onSubmit={handleSubmitVenue}>
-                <div style={{ marginBottom: "15px" }}>
-                  <label style={{ display: "block", marginBottom: "5px", fontWeight: "bold", fontSize: "14px" }}>
+                <div className="mb-4">
+                  <label className="block mb-1 font-bold text-sm">
                     Venue Name *
                   </label>
                   <input
@@ -826,55 +685,37 @@ export default function LeagueManagementPage() {
                     value={venueForm.name}
                     onChange={(e) => setVenueForm({ ...venueForm, name: e.target.value })}
                     required
-                    style={{
-                      width: "100%",
-                      padding: "10px",
-                      borderRadius: "8px",
-                      border: "1px solid #ccc",
-                      fontSize: "14px",
-                    }}
+                    className="w-full p-2.5 rounded-lg border border-gray-300 text-sm"
                   />
                 </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "15px", marginBottom: "15px" }}>
-                  <div>
-                    <label style={{ display: "block", marginBottom: "5px", fontWeight: "bold", fontSize: "14px" }}>
+                <div className="grid grid-cols-3 gap-4 mb-4">
+                  <div className="col-span-2">
+                    <label className="block mb-1 font-bold text-sm">
                       Address
                     </label>
                     <input
                       type="text"
                       value={venueForm.address}
                       onChange={(e) => setVenueForm({ ...venueForm, address: e.target.value })}
-                      style={{
-                        width: "100%",
-                        padding: "10px",
-                        borderRadius: "8px",
-                        border: "1px solid #ccc",
-                        fontSize: "14px",
-                      }}
+                      className="w-full p-2.5 rounded-lg border border-gray-300 text-sm"
                     />
                   </div>
                   <div>
-                    <label style={{ display: "block", marginBottom: "5px", fontWeight: "bold", fontSize: "14px" }}>
+                    <label className="block mb-1 font-bold text-sm">
                       City
                     </label>
                     <input
                       type="text"
                       value={venueForm.city}
                       onChange={(e) => setVenueForm({ ...venueForm, city: e.target.value })}
-                      style={{
-                        width: "100%",
-                        padding: "10px",
-                        borderRadius: "8px",
-                        border: "1px solid #ccc",
-                        fontSize: "14px",
-                      }}
+                      className="w-full p-2.5 rounded-lg border border-gray-300 text-sm"
                     />
                   </div>
                 </div>
 
-                <div style={{ marginBottom: "15px" }}>
-                  <label style={{ display: "block", marginBottom: "5px", fontWeight: "bold", fontSize: "14px" }}>
+                <div className="mb-4">
+                  <label className="block mb-1 font-bold text-sm">
                     Capacity
                   </label>
                   <input
@@ -882,29 +723,17 @@ export default function LeagueManagementPage() {
                     value={venueForm.capacity}
                     onChange={(e) => setVenueForm({ ...venueForm, capacity: e.target.value })}
                     min="0"
-                    style={{
-                      width: "100%",
-                      padding: "10px",
-                      borderRadius: "8px",
-                      border: "1px solid #ccc",
-                      fontSize: "14px",
-                    }}
+                    className="w-full p-2.5 rounded-lg border border-gray-300 text-sm"
                   />
                 </div>
 
-                <div style={{ display: "flex", gap: "10px" }}>
+                <div className="flex gap-2.5">
                   <button
                     type="submit"
                     disabled={venueSubmitting}
-                    style={{
-                      padding: "12px 24px",
-                      background: venueSubmitting ? "#ccc" : "#1089D3",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "8px",
-                      cursor: venueSubmitting ? "not-allowed" : "pointer",
-                      fontWeight: "bold",
-                    }}
+                    className={`px-6 py-3 text-white rounded-lg font-bold transition ${
+                      venueSubmitting ? "bg-gray-400 cursor-not-allowed" : "bg-[#1089D3] cursor-pointer hover:bg-[#0d7ac0]"
+                    }`}
                   >
                     {venueSubmitting ? "Saving..." : venueForm.id ? "Update Venue" : "Add Venue"}
                   </button>
@@ -914,14 +743,7 @@ export default function LeagueManagementPage() {
                       setVenueForm({ name: "", address: "", city: "", capacity: "" });
                       setVenueFormVisible(false);
                     }}
-                    style={{
-                      padding: "12px 24px",
-                      background: "#666",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "8px",
-                      cursor: "pointer",
-                    }}
+                    className="px-6 py-3 bg-gray-500 text-white rounded-lg cursor-pointer hover:bg-gray-600 transition"
                   >
                     Cancel
                   </button>
@@ -931,59 +753,42 @@ export default function LeagueManagementPage() {
           )}
 
           {/* Venues List */}
-          <div style={{ background: "white", borderRadius: "12px", padding: "20px", boxShadow: "0 2px 8px rgba(0,0,0,0.1)" }}>
+          <div className="bg-white rounded-xl p-5 shadow-md">
             {venues.length === 0 ? (
-              <p style={{ textAlign: "center", color: "#666", padding: "40px" }}>
-                No venues added yet. Click "Add Venue" to get started.
+              <p className="text-center text-gray-500 py-10">
+                No venues added yet. Click &quot;Add Venue&quot; to get started.
               </p>
             ) : (
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse">
                   <thead>
-                    <tr style={{ borderBottom: "2px solid #eee" }}>
-                      <th style={{ padding: "12px", textAlign: "left", fontWeight: "bold" }}>Name</th>
-                      <th style={{ padding: "12px", textAlign: "left", fontWeight: "bold" }}>City</th>
-                      <th style={{ padding: "12px", textAlign: "left", fontWeight: "bold" }}>Address</th>
-                      <th style={{ padding: "12px", textAlign: "left", fontWeight: "bold" }}>Capacity</th>
-                      <th style={{ padding: "12px", textAlign: "right", fontWeight: "bold" }}>Actions</th>
+                    <tr className="border-b-2 border-gray-200">
+                      <th className="p-3 text-left font-bold">Name</th>
+                      <th className="p-3 text-left font-bold">City</th>
+                      <th className="p-3 text-left font-bold">Address</th>
+                      <th className="p-3 text-left font-bold">Capacity</th>
+                      <th className="p-3 text-right font-bold">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {venues.map((venue) => (
-                      <tr key={venue.id} style={{ borderBottom: "1px solid #eee" }}>
-                        <td style={{ padding: "12px", fontWeight: "bold" }}>{venue.name}</td>
-                        <td style={{ padding: "12px" }}>{venue.city || "-"}</td>
-                        <td style={{ padding: "12px" }}>{venue.address || "-"}</td>
-                        <td style={{ padding: "12px" }}>
+                      <tr key={venue.id} className="border-b border-gray-200">
+                        <td className="p-3 font-bold">{venue.name}</td>
+                        <td className="p-3">{venue.city || "-"}</td>
+                        <td className="p-3">{venue.address || "-"}</td>
+                        <td className="p-3">
                           {venue.capacity ? venue.capacity.toLocaleString() : "-"}
                         </td>
-                        <td style={{ padding: "12px", textAlign: "right" }}>
+                        <td className="p-3 text-right">
                           <button
                             onClick={() => handleEditVenue(venue)}
-                            style={{
-                              padding: "6px 12px",
-                              background: "#1089D3",
-                              color: "white",
-                              border: "none",
-                              borderRadius: "6px",
-                              cursor: "pointer",
-                              marginRight: "8px",
-                              fontSize: "14px",
-                            }}
+                            className="px-3 py-1.5 bg-[#1089D3] text-white rounded-md cursor-pointer mr-2 text-sm hover:bg-[#0d7ac0] transition"
                           >
                             Edit
                           </button>
                           <button
                             onClick={() => handleDeleteVenue(venue)}
-                            style={{
-                              padding: "6px 12px",
-                              background: "#dc3545",
-                              color: "white",
-                              border: "none",
-                              borderRadius: "6px",
-                              cursor: "pointer",
-                              fontSize: "14px",
-                            }}
+                            className="px-3 py-1.5 bg-red-500 text-white rounded-md cursor-pointer text-sm hover:bg-red-600 transition"
                           >
                             Delete
                           </button>

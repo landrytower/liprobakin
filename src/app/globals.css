@@ -221,3 +221,30 @@ body {
     transform: translateY(-0.1em);
   }
 }
+
+/* Team Logo Marquee Animation */
+@keyframes marquee {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marquee {
+  animation: marquee 45s linear infinite;
+}
+
+.animation-pause:hover {
+  animation-play-state: paused;
+}
+
+/* Logo Showcase Styling */
+.logo-showcase-item:hover .logo-inner {
+  transform: scale(1.1);
+}
+
+.marquee-container:hover .animate-marquee {
+  animation-play-state: paused;
+}

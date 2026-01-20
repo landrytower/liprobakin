@@ -3404,85 +3404,193 @@ export default function Home() {
             )}
           </div>
           
-          <div className={`relative mt-6 sm:mt-8 ${teamSearch ? 'px-1 sm:px-4' : 'px-1 sm:px-0 md:w-screen md:left-1/2 md:right-1/2 md:-ml-[50vw] md:-mr-[50vw] md:px-0 md:relative'}`}>
-            <div 
-              ref={teamsScrollRef}
-              className={`overflow-x-auto overflow-y-hidden pb-2 teams-scroller ${teamSearch ? 'pl-2.5' : 'pl-2.5 md:pl-4'}`}
-              style={{ 
-                scrollBehavior: 'smooth'
-              }}
-            >
-              <div className={teamSearch 
-                ? "flex gap-2 pb-2 sm:gap-2.5" 
-                : "grid grid-flow-col grid-rows-2 auto-cols-[280px] gap-2 pb-2 sm:auto-cols-[300px] md:auto-cols-[300px] lg:auto-cols-[300px] sm:gap-2.5"
-              }>
-                {filteredFranchises.map((team) => {
-                  const fullName = [team.city, team.name].filter(Boolean).join(" ").trim();
-                  return (
-                    <Link
-                      key={fullName}
-                      href={`/team/${encodeURIComponent(fullName)}`}
-                      className="group relative rounded-2xl border border-white/10 bg-gradient-to-br from-slate-800/40 via-slate-900/60 to-slate-950/80 p-5 sm:p-6 text-left transition-all duration-300 active:scale-95 sm:hover:scale-[1.02] hover:border-white/30 sm:hover:shadow-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 overflow-hidden flex-shrink-0"
+          <div className={`relative mt-3 sm:mt-4 ${teamSearch ? 'px-1 sm:px-4' : 'px-1 sm:px-0 md:w-screen md:left-1/2 md:right-1/2 md:-ml-[50vw] md:-mr-[50vw] md:px-0 md:relative'}`}>
+            {teamSearch ? (
+              // Search Results - auto-scrolling marquee format
+              <div className="relative overflow-hidden">
+                <div className="relative">
+                  <div className="marquee-container overflow-hidden flex justify-center" style={{ width: '100%' }}>
+                    <div 
+                      className="marquee-content flex animate-marquee hover:animation-pause"
                       style={{
-                        backgroundImage: `linear-gradient(135deg, ${team.colors[0]}15, ${team.colors[1]}08)`,
-                        width: '280px',
-                        minWidth: '280px'
+                        animationDuration: '45s',
+                        animationIterationCount: 'infinite',
+                        animationTimingFunction: 'linear',
+                        animationDirection: 'normal'
                       }}
                     >
-                      {/* Glow effect on hover */}
-                      <div 
-                        className="absolute inset-0 opacity-0 sm:group-hover:opacity-100 transition-opacity duration-300 blur-xl pointer-events-none"
-                        style={{
-                          background: `radial-gradient(circle at 50% 50%, ${team.colors[0]}30, transparent 70%)`
-                        }}
-                      />
-                      
-                      <div className="relative z-10">
-                        {team.logo ? (
-                          <div className="mb-4 flex items-center gap-3">
-                            <div className="relative flex-shrink-0">
-                              <div 
-                                className="absolute inset-0 rounded-full blur-md opacity-50 sm:group-hover:opacity-80 transition-opacity"
-                                style={{ backgroundColor: team.colors[0] }}
-                              />
-                              <Image
-                                src={team.logo}
-                                alt={`${fullName} logo`}
-                                width={64}
-                                height={64}
-                                className="relative h-14 w-14 sm:h-16 sm:w-16 rounded-full border-2 border-white/30 object-cover shadow-lg"
-                              />
+                      {/* First set of search results */}
+                      {filteredFranchises.map((team) => {
+                        const fullName = [team.city, team.name].filter(Boolean).join(" ").trim();
+                        return (
+                          <Link
+                            key={`search-first-${fullName}`}
+                            href={`/team/${encodeURIComponent(fullName)}`}
+                            className="logo-showcase-item flex-shrink-0 mx-4 lg:mx-6 group"
+                          >
+                            <div className="logo-inner relative">
+                              <div className="logo-innerInner p-4 transition-all duration-300 group-hover:scale-110">
+                                {team.logo ? (
+                                  <Image
+                                    src={team.logo}
+                                    alt={`${fullName} logo`}
+                                    width={88}
+                                    height={88}
+                                    className="h-[67px] w-[67px] lg:h-[84px] lg:w-[84px] rounded-full border-2 border-white/20 object-cover shadow-lg transition-all duration-300 group-hover:border-white/40 group-hover:shadow-xl"
+                                    style={{
+                                      filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.2))',
+                                    }}
+                                  />
+                                ) : (
+                                  <div 
+                                    className="h-[67px] w-[67px] lg:h-[84px] lg:w-[84px] rounded-full border-2 border-white/20 flex items-center justify-center text-white font-bold text-lg bg-gradient-to-br transition-all duration-300 group-hover:border-white/40 group-hover:shadow-xl"
+                                    style={{
+                                      backgroundImage: `linear-gradient(135deg, ${team.colors[0]}, ${team.colors[1]})`
+                                    }}
+                                  >
+                                    {team.name.slice(0, 2).toUpperCase()}
+                                  </div>
+                                )}
+                              </div>
                             </div>
-                            <p className="text-base sm:text-lg font-bold text-white tracking-tight leading-tight line-clamp-2">{fullName}</p>
-                          </div>
-                        ) : (
-                          <p className="text-base sm:text-lg font-bold text-white mb-4 line-clamp-2">{fullName}</p>
-                        )}
-                        
-                        {/* Color bars with enhanced styling */}
-                        <div className="mt-5 flex gap-2">
-                          {team.colors.map((color, idx) => (
-                            <div key={`${fullName}-${color}`} className="flex-1 relative">
-                              <div
-                                className="h-2.5 rounded-full shadow-md transition-all duration-300 sm:group-hover:h-3 sm:group-hover:shadow-lg"
-                                style={{ 
-                                  backgroundColor: color,
-                                  boxShadow: `0 0 8px ${color}40, 0 0 12px ${color}30`
-                                }}
-                              />
-                              <div
-                                className="absolute inset-0 h-2.5 rounded-full opacity-0 sm:group-hover:opacity-100 transition-opacity duration-300 blur-sm pointer-events-none"
-                                style={{ backgroundColor: color }}
-                              />
+                          </Link>
+                        );
+                      })}
+                      {/* Duplicate set for seamless loop */}
+                      {filteredFranchises.map((team) => {
+                        const fullName = [team.city, team.name].filter(Boolean).join(" ").trim();
+                        return (
+                          <Link
+                            key={`search-second-${fullName}`}
+                            href={`/team/${encodeURIComponent(fullName)}`}
+                            className="logo-showcase-item flex-shrink-0 mx-4 lg:mx-6 group"
+                          >
+                            <div className="logo-inner relative">
+                              <div className="logo-innerInner p-4 transition-all duration-300 group-hover:scale-110">
+                                {team.logo ? (
+                                  <Image
+                                    src={team.logo}
+                                    alt={`${fullName} logo`}
+                                    width={88}
+                                    height={88}
+                                    className="h-[67px] w-[67px] lg:h-[84px] lg:w-[84px] rounded-full border-2 border-white/20 object-cover shadow-lg transition-all duration-300 group-hover:border-white/40 group-hover:shadow-xl"
+                                    style={{
+                                      filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.2))',
+                                    }}
+                                  />
+                                ) : (
+                                  <div 
+                                    className="h-[67px] w-[67px] lg:h-[84px] lg:w-[84px] rounded-full border-2 border-white/20 flex items-center justify-center text-white font-bold text-lg bg-gradient-to-br transition-all duration-300 group-hover:border-white/40 group-hover:shadow-xl"
+                                    style={{
+                                      backgroundImage: `linear-gradient(135deg, ${team.colors[0]}, ${team.colors[1]})`
+                                    }}
+                                  >
+                                    {team.name.slice(0, 2).toUpperCase()}
+                                  </div>
+                                )}
+                              </div>
                             </div>
-                          ))}
-                        </div>
-                      </div>
-                    </Link>
-                  );
-                })}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
+            ) : (
+              // Logo Showcase Marquee - new carousel design
+              <div className="relative overflow-hidden">
+                <div className="relative">
+                  {/* Marquee Container */}
+                  <div className="marquee-container overflow-hidden flex justify-center" style={{ width: '100%' }}>
+                    <div 
+                      className="marquee-content flex animate-marquee hover:animation-pause"
+                      style={{
+                        animationDuration: '45s',
+                        animationIterationCount: 'infinite',
+                        animationTimingFunction: 'linear',
+                        animationDirection: 'normal'
+                      }}
+                    >
+                      {/* First set of logos */}
+                      {filteredFranchises.map((team) => {
+                        const fullName = [team.city, team.name].filter(Boolean).join(" ").trim();
+                        return (
+                          <Link
+                            key={`first-${fullName}`}
+                            href={`/team/${encodeURIComponent(fullName)}`}
+                            className="logo-showcase-item flex-shrink-0 mx-4 lg:mx-6 group"
+                          >
+                            <div className="logo-inner relative">
+                              <div className="logo-innerInner p-4 transition-all duration-300 group-hover:scale-110">
+                                {team.logo ? (
+                                  <Image
+                                    src={team.logo}
+                                    alt={`${fullName} logo`}
+                                    width={88}
+                                    height={88}
+                                    className="h-[67px] w-[67px] lg:h-[84px] lg:w-[84px] rounded-full border-2 border-white/20 object-cover shadow-lg transition-all duration-300 group-hover:border-white/40 group-hover:shadow-xl"
+                                    style={{
+                                      filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.2))',
+                                    }}
+                                  />
+                                ) : (
+                                  <div 
+                                    className="h-[67px] w-[67px] lg:h-[84px] lg:w-[84px] rounded-full border-2 border-white/20 flex items-center justify-center text-white font-bold text-lg bg-gradient-to-br transition-all duration-300 group-hover:border-white/40 group-hover:shadow-xl"
+                                    style={{
+                                      backgroundImage: `linear-gradient(135deg, ${team.colors[0]}, ${team.colors[1]})`
+                                    }}
+                                  >
+                                    {team.name.slice(0, 2).toUpperCase()}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </Link>
+                        );
+                      })}
+                      {/* Duplicate set for seamless loop */}
+                      {filteredFranchises.map((team) => {
+                        const fullName = [team.city, team.name].filter(Boolean).join(" ").trim();
+                        return (
+                          <Link
+                            key={`second-${fullName}`}
+                            href={`/team/${encodeURIComponent(fullName)}`}
+                            className="logo-showcase-item flex-shrink-0 mx-4 lg:mx-6 group"
+                          >
+                            <div className="logo-inner relative">
+                              <div className="logo-innerInner p-4 transition-all duration-300 group-hover:scale-110">
+                                {team.logo ? (
+                                  <Image
+                                    src={team.logo}
+                                    alt={`${fullName} logo`}
+                                    width={88}
+                                    height={88}
+                                    className="h-[67px] w-[67px] lg:h-[84px] lg:w-[84px] rounded-full border-2 border-white/20 object-cover shadow-lg transition-all duration-300 group-hover:border-white/40 group-hover:shadow-xl"
+                                    style={{
+                                      filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.2))',
+                                    }}
+                                  />
+                                ) : (
+                                  <div 
+                                    className="h-[67px] w-[67px] lg:h-[84px] lg:w-[84px] rounded-full border-2 border-white/20 flex items-center justify-center text-white font-bold text-lg bg-gradient-to-br transition-all duration-300 group-hover:border-white/40 group-hover:shadow-xl"
+                                    style={{
+                                      backgroundImage: `linear-gradient(135deg, ${team.colors[0]}, ${team.colors[1]})`
+                                    }}
+                                  >
+                                    {team.name.slice(0, 2).toUpperCase()}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </section>
 

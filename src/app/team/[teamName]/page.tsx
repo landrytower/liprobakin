@@ -347,7 +347,7 @@ export default function TeamPage() {
       {/* Google Ad banner */}
       <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
         <GoogleAd
-          slot="1234567890"
+          slot="6159195090622597" 
           format="horizontal"
           className="w-full"
           style={{ minHeight: "120px" }}

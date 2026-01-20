@@ -3410,15 +3410,7 @@ export default function Home() {
               <div className="relative overflow-hidden">
                 <div className="relative">
                   <div className="marquee-container overflow-hidden flex justify-center" style={{ width: '100%' }}>
-                    <div 
-                      className="marquee-content flex animate-marquee hover:animation-pause"
-                      style={{
-                        animationDuration: '45s',
-                        animationIterationCount: 'infinite',
-                        animationTimingFunction: 'linear',
-                        animationDirection: 'normal'
-                      }}
-                    >
+                    <div className="marquee-content flex animate-marquee hover:animation-pause">
                       {/* First set of search results */}
                       {filteredFranchises.map((team) => {
                         const fullName = [team.city, team.name].filter(Boolean).join(" ").trim();
@@ -3440,6 +3432,8 @@ export default function Home() {
                                     style={{
                                       filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.2))',
                                     }}
+                                    priority={false}
+                                    loading="lazy"
                                   />
                                 ) : (
                                   <div 
@@ -3477,6 +3471,8 @@ export default function Home() {
                                     style={{
                                       filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.2))',
                                     }}
+                                    priority={false}
+                                    loading="lazy"
                                   />
                                 ) : (
                                   <div 
@@ -3503,15 +3499,7 @@ export default function Home() {
                 <div className="relative">
                   {/* Marquee Container */}
                   <div className="marquee-container overflow-hidden flex justify-center" style={{ width: '100%' }}>
-                    <div 
-                      className="marquee-content flex animate-marquee hover:animation-pause"
-                      style={{
-                        animationDuration: '45s',
-                        animationIterationCount: 'infinite',
-                        animationTimingFunction: 'linear',
-                        animationDirection: 'normal'
-                      }}
-                    >
+                    <div className="marquee-content flex animate-marquee hover:animation-pause">
                       {/* First set of logos */}
                       {filteredFranchises.map((team) => {
                         const fullName = [team.city, team.name].filter(Boolean).join(" ").trim();
@@ -3533,6 +3521,8 @@ export default function Home() {
                                     style={{
                                       filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.2))',
                                     }}
+                                    priority={false}
+                                    loading="lazy"
                                   />
                                 ) : (
                                   <div 
@@ -3570,6 +3560,8 @@ export default function Home() {
                                     style={{
                                       filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.2))',
                                     }}
+                                    priority={false}
+                                    loading="lazy"
                                   />
                                 ) : (
                                   <div 

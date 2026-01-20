@@ -225,18 +225,27 @@ body {
 /* Team Logo Marquee Animation */
 @keyframes marquee {
   0% {
-    transform: translateX(0%);
+    transform: translate3d(0%, 0, 0);
   }
   100% {
-    transform: translateX(-50%);
+    transform: translate3d(-50%, 0, 0);
   }
 }
 
 .animate-marquee {
   animation: marquee 45s linear infinite;
+  animation-play-state: running;
+  will-change: transform;
 }
 
-.animation-pause:hover {
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  .animate-marquee {
+    animation-duration: 30s; /* Faster on mobile for better responsiveness */
+  }
+}
+
+.animation-pause:hover .animate-marquee {
   animation-play-state: paused;
 }
 
@@ -247,4 +256,11 @@ body {
 
 .marquee-container:hover .animate-marquee {
   animation-play-state: paused;
+}
+
+/* Hardware acceleration for better mobile performance */
+.marquee-content {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000px;
 }

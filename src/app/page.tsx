@@ -2072,30 +2072,51 @@ export default function Home() {
           <div className="flex items-center gap-4">
             <button
               type="button"
-              className="flex flex-col justify-center items-center w-10 h-10 rounded-lg border border-white/20 bg-white/5 text-white transition-all hover:border-white/50 hover:bg-white/10 lg:hidden"
+              className="group relative flex items-center justify-center w-12 h-12 rounded-xl backdrop-blur-xl bg-white/5 border border-white/10 text-white/90 shadow-2xl transition-all duration-700 ease-out hover:bg-white/10 hover:border-white/20 hover:shadow-white/10 focus:outline-none focus:ring-2 focus:ring-white/20 lg:hidden active:scale-95 transform-gpu"
               onClick={() => setMobileNavOpen((prev) => !prev)}
               aria-expanded={mobileNavOpen}
               aria-controls="mobile-nav-panel"
               aria-label="Toggle navigation menu"
             >
               <span className="sr-only">Toggle navigation</span>
-              <div className="relative w-5 h-4 flex flex-col justify-between">
-                <span
-                  className={`block h-0.5 w-full bg-current transition-all duration-300 ease-in-out ${
-                    mobileNavOpen ? "translate-y-1.5 rotate-45" : ""
-                  }`}
-                />
-                <span
-                  className={`block h-0.5 w-full bg-current transition-all duration-300 ease-in-out ${
-                    mobileNavOpen ? "opacity-0" : "opacity-100"
-                  }`}
-                />
-                <span
-                  className={`block h-0.5 w-full bg-current transition-all duration-300 ease-in-out ${
-                    mobileNavOpen ? "-translate-y-1.5 -rotate-45" : ""
-                  }`}
-                />
+              
+              {/* Glossy Background Effect */}
+              <div className={`absolute inset-0 rounded-xl bg-gradient-to-br from-white/10 via-transparent to-white/5 transition-all duration-500 ${
+                mobileNavOpen ? 'opacity-100' : 'opacity-60'
+              }`} />
+              
+              {/* Animated Glow Ring */}
+              <div className={`absolute inset-0 rounded-xl ring-1 ring-white/20 transition-all duration-500 ${
+                mobileNavOpen ? 'ring-white/40 shadow-lg shadow-white/20' : 'ring-white/10'
+              }`} />
+              
+              {/* Menu Icon Container */}
+              <div className="relative w-6 h-6 flex items-center justify-center transform-gpu">
+                <div className={`absolute inset-0 transition-all duration-500 ease-in-out ${
+                  mobileNavOpen ? 'rotate-180 opacity-0' : 'rotate-0 opacity-100'
+                }`}>
+                  {/* Modern Grid Icon (replacing hamburger) */}
+                  <div className="w-6 h-6 grid grid-cols-2 grid-rows-2 gap-1 p-1">
+                    <div className="bg-white/80 rounded-sm transition-all duration-300 group-hover:bg-white"></div>
+                    <div className="bg-white/60 rounded-sm transition-all duration-300 group-hover:bg-white delay-75"></div>
+                    <div className="bg-white/60 rounded-sm transition-all duration-300 group-hover:bg-white delay-150"></div>
+                    <div className="bg-white/80 rounded-sm transition-all duration-300 group-hover:bg-white delay-75"></div>
+                  </div>
+                </div>
+                
+                <div className={`absolute inset-0 transition-all duration-500 ease-in-out ${
+                  mobileNavOpen ? 'rotate-0 opacity-100' : 'rotate-180 opacity-0'
+                }`}>
+                  {/* Close Icon with Smooth X Animation */}
+                  <div className="relative w-6 h-6 flex items-center justify-center">
+                    <span className="absolute w-4 h-0.5 bg-white/90 rounded-full transform rotate-45 transition-all duration-300 ease-out"></span>
+                    <span className="absolute w-4 h-0.5 bg-white/90 rounded-full transform -rotate-45 transition-all duration-300 ease-out"></span>
+                  </div>
+                </div>
               </div>
+              
+              {/* Subtle Shine Effect */}
+              <div className={`absolute inset-0 rounded-xl bg-gradient-to-tr from-transparent via-white/10 to-transparent translate-x-[-100%] transition-transform duration-1000 group-hover:translate-x-[100%]`} />
             </button>
             <div className="hidden gap-8 text-xs font-medium uppercase tracking-[0.3em] text-slate-300 lg:flex">
               {navSections.map((section) => (
@@ -2185,15 +2206,42 @@ export default function Home() {
         </div>
       </nav>
 
-      {mobileNavOpen ? (
+      {/* Enhanced Mobile Navigation Panel */}
+      <div 
+        className={`fixed inset-0 top-[73px] z-40 transition-all duration-700 ease-out transform-gpu lg:hidden ${
+          mobileNavOpen 
+            ? 'opacity-100 visible translate-y-0' 
+            : 'opacity-0 invisible -translate-y-4 pointer-events-none'
+        }`}
+      >
+        {/* Background Overlay with Blur Effect */}
+        <div className={`absolute inset-0 bg-gradient-to-b from-black/95 via-black/90 to-black/95 backdrop-blur-2xl transition-all duration-700 ${
+          mobileNavOpen ? 'opacity-100' : 'opacity-0'
+        }`} />
+        
+        {/* Main Content */}
         <div
           id="mobile-nav-panel"
-          className="fixed inset-0 top-[73px] z-40 bg-black/95 backdrop-blur-xl lg:hidden overflow-y-auto"
+          className={`relative h-full overflow-y-auto transition-all duration-700 ease-out ${
+            mobileNavOpen ? 'translate-x-0' : 'translate-x-full'
+          }`}
         >
           <div className="mx-auto max-w-6xl px-4 py-6 md:px-8">
-            {/* Navigation Links */}
-            <div className="flex flex-col gap-2 mb-6">
-              {mobileNavSections.map((section) => (
+            {/* Animated Header */}
+            <div className={`mb-8 transition-all duration-700 delay-300 ${
+              mobileNavOpen ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
+            }`}>
+              <div className="text-center">
+                <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent mb-2">
+                  Navigation
+                </h2>
+                <div className="w-16 h-0.5 bg-gradient-to-r from-blue-400 to-purple-400 mx-auto rounded-full" />
+              </div>
+            </div>
+
+            {/* Navigation Links with Staggered Animation */}
+            <div className="flex flex-col gap-3 mb-8">
+              {mobileNavSections.map((section, index) => (
                 <a
                   key={section}
                   href={`#${slug(section)}`}
@@ -2205,105 +2253,93 @@ export default function Home() {
                       element.scrollIntoView({ behavior: 'smooth', block: 'start' });
                     }
                   }}
-                  className="group relative overflow-hidden rounded-xl border border-white/10 bg-gradient-to-r from-white/5 to-white/[0.02] px-6 py-4 text-base font-semibold uppercase tracking-[0.2em] text-slate-200 transition-all hover:border-blue-400/50 hover:text-white hover:shadow-lg hover:shadow-blue-500/10 cursor-pointer"
+                  className={`group relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-r from-white/5 via-white/[0.02] to-white/5 backdrop-blur-sm px-6 py-5 text-base font-semibold uppercase tracking-[0.2em] text-slate-200 transition-all duration-500 hover:border-blue-400/50 hover:text-white hover:shadow-xl hover:shadow-blue-500/20 hover:scale-[1.02] cursor-pointer transform-gpu ${
+                    mobileNavOpen 
+                      ? 'opacity-100 translate-y-0' 
+                      : 'opacity-0 translate-y-8'
+                  }`}
+                  style={{ 
+                    transitionDelay: mobileNavOpen ? `${400 + (index * 100)}ms` : '0ms'
+                  }}
                 >
-                  <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 via-blue-500/5 to-blue-500/0 opacity-0 transition-opacity group-hover:opacity-100" />
-                  <span className="relative z-10">{copy.nav[slug(section) as keyof typeof copy.nav] ?? section}</span>
+                  {/* Animated Background Gradient */}
+                  <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 via-blue-500/10 to-purple-500/0 opacity-0 transition-all duration-500 group-hover:opacity-100" />
+                  
+                  {/* Content */}
+                  <div className="relative z-10 flex items-center justify-between">
+                    <span>{copy.nav[slug(section) as keyof typeof copy.nav] ?? section}</span>
+                    <div className="w-5 h-5 rounded-full border border-blue-400/30 flex items-center justify-center transition-all duration-300 group-hover:border-blue-400 group-hover:bg-blue-400/10 group-hover:scale-110">
+                      <svg className="w-3 h-3 text-blue-400 transform transition-transform duration-300 group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </div>
+                  </div>
+                  
+                  {/* Shine Effect */}
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent transform translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-out" />
                 </a>
               ))}
             </div>
             
-            {/* User Section */}
+            {/* User Section with Enhanced Styling */}
             {user && !isAdmin ? (
-              <div className="flex flex-col gap-3 pt-6 border-t border-white/10">
+              <div className={`flex flex-col gap-4 pt-8 border-t border-white/10 transition-all duration-700 delay-700 ${
+                mobileNavOpen ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
+              }`}>
+                <div className="text-center mb-4">
+                  <h3 className="text-lg font-semibold text-white mb-1">Account</h3>
+                  <div className="w-12 h-0.5 bg-gradient-to-r from-blue-400 to-purple-400 mx-auto rounded-full" />
+                </div>
+                
                 <Link
                   href="/account"
                   onClick={() => setMobileNavOpen(false)}
-                  className="flex items-center gap-3 rounded-xl border border-white/10 bg-gradient-to-r from-blue-500/10 to-blue-600/5 px-6 py-4 text-white transition-all hover:border-blue-400/50 hover:shadow-lg hover:shadow-blue-500/20"
+                  className="group flex items-center gap-4 rounded-2xl border border-blue-500/20 bg-gradient-to-r from-blue-500/10 via-blue-600/5 to-purple-500/10 px-6 py-5 text-white transition-all duration-500 hover:border-blue-400/50 hover:shadow-xl hover:shadow-blue-500/25 hover:scale-[1.02] transform-gpu"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
+                  <div className="p-2 rounded-xl bg-blue-500/20 group-hover:bg-blue-500/30 transition-all duration-300">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-400 group-hover:scale-110 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  </div>
                   <div className="flex-1 text-left">
-                    <div className="text-sm font-semibold">{language === 'fr' ? 'Paramètres du compte' : 'Account Settings'}</div>
+                    <div className="text-sm font-semibold mb-1">{language === 'fr' ? 'Paramètres du compte' : 'Account Settings'}</div>
                     {(userProfile?.firstName || userProfile?.lastName) && (
                       <div className="text-xs text-slate-400">{`${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim()}</div>
                     )}
                   </div>
+                  <div className="w-5 h-5 rounded-full border border-blue-400/30 flex items-center justify-center transition-all duration-300 group-hover:border-blue-400 group-hover:bg-blue-400/10">
+                    <svg className="w-3 h-3 text-blue-400 transform transition-transform duration-300 group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
                 </Link>
+                
                 <button
                   onClick={() => {
                     handleSignOut();
                     setMobileNavOpen(false);
                   }}
-                  className="flex items-center gap-3 rounded-xl border border-red-500/20 bg-gradient-to-r from-red-500/10 to-red-600/5 px-6 py-4 text-red-400 transition-all hover:border-red-400/50 hover:shadow-lg hover:shadow-red-500/20"
+                  className="group flex items-center gap-4 rounded-2xl border border-red-500/20 bg-gradient-to-r from-red-500/10 via-red-600/5 to-pink-500/10 px-6 py-5 text-red-400 transition-all duration-500 hover:border-red-400/50 hover:shadow-xl hover:shadow-red-500/25 hover:scale-[1.02] transform-gpu"
                   type="button"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                  </svg>
+                  <div className="p-2 rounded-xl bg-red-500/20 group-hover:bg-red-500/30 transition-all duration-300">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 group-hover:scale-110 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                  </div>
                   <span className="flex-1 text-left text-sm font-semibold">{language === 'fr' ? 'Se déconnecter' : 'Sign Out'}</span>
+                  <div className="w-5 h-5 rounded-full border border-red-400/30 flex items-center justify-center transition-all duration-300 group-hover:border-red-400 group-hover:bg-red-400/10">
+                    <svg className="w-3 h-3 text-red-400 transform transition-transform duration-300 group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
                 </button>
               </div>
-            ) : (
-              <div className="pt-6 border-t border-white/10">
-                <button
-                  onClick={() => {
-                    setAuthModalOpen(true);
-                    setMobileNavOpen(false);
-                  }}
-                  className="w-full flex items-center justify-center gap-3 rounded-xl border border-white/20 bg-gradient-to-r from-white/10 to-white/5 px-6 py-4 text-white font-semibold transition-all hover:border-white/40 hover:bg-white/15 hover:shadow-lg hover:shadow-white/10"
-                  type="button"
-                >
-                  <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
-                  <span>{language === 'fr' ? 'Se connecter / S\'inscrire' : 'Log In / Sign Up'}</span>
-                </button>
-              </div>
-            )}
-            
-            {/* Language & Gender Controls */}
-            <div className="flex flex-col gap-3 pt-6 border-t border-white/10">
-              <div>
-                <p className="text-xs uppercase tracking-wider text-slate-400 mb-2 px-2">{language === 'fr' ? 'Langue' : 'Language'}</p>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setLanguage('fr')}
-                    className={`flex-1 px-4 py-3 rounded-xl text-sm font-semibold uppercase tracking-wider transition-all ${
-                      language === 'fr'
-                        ? 'bg-white text-slate-900 shadow-lg'
-                        : 'bg-white/5 border border-white/10 text-slate-300 hover:border-white/30 hover:bg-white/10'
-                    }`}
-                    type="button"
-                  >
-                    🇫🇷 Français
-                  </button>
-                  <button
-                    onClick={() => setLanguage('en')}
-                    className={`flex-1 px-4 py-3 rounded-xl text-sm font-semibold uppercase tracking-wider transition-all ${
-                      language === 'en'
-                        ? 'bg-white text-slate-900 shadow-lg'
-                        : 'bg-white/5 border border-white/10 text-slate-300 hover:border-white/30 hover:bg-white/10'
-                    }`}
-                    type="button"
-                  >
-                    🇬🇧 English
-                  </button>
-                </div>
-              </div>
-              
-              <div>
-                <p className="text-xs uppercase tracking-wider text-slate-400 mb-2 px-2">{language === 'fr' ? 'Ligue' : 'League'}</p>
-                <div className="w-full">
-                  <GenderToggle value={gender} onChange={setGender} language={language} />
-                </div>
-              </div>
-            </div>
+            ) : null}
           </div>
         </div>
-      ) : null}
+      </div>
 
       {/* News Section */}
       {newsArticles.length > 0 && featuredArticleId && (
@@ -2349,105 +2385,233 @@ export default function Home() {
                         }`}
                         style={{bottom: 'calc(1.25rem - 3%)'}}
                       >
-                      {newsArticles.length > 0 && (
-
-
-                          <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 max-w-4xl mx-auto w-full">
-                            {(() => {
-                              // On mobile (< 640px): show 2 articles with rotation
-                              // On desktop (>= 640px): show first 3 articles, no rotation
-                              const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
-                              const articlesToShow = 3;
-                              const gridArticles = [];
+                        {newsArticles.length > 0 && (
+                          <>
+                            {/* Mobile Swipeable Grid */}
+                            <div className="sm:hidden">
+                            <div className="relative max-w-4xl mx-auto w-full">
+                              {/* Swipeable Container */}
+                              <div 
+                                className="flex gap-2 transition-transform duration-300 ease-out"
+                                style={{
+                                  transform: `translateX(-${(newsGridStartIndex % Math.ceil(newsArticles.length / 2)) * 100}%)`
+                                }}
+                              >
+                                {(() => {
+                                  const pairs = [];
+                                  for (let i = 0; i < newsArticles.length; i += 2) {
+                                    pairs.push(newsArticles.slice(i, i + 2));
+                                  }
+                                  return pairs.map((pair, pairIndex) => (
+                                    <div key={pairIndex} className="flex-shrink-0 w-full grid gap-2 grid-cols-2">
+                                      {pair.map((article) => (
+                                        <button
+                                          key={article.id}
+                                          onClick={() => {
+                                            setIsArticleChanging(true);
+                                            setTimeout(() => {
+                                              setFeaturedArticleId(article.id);
+                                              setExpandedArticleId(null);
+                                              setIsArticleChanging(false);
+                                              const newsSection = document.querySelector('section');
+                                              if (newsSection) {
+                                                newsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                              }
+                                            }, 300);
+                                          }}
+                                          className={`group relative overflow-hidden rounded-xl border text-left transition-all duration-300 backdrop-blur-md ${
+                                            article.id === featured.id 
+                                              ? 'border-white/30 bg-white/10' 
+                                              : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10'
+                                          }`}
+                                        >
+                                          {article.id === featured.id && !expandedArticleId && (
+                                            <div className="absolute top-0 left-0 right-0 h-1 bg-white/5 overflow-hidden z-20">
+                                              <div 
+                                                className="h-full bg-white/40 backdrop-blur-md relative"
+                                                style={{
+                                                  animation: 'progressBar 15s linear infinite'
+                                                }}
+                                              >
+                                                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer" />
+                                              </div>
+                                            </div>
+                                          )}
+                                          
+                                          {article.imageUrl && (
+                                            <div className="relative h-20 overflow-hidden">
+                                              <Image
+                                                src={article.imageUrl}
+                                                alt={language === 'en' && article.title_en ? article.title_en : article.title}
+                                                fill
+                                                className="object-cover transition duration-300 group-hover:scale-105"
+                                              />
+                                              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent" />
+                                            </div>
+                                          )}
+                                          
+                                          <div className="p-2">
+                                            <span className="mb-1 inline-block text-[9px] font-semibold uppercase tracking-wider text-orange-500">
+                                              {article.category}
+                                            </span>
+                                            
+                                            <h3 className="mb-1 text-[10px] font-bold leading-tight text-white group-hover:text-orange-500 transition-colors line-clamp-2">
+                                              {language === 'en' && article.title_en ? article.title_en : article.title}
+                                            </h3>
+                                            
+                                            <p className="text-[9px] text-slate-400 line-clamp-2">
+                                              {language === 'en' && article.headline_en ? article.headline_en : article.headline}
+                                            </p>
+                                            
+                                            {article.createdAt && (
+                                              <p className="mt-1 text-[9px] text-slate-500">
+                                                {new Intl.DateTimeFormat(language === 'fr' ? "fr-FR" : "en-US", {
+                                                  month: "short",
+                                                  day: "numeric",
+                                                }).format(article.createdAt)}
+                                              </p>
+                                            )}
+                                          </div>
+                                        </button>
+                                      ))}
+                                    </div>
+                                  ));
+                                })()}
+                              </div>
                               
-                              if (isMobile) {
-                                // Mobile: rotate through articles
-                                for (let i = 0; i < articlesToShow; i++) {
-                                  const index = (newsGridStartIndex + i) % newsArticles.length;
-                                  gridArticles.push(newsArticles[index]);
-                                }
-                              } else {
+                              {/* Swipe Navigation Dots */}
+                              {newsArticles.length > 2 && (
+                                <div className="flex justify-center gap-1.5 mt-3">
+                                  {Array.from({ length: Math.ceil(newsArticles.length / 2) }).map((_, index) => (
+                                    <button
+                                      key={index}
+                                      onClick={() => setNewsGridStartIndex(index)}
+                                      className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                                        (newsGridStartIndex % Math.ceil(newsArticles.length / 2)) === index
+                                          ? 'bg-white/80 scale-125'
+                                          : 'bg-white/30 hover:bg-white/50'
+                                      }`}
+                                    />
+                                  ))}
+                                </div>
+                              )}
+                              
+                              {/* Swipe Gesture Buttons (Left/Right) */}
+                              {newsArticles.length > 2 && (
+                                <>
+                                  <button
+                                    onClick={() => setNewsGridStartIndex(prev => 
+                                      prev === 0 
+                                        ? Math.ceil(newsArticles.length / 2) - 1 
+                                        : prev - 1
+                                    )}
+                                    className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-3 w-8 h-8 rounded-full bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/20 transition-all duration-300"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                                    </svg>
+                                  </button>
+                                  <button
+                                    onClick={() => setNewsGridStartIndex(prev => 
+                                      (prev + 1) % Math.ceil(newsArticles.length / 2)
+                                    )}
+                                    className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-3 w-8 h-8 rounded-full bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/20 transition-all duration-300"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                    </svg>
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Desktop Grid */}
+                          <div className="hidden sm:block">
+                            <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 max-w-4xl mx-auto w-full">
+                              {(() => {
+                                const articlesToShow = 3;
+                                const gridArticles = [];
+                                
                                 // Desktop: always show first 3 articles
                                 for (let i = 0; i < Math.min(articlesToShow, newsArticles.length); i++) {
                                   gridArticles.push(newsArticles[i]);
                                 }
-                              }
-                              
-                              return gridArticles.map((article, index) => (
-                                <button
-                                  key={article.id}
-                                  onClick={() => {
-                                    setIsArticleChanging(true);
-                                    setTimeout(() => {
-                                      setFeaturedArticleId(article.id);
-                                      setExpandedArticleId(null);
-                                      setIsArticleChanging(false);
-                                      // Scroll to news section
-                                      const newsSection = document.querySelector('section');
-                                      if (newsSection) {
-                                        newsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                                      }
-                                    }, 300);
-                                  }}
-                                  className={`group relative overflow-hidden rounded-xl border text-left transition-all duration-300 backdrop-blur-md ${
-                                    article.id === featured.id 
-                                      ? 'border-white/30 bg-white/10' 
-                                      : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10'
-                                  } ${index === 2 ? 'hidden sm:block' : ''}`}
-                              >
-                                {/* Glassy Progress Bar - Only show on active featured article */}
-                                {article.id === featured.id && !expandedArticleId && (
-                                  <div className="absolute top-0 left-0 right-0 h-1 bg-white/5 overflow-hidden z-20">
-                                    <div 
-                                      className="h-full bg-white/40 backdrop-blur-md relative"
-                                      style={{
-                                        animation: 'progressBar 15s linear infinite'
-                                      }}
-                                    >
-                                      {/* Subtle shimmer */}
-                                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer" />
+                                
+                                return gridArticles.map((article, index) => (
+                                  <button
+                                    key={article.id}
+                                    onClick={() => {
+                                      setIsArticleChanging(true);
+                                      setTimeout(() => {
+                                        setFeaturedArticleId(article.id);
+                                        setExpandedArticleId(null);
+                                        setIsArticleChanging(false);
+                                        const newsSection = document.querySelector('section');
+                                        if (newsSection) {
+                                          newsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                        }
+                                      }, 300);
+                                    }}
+                                    className={`group relative overflow-hidden rounded-xl border text-left transition-all duration-300 backdrop-blur-md ${
+                                      article.id === featured.id 
+                                        ? 'border-white/30 bg-white/10' 
+                                        : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10'
+                                    } ${index === 2 ? 'hidden sm:block' : ''}`}
+                                  >
+                                    {article.id === featured.id && !expandedArticleId && (
+                                      <div className="absolute top-0 left-0 right-0 h-1 bg-white/5 overflow-hidden z-20">
+                                        <div 
+                                          className="h-full bg-white/40 backdrop-blur-md relative"
+                                          style={{
+                                            animation: 'progressBar 15s linear infinite'
+                                          }}
+                                        >
+                                          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer" />
+                                        </div>
+                                      </div>
+                                    )}
+                                    
+                                    {article.imageUrl && (
+                                      <div className="relative h-20 md:h-28 overflow-hidden">
+                                        <Image
+                                          src={article.imageUrl}
+                                          alt={language === 'en' && article.title_en ? article.title_en : article.title}
+                                          fill
+                                          className="object-cover transition duration-300 group-hover:scale-105"
+                                        />
+                                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent" />
+                                      </div>
+                                    )}
+                                    
+                                    <div className="p-2 md:p-3">
+                                      <span className="mb-1 inline-block text-[9px] md:text-[10px] font-semibold uppercase tracking-wider text-orange-500">
+                                        {article.category}
+                                      </span>
+                                      
+                                      <h3 className="mb-1 md:mb-1.5 text-[10px] md:text-xs font-bold leading-tight text-white group-hover:text-orange-500 transition-colors line-clamp-2">
+                                        {language === 'en' && article.title_en ? article.title_en : article.title}
+                                      </h3>
+                                      
+                                      <p className="text-[9px] md:text-[11px] text-slate-400 line-clamp-2">
+                                        {language === 'en' && article.headline_en ? article.headline_en : article.headline}
+                                      </p>
+                                      
+                                      {article.createdAt && (
+                                        <p className="mt-1 md:mt-1.5 text-[9px] md:text-[10px] text-slate-500">
+                                          {new Intl.DateTimeFormat(language === 'fr' ? "fr-FR" : "en-US", {
+                                            month: "short",
+                                            day: "numeric",
+                                          }).format(article.createdAt)}
+                                        </p>
+                                      )}
                                     </div>
-                                  </div>
-                                )}
-                                
-                                {article.imageUrl && (
-                                  <div className="relative h-20 md:h-28 overflow-hidden">
-                                    <Image
-                                      src={article.imageUrl}
-                                      alt={language === 'en' && article.title_en ? article.title_en : article.title}
-                                      fill
-                                      className="object-cover transition duration-300 group-hover:scale-105"
-                                    />
-                                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent" />
-                                  </div>
-                                )}
-                                
-                                <div className="p-2 md:p-3">
-                                  <span className="mb-1 inline-block text-[9px] md:text-[10px] font-semibold uppercase tracking-wider text-orange-500">
-                                    {article.category}
-                                  </span>
-                                  
-                                  <h3 className="mb-1 md:mb-1.5 text-[10px] md:text-xs font-bold leading-tight text-white group-hover:text-orange-500 transition-colors line-clamp-2">
-                                    {language === 'en' && article.title_en ? article.title_en : article.title}
-                                  </h3>
-                                  
-                                  <p className="text-[9px] md:text-[11px] text-slate-400 line-clamp-2">
-                                    {language === 'en' && article.headline_en ? article.headline_en : article.headline}
-                                  </p>
-                                  
-                                  {article.createdAt && (
-                                    <p className="mt-1 md:mt-1.5 text-[9px] md:text-[10px] text-slate-500">
-                                      {new Intl.DateTimeFormat(language === 'fr' ? "fr-FR" : "en-US", {
-                                        month: "short",
-                                        day: "numeric",
-                                      }).format(article.createdAt)}
-                                    </p>
-                                  )}
-                                </div>
-                              </button>
-                              ));
-                            })()}
+                                  </button>
+                                ));
+                              })()}
+                            </div>
                           </div>
+                          </>
                         )}
                       </div>
 

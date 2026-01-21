@@ -192,8 +192,8 @@ export default function PlayerProfilePopup({ userProfile, onClose, language }: P
   }
 
   return (
-    <div className="fixed top-6 right-6 z-50 animate-in slide-in-from-top-4 fade-in duration-500">
-      <div className="relative w-72 rounded-2xl border border-white/30 bg-gradient-to-br from-slate-900/95 via-slate-800/95 to-slate-900/95 backdrop-blur-xl shadow-2xl">
+    <div className="fixed top-4 right-4 sm:top-6 sm:right-6 z-50 animate-in slide-in-from-top-4 fade-in duration-500">
+      <div className="relative w-64 sm:w-72 rounded-2xl border border-white/30 bg-gradient-to-br from-slate-900/95 via-slate-800/95 to-slate-900/95 backdrop-blur-xl shadow-2xl">
         {/* Close Button */}
         <button
           onClick={onClose}
@@ -207,10 +207,10 @@ export default function PlayerProfilePopup({ userProfile, onClose, language }: P
         </button>
 
         {/* Profile Header */}
-        <div className="p-5 pb-3">
-          <div className="flex items-start gap-3">
+        <div className="p-4 pb-3 sm:p-5">
+          <div className="flex items-center gap-3 sm:items-start">
             {/* Player Photo */}
-            <div className="relative h-16 w-16 rounded-full overflow-hidden ring-3 ring-blue-500/50 flex-shrink-0">
+            <div className="relative h-14 w-14 sm:h-16 sm:w-16 rounded-full overflow-hidden ring-2 ring-blue-500/50 flex-shrink-0">
               {playerData?.headshot || userProfile.verificationImageUrl ? (
                 <Image
                   src={playerData?.headshot || userProfile.verificationImageUrl || ""}
@@ -219,21 +219,21 @@ export default function PlayerProfilePopup({ userProfile, onClose, language }: P
                   className="object-cover"
                 />
               ) : (
-                <div className="h-full w-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-2xl font-bold">
+                <div className="h-full w-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-lg sm:text-2xl font-bold">
                   {playerData?.name?.[0] || userProfile.firstName[0]}{playerData?.name?.split(' ')[1]?.[0] || userProfile.lastName[0]}
                 </div>
               )}
             </div>
 
-            {/* Player Info */}
-            <div className="flex-1 min-w-0">
-              <h3 className="text-base font-bold text-white truncate">
+            {/* Player Info - Right side of headshot */}
+            <div className="flex-1 min-w-0 flex flex-col justify-center">
+              <h3 className="text-sm sm:text-base font-bold text-white truncate leading-tight">
                 {playerData?.name || userProfile.linkedPlayerName || `${userProfile.firstName} ${userProfile.lastName}`}
               </h3>
-              <p className="text-xs text-slate-300">
+              <p className="text-xs text-slate-300 mt-0.5">
                 #{playerData?.number || userProfile.playerNumber} • {playerData?.position || userProfile.position || "Player"}
               </p>
-              <p className="text-xs text-slate-400 truncate">{userProfile.teamName}</p>
+              <p className="text-xs text-slate-400 truncate mt-0.5">{userProfile.teamName}</p>
               
               {/* Social Media Icons */}
               <div className="flex gap-2 mt-2">

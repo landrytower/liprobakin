@@ -26,9 +26,10 @@ interface NextGame {
 interface PlayerProfilePopupProps {
   userProfile: UserProfile;
   onClose: () => void;
+  language: string;
 }
 
-export default function PlayerProfilePopup({ userProfile, onClose }: PlayerProfilePopupProps) {
+export default function PlayerProfilePopup({ userProfile, onClose, language }: PlayerProfilePopupProps) {
   const [stats, setStats] = useState<PlayerStats | null>(null);
   const [nextGame, setNextGame] = useState<NextGame | null>(null);
   const [loading, setLoading] = useState(true);
@@ -207,7 +208,7 @@ export default function PlayerProfilePopup({ userProfile, onClose }: PlayerProfi
 
         {/* Profile Header */}
         <div className="p-5 pb-3">
-          <div className="flex items-center gap-3">
+          <div className="flex items-start gap-3">
             {/* Player Photo */}
             <div className="relative h-16 w-16 rounded-full overflow-hidden ring-3 ring-blue-500/50 flex-shrink-0">
               {playerData?.headshot || userProfile.verificationImageUrl ? (
@@ -304,7 +305,7 @@ export default function PlayerProfilePopup({ userProfile, onClose }: PlayerProfi
                 <div className="rounded-xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 border border-blue-400/30 p-3">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-semibold text-blue-300 uppercase tracking-wider">
-                      Next Game
+                      {language === 'fr' ? 'Prochain match' : 'Next Game'}
                     </span>
                     <span className="text-sm text-white font-bold">
                       {nextGame.isHome ? "vs" : "@"} {nextGame.opponent}

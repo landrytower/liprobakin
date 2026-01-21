@@ -1023,6 +1023,9 @@ export default function Home() {
   const [featuredArticleId, setFeaturedArticleId] = useState<string | null>(null);
   const [expandedArticleId, setExpandedArticleId] = useState<string | null>(null);
   const [newsGridStartIndex, setNewsGridStartIndex] = useState(0);
+  const [touchStartX, setTouchStartX] = useState(0);
+  const [touchEndX, setTouchEndX] = useState(0);
+  const [isSwiping, setIsSwiping] = useState(false);
   const [isArticleChanging, setIsArticleChanging] = useState(false);
   const [dynamicStandings, setDynamicStandings] = useState<any[]>([]);
   const [currentPartnerIndex, setCurrentPartnerIndex] = useState(0);
@@ -1608,6 +1611,39 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [newsArticles]);
 
+  // Touch handlers for swipe gestures
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setTouchStartX(e.targetTouches[0].clientX);
+    setIsSwiping(true);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isSwiping) return;
+    setTouchEndX(e.targetTouches[0].clientX);
+  };
+
+  const handleTouchEnd = () => {
+    if (!isSwiping) return;
+    setIsSwiping(false);
+    
+    const touchDistance = touchStartX - touchEndX;
+    const minSwipeDistance = 50; // Minimum distance for a swipe
+    
+    if (Math.abs(touchDistance) > minSwipeDistance) {
+      const maxIndex = Math.ceil(newsArticles.length / 2) - 1;
+      
+      if (touchDistance > 0) {
+        // Swipe left - go to next page
+        setNewsGridStartIndex(prev => (prev + 1) % Math.ceil(newsArticles.length / 2));
+      } else {
+        // Swipe right - go to previous page
+        setNewsGridStartIndex(prev => 
+          prev === 0 ? maxIndex : prev - 1
+        );
+      }
+    }
+  };
+
   useEffect(() => {
     const fetchLeagueTopPlayers = async () => {
       try {
@@ -2072,7 +2108,7 @@ export default function Home() {
           <div className="flex items-center gap-4">
             <button
               type="button"
-              className="group relative flex items-center justify-center w-12 h-12 rounded-xl backdrop-blur-xl bg-white/5 border border-white/10 text-white/90 shadow-2xl transition-all duration-700 ease-out hover:bg-white/10 hover:border-white/20 hover:shadow-white/10 focus:outline-none focus:ring-2 focus:ring-white/20 lg:hidden active:scale-95 transform-gpu"
+              className="group relative flex items-center justify-center w-12 h-12 rounded-xl backdrop-blur-xl bg-white/5 border border-white/10 text-white/90 shadow-2xl transition-all duration-700 ease-out focus:outline-none focus:ring-2 focus:ring-white/20 lg:hidden active:scale-95 transform-gpu sm:hover:bg-white/10 sm:hover:border-white/20 sm:hover:shadow-white/10"
               onClick={() => setMobileNavOpen((prev) => !prev)}
               aria-expanded={mobileNavOpen}
               aria-controls="mobile-nav-panel"
@@ -2392,10 +2428,13 @@ export default function Home() {
                             <div className="relative max-w-4xl mx-auto w-full">
                               {/* Swipeable Container */}
                               <div 
-                                className="flex gap-2 transition-transform duration-300 ease-out"
+                                className="flex gap-2 transition-transform duration-300 ease-out touch-pan-x"
                                 style={{
                                   transform: `translateX(-${(newsGridStartIndex % Math.ceil(newsArticles.length / 2)) * 100}%)`
                                 }}
+                                onTouchStart={handleTouchStart}
+                                onTouchMove={handleTouchMove}
+                                onTouchEnd={handleTouchEnd}
                               >
                                 {(() => {
                                   const pairs = [];
@@ -3913,7 +3952,8 @@ export default function Home() {
       {showProfilePopup && userProfile ? (
         <PlayerProfilePopup 
           userProfile={userProfile} 
-          onClose={() => setShowProfilePopup(false)} 
+          onClose={() => setShowProfilePopup(false)}
+          language={language}
         />
       ) : null}
     </div>

@@ -3624,9 +3624,14 @@ export default function Home() {
                   </svg>
                 </button>
                 
-                {/* Calendar Dropdown */}
-                {showCalendar && (
-                  <div className="absolute right-0 top-full mt-2 z-50 bg-slate-900 border border-white/10 rounded-2xl p-4 shadow-xl min-w-[300px]">
+                {/* Calendar Dropdown with animation */}
+                <div 
+                  className={`absolute right-0 top-full mt-2 z-50 bg-slate-900/95 backdrop-blur-md border border-white/10 rounded-2xl p-4 shadow-2xl min-w-[300px] transform transition-all duration-300 ease-out origin-top-right ${
+                    showCalendar 
+                      ? 'opacity-100 scale-100 translate-y-0' 
+                      : 'opacity-0 scale-95 -translate-y-2 pointer-events-none'
+                  }`}
+                >
                     <div className="flex items-center justify-between mb-4">
                       <button
                         onClick={() => {
@@ -3731,8 +3736,7 @@ export default function Home() {
                     >
                       {language === 'fr' ? 'Voir cette semaine' : 'Show this week'}
                     </button>
-                  </div>
-                )}
+                </div>
               </div>
             }
           />

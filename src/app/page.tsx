@@ -1489,7 +1489,8 @@ export default function Home() {
       
       console.log('✅ Total articles (real-time):', articles.length);
       console.log('📰 Articles:', articles.map(a => ({ id: a.id, title: a.title })));
-      setNewsArticles(articles);
+      // Limit to last 5 published articles
+      setNewsArticles(articles.slice(0, 5));
       
       if (articles.length > 0 && !featuredArticleId) {
         console.log('🎯 Setting featured article to:', articles[0].id);
@@ -2734,24 +2735,17 @@ export default function Home() {
                             {/* Mobile Swipeable Grid */}
                             <div className="sm:hidden">
                             <div className="relative max-w-4xl mx-auto w-full">
-                              {/* Swipeable Container */}
+                              {/* Smooth Scroll Container - Hold and drag to scroll */}
                               <div 
-                                className="flex gap-2 transition-transform duration-300 ease-out touch-pan-x"
+                                className="flex gap-3 overflow-x-auto scroll-smooth snap-x snap-mandatory scrollbar-hide touch-pan-x pb-3"
                                 style={{
-                                  transform: `translateX(-${(newsGridStartIndex % Math.ceil(newsArticles.length / 2)) * 100}%)`
+                                  WebkitOverflowScrolling: 'touch',
+                                  scrollbarWidth: 'none',
+                                  msOverflowStyle: 'none'
                                 }}
-                                onTouchStart={handleTouchStart}
-                                onTouchMove={handleTouchMove}
-                                onTouchEnd={handleTouchEnd}
                               >
-                                {(() => {
-                                  const pairs = [];
-                                  for (let i = 0; i < newsArticles.length; i += 2) {
-                                    pairs.push(newsArticles.slice(i, i + 2));
-                                  }
-                                  return pairs.map((pair, pairIndex) => (
-                                    <div key={pairIndex} className="flex-shrink-0 w-full grid gap-2 grid-cols-2">
-                                      {pair.map((article) => (
+                                {/* Individual scrollable cards */}
+                                {newsArticles.map((article) => (
                                         <button
                                           key={article.id}
                                           onClick={() => {
@@ -2766,7 +2760,7 @@ export default function Home() {
                                               }
                                             }, 300);
                                           }}
-                                          className={`group relative overflow-hidden rounded-xl border text-left transition-all duration-300 backdrop-blur-md ${
+                                          className={`group relative overflow-hidden rounded-xl border text-left transition-all duration-300 backdrop-blur-md snap-start flex-shrink-0 w-[45vw] ${
                                             article.id === featured.id 
                                               ? 'border-white/30 bg-white/10' 
                                               : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10'
@@ -2820,56 +2814,8 @@ export default function Home() {
                                             )}
                                           </div>
                                         </button>
-                                      ))}
-                                    </div>
-                                  ));
-                                })()}
+                                ))}
                               </div>
-                              
-                              {/* Swipe Navigation Dots */}
-                              {newsArticles.length > 2 && (
-                                <div className="flex justify-center gap-1.5 mt-3">
-                                  {Array.from({ length: Math.ceil(newsArticles.length / 2) }).map((_, index) => (
-                                    <button
-                                      key={index}
-                                      onClick={() => setNewsGridStartIndex(index)}
-                                      className={`w-2 h-2 rounded-full transition-all duration-300 ${
-                                        (newsGridStartIndex % Math.ceil(newsArticles.length / 2)) === index
-                                          ? 'bg-white/80 scale-125'
-                                          : 'bg-white/30 hover:bg-white/50'
-                                      }`}
-                                    />
-                                  ))}
-                                </div>
-                              )}
-                              
-                              {/* Swipe Gesture Buttons (Left/Right) */}
-                              {newsArticles.length > 2 && (
-                                <>
-                                  <button
-                                    onClick={() => setNewsGridStartIndex(prev => 
-                                      prev === 0 
-                                        ? Math.ceil(newsArticles.length / 2) - 1 
-                                        : prev - 1
-                                    )}
-                                    className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-3 w-8 h-8 rounded-full bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/20 transition-all duration-300"
-                                  >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                                    </svg>
-                                  </button>
-                                  <button
-                                    onClick={() => setNewsGridStartIndex(prev => 
-                                      (prev + 1) % Math.ceil(newsArticles.length / 2)
-                                    )}
-                                    className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-3 w-8 h-8 rounded-full bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/20 transition-all duration-300"
-                                  >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                    </svg>
-                                  </button>
-                                </>
-                              )}
                             </div>
                           </div>
 

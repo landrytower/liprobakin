@@ -33,6 +33,7 @@ export default function PlayerProfilePopup({ userProfile, onClose, language }: P
   const [stats, setStats] = useState<PlayerStats | null>(null);
   const [nextGame, setNextGame] = useState<NextGame | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isClosing, setIsClosing] = useState(false);
   const [playerData, setPlayerData] = useState<{ name: string; number: string; headshot: string; position: string } | null>(null);
 
   const fullName = playerData?.name || userProfile.linkedPlayerName || `${userProfile.firstName} ${userProfile.lastName}`;
@@ -190,17 +191,31 @@ export default function PlayerProfilePopup({ userProfile, onClose, language }: P
     }
   }, [userProfile]);
 
+  // Handle smooth close animation
+  const handleClose = () => {
+    setIsClosing(true);
+    setTimeout(() => {
+      onClose();
+    }, 400); // Match animation duration
+  };
+
   // Only show for verified players
   if (userProfile.verificationStatus !== "approved" || userProfile.role !== "player") {
     return null;
   }
 
   return (
-    <div className="fixed top-4 right-4 sm:top-6 sm:right-6 z-50 animate-in slide-in-from-top-4 fade-in duration-500">
+    <div 
+      className={`fixed top-4 right-4 sm:top-6 sm:right-6 z-50 transition-all duration-400 ease-out ${
+        isClosing 
+          ? 'opacity-0 translate-y-[-20px] scale-95' 
+          : 'animate-in slide-in-from-top-4 fade-in duration-500'
+      }`}
+    >
       <div className="relative w-64 sm:w-72 rounded-2xl border border-white/30 bg-gradient-to-br from-slate-900/95 via-slate-800/95 to-slate-900/95 backdrop-blur-xl shadow-2xl">
         {/* Close Button */}
         <button
-          onClick={onClose}
+          onClick={handleClose}
           className="absolute -top-2 -right-2 flex h-8 w-8 items-center justify-center rounded-full bg-red-500 hover:bg-red-600 text-white shadow-lg transition-all hover:scale-110"
           type="button"
           aria-label="Close player profile"

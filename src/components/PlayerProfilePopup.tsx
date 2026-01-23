@@ -256,27 +256,195 @@ export default function PlayerProfilePopup({ userProfile, onClose, language }: P
               </p>
               <p className="text-xs text-slate-400 truncate mt-0.5">{userProfile.teamName}</p>
               
-              {/* Social Media Icons */}
+              {/* Download Card Button */}
               <div className="flex gap-2 mt-2">
-                <a
-                  href="#"
-                  className="group flex items-center justify-center w-6 h-6 rounded-lg bg-gradient-to-br from-white/10 via-white/5 to-white/10 border border-white/20 backdrop-blur-md transition-all duration-300 hover:border-white/40 hover:scale-110 hover:shadow-lg hover:shadow-pink-500/20"
-                  aria-label="Instagram"
-                >
-                  <svg className="w-3 h-3 text-white/80 group-hover:text-white transition-colors" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
-                  </svg>
-                </a>
-                <a
-                  href="#"
-                  className="group flex items-center justify-center w-6 h-6 rounded-lg bg-gradient-to-br from-white/10 via-white/5 to-white/10 border border-white/20 backdrop-blur-md transition-all duration-300 hover:border-white/40 hover:scale-110 hover:shadow-lg hover:shadow-blue-500/20"
-                  aria-label="Facebook"
-                >
-                  <svg className="w-3 h-3 text-white/80 group-hover:text-white transition-colors" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-                  </svg>
-                </a>
-              </div>
+                <button
+                  onClick={() => {
+                      const downloadCard = async () => {
+                        try {
+                          const canvas = document.createElement('canvas');
+                          const ctx = canvas.getContext('2d');
+                          if (!ctx) return;
+                          
+                          // Mobile-friendly portrait size
+                          canvas.width = 400;
+                          canvas.height = 700;
+                          
+                          // Dark blue background
+                          ctx.fillStyle = '#1e293b';
+                          ctx.fillRect(0, 0, canvas.width, canvas.height);
+                          
+                          // Decorative circles (top-right and bottom corners)
+                          ctx.beginPath();
+                          ctx.arc(canvas.width + 30, -30, 120, 0, 2 * Math.PI);
+                          ctx.fillStyle = '#334155';
+                          ctx.fill();
+                          
+                          ctx.beginPath();
+                          ctx.arc(-40, canvas.height - 100, 100, 0, 2 * Math.PI);
+                          ctx.fillStyle = '#475569';
+                          ctx.fill();
+                          
+                          ctx.beginPath();
+                          ctx.arc(canvas.width - 50, canvas.height - 50, 80, 0, 2 * Math.PI);
+                          ctx.fillStyle = '#9a6b4c';
+                          ctx.fill();
+                          
+                          // "LIPROBAKIN" header
+                          ctx.fillStyle = '#f59e0b';
+                          ctx.font = 'bold 24px Arial';
+                          ctx.textAlign = 'center';
+                          ctx.fillText('LIPROBAKIN', canvas.width / 2, 45);
+                          
+                          // Circular photo area
+                          const photoSize = 140;
+                          const photoX = canvas.width / 2;
+                          const photoY = 150;
+                          
+                          // Gold ring around photo
+                          ctx.beginPath();
+                          ctx.arc(photoX, photoY, photoSize / 2 + 5, 0, 2 * Math.PI);
+                          ctx.strokeStyle = '#f59e0b';
+                          ctx.lineWidth = 4;
+                          ctx.stroke();
+                          
+                          // Dark circle background
+                          ctx.beginPath();
+                          ctx.arc(photoX, photoY, photoSize / 2, 0, 2 * Math.PI);
+                          ctx.fillStyle = '#334155';
+                          ctx.fill();
+                          
+                          // Try to load player headshot
+                          let imageLoaded = false;
+                          if (playerData?.headshot) {
+                            try {
+                              const img = document.createElement('img');
+                              img.crossOrigin = 'anonymous';
+                              
+                              imageLoaded = await new Promise<boolean>((resolve) => {
+                                img.onload = () => {
+                                  ctx.save();
+                                  ctx.beginPath();
+                                  ctx.arc(photoX, photoY, photoSize / 2 - 2, 0, 2 * Math.PI);
+                                  ctx.clip();
+                                  ctx.drawImage(img, photoX - photoSize/2 + 2, photoY - photoSize/2 + 2, photoSize - 4, photoSize - 4);
+                                  ctx.restore();
+                                  resolve(true);
+                                };
+                                img.onerror = () => resolve(false);
+                                img.src = playerData.headshot + '?t=' + new Date().getTime();
+                              });
+                            } catch {
+                              console.log('Could not load player image');
+                            }
+                          }
+                          
+                          // If no image, show initials
+                          if (!imageLoaded) {
+                            const initials = fullName.split(' ').map(name => name[0]).join('').slice(0, 2).toUpperCase();
+                            ctx.fillStyle = '#ffffff';
+                            ctx.font = 'bold 56px Arial';
+                            ctx.textAlign = 'center';
+                            ctx.fillText(initials, photoX, photoY + 18);
+                          }
+                          
+                          // Jersey number badge
+                          const badgeY = photoY + photoSize / 2 + 10;
+                          const badgeWidth = 60;
+                          const badgeHeight = 28;
+                          
+                          // Draw badge background
+                          ctx.beginPath();
+                          ctx.roundRect(photoX - badgeWidth/2, badgeY, badgeWidth, badgeHeight, 14);
+                          ctx.fillStyle = '#f59e0b';
+                          ctx.fill();
+                          
+                          // Jersey number text
+                          ctx.fillStyle = '#1e293b';
+                          ctx.font = 'bold 16px Arial';
+                          ctx.textAlign = 'center';
+                          ctx.fillText(`#${playerData?.number || userProfile.playerNumber || '00'}`, photoX, badgeY + 20);
+                          
+                          // Player name
+                          ctx.fillStyle = '#ffffff';
+                          ctx.font = 'bold 28px Arial';
+                          ctx.textAlign = 'center';
+                          ctx.fillText(fullName, canvas.width / 2, badgeY + 70);
+                          
+                          // Team name
+                          ctx.fillStyle = '#f59e0b';
+                          ctx.font = '18px Arial';
+                          ctx.fillText(userProfile.teamName || '', canvas.width / 2, badgeY + 100);
+                          
+                          // Stats boxes
+                          const statsY = badgeY + 140;
+                          const boxWidth = 100;
+                          const boxHeight = 80;
+                          const boxSpacing = 15;
+                          const totalBoxWidth = (boxWidth * 3) + (boxSpacing * 2);
+                          const startX = (canvas.width - totalBoxWidth) / 2;
+                          
+                          const statsData = [
+                            { label: 'PTS', value: stats?.pts ?? 0 },
+                            { label: 'REB', value: stats?.reb ?? 0 },
+                            { label: 'AST', value: stats?.ast ?? 0 }
+                          ];
+                          
+                          statsData.forEach((stat, index) => {
+                            const boxX = startX + (index * (boxWidth + boxSpacing));
+                            
+                            // Draw rounded box
+                            ctx.beginPath();
+                            ctx.roundRect(boxX, statsY, boxWidth, boxHeight, 12);
+                            ctx.fillStyle = '#334155';
+                            ctx.fill();
+                            
+                            // Stat value
+                            ctx.fillStyle = '#ffffff';
+                            ctx.font = 'bold 28px Arial';
+                            ctx.textAlign = 'center';
+                            ctx.fillText(stat.value.toFixed(1), boxX + boxWidth/2, statsY + 38);
+                            
+                            // Stat label
+                            ctx.fillStyle = '#94a3b8';
+                            ctx.font = '12px Arial';
+                            ctx.fillText(stat.label, boxX + boxWidth/2, statsY + 60);
+                          });
+                          
+                          // Website footer
+                          ctx.fillStyle = '#64748b';
+                          ctx.font = '14px Arial';
+                          ctx.textAlign = 'center';
+                          ctx.fillText('liprobakin.com', canvas.width / 2, canvas.height - 25);
+                          
+                          // Download the image
+                          canvas.toBlob((blob) => {
+                            if (!blob) return;
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = `${fullName.replace(/\s+/g, '_')}_card.png`;
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                            URL.revokeObjectURL(url);
+                          }, 'image/png');
+                          
+                        } catch (error) {
+                          console.error('Error creating share card:', error);
+                        }
+                      };
+                      
+                      downloadCard();
+                    }}
+                    className="group flex items-center justify-center w-6 h-6 rounded-lg bg-gradient-to-br from-white/10 via-white/5 to-white/10 border border-white/20 backdrop-blur-md transition-all duration-300 hover:border-white/40 hover:scale-110 hover:shadow-lg hover:shadow-green-500/20"
+                    aria-label="Download Share Card"
+                  >
+                    <svg className="w-3 h-3 text-white/80 group-hover:text-white transition-colors" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                    </svg>
+                  </button>
+                </div>
             </div>
           </div>
         </div>

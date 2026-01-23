@@ -1069,6 +1069,9 @@ export default function Home() {
   const [liveGames, setLiveGames] = useState<EnhancedMatchup[]>([]);
   const [showProfilePopup, setShowProfilePopup] = useState(false);
   const [scheduleStartIndex, setScheduleStartIndex] = useState(0);
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [selectedScheduleDate, setSelectedScheduleDate] = useState<Date | null>(null);
+  const [allScheduledGames, setAllScheduledGames] = useState<EnhancedMatchup[]>([]);
   const scheduleScrollRef = useRef<HTMLDivElement>(null);
   const teamsScrollRef = useRef<HTMLDivElement>(null);
   
@@ -1362,7 +1365,7 @@ export default function Home() {
           }
         }
         
-        // Fallback: Download the image
+        // Fallback: Download the image first
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -1370,22 +1373,46 @@ export default function Home() {
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
+        
+        // Also copy to clipboard if supported (so user can paste)
+        try {
+          await navigator.clipboard.write([
+            new ClipboardItem({ 'image/png': blob })
+          ]);
+          console.log('Image copied to clipboard');
+        } catch (clipErr) {
+          console.log('Clipboard write not supported');
+        }
+        
         URL.revokeObjectURL(url);
         
-        // After download, open Instagram/Facebook so user can post
-        setTimeout(() => {
-          if (platform === 'ig') {
-            // Try to open Instagram app, fallback to web
-            window.open('instagram://camera', '_blank');
-            // If app doesn't open after 2 seconds, open web version
+        // Show instruction alert then open the platform
+        if (platform === 'ig') {
+          alert('📸 Image saved! Open Instagram Stories and select the image from your gallery.');
+          // Try to open Instagram app, fallback to web
+          setTimeout(() => {
+            window.open('instagram://story-camera', '_blank');
             setTimeout(() => {
-              window.open('https://www.instagram.com/', '_blank');
-            }, 1500);
-          } else {
-            // Open Facebook
-            window.open('https://www.facebook.com/', '_blank');
-          }
-        }, 500);
+              window.open('https://www.instagram.com/stories/create/', '_blank');
+            }, 1000);
+          }, 300);
+        } else {
+          alert('📸 Image saved! Select it from your gallery when creating your Facebook Story.');
+          // Open Facebook Stories directly
+          setTimeout(() => {
+            // Try mobile app deep link first
+            const fbStoryUrl = 'fb://story_composer';
+            const fbWebUrl = 'https://www.facebook.com/stories/create';
+            
+            // Try app first
+            window.location.href = fbStoryUrl;
+            
+            // Fallback to web after short delay
+            setTimeout(() => {
+              window.open(fbWebUrl, '_blank');
+            }, 1000);
+          }, 300);
+        }
         
       }, 'image/png');
       
@@ -1587,45 +1614,53 @@ export default function Home() {
 
   useEffect(() => {
     // Fetch player profile data from Firestore if user is a verified player
-    const fetchPlayerData = async () => {
-      if (!userProfile?.role || !userProfile?.verificationStatus || !userProfile?.teamName) {
-        setPlayerData(null);
-        setNextGame(null);
-        return;
-      }
+    // Using real-time listener for instant updates when player data changes
+    if (!userProfile?.role || !userProfile?.verificationStatus || !userProfile?.teamName) {
+      setPlayerData(null);
+      setNextGame(null);
+      return;
+    }
 
-      if (userProfile.role === "player" && userProfile.verificationStatus === "approved" && userProfile.teamName) {
-        try {
-          // Find the team in Firestore
-          const teamsRef = collection(firebaseDB, "teams");
-          const teamsSnapshot = await getDocs(teamsRef);
+    if (userProfile.role !== "player" || userProfile.verificationStatus !== "approved" || !userProfile.teamName) {
+      setPlayerData(null);
+      setNextGame(null);
+      return;
+    }
+
+    let unsubscribe: (() => void) | null = null;
+
+    const setupRealTimeListener = async () => {
+      try {
+        // Find the team in Firestore
+        const teamsRef = collection(firebaseDB, "teams");
+        const teamsSnapshot = await getDocs(teamsRef);
+        
+        let targetTeamId: string | null = null;
+        
+        // Find the team document that matches the user's teamName
+        for (const teamDoc of teamsSnapshot.docs) {
+          const teamData = teamDoc.data();
+          const teamDocName = teamData.name ?? "";
+          const teamDocCity = teamData.city ?? "";
+          const fullTeamName = teamDocCity ? `${teamDocCity} ${teamDocName}` : teamDocName;
           
-          let targetTeamId: string | null = null;
-          
-          // Find the team document that matches the user's teamName
-          for (const teamDoc of teamsSnapshot.docs) {
-            const teamData = teamDoc.data();
-            const teamDocName = teamData.name ?? "";
-            const teamDocCity = teamData.city ?? "";
-            const fullTeamName = teamDocCity ? `${teamDocCity} ${teamDocName}` : teamDocName;
-            
-            if (fullTeamName === userProfile.teamName || teamDocName === userProfile.teamName) {
-              targetTeamId = teamDoc.id;
-              break;
-            }
+          if (fullTeamName === userProfile.teamName || teamDocName === userProfile.teamName) {
+            targetTeamId = teamDoc.id;
+            break;
           }
-          
-          if (!targetTeamId) {
-            console.log("Team not found in Firestore:", userProfile.teamName);
-            setPlayerData(null);
-            setNextGame(null);
-            return;
-          }
-          
-          // Fetch roster from Firestore
-          const rosterRef = collection(firebaseDB, `teams/${targetTeamId}/roster`);
-          const rosterSnapshot = await getDocs(rosterRef);
-          
+        }
+        
+        if (!targetTeamId) {
+          console.log("Team not found in Firestore:", userProfile.teamName);
+          setPlayerData(null);
+          setNextGame(null);
+          return;
+        }
+        
+        // Set up real-time listener on the roster subcollection
+        const rosterRef = collection(firebaseDB, `teams/${targetTeamId}/roster`);
+        
+        unsubscribe = onSnapshot(rosterRef, (rosterSnapshot) => {
           if (rosterSnapshot.empty) {
             console.log("No roster found for team:", userProfile.teamName);
             setPlayerData(null);
@@ -1640,19 +1675,23 @@ export default function Home() {
           if (userProfile.linkedPlayerId) {
             const playerDoc = rosterSnapshot.docs.find(doc => doc.id === userProfile.linkedPlayerId);
             if (playerDoc) {
-              const playerData = playerDoc.data();
+              const pData = playerDoc.data();
+              // Add cache-buster to headshot URL to force refresh
+              const headshotUrl = pData.headshot 
+                ? `${pData.headshot}${pData.headshot.includes('?') ? '&' : '?'}t=${Date.now()}`
+                : "/players/default-avatar.png";
               foundPlayer = {
-                name: `${playerData.firstName || ""} ${playerData.lastName || ""}`.trim(),
-                number: playerData.number ?? 0,
-                height: playerData.height ?? "",
-                headshot: playerData.headshot ?? "/players/default-avatar.png",
-                position: playerData.position ?? "",
+                name: `${pData.firstName || ""} ${pData.lastName || ""}`.trim(),
+                number: pData.number ?? 0,
+                height: pData.height ?? "",
+                headshot: headshotUrl,
+                position: pData.position ?? "",
                 stats: {
-                  pts: playerData.stats?.pts ?? "0.0",
-                  reb: playerData.stats?.reb ?? "0.0",
-                  ast: playerData.stats?.ast ?? "0.0",
-                  blk: playerData.stats?.blk ?? "0.0",
-                  stl: playerData.stats?.stl ?? "0.0"
+                  pts: pData.stats?.pts ?? "0.0",
+                  reb: pData.stats?.reb ?? "0.0",
+                  ast: pData.stats?.ast ?? "0.0",
+                  blk: pData.stats?.blk ?? "0.0",
+                  stl: pData.stats?.stl ?? "0.0"
                 }
               };
             }
@@ -1661,20 +1700,24 @@ export default function Home() {
           // Fallback: find by player number if linkedPlayerId not available
           if (!foundPlayer && userProfile.playerNumber) {
             for (const playerDoc of rosterSnapshot.docs) {
-              const playerData = playerDoc.data();
-              if (playerData.number?.toString() === userProfile.playerNumber.toString()) {
+              const pData = playerDoc.data();
+              if (pData.number?.toString() === userProfile.playerNumber.toString()) {
+                // Add cache-buster to headshot URL to force refresh
+                const headshotUrl = pData.headshot 
+                  ? `${pData.headshot}${pData.headshot.includes('?') ? '&' : '?'}t=${Date.now()}`
+                  : "/players/default-avatar.png";
                 foundPlayer = {
-                  name: `${playerData.firstName || ""} ${playerData.lastName || ""}`.trim(),
-                  number: playerData.number ?? 0,
-                  height: playerData.height ?? "",
-                  headshot: playerData.headshot ?? "/players/default-avatar.png",
-                  position: playerData.position ?? "",
+                  name: `${pData.firstName || ""} ${pData.lastName || ""}`.trim(),
+                  number: pData.number ?? 0,
+                  height: pData.height ?? "",
+                  headshot: headshotUrl,
+                  position: pData.position ?? "",
                   stats: {
-                    pts: playerData.stats?.pts ?? "0.0",
-                    reb: playerData.stats?.reb ?? "0.0",
-                    ast: playerData.stats?.ast ?? "0.0",
-                    blk: playerData.stats?.blk ?? "0.0",
-                    stl: playerData.stats?.stl ?? "0.0"
+                    pts: pData.stats?.pts ?? "0.0",
+                    reb: pData.stats?.reb ?? "0.0",
+                    ast: pData.stats?.ast ?? "0.0",
+                    blk: pData.stats?.blk ?? "0.0",
+                    stl: pData.stats?.stl ?? "0.0"
                   }
                 };
                 break;
@@ -1707,18 +1750,27 @@ export default function Home() {
             setPlayerData(null);
             setNextGame(null);
           }
-        } catch (error) {
-          console.error("Error fetching player data from Firestore:", error);
+        }, (error) => {
+          console.error("Error in roster listener:", error);
           setPlayerData(null);
           setNextGame(null);
-        }
-      } else {
+        });
+        
+      } catch (error) {
+        console.error("Error setting up player data listener:", error);
         setPlayerData(null);
         setNextGame(null);
       }
     };
     
-    fetchPlayerData();
+    setupRealTimeListener();
+    
+    // Cleanup listener on unmount
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
   }, [userProfile, dynamicSpotlightGames]);
 
   // Countdown timer for next game
@@ -1781,10 +1833,9 @@ export default function Home() {
   useEffect(() => {
     const calculateStandings = async () => {
       try {
-        const gamesRef = collection(firebaseDB, "games");
-        const gamesSnapshot = await getDocs(gamesRef);
-        
-        console.log("Total games found:", gamesSnapshot.size);
+        // First, fetch ALL teams to ensure they all show up in standings
+        const teamsRef = collection(firebaseDB, "teams");
+        const teamsSnapshot = await getDocs(teamsRef);
         
         const teamStats: Record<string, {
           wins: number;
@@ -1794,15 +1845,39 @@ export default function Home() {
           gender: string;
         }> = {};
         
+        // Initialize ALL teams with 0-0 records
+        teamsSnapshot.docs.forEach((doc) => {
+          const team = doc.data();
+          const teamId = doc.id;
+          const teamName = team.name || team.teamName || "";
+          const teamGender = team.gender || "men";
+          
+          if (teamName) {
+            teamStats[teamId] = {
+              wins: 0,
+              losses: 0,
+              totalPoints: 0,
+              teamName: teamName,
+              gender: teamGender
+            };
+          }
+        });
+        
+        console.log("All teams initialized:", Object.keys(teamStats).length);
+        
+        // Then fetch games and update records
+        const gamesRef = collection(firebaseDB, "games");
+        const gamesSnapshot = await getDocs(gamesRef);
+        
+        console.log("Total games found:", gamesSnapshot.size);
+        
         gamesSnapshot.docs.forEach((doc) => {
           const game = doc.data();
-          console.log("Processing game:", game);
           
           if (game.winnerTeamId && game.loserTeamId) {
             const homeTeam = game.homeTeamId;
             const awayTeam = game.awayTeamId;
             const winnerTeam = game.winnerTeamId;
-            const loserTeam = game.loserTeamId;
             const winnerScore = game.winnerScore || 0;
             const loserScore = game.loserScore || 0;
             const homeTeamName = game.homeTeamName || "";
@@ -1813,10 +1888,8 @@ export default function Home() {
             const homeScore = winnerTeam === homeTeam ? winnerScore : loserScore;
             const awayScore = winnerTeam === awayTeam ? winnerScore : loserScore;
             
-            console.log(`Game: ${homeTeamName} (${homeScore}) vs ${awayTeamName} (${awayScore}), Winner: ${winnerTeam === homeTeam ? homeTeamName : awayTeamName}`);
-            
-            // Initialize home team
-            if (!teamStats[homeTeam]) {
+            // Initialize home team if not already (fallback for teams not in teams collection)
+            if (!teamStats[homeTeam] && homeTeamName) {
               teamStats[homeTeam] = {
                 wins: 0,
                 losses: 0,
@@ -1826,8 +1899,8 @@ export default function Home() {
               };
             }
             
-            // Initialize away team
-            if (!teamStats[awayTeam]) {
+            // Initialize away team if not already (fallback)
+            if (!teamStats[awayTeam] && awayTeamName) {
               teamStats[awayTeam] = {
                 wins: 0,
                 losses: 0,
@@ -1838,19 +1911,23 @@ export default function Home() {
             }
             
             // Update stats
-            teamStats[homeTeam].totalPoints += homeScore;
-            teamStats[awayTeam].totalPoints += awayScore;
-            
-            if (winnerTeam === homeTeam) {
-              teamStats[homeTeam].wins += 1;
-              teamStats[awayTeam].losses += 1;
-            } else {
-              teamStats[awayTeam].wins += 1;
-              teamStats[homeTeam].losses += 1;
+            if (teamStats[homeTeam]) {
+              teamStats[homeTeam].totalPoints += homeScore;
+              if (winnerTeam === homeTeam) {
+                teamStats[homeTeam].wins += 1;
+              } else {
+                teamStats[homeTeam].losses += 1;
+              }
             }
             
-            console.log(`${homeTeamName} stats:`, teamStats[homeTeam]);
-            console.log(`${awayTeamName} stats:`, teamStats[awayTeam]);
+            if (teamStats[awayTeam]) {
+              teamStats[awayTeam].totalPoints += awayScore;
+              if (winnerTeam === awayTeam) {
+                teamStats[awayTeam].wins += 1;
+              } else {
+                teamStats[awayTeam].losses += 1;
+              }
+            }
           }
         });
         
@@ -1866,10 +1943,11 @@ export default function Home() {
           gender: stats.gender
         }));
         
-        // Sort by wins (descending), then by total points (descending)
+        // Sort by wins (descending), then by total points (descending), then alphabetically
         standingsArray.sort((a, b) => {
           if (b.wins !== a.wins) return b.wins - a.wins;
-          return b.totalPoints - a.totalPoints;
+          if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
+          return a.team.localeCompare(b.team);
         });
         
         // Update seed numbers after sorting
@@ -2366,6 +2444,10 @@ export default function Home() {
         // Exclude spotlight games from weekly schedule (skip first 3 games)
         const weeklyScheduleGamesData = allGames.slice(3);
         const allWeeklyGames = await Promise.all(weeklyScheduleGamesData.map(formatGameData));
+        
+        // Store all games for calendar filtering
+        const allFormattedGames = await Promise.all(allGames.map(formatGameData));
+        setAllScheduledGames(allFormattedGames);
         
         setDynamicSpotlightGames(spotlightGames);
         setWeeklyScheduleGames(allWeeklyGames);
@@ -3448,24 +3530,15 @@ export default function Home() {
                   </div>
                 )}
                 
-                {/* Social Media Share Icons */}
+                {/* Download Card Button */}
                 <div className="flex justify-end gap-3 mt-2">
                   <button
                     onClick={() => sharePlayerCard('ig')}
                     className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all"
-                    aria-label="Share to Instagram"
+                    aria-label="Download Player Card"
                   >
                     <svg className="w-4 h-4 text-white/60 hover:text-white" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
-                    </svg>
-                  </button>
-                  <button
-                    onClick={() => sharePlayerCard('fb')}
-                    className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all"
-                    aria-label="Share to Facebook"
-                  >
-                    <svg className="w-4 h-4 text-white/60 hover:text-white" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                      <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
                     </svg>
                   </button>
                 </div>
@@ -3539,19 +3612,190 @@ export default function Home() {
             id="schedule"
             eyebrow={sectionCopy.schedule.eyebrow}
             title={sectionCopy.schedule.title}
+            actions={
+              <div className="relative">
+                <button
+                  onClick={() => setShowCalendar(!showCalendar)}
+                  className="flex items-center justify-center w-10 h-10 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 text-white/70 hover:bg-white/10 hover:text-white hover:border-white/20 transition-all"
+                  aria-label={language === 'fr' ? 'Ouvrir le calendrier' : 'Open calendar'}
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                </button>
+                
+                {/* Calendar Dropdown */}
+                {showCalendar && (
+                  <div className="absolute right-0 top-full mt-2 z-50 bg-slate-900 border border-white/10 rounded-2xl p-4 shadow-xl min-w-[300px]">
+                    <div className="flex items-center justify-between mb-4">
+                      <button
+                        onClick={() => {
+                          const newDate = new Date(selectedScheduleDate || new Date());
+                          newDate.setMonth(newDate.getMonth() - 1);
+                          setSelectedScheduleDate(newDate);
+                        }}
+                        className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                        aria-label={language === 'fr' ? 'Mois précédent' : 'Previous month'}
+                      >
+                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                        </svg>
+                      </button>
+                      <span className="text-white font-semibold">
+                        {(selectedScheduleDate || new Date()).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { month: 'long', year: 'numeric' })}
+                      </span>
+                      <button
+                        onClick={() => {
+                          const newDate = new Date(selectedScheduleDate || new Date());
+                          newDate.setMonth(newDate.getMonth() + 1);
+                          setSelectedScheduleDate(newDate);
+                        }}
+                        className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                        aria-label={language === 'fr' ? 'Mois suivant' : 'Next month'}
+                      >
+                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+                    </div>
+                    
+                    {/* Day headers */}
+                    <div className="grid grid-cols-7 gap-1 mb-2">
+                      {(language === 'fr' ? ['L', 'M', 'M', 'J', 'V', 'S', 'D'] : ['S', 'M', 'T', 'W', 'T', 'F', 'S']).map((day, i) => (
+                        <div key={i} className="text-center text-xs text-slate-500 py-1">{day}</div>
+                      ))}
+                    </div>
+                    
+                    {/* Calendar days */}
+                    <div className="grid grid-cols-7 gap-1">
+                      {(() => {
+                        const currentMonth = selectedScheduleDate || new Date();
+                        const year = currentMonth.getFullYear();
+                        const month = currentMonth.getMonth();
+                        const firstDay = new Date(year, month, 1);
+                        const lastDay = new Date(year, month + 1, 0);
+                        const startDay = language === 'fr' ? (firstDay.getDay() + 6) % 7 : firstDay.getDay();
+                        const days = [];
+                        
+                        // Empty cells for days before month starts
+                        for (let i = 0; i < startDay; i++) {
+                          days.push(<div key={`empty-${i}`} className="p-2"></div>);
+                        }
+                        
+                        // Days of the month
+                        for (let day = 1; day <= lastDay.getDate(); day++) {
+                          const date = new Date(year, month, day);
+                          const isToday = new Date().toDateString() === date.toDateString();
+                          const isSelected = selectedScheduleDate?.toDateString() === date.toDateString();
+                          
+                          // Check if there are games on this day
+                          const hasGames = allScheduledGames.some(game => {
+                            const gameDate = new Date(game.dateTime || '');
+                            return gameDate.toDateString() === date.toDateString();
+                          });
+                          
+                          days.push(
+                            <button
+                              key={day}
+                              onClick={() => {
+                                setSelectedScheduleDate(date);
+                                setShowCalendar(false);
+                              }}
+                              className={`p-2 text-sm rounded-lg transition-all relative ${
+                                isSelected
+                                  ? 'bg-blue-500 text-white'
+                                  : isToday
+                                  ? 'bg-blue-500/30 text-blue-300'
+                                  : 'hover:bg-white/10 text-white'
+                              }`}
+                            >
+                              {day}
+                              {hasGames && !isSelected && (
+                                <div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-orange-500"></div>
+                              )}
+                            </button>
+                          );
+                        }
+                        
+                        return days;
+                      })()}
+                    </div>
+                    
+                    {/* Reset button */}
+                    <button
+                      onClick={() => {
+                        setSelectedScheduleDate(null);
+                        setShowCalendar(false);
+                      }}
+                      className="w-full mt-4 py-2 text-sm text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+                    >
+                      {language === 'fr' ? 'Voir cette semaine' : 'Show this week'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            }
           />
           <div className="relative">
             <div className="rounded-3xl border border-white/10 bg-slate-950/70 p-6">
+              {/* Selected date indicator */}
+              {selectedScheduleDate && (
+                <div className="mb-4 flex items-center justify-between">
+                  <span className="text-sm text-slate-400">
+                    {language === 'fr' ? 'Semaine du' : 'Week of'}{' '}
+                    <span className="text-white font-medium">
+                      {(() => {
+                        const weekStart = new Date(selectedScheduleDate);
+                        const day = weekStart.getDay();
+                        const diff = language === 'fr' ? (day === 0 ? -6 : 1 - day) : -day;
+                        weekStart.setDate(weekStart.getDate() + diff);
+                        return weekStart.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { month: 'short', day: 'numeric' });
+                      })()}
+                    </span>
+                  </span>
+                  <button
+                    onClick={() => setSelectedScheduleDate(null)}
+                    className="text-xs text-blue-400 hover:text-blue-300"
+                  >
+                    {language === 'fr' ? 'Retour à cette semaine' : 'Back to this week'}
+                  </button>
+                </div>
+              )}
+              
               <div 
                 ref={scheduleScrollRef}
                 className="space-y-4 max-h-[600px] md:max-h-[700px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-slate-900 scroll-smooth"
               >
-                {weeklyScheduleGames.length === 0 ? (
-                  <div className="py-8 text-center">
-                    <p className="text-slate-400">{language === 'fr' ? "Aucun match n'est encore prévu." : "No games scheduled yet."}</p>
-                  </div>
-                ) : (
-                  weeklyScheduleGames.map((game) => (
+                {(() => {
+                  // Filter games based on selected date's week
+                  const gamesToShow = selectedScheduleDate
+                    ? (() => {
+                        const weekStart = new Date(selectedScheduleDate);
+                        const day = weekStart.getDay();
+                        const diff = language === 'fr' ? (day === 0 ? -6 : 1 - day) : -day;
+                        weekStart.setDate(weekStart.getDate() + diff);
+                        weekStart.setHours(0, 0, 0, 0);
+                        
+                        const weekEnd = new Date(weekStart);
+                        weekEnd.setDate(weekStart.getDate() + 6);
+                        weekEnd.setHours(23, 59, 59, 999);
+                        
+                        return allScheduledGames.filter(game => {
+                          const gameDate = new Date(game.dateTime || '');
+                          return gameDate >= weekStart && gameDate <= weekEnd;
+                        });
+                      })()
+                    : weeklyScheduleGames;
+                  
+                  if (gamesToShow.length === 0) {
+                    return (
+                      <div className="py-8 text-center">
+                        <p className="text-slate-400">{language === 'fr' ? "Aucun match n'est prévu cette semaine." : "No games scheduled for this week."}</p>
+                      </div>
+                    );
+                  }
+                  
+                  return gamesToShow.map((game) => (
                   <div
                     key={game.id}
                     className="rounded-2xl border border-white/5 bg-black/30 p-3 sm:p-4"
@@ -3608,8 +3852,8 @@ export default function Home() {
                       </div>
                     </div>
                   </div>
-                ))
-              )}
+                ));
+              })()}
             </div>
           </div>
           

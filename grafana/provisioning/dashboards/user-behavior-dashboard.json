@@ -625,7 +625,17 @@
         "defaults": {
           "color": { "mode": "thresholds" },
           "mappings": [],
-          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null } ] },
+          "thresholds": { 
+            "mode": "absolute", 
+            "steps": [ 
+              { "color": "#0a0a0a", "value": null },
+              { "color": "#1e3a5f", "value": 1 },
+              { "color": "#2563eb", "value": 5 },
+              { "color": "#3b82f6", "value": 10 },
+              { "color": "#60a5fa", "value": 50 },
+              { "color": "#93c5fd", "value": 100 }
+            ] 
+          },
           "unit": "short"
         },
         "overrides": []
@@ -633,35 +643,101 @@
       "gridPos": { "h": 10, "w": 24, "x": 0, "y": 70 },
       "id": 21,
       "options": {
-        "basemap": { "type": "carto" },
-        "controls": { "mouseWheelZoom": true },
-        "view": { "lat": 10, "lon": 0, "zoom": 1.1 },
+        "basemap": { 
+          "config": {},
+          "name": "Layer 0",
+          "type": "dark" 
+        },
+        "controls": { 
+          "mouseWheelZoom": true,
+          "showAttribution": true,
+          "showDebug": false,
+          "showMeasure": false,
+          "showScale": false,
+          "showZoom": true
+        },
         "layers": [
           {
-            "type": "choropleth",
-            "name": "Pageviews by country",
             "config": {
-              "location": { "mode": "country" },
-              "dataLayer": {
-                "type": "table",
-                "labelField": "country",
-                "valueField": "Value"
-              },
+              "showLegend": true,
               "style": {
-                "colorMode": "palette-classic",
-                "opacity": 0.8,
-                "palette": "Turbo"
+                "color": {
+                  "field": "Value",
+                  "fixed": "dark-green"
+                },
+                "opacity": 0.6,
+                "rotation": {
+                  "fixed": 0,
+                  "max": 360,
+                  "min": -360,
+                  "mode": "mod"
+                },
+                "size": {
+                  "field": "Value",
+                  "fixed": 5,
+                  "max": 30,
+                  "min": 5
+                },
+                "symbol": {
+                  "fixed": "img/icons/marker/circle.svg",
+                  "mode": "fixed"
+                },
+                "symbolAlign": {
+                  "horizontal": "center",
+                  "vertical": "center"
+                },
+                "textConfig": {
+                  "fontSize": 12,
+                  "offsetX": 0,
+                  "offsetY": 0,
+                  "textAlign": "center",
+                  "textBaseline": "middle"
+                }
               }
-            }
+            },
+            "location": {
+              "lookup": "country",
+              "mode": "lookup"
+            },
+            "name": "Pageviews",
+            "tooltip": true,
+            "type": "markers"
           }
-        ]
+        ],
+        "tooltip": {
+          "mode": "details"
+        },
+        "view": { 
+          "allLayers": true,
+          "id": "zero",
+          "lat": 0, 
+          "lon": 0, 
+          "zoom": 1.5 
+        }
       },
       "targets": [
-        { "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "expr": "liprobakin_pageviews_country_total", "format": "table", "instant": true, "legendFormat": "__auto", "refId": "A" }
+        { 
+          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, 
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "liprobakin_pageviews_country_total", 
+          "format": "table", 
+          "instant": true, 
+          "legendFormat": "__auto", 
+          "range": false,
+          "refId": "A" 
+        }
       ],
       "title": "🌍 Pageviews by country (last scrape)",
       "transformations": [
-        { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true }, "renameByName": { "Value": "Value" } } }
+        { 
+          "id": "organize", 
+          "options": { 
+            "excludeByName": { "Time": true, "__name__": true, "instance": true, "job": true }, 
+            "indexByName": {},
+            "renameByName": { "country": "country", "Value": "Value" } 
+          } 
+        }
       ],
       "type": "geomap"
     }

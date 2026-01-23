@@ -1068,9 +1068,6 @@ export default function Home() {
   const [gameCountdown, setGameCountdown] = useState<{ days: number; hours: number; minutes: number; seconds: number; isGameDay: boolean } | null>(null);
   const [liveGames, setLiveGames] = useState<EnhancedMatchup[]>([]);
   const [showProfilePopup, setShowProfilePopup] = useState(false);
-  const [showShareCard, setShowShareCard] = useState<'ig' | 'fb' | null>(null);
-  const [shareCardImage, setShareCardImage] = useState<string | null>(null);
-  const shareCardRef = useRef<HTMLDivElement>(null);
   const [scheduleStartIndex, setScheduleStartIndex] = useState(0);
   const scheduleScrollRef = useRef<HTMLDivElement>(null);
   const teamsScrollRef = useRef<HTMLDivElement>(null);
@@ -1094,50 +1091,252 @@ export default function Home() {
   const [playersGender, setPlayersGender] = useState<Gender>("men");
   const [teamSearch, setTeamSearch] = useState<string>("");
 
-  // Generate shareable player card image
-  const generateShareCard = useCallback(async (platform: 'ig' | 'fb') => {
-    setShowShareCard(platform);
-    setShareCardImage(null);
+  // Share player card using native share API
+  const sharePlayerCard = useCallback(async (platform: 'ig' | 'fb') => {
+    if (!playerData) return;
     
-    // Wait for modal and card to render
-    await new Promise(resolve => setTimeout(resolve, 300));
+    // Create canvas for the share image
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
     
-    if (shareCardRef.current) {
-      try {
-        // Temporarily make the card visible for capture
-        const originalStyle = shareCardRef.current.style.cssText;
-        shareCardRef.current.style.cssText = 'position: fixed; left: 0; top: 0; z-index: -1;';
+    // Set dimensions (IG story or FB post)
+    canvas.width = platform === 'ig' ? 1080 : 1200;
+    canvas.height = platform === 'ig' ? 1920 : 630;
+    
+    // Background gradient
+    const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+    gradient.addColorStop(0, '#0f172a');
+    gradient.addColorStop(0.5, '#1e293b');
+    gradient.addColorStop(1, '#0f172a');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Add accent circles
+    ctx.beginPath();
+    ctx.arc(100, 100, 200, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(245, 158, 11, 0.15)';
+    ctx.fill();
+    
+    ctx.beginPath();
+    ctx.arc(canvas.width - 100, canvas.height - 100, 200, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(249, 115, 22, 0.15)';
+    ctx.fill();
+    
+    // Load player image
+    const loadImage = (src: string): Promise<HTMLImageElement> => {
+      return new Promise((resolve, reject) => {
+        const img = document.createElement('img');
+        img.crossOrigin = 'anonymous';
+        img.onload = () => resolve(img);
+        img.onerror = () => reject();
+        img.src = src;
+      });
+    };
+    
+    try {
+      const playerImg = await loadImage(playerData.headshot || '/players/placeholder.jpg');
+      
+      if (platform === 'ig') {
+        // Instagram Story Layout
+        // Logo
+        ctx.fillStyle = '#f59e0b';
+        ctx.font = 'bold 48px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText('LIPROBAKIN', canvas.width / 2, 120);
         
-        const canvas = await html2canvas(shareCardRef.current, {
-          backgroundColor: '#0f172a',
-          scale: 1,
-          useCORS: true,
-          allowTaint: true,
-          logging: false,
-          imageTimeout: 5000,
+        // Player photo (circular)
+        const photoSize = 400;
+        const photoX = (canvas.width - photoSize) / 2;
+        const photoY = 250;
+        
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(photoX + photoSize / 2, photoY + photoSize / 2, photoSize / 2, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.clip();
+        ctx.drawImage(playerImg, photoX, photoY, photoSize, photoSize);
+        ctx.restore();
+        
+        // Photo border
+        ctx.beginPath();
+        ctx.arc(photoX + photoSize / 2, photoY + photoSize / 2, photoSize / 2 + 8, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(245, 158, 11, 0.5)';
+        ctx.lineWidth = 16;
+        ctx.stroke();
+        
+        // Jersey number badge
+        ctx.fillStyle = '#f59e0b';
+        ctx.beginPath();
+        ctx.roundRect(canvas.width / 2 - 80, photoY + photoSize - 30, 160, 80, 20);
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 56px system-ui';
+        ctx.fillText(`#${playerData.number || '00'}`, canvas.width / 2, photoY + photoSize + 30);
+        
+        // Player name
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 72px system-ui';
+        ctx.fillText(playerData.name, canvas.width / 2, photoY + photoSize + 160);
+        
+        // Team
+        ctx.fillStyle = '#f59e0b';
+        ctx.font = 'bold 36px system-ui';
+        ctx.fillText(userProfile?.teamName || 'FEBACO', canvas.width / 2, photoY + photoSize + 220);
+        
+        // Stats
+        const stats = [
+          { label: 'PTS', value: playerData.stats?.pts || '0' },
+          { label: 'REB', value: playerData.stats?.reb || '0' },
+          { label: 'AST', value: playerData.stats?.ast || '0' },
+        ];
+        const statY = photoY + photoSize + 320;
+        const statWidth = 280;
+        const startX = (canvas.width - statWidth * 3) / 2;
+        
+        stats.forEach((stat, i) => {
+          const x = startX + i * statWidth + statWidth / 2;
+          // Stat box
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+          ctx.beginPath();
+          ctx.roundRect(startX + i * statWidth + 20, statY, statWidth - 40, 180, 20);
+          ctx.fill();
+          // Value
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 80px system-ui';
+          ctx.fillText(Number(stat.value).toFixed(1), x, statY + 90);
+          // Label
+          ctx.fillStyle = '#f59e0b';
+          ctx.font = 'bold 28px system-ui';
+          ctx.fillText(stat.label, x, statY + 140);
         });
         
-        // Restore original position
-        shareCardRef.current.style.cssText = originalStyle;
+        // Website
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.font = '28px system-ui';
+        ctx.fillText('liprobakin.com', canvas.width / 2, canvas.height - 80);
+      } else {
+        // Facebook Layout (horizontal)
+        const photoSize = 350;
+        const photoX = 80;
+        const photoY = (canvas.height - photoSize) / 2;
         
-        const dataUrl = canvas.toDataURL('image/png');
-        setShareCardImage(dataUrl);
-      } catch (error) {
-        console.error('Error generating share card:', error);
-        // Show fallback - at least display the card for screenshot
-        setShareCardImage('error');
+        // Player photo
+        ctx.save();
+        ctx.beginPath();
+        ctx.roundRect(photoX, photoY, photoSize, photoSize, 30);
+        ctx.closePath();
+        ctx.clip();
+        ctx.drawImage(playerImg, photoX, photoY, photoSize, photoSize);
+        ctx.restore();
+        
+        // Photo border
+        ctx.strokeStyle = 'rgba(245, 158, 11, 0.5)';
+        ctx.lineWidth = 8;
+        ctx.beginPath();
+        ctx.roundRect(photoX, photoY, photoSize, photoSize, 30);
+        ctx.stroke();
+        
+        // Jersey badge
+        ctx.fillStyle = '#f59e0b';
+        ctx.beginPath();
+        ctx.roundRect(photoX + photoSize - 60, photoY + photoSize - 60, 100, 60, 15);
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 32px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(`#${playerData.number || '00'}`, photoX + photoSize - 10, photoY + photoSize - 20);
+        
+        // Right side content
+        const textX = photoX + photoSize + 80;
+        ctx.textAlign = 'left';
+        
+        // Logo
+        ctx.fillStyle = '#f59e0b';
+        ctx.font = 'bold 32px system-ui';
+        ctx.fillText('LIPROBAKIN', textX, photoY + 40);
+        
+        // Name
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 56px system-ui';
+        ctx.fillText(playerData.name, textX, photoY + 110);
+        
+        // Team
+        ctx.fillStyle = '#f59e0b';
+        ctx.font = 'bold 28px system-ui';
+        ctx.fillText(userProfile?.teamName || 'FEBACO', textX, photoY + 160);
+        
+        // Stats row
+        const stats = [
+          { label: 'PTS', value: playerData.stats?.pts || '0' },
+          { label: 'REB', value: playerData.stats?.reb || '0' },
+          { label: 'AST', value: playerData.stats?.ast || '0' },
+          { label: 'STL', value: playerData.stats?.stl || '0' },
+          { label: 'BLK', value: playerData.stats?.blk || '0' },
+        ];
+        const statStartY = photoY + 220;
+        const statBoxWidth = 120;
+        
+        stats.forEach((stat, i) => {
+          const x = textX + i * (statBoxWidth + 15);
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+          ctx.beginPath();
+          ctx.roundRect(x, statStartY, statBoxWidth, 100, 15);
+          ctx.fill();
+          ctx.textAlign = 'center';
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 40px system-ui';
+          ctx.fillText(Number(stat.value).toFixed(1), x + statBoxWidth / 2, statStartY + 50);
+          ctx.fillStyle = '#f59e0b';
+          ctx.font = 'bold 18px system-ui';
+          ctx.fillText(stat.label, x + statBoxWidth / 2, statStartY + 80);
+        });
+        
+        // Website
+        ctx.textAlign = 'right';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.font = '24px system-ui';
+        ctx.fillText('liprobakin.com', canvas.width - 40, canvas.height - 30);
       }
+      
+      // Convert to blob and share
+      canvas.toBlob(async (blob) => {
+        if (!blob) return;
+        
+        const file = new File([blob], `${playerData.name.replace(/\s+/g, '_')}_stats.png`, { type: 'image/png' });
+        
+        // Try native share
+        if (navigator.share && navigator.canShare?.({ files: [file] })) {
+          try {
+            await navigator.share({
+              files: [file],
+              title: `${playerData.name} - Stats`,
+              text: `Check out ${playerData.name}'s stats on Liprobakin!`,
+            });
+          } catch (err) {
+            // User cancelled or error - download instead
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = file.name;
+            a.click();
+            URL.revokeObjectURL(url);
+          }
+        } else {
+          // Fallback - download the image
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = file.name;
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+      }, 'image/png');
+      
+    } catch (error) {
+      console.error('Error creating share card:', error);
     }
-  }, []);
-
-  const downloadShareCard = useCallback(() => {
-    if (shareCardImage && playerData) {
-      const link = document.createElement('a');
-      link.download = `${playerData.name.replace(/\s+/g, '_')}_stats.png`;
-      link.href = shareCardImage;
-      link.click();
-    }
-  }, [shareCardImage, playerData]);
+  }, [playerData, userProfile]);
 
   // Removed static roster - RosterModal now fetches from Firestore
   const genderPlayers = playersGender === "men" ? spotlightPlayers : spotlightPlayersWomen;
@@ -3246,10 +3445,10 @@ export default function Home() {
                   </div>
                 )}
                 
-                {/* Social Media Icons - Bottom right */}
+                {/* Social Media Share Icons */}
                 <div className="flex justify-end gap-3 mt-2">
                   <button
-                    onClick={() => generateShareCard('ig')}
+                    onClick={() => sharePlayerCard('ig')}
                     className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all"
                     aria-label="Share to Instagram"
                   >
@@ -3258,7 +3457,7 @@ export default function Home() {
                     </svg>
                   </button>
                   <button
-                    onClick={() => generateShareCard('fb')}
+                    onClick={() => sharePlayerCard('fb')}
                     className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all"
                     aria-label="Share to Facebook"
                   >
@@ -3271,211 +3470,6 @@ export default function Home() {
             )}
           </div>
         </section>
-      )}
-
-      {/* Share Card Modal */}
-      {showShareCard && playerData && (
-        <div 
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 overflow-y-auto"
-          onClick={() => {
-            setShowShareCard(null);
-            setShareCardImage(null);
-          }}
-        >
-          <div 
-            className="relative w-full max-w-sm my-8"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Close button */}
-            <button
-              onClick={() => {
-                setShowShareCard(null);
-                setShareCardImage(null);
-              }}
-              className="absolute -top-10 right-0 text-white/60 hover:text-white transition-colors z-10"
-              aria-label="Close"
-            >
-              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-
-            {/* Share Card Preview - Always visible */}
-            <div 
-              ref={shareCardRef}
-              className={`w-full rounded-2xl overflow-hidden shadow-2xl ${showShareCard === 'ig' ? 'aspect-[9/16]' : 'aspect-[1.91/1]'}`}
-              style={{
-                background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)',
-              }}
-            >
-              {/* Background pattern */}
-              <div className="absolute inset-0 opacity-10 pointer-events-none">
-                <div className="absolute inset-0" style={{
-                  backgroundImage: `url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.3'%3E%3Cpath d='M20 20h20v20H20V20zm0-20h20v20H20V0zM0 20h20v20H0V20zM0 0h20v20H0V0z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-                }} />
-              </div>
-
-              {/* Gradient accents */}
-              <div className="absolute top-0 left-0 w-32 h-32 bg-amber-500/20 rounded-full blur-3xl" />
-              <div className="absolute bottom-0 right-0 w-32 h-32 bg-orange-500/20 rounded-full blur-3xl" />
-
-              {showShareCard === 'ig' ? (
-                /* Instagram Story Layout (9:16) */
-                <div className="relative z-10 flex flex-col items-center justify-center h-full px-4 py-6">
-                  {/* Liprobakin logo at top */}
-                  <div className="absolute top-4 left-0 right-0 flex justify-center">
-                    <div className="text-lg font-bold bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent">
-                      LIPROBAKIN
-                    </div>
-                  </div>
-
-                  {/* Player photo */}
-                  <div className="relative mb-3 mt-8">
-                    <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-amber-500/50 shadow-xl shadow-amber-500/20">
-                      <img 
-                        src={playerData.headshot || '/players/placeholder.jpg'}
-                        alt={playerData.name}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    {/* Jersey number badge */}
-                    <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-lg font-black px-3 py-0.5 rounded-lg shadow-lg">
-                      #{playerData.number || '00'}
-                    </div>
-                  </div>
-
-                  {/* Player name */}
-                  <h2 className="text-xl font-black text-white text-center mt-4 mb-1 tracking-tight">
-                    {playerData.name}
-                  </h2>
-
-                  {/* Team name */}
-                  <p className="text-sm text-amber-400 font-medium mb-4">
-                    {userProfile?.teamName || 'FEBACO'}
-                  </p>
-
-                  {/* Stats grid */}
-                  <div className="grid grid-cols-3 gap-2 w-full">
-                    {[
-                      { label: 'PTS', value: playerData.stats?.pts || 0 },
-                      { label: 'REB', value: playerData.stats?.reb || 0 },
-                      { label: 'AST', value: playerData.stats?.ast || 0 },
-                    ].map((stat, i) => (
-                      <div key={i} className="bg-white/10 backdrop-blur-sm rounded-xl p-2 text-center border border-white/10">
-                        <div className="text-2xl font-black text-white">
-                          {Number(stat.value).toFixed(1)}
-                        </div>
-                        <div className="text-[10px] font-bold text-amber-400">{stat.label}</div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Secondary stats */}
-                  <div className="grid grid-cols-2 gap-2 w-full max-w-[200px] mt-2">
-                    {[
-                      { label: 'STL', value: playerData.stats?.stl || 0 },
-                      { label: 'BLK', value: playerData.stats?.blk || 0 },
-                    ].map((stat, i) => (
-                      <div key={i} className="bg-white/10 backdrop-blur-sm rounded-lg p-1.5 text-center border border-white/10">
-                        <div className="text-lg font-black text-white">
-                          {Number(stat.value).toFixed(1)}
-                        </div>
-                        <div className="text-[9px] font-bold text-amber-400">{stat.label}</div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Bottom branding */}
-                  <div className="absolute bottom-3 left-0 right-0 flex flex-col items-center">
-                    <div className="text-white/30 text-xs">liprobakin.com</div>
-                  </div>
-                </div>
-              ) : (
-                /* Facebook Layout (1.91:1) */
-                <div className="relative z-10 flex items-center h-full px-4 py-3 gap-4">
-                  {/* Left side - Player photo */}
-                  <div className="flex-shrink-0">
-                    <div className="relative">
-                      <div className="w-20 h-20 rounded-xl overflow-hidden border-2 border-amber-500/50 shadow-lg">
-                        <img 
-                          src={playerData.headshot || '/players/placeholder.jpg'}
-                          alt={playerData.name}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                      {/* Jersey number badge */}
-                      <div className="absolute -bottom-1 -right-1 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-black px-1.5 py-0.5 rounded-md shadow">
-                        #{playerData.number || '00'}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Right side - Info */}
-                  <div className="flex-1 flex flex-col justify-center min-w-0">
-                    {/* Logo */}
-                    <div className="text-xs font-bold bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent mb-0.5">
-                      LIPROBAKIN
-                    </div>
-
-                    {/* Player name */}
-                    <h2 className="text-base font-black text-white truncate">
-                      {playerData.name}
-                    </h2>
-
-                    {/* Team */}
-                    <p className="text-xs text-amber-400 font-medium mb-2">
-                      {userProfile?.teamName || 'FEBACO'}
-                    </p>
-
-                    {/* Stats row */}
-                    <div className="flex gap-1">
-                      {[
-                        { label: 'PTS', value: playerData.stats?.pts || 0 },
-                        { label: 'REB', value: playerData.stats?.reb || 0 },
-                        { label: 'AST', value: playerData.stats?.ast || 0 },
-                        { label: 'STL', value: playerData.stats?.stl || 0 },
-                        { label: 'BLK', value: playerData.stats?.blk || 0 },
-                      ].map((stat, i) => (
-                        <div key={i} className="bg-white/10 backdrop-blur-sm rounded-lg px-1.5 py-1 text-center border border-white/10">
-                          <div className="text-sm font-black text-white">
-                            {Number(stat.value).toFixed(1)}
-                          </div>
-                          <div className="text-[8px] font-bold text-amber-400">{stat.label}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Action buttons */}
-            <div className="mt-4 space-y-3">
-              {shareCardImage && shareCardImage !== 'error' ? (
-                <button
-                  onClick={downloadShareCard}
-                  className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold py-3 px-6 rounded-xl hover:from-amber-600 hover:to-orange-600 transition-all"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                  </svg>
-                  {language === 'fr' ? 'Télécharger' : 'Download'}
-                </button>
-              ) : (
-                <div className="w-full flex items-center justify-center gap-2 bg-white/10 text-white/60 font-semibold py-3 px-6 rounded-xl">
-                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-white/20 border-t-amber-500"></div>
-                  {language === 'fr' ? 'Génération...' : 'Generating...'}
-                </div>
-              )}
-              <p className="text-center text-white/50 text-sm">
-                {showShareCard === 'ig' 
-                  ? (language === 'fr' ? 'Téléchargez et partagez sur vos stories !' : 'Download and share on your stories!')
-                  : (language === 'fr' ? 'Téléchargez et partagez sur Facebook !' : 'Download and share on Facebook!')
-                }
-              </p>
-            </div>
-          </div>
-        </div>
       )}
 
       <main className="mx-auto max-w-6xl space-y-20 px-4 pb-20 pt-12 md:px-8">

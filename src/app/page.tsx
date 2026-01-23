@@ -1097,23 +1097,37 @@ export default function Home() {
   // Generate shareable player card image
   const generateShareCard = useCallback(async (platform: 'ig' | 'fb') => {
     setShowShareCard(platform);
-    // Wait for modal to render
-    setTimeout(async () => {
-      if (shareCardRef.current) {
-        try {
-          const canvas = await html2canvas(shareCardRef.current, {
-            backgroundColor: '#0f172a',
-            scale: 2,
-            useCORS: true,
-            allowTaint: true,
-          });
-          const dataUrl = canvas.toDataURL('image/png');
-          setShareCardImage(dataUrl);
-        } catch (error) {
-          console.error('Error generating share card:', error);
-        }
+    setShareCardImage(null);
+    
+    // Wait for modal and card to render
+    await new Promise(resolve => setTimeout(resolve, 300));
+    
+    if (shareCardRef.current) {
+      try {
+        // Temporarily make the card visible for capture
+        const originalStyle = shareCardRef.current.style.cssText;
+        shareCardRef.current.style.cssText = 'position: fixed; left: 0; top: 0; z-index: -1;';
+        
+        const canvas = await html2canvas(shareCardRef.current, {
+          backgroundColor: '#0f172a',
+          scale: 1,
+          useCORS: true,
+          allowTaint: true,
+          logging: false,
+          imageTimeout: 5000,
+        });
+        
+        // Restore original position
+        shareCardRef.current.style.cssText = originalStyle;
+        
+        const dataUrl = canvas.toDataURL('image/png');
+        setShareCardImage(dataUrl);
+      } catch (error) {
+        console.error('Error generating share card:', error);
+        // Show fallback - at least display the card for screenshot
+        setShareCardImage('error');
       }
-    }, 100);
+    }
   }, []);
 
   const downloadShareCard = useCallback(() => {
@@ -3260,16 +3274,16 @@ export default function Home() {
       )}
 
       {/* Share Card Modal */}
-      {showShareCard && (
+      {showShareCard && selectedPlayer && (
         <div 
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 overflow-y-auto"
           onClick={() => {
             setShowShareCard(null);
             setShareCardImage(null);
           }}
         >
           <div 
-            className="relative max-w-md w-full"
+            className="relative w-full max-w-sm my-8"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Close button */}
@@ -3278,210 +3292,188 @@ export default function Home() {
                 setShowShareCard(null);
                 setShareCardImage(null);
               }}
-              className="absolute -top-12 right-0 text-white/60 hover:text-white transition-colors"
+              className="absolute -top-10 right-0 text-white/60 hover:text-white transition-colors z-10"
+              aria-label="Close"
             >
               <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
 
-            {/* Generated image preview */}
-            {shareCardImage ? (
-              <div className="space-y-4">
-                <img 
-                  src={shareCardImage} 
-                  alt="Share card" 
-                  className="w-full rounded-2xl shadow-2xl"
-                />
-                <div className="flex gap-3">
-                  <button
-                    onClick={downloadShareCard}
-                    className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold py-3 px-6 rounded-xl hover:from-amber-600 hover:to-orange-600 transition-all"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                    </svg>
-                    {language === 'fr' ? 'Télécharger' : 'Download'}
-                  </button>
-                </div>
-                <p className="text-center text-white/50 text-sm">
-                  {showShareCard === 'ig' 
-                    ? (language === 'fr' ? 'Parfait pour les stories Instagram !' : 'Perfect for Instagram stories!')
-                    : (language === 'fr' ? 'Parfait pour Facebook !' : 'Perfect for Facebook!')
-                  }
-                </p>
+            {/* Share Card Preview - Always visible */}
+            <div 
+              ref={shareCardRef}
+              className={`w-full rounded-2xl overflow-hidden shadow-2xl ${showShareCard === 'ig' ? 'aspect-[9/16]' : 'aspect-[1.91/1]'}`}
+              style={{
+                background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)',
+              }}
+            >
+              {/* Background pattern */}
+              <div className="absolute inset-0 opacity-10 pointer-events-none">
+                <div className="absolute inset-0" style={{
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.3'%3E%3Cpath d='M20 20h20v20H20V20zm0-20h20v20H20V0zM0 20h20v20H0V20zM0 0h20v20H0V0z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+                }} />
               </div>
-            ) : (
-              <div className="flex items-center justify-center h-64 bg-slate-900 rounded-2xl">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500"></div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
-      {/* Hidden Share Card Template - captured by html2canvas */}
-      {showShareCard && selectedPlayer && (
-        <div 
-          ref={shareCardRef}
-          className="fixed -left-[9999px] top-0"
-          style={{ 
-            width: showShareCard === 'ig' ? '1080px' : '1200px',
-            height: showShareCard === 'ig' ? '1920px' : '630px',
-          }}
-        >
-          <div 
-            className="w-full h-full flex flex-col items-center justify-center relative overflow-hidden"
-            style={{
-              background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)',
-            }}
-          >
-            {/* Background pattern */}
-            <div className="absolute inset-0 opacity-10">
-              <div className="absolute inset-0" style={{
-                backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-              }} />
-            </div>
+              {/* Gradient accents */}
+              <div className="absolute top-0 left-0 w-32 h-32 bg-amber-500/20 rounded-full blur-3xl" />
+              <div className="absolute bottom-0 right-0 w-32 h-32 bg-orange-500/20 rounded-full blur-3xl" />
 
-            {/* Gradient accents */}
-            <div className="absolute top-0 left-0 w-96 h-96 bg-amber-500/20 rounded-full blur-3xl" />
-            <div className="absolute bottom-0 right-0 w-96 h-96 bg-orange-500/20 rounded-full blur-3xl" />
-
-            {showShareCard === 'ig' ? (
-              /* Instagram Story Layout (9:16) */
-              <div className="relative z-10 flex flex-col items-center justify-center h-full px-12 py-16">
-                {/* Liprobakin logo at top */}
-                <div className="absolute top-16 left-0 right-0 flex justify-center">
-                  <div className="text-4xl font-bold bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent">
-                    LIPROBAKIN
-                  </div>
-                </div>
-
-                {/* Player photo */}
-                <div className="relative mb-8">
-                  <div className="w-80 h-80 rounded-full overflow-hidden border-8 border-amber-500/50 shadow-2xl shadow-amber-500/20">
-                    <img 
-                      src={selectedPlayer.photo || '/players/placeholder.jpg'}
-                      alt={selectedPlayer.name}
-                      className="w-full h-full object-cover"
-                      crossOrigin="anonymous"
-                    />
-                  </div>
-                  {/* Jersey number badge */}
-                  <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-5xl font-black px-8 py-3 rounded-2xl shadow-xl">
-                    #{selectedPlayer.number || '00'}
-                  </div>
-                </div>
-
-                {/* Player name */}
-                <h2 className="text-6xl font-black text-white text-center mt-8 mb-2 tracking-tight">
-                  {selectedPlayer.name}
-                </h2>
-
-                {/* Team name */}
-                <p className="text-3xl text-amber-400 font-medium mb-12">
-                  {selectedPlayer.team || 'FEBACO'}
-                </p>
-
-                {/* Stats grid */}
-                <div className="grid grid-cols-3 gap-6 w-full max-w-2xl">
-                  {[
-                    { label: 'PTS', value: selectedPlayer.leaderboard?.pts || 0 },
-                    { label: 'REB', value: selectedPlayer.leaderboard?.reb || 0 },
-                    { label: 'AST', value: selectedPlayer.leaderboard?.ast || 0 },
-                  ].map((stat, i) => (
-                    <div key={i} className="bg-white/5 backdrop-blur-sm rounded-3xl p-8 text-center border border-white/10">
-                      <div className="text-7xl font-black text-white mb-2">
-                        {Number(stat.value).toFixed(1)}
-                      </div>
-                      <div className="text-2xl font-bold text-amber-400">{stat.label}</div>
+              {showShareCard === 'ig' ? (
+                /* Instagram Story Layout (9:16) */
+                <div className="relative z-10 flex flex-col items-center justify-center h-full px-4 py-6">
+                  {/* Liprobakin logo at top */}
+                  <div className="absolute top-4 left-0 right-0 flex justify-center">
+                    <div className="text-lg font-bold bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent">
+                      LIPROBAKIN
                     </div>
-                  ))}
-                </div>
+                  </div>
 
-                {/* Secondary stats */}
-                <div className="grid grid-cols-2 gap-6 w-full max-w-md mt-6">
-                  {[
-                    { label: 'STL', value: selectedPlayer.leaderboard?.stl || 0 },
-                    { label: 'BLK', value: selectedPlayer.leaderboard?.blk || 0 },
-                  ].map((stat, i) => (
-                    <div key={i} className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 text-center border border-white/10">
-                      <div className="text-5xl font-black text-white mb-1">
-                        {Number(stat.value).toFixed(1)}
-                      </div>
-                      <div className="text-xl font-bold text-amber-400">{stat.label}</div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Bottom branding */}
-                <div className="absolute bottom-16 left-0 right-0 flex flex-col items-center gap-2">
-                  <div className="text-white/40 text-xl">liprobakin.com</div>
-                </div>
-              </div>
-            ) : (
-              /* Facebook Layout (1.91:1) */
-              <div className="relative z-10 flex items-center h-full px-16 py-12 gap-12">
-                {/* Left side - Player photo */}
-                <div className="flex-shrink-0">
-                  <div className="relative">
-                    <div className="w-72 h-72 rounded-3xl overflow-hidden border-4 border-amber-500/50 shadow-2xl">
+                  {/* Player photo */}
+                  <div className="relative mb-3 mt-8">
+                    <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-amber-500/50 shadow-xl shadow-amber-500/20">
                       <img 
                         src={selectedPlayer.photo || '/players/placeholder.jpg'}
                         alt={selectedPlayer.name}
                         className="w-full h-full object-cover"
-                        crossOrigin="anonymous"
                       />
                     </div>
                     {/* Jersey number badge */}
-                    <div className="absolute -bottom-4 -right-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-4xl font-black px-6 py-2 rounded-xl shadow-xl">
+                    <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-lg font-black px-3 py-0.5 rounded-lg shadow-lg">
                       #{selectedPlayer.number || '00'}
                     </div>
                   </div>
-                </div>
-
-                {/* Right side - Info */}
-                <div className="flex-1 flex flex-col justify-center">
-                  {/* Logo */}
-                  <div className="text-3xl font-bold bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent mb-4">
-                    LIPROBAKIN
-                  </div>
 
                   {/* Player name */}
-                  <h2 className="text-5xl font-black text-white mb-2">
+                  <h2 className="text-xl font-black text-white text-center mt-4 mb-1 tracking-tight">
                     {selectedPlayer.name}
                   </h2>
 
-                  {/* Team */}
-                  <p className="text-2xl text-amber-400 font-medium mb-8">
+                  {/* Team name */}
+                  <p className="text-sm text-amber-400 font-medium mb-4">
                     {selectedPlayer.team || 'FEBACO'}
                   </p>
 
-                  {/* Stats row */}
-                  <div className="flex gap-4">
+                  {/* Stats grid */}
+                  <div className="grid grid-cols-3 gap-2 w-full">
                     {[
                       { label: 'PTS', value: selectedPlayer.leaderboard?.pts || 0 },
                       { label: 'REB', value: selectedPlayer.leaderboard?.reb || 0 },
                       { label: 'AST', value: selectedPlayer.leaderboard?.ast || 0 },
-                      { label: 'STL', value: selectedPlayer.leaderboard?.stl || 0 },
-                      { label: 'BLK', value: selectedPlayer.leaderboard?.blk || 0 },
                     ].map((stat, i) => (
-                      <div key={i} className="bg-white/5 backdrop-blur-sm rounded-2xl px-6 py-4 text-center border border-white/10">
-                        <div className="text-4xl font-black text-white">
+                      <div key={i} className="bg-white/10 backdrop-blur-sm rounded-xl p-2 text-center border border-white/10">
+                        <div className="text-2xl font-black text-white">
                           {Number(stat.value).toFixed(1)}
                         </div>
-                        <div className="text-lg font-bold text-amber-400">{stat.label}</div>
+                        <div className="text-[10px] font-bold text-amber-400">{stat.label}</div>
                       </div>
                     ))}
                   </div>
-                </div>
 
-                {/* Website watermark */}
-                <div className="absolute bottom-6 right-8 text-white/30 text-lg">
-                  liprobakin.com
+                  {/* Secondary stats */}
+                  <div className="grid grid-cols-2 gap-2 w-full max-w-[200px] mt-2">
+                    {[
+                      { label: 'STL', value: selectedPlayer.leaderboard?.stl || 0 },
+                      { label: 'BLK', value: selectedPlayer.leaderboard?.blk || 0 },
+                    ].map((stat, i) => (
+                      <div key={i} className="bg-white/10 backdrop-blur-sm rounded-lg p-1.5 text-center border border-white/10">
+                        <div className="text-lg font-black text-white">
+                          {Number(stat.value).toFixed(1)}
+                        </div>
+                        <div className="text-[9px] font-bold text-amber-400">{stat.label}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Bottom branding */}
+                  <div className="absolute bottom-3 left-0 right-0 flex flex-col items-center">
+                    <div className="text-white/30 text-xs">liprobakin.com</div>
+                  </div>
                 </div>
-              </div>
-            )}
+              ) : (
+                /* Facebook Layout (1.91:1) */
+                <div className="relative z-10 flex items-center h-full px-4 py-3 gap-4">
+                  {/* Left side - Player photo */}
+                  <div className="flex-shrink-0">
+                    <div className="relative">
+                      <div className="w-20 h-20 rounded-xl overflow-hidden border-2 border-amber-500/50 shadow-lg">
+                        <img 
+                          src={selectedPlayer.photo || '/players/placeholder.jpg'}
+                          alt={selectedPlayer.name}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      {/* Jersey number badge */}
+                      <div className="absolute -bottom-1 -right-1 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-black px-1.5 py-0.5 rounded-md shadow">
+                        #{selectedPlayer.number || '00'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right side - Info */}
+                  <div className="flex-1 flex flex-col justify-center min-w-0">
+                    {/* Logo */}
+                    <div className="text-xs font-bold bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent mb-0.5">
+                      LIPROBAKIN
+                    </div>
+
+                    {/* Player name */}
+                    <h2 className="text-base font-black text-white truncate">
+                      {selectedPlayer.name}
+                    </h2>
+
+                    {/* Team */}
+                    <p className="text-xs text-amber-400 font-medium mb-2">
+                      {selectedPlayer.team || 'FEBACO'}
+                    </p>
+
+                    {/* Stats row */}
+                    <div className="flex gap-1">
+                      {[
+                        { label: 'PTS', value: selectedPlayer.leaderboard?.pts || 0 },
+                        { label: 'REB', value: selectedPlayer.leaderboard?.reb || 0 },
+                        { label: 'AST', value: selectedPlayer.leaderboard?.ast || 0 },
+                        { label: 'STL', value: selectedPlayer.leaderboard?.stl || 0 },
+                        { label: 'BLK', value: selectedPlayer.leaderboard?.blk || 0 },
+                      ].map((stat, i) => (
+                        <div key={i} className="bg-white/10 backdrop-blur-sm rounded-lg px-1.5 py-1 text-center border border-white/10">
+                          <div className="text-sm font-black text-white">
+                            {Number(stat.value).toFixed(1)}
+                          </div>
+                          <div className="text-[8px] font-bold text-amber-400">{stat.label}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Action buttons */}
+            <div className="mt-4 space-y-3">
+              {shareCardImage && shareCardImage !== 'error' ? (
+                <button
+                  onClick={downloadShareCard}
+                  className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold py-3 px-6 rounded-xl hover:from-amber-600 hover:to-orange-600 transition-all"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  {language === 'fr' ? 'Télécharger' : 'Download'}
+                </button>
+              ) : (
+                <div className="w-full flex items-center justify-center gap-2 bg-white/10 text-white/60 font-semibold py-3 px-6 rounded-xl">
+                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-white/20 border-t-amber-500"></div>
+                  {language === 'fr' ? 'Génération...' : 'Generating...'}
+                </div>
+              )}
+              <p className="text-center text-white/50 text-sm">
+                {showShareCard === 'ig' 
+                  ? (language === 'fr' ? 'Téléchargez et partagez sur vos stories !' : 'Download and share on your stories!')
+                  : (language === 'fr' ? 'Téléchargez et partagez sur Facebook !' : 'Download and share on Facebook!')
+                }
+              </p>
+            </div>
           </div>
         </div>
       )}

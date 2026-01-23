@@ -3613,133 +3613,158 @@ export default function Home() {
             eyebrow={sectionCopy.schedule.eyebrow}
             title={sectionCopy.schedule.title}
             actions={
-              <div className="relative">
-                <button
-                  onClick={() => setShowCalendar(!showCalendar)}
-                  className="flex items-center justify-center w-10 h-10 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 text-white/70 hover:bg-white/10 hover:text-white hover:border-white/20 transition-all"
-                  aria-label={language === 'fr' ? 'Ouvrir le calendrier' : 'Open calendar'}
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                </button>
-                
-                {/* Calendar Dropdown with animation */}
-                <div 
-                  className={`absolute right-0 top-full mt-2 z-50 bg-slate-900/95 backdrop-blur-md border border-white/10 rounded-2xl p-4 shadow-2xl min-w-[300px] transform transition-all duration-300 ease-out origin-top-right ${
-                    showCalendar 
-                      ? 'opacity-100 scale-100 translate-y-0' 
-                      : 'opacity-0 scale-95 -translate-y-2 pointer-events-none'
-                  }`}
-                >
-                    <div className="flex items-center justify-between mb-4">
-                      <button
-                        onClick={() => {
-                          const newDate = new Date(selectedScheduleDate || new Date());
-                          newDate.setMonth(newDate.getMonth() - 1);
-                          setSelectedScheduleDate(newDate);
-                        }}
-                        className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-                        aria-label={language === 'fr' ? 'Mois précédent' : 'Previous month'}
-                      >
-                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                        </svg>
-                      </button>
-                      <span className="text-white font-semibold">
-                        {(selectedScheduleDate || new Date()).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { month: 'long', year: 'numeric' })}
-                      </span>
-                      <button
-                        onClick={() => {
-                          const newDate = new Date(selectedScheduleDate || new Date());
-                          newDate.setMonth(newDate.getMonth() + 1);
-                          setSelectedScheduleDate(newDate);
-                        }}
-                        className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-                        aria-label={language === 'fr' ? 'Mois suivant' : 'Next month'}
-                      >
-                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                      </button>
-                    </div>
-                    
-                    {/* Day headers */}
-                    <div className="grid grid-cols-7 gap-1 mb-2">
-                      {(language === 'fr' ? ['L', 'M', 'M', 'J', 'V', 'S', 'D'] : ['S', 'M', 'T', 'W', 'T', 'F', 'S']).map((day, i) => (
-                        <div key={i} className="text-center text-xs text-slate-500 py-1">{day}</div>
-                      ))}
-                    </div>
-                    
-                    {/* Calendar days */}
-                    <div className="grid grid-cols-7 gap-1">
-                      {(() => {
-                        const currentMonth = selectedScheduleDate || new Date();
-                        const year = currentMonth.getFullYear();
-                        const month = currentMonth.getMonth();
-                        const firstDay = new Date(year, month, 1);
-                        const lastDay = new Date(year, month + 1, 0);
-                        const startDay = language === 'fr' ? (firstDay.getDay() + 6) % 7 : firstDay.getDay();
-                        const days = [];
-                        
-                        // Empty cells for days before month starts
-                        for (let i = 0; i < startDay; i++) {
-                          days.push(<div key={`empty-${i}`} className="p-2"></div>);
-                        }
-                        
-                        // Days of the month
-                        for (let day = 1; day <= lastDay.getDate(); day++) {
-                          const date = new Date(year, month, day);
-                          const isToday = new Date().toDateString() === date.toDateString();
-                          const isSelected = selectedScheduleDate?.toDateString() === date.toDateString();
-                          
-                          // Check if there are games on this day
-                          const hasGames = allScheduledGames.some(game => {
-                            const gameDate = new Date(game.dateTime || '');
-                            return gameDate.toDateString() === date.toDateString();
-                          });
-                          
-                          days.push(
-                            <button
-                              key={day}
-                              onClick={() => {
-                                setSelectedScheduleDate(date);
-                                setShowCalendar(false);
-                              }}
-                              className={`p-2 text-sm rounded-lg transition-all relative ${
-                                isSelected
-                                  ? 'bg-blue-500 text-white'
-                                  : isToday
-                                  ? 'bg-blue-500/30 text-blue-300'
-                                  : 'hover:bg-white/10 text-white'
-                              }`}
-                            >
-                              {day}
-                              {hasGames && !isSelected && (
-                                <div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-orange-500"></div>
-                              )}
-                            </button>
-                          );
-                        }
-                        
-                        return days;
-                      })()}
-                    </div>
-                    
-                    {/* Reset button */}
-                    <button
-                      onClick={() => {
-                        setSelectedScheduleDate(null);
-                        setShowCalendar(false);
-                      }}
-                      className="w-full mt-4 py-2 text-sm text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
-                    >
-                      {language === 'fr' ? 'Voir cette semaine' : 'Show this week'}
-                    </button>
-                </div>
-              </div>
+              <button
+                onClick={() => setShowCalendar(true)}
+                className="flex items-center justify-center w-10 h-10 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 text-white/70 hover:bg-white/10 hover:text-white hover:border-white/20 transition-all ml-auto"
+                aria-label={language === 'fr' ? 'Ouvrir le calendrier' : 'Open calendar'}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </button>
             }
           />
+          
+          {/* Calendar Drawer - Slides in from right */}
+          {/* Backdrop */}
+          <div 
+            className={`fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] transition-opacity duration-300 ${
+              showCalendar ? 'opacity-100' : 'opacity-0 pointer-events-none'
+            }`}
+            onClick={() => setShowCalendar(false)}
+          />
+          
+          {/* Calendar Panel */}
+          <div 
+            className={`fixed top-0 right-0 h-full w-[320px] max-w-[85vw] bg-slate-900/98 backdrop-blur-xl border-l border-white/10 shadow-2xl z-[101] transform transition-transform duration-300 ease-out ${
+              showCalendar ? 'translate-x-0' : 'translate-x-full'
+            }`}
+          >
+            <div className="p-6 h-full overflow-y-auto">
+              {/* Header with close button */}
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-semibold text-white">
+                  {language === 'fr' ? 'Calendrier' : 'Calendar'}
+                </h3>
+                <button
+                  onClick={() => setShowCalendar(false)}
+                  className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                  aria-label={language === 'fr' ? 'Fermer' : 'Close'}
+                >
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              
+              {/* Month navigation */}
+              <div className="flex items-center justify-between mb-4">
+                <button
+                  onClick={() => {
+                    const newDate = new Date(selectedScheduleDate || new Date());
+                    newDate.setMonth(newDate.getMonth() - 1);
+                    setSelectedScheduleDate(newDate);
+                  }}
+                  className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                  aria-label={language === 'fr' ? 'Mois précédent' : 'Previous month'}
+                >
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <span className="text-white font-semibold">
+                  {(selectedScheduleDate || new Date()).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { month: 'long', year: 'numeric' })}
+                </span>
+                <button
+                  onClick={() => {
+                    const newDate = new Date(selectedScheduleDate || new Date());
+                    newDate.setMonth(newDate.getMonth() + 1);
+                    setSelectedScheduleDate(newDate);
+                  }}
+                  className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                  aria-label={language === 'fr' ? 'Mois suivant' : 'Next month'}
+                >
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              </div>
+              
+              {/* Day headers */}
+              <div className="grid grid-cols-7 gap-1 mb-2">
+                {(language === 'fr' ? ['L', 'M', 'M', 'J', 'V', 'S', 'D'] : ['S', 'M', 'T', 'W', 'T', 'F', 'S']).map((day, i) => (
+                  <div key={i} className="text-center text-xs text-slate-500 py-1">{day}</div>
+                ))}
+              </div>
+              
+              {/* Calendar days */}
+              <div className="grid grid-cols-7 gap-1">
+                {(() => {
+                  const currentMonth = selectedScheduleDate || new Date();
+                  const year = currentMonth.getFullYear();
+                  const month = currentMonth.getMonth();
+                  const firstDay = new Date(year, month, 1);
+                  const lastDay = new Date(year, month + 1, 0);
+                  const startDay = language === 'fr' ? (firstDay.getDay() + 6) % 7 : firstDay.getDay();
+                  const days = [];
+                  
+                  // Empty cells for days before month starts
+                  for (let i = 0; i < startDay; i++) {
+                    days.push(<div key={`empty-${i}`} className="p-2"></div>);
+                  }
+                  
+                  // Days of the month
+                  for (let day = 1; day <= lastDay.getDate(); day++) {
+                    const date = new Date(year, month, day);
+                    const isToday = new Date().toDateString() === date.toDateString();
+                    const isSelected = selectedScheduleDate?.toDateString() === date.toDateString();
+                    
+                    // Check if there are games on this day
+                    const hasGames = allScheduledGames.some(game => {
+                      const gameDate = new Date(game.dateTime || '');
+                      return gameDate.toDateString() === date.toDateString();
+                    });
+                    
+                    days.push(
+                      <button
+                        key={day}
+                        onClick={() => {
+                          setSelectedScheduleDate(date);
+                          setShowCalendar(false);
+                        }}
+                        className={`p-2 text-sm rounded-lg transition-all relative ${
+                          isSelected
+                            ? 'bg-blue-500 text-white'
+                            : isToday
+                            ? 'bg-blue-500/30 text-blue-300'
+                            : 'hover:bg-white/10 text-white'
+                        }`}
+                      >
+                        {day}
+                        {hasGames && !isSelected && (
+                          <div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-orange-500"></div>
+                        )}
+                      </button>
+                    );
+                  }
+                  
+                  return days;
+                })()}
+              </div>
+              
+              {/* Reset button */}
+              <button
+                onClick={() => {
+                  setSelectedScheduleDate(null);
+                  setShowCalendar(false);
+                }}
+                className="w-full mt-6 py-3 text-sm text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl transition-colors"
+              >
+                {language === 'fr' ? 'Voir cette semaine' : 'Show this week'}
+              </button>
+            </div>
+          </div>
+          
           <div className="relative">
             <div className="rounded-3xl border border-white/10 bg-slate-950/70 p-6">
               {/* Selected date indicator */}

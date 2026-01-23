@@ -212,9 +212,9 @@ export default function PlayerProfilePopup({ userProfile, onClose, language }: P
 
         {/* Profile Header - Horizontal layout: photo left, info right */}
         <div className="p-4 pb-3 sm:p-5">
-          <div style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: "12px" }}>
-            {/* Player Photo - Fixed small size */}
-            <div style={{ width: "48px", height: "48px", minWidth: "48px", flexShrink: 0 }}>
+          <div className="flex flex-row items-center gap-3">
+            {/* Player Photo - Fixed small size on left */}
+            <div className="w-12 h-12 min-w-[48px] flex-shrink-0">
               <div className="relative w-full h-full rounded-full overflow-hidden ring-2 ring-blue-500/50">
                 {playerData?.headshot || userProfile.verificationImageUrl ? (
                   <Image
@@ -231,8 +231,8 @@ export default function PlayerProfilePopup({ userProfile, onClose, language }: P
               </div>
             </div>
 
-            {/* Player Info - Right side of headshot */}
-            <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
+            {/* Player Info - Always on right side of headshot */}
+            <div className="flex-1 min-w-0 overflow-hidden">
               <h3 className="text-sm font-bold text-white leading-tight truncate" title={fullName}>
                 {fullName}
               </h3>

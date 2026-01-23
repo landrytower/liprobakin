@@ -18,12 +18,17 @@ export default function GoogleAd({
   className = ''
 }: GoogleAdProps) {
   const adRef = useRef<HTMLModElement | null>(null);
+  const adLoadedRef = useRef(false);
 
   useEffect(() => {
+    // Only push once per component instance
+    if (adLoadedRef.current) return;
+    
     try {
-      // Prevent pushing twice on the same <ins> which triggers "already have ads" errors
-      const el = adRef.current as (HTMLDivElement & { dataset?: { adStatus?: string } }) | null;
-      if (el && !el.dataset?.adStatus) {
+      const el = adRef.current as (HTMLElement & { dataset?: { adStatus?: string } }) | null;
+      // Check if ad is already filled or has been pushed
+      if (el && !el.dataset?.adStatus && el.innerHTML.trim() === '') {
+        adLoadedRef.current = true;
         // @ts-expect-error - AdSense script
         (window.adsbygoogle = window.adsbygoogle || []).push({});
       }

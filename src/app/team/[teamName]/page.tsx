@@ -459,27 +459,35 @@ export default function TeamPage() {
                     <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent"></div>
                     
                     {/* Hover overlay with stats - desktop only */}
-                    <div className="absolute inset-0 bg-blue-950/90 opacity-0 group-hover:opacity-100 transition-opacity duration-200 hidden md:flex flex-col items-center justify-center p-2">
-                      <span className="text-lg font-bold text-white mb-1">#{player.number}</span>
-                      <h3 className="text-xs font-semibold text-blue-400 text-center mb-3 leading-tight">
+                    <div className="absolute inset-0 bg-gradient-to-b from-blue-950/50 via-blue-950/70 to-blue-950/85 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 transition-all duration-300 ease-out hidden md:flex flex-col items-center justify-center p-2">
+                      <span className="text-xl font-bold text-white mb-0.5 transform -translate-y-2 group-hover:translate-y-0 transition-transform duration-300 delay-75">#{player.number}</span>
+                      <h3 className="text-xs font-semibold text-blue-300 text-center mb-2 leading-tight transform -translate-y-2 group-hover:translate-y-0 transition-transform duration-300 delay-100">
                         {player.name}
                       </h3>
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-center">
-                        <div>
-                          <span className="text-lg font-bold text-white">{player.stats?.ppg?.toFixed(1) || '0.0'}</span>
-                          <span className="text-[10px] text-slate-400 block uppercase">PTS</span>
+                      <div className="grid grid-cols-3 gap-x-4 gap-y-1.5 text-center">
+                        <div className="transform translate-y-3 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 delay-150">
+                          <span className="text-2xl font-bold text-white">{Number(player.stats?.pts || 0).toFixed(1)}</span>
+                          <span className="text-[10px] text-blue-300 block uppercase tracking-wide">PTS</span>
                         </div>
-                        <div>
-                          <span className="text-lg font-bold text-white">{player.stats?.reb?.toFixed(1) || '0.0'}</span>
-                          <span className="text-[10px] text-slate-400 block uppercase">REB</span>
+                        <div className="transform translate-y-3 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 delay-175">
+                          <span className="text-2xl font-bold text-white">{Number(player.stats?.reb || 0).toFixed(1)}</span>
+                          <span className="text-[10px] text-blue-300 block uppercase tracking-wide">REB</span>
                         </div>
-                        <div>
-                          <span className="text-lg font-bold text-white">{player.stats?.ast?.toFixed(1) || '0.0'}</span>
-                          <span className="text-[10px] text-slate-400 block uppercase">AST</span>
+                        <div className="transform translate-y-3 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 delay-200">
+                          <span className="text-2xl font-bold text-white">{Number(player.stats?.ast || 0).toFixed(1)}</span>
+                          <span className="text-[10px] text-blue-300 block uppercase tracking-wide">AST</span>
                         </div>
-                        <div>
-                          <span className="text-lg font-bold text-white">{player.stats?.blk?.toFixed(1) || '0.0'}</span>
-                          <span className="text-[10px] text-slate-400 block uppercase">BLK</span>
+                        <div className="transform translate-y-3 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 delay-225">
+                          <span className="text-2xl font-bold text-white">{Number(player.stats?.stl || 0).toFixed(1)}</span>
+                          <span className="text-[10px] text-blue-300 block uppercase tracking-wide">STL</span>
+                        </div>
+                        <div className="transform translate-y-3 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 delay-250">
+                          <span className="text-2xl font-bold text-white">{Number(player.stats?.blk || 0).toFixed(1)}</span>
+                          <span className="text-[10px] text-blue-300 block uppercase tracking-wide">BLK</span>
+                        </div>
+                        <div className="transform translate-y-3 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 delay-275">
+                          <span className="text-2xl font-bold text-yellow-400">{(Number(player.stats?.pts || 0) + Number(player.stats?.reb || 0) + Number(player.stats?.ast || 0) + Number(player.stats?.stl || 0) + Number(player.stats?.blk || 0)).toFixed(1)}</span>
+                          <span className="text-[10px] text-yellow-400 block uppercase tracking-wide">EFF</span>
                         </div>
                       </div>
                     </div>

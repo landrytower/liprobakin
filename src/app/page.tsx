@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import type { ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
@@ -12,6 +12,7 @@ import AuthModal from "@/components/AuthModal";
 import PlayerProfilePopup from "@/components/PlayerProfilePopup";
 import AnimatedButton from "@/components/AnimatedButton";
 import ArticleContent from "@/components/ArticleContent";
+import html2canvas from "html2canvas";
 
 import {
   conferenceStandings,
@@ -100,7 +101,34 @@ const formatTimeAgo = (date: Date): string => {
   }
 };
 
+const formatISODate = (isoString: string, language: Locale): string => {
+  try {
+    const date = new Date(isoString);
+    if (isNaN(date.getTime())) return isoString;
+    
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
+    let hours = date.getHours();
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    
+    if (language === 'en') {
+      const period = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12 || 12;
+      return `${month}/${day} · ${hours}:${minutes} ${period}`;
+    } else {
+      return `${day}/${month} · ${hours.toString().padStart(2, '0')}:${minutes}`;
+    }
+  } catch {
+    return isoString;
+  }
+};
+
 const formatGameDateTime = (dateTimeStr: string, language: Locale): string => {
+  // First check if it's an ISO string (starts with year)
+  if (/^\d{4}-\d{2}-\d{2}/.test(dateTimeStr)) {
+    return formatISODate(dateTimeStr, language);
+  }
+  
   // Parse the datetime string - handle both "·" and other separators
   const parts = dateTimeStr.split(/\s*[·•]\s*/);
   if (parts.length < 2) return dateTimeStr;
@@ -1037,8 +1065,12 @@ export default function Home() {
   const [playerCardExpanded, setPlayerCardExpanded] = useState(true);
   const [playerData, setPlayerData] = useState<RosterPlayer | null>(null);
   const [nextGame, setNextGame] = useState<EnhancedMatchup | null>(null);
+  const [gameCountdown, setGameCountdown] = useState<{ days: number; hours: number; minutes: number; seconds: number; isGameDay: boolean } | null>(null);
   const [liveGames, setLiveGames] = useState<EnhancedMatchup[]>([]);
   const [showProfilePopup, setShowProfilePopup] = useState(false);
+  const [showShareCard, setShowShareCard] = useState<'ig' | 'fb' | null>(null);
+  const [shareCardImage, setShareCardImage] = useState<string | null>(null);
+  const shareCardRef = useRef<HTMLDivElement>(null);
   const [scheduleStartIndex, setScheduleStartIndex] = useState(0);
   const scheduleScrollRef = useRef<HTMLDivElement>(null);
   const teamsScrollRef = useRef<HTMLDivElement>(null);
@@ -1061,6 +1093,38 @@ export default function Home() {
   const [franchiseGender, setFranchiseGender] = useState<Gender>("men");
   const [playersGender, setPlayersGender] = useState<Gender>("men");
   const [teamSearch, setTeamSearch] = useState<string>("");
+
+  // Generate shareable player card image
+  const generateShareCard = useCallback(async (platform: 'ig' | 'fb') => {
+    setShowShareCard(platform);
+    // Wait for modal to render
+    setTimeout(async () => {
+      if (shareCardRef.current) {
+        try {
+          const canvas = await html2canvas(shareCardRef.current, {
+            backgroundColor: '#0f172a',
+            scale: 2,
+            useCORS: true,
+            allowTaint: true,
+          });
+          const dataUrl = canvas.toDataURL('image/png');
+          setShareCardImage(dataUrl);
+        } catch (error) {
+          console.error('Error generating share card:', error);
+        }
+      }
+    }, 100);
+  }, []);
+
+  const downloadShareCard = useCallback(() => {
+    if (shareCardImage && playerData) {
+      const link = document.createElement('a');
+      link.download = `${playerData.name.replace(/\s+/g, '_')}_stats.png`;
+      link.href = shareCardImage;
+      link.click();
+    }
+  }, [shareCardImage, playerData]);
+
   // Removed static roster - RosterModal now fetches from Firestore
   const genderPlayers = playersGender === "men" ? spotlightPlayers : spotlightPlayersWomen;
   // Always use dynamic standings calculated from games - no fallback to static data
@@ -1385,6 +1449,38 @@ export default function Home() {
     
     fetchPlayerData();
   }, [userProfile, dynamicSpotlightGames]);
+
+  // Countdown timer for next game
+  useEffect(() => {
+    if (!nextGame?.dateTime) {
+      setGameCountdown(null);
+      return;
+    }
+
+    const updateCountdown = () => {
+      const gameDate = new Date(nextGame.dateTime!);
+      const now = new Date();
+      const diff = gameDate.getTime() - now.getTime();
+
+      if (diff <= 0) {
+        setGameCountdown(null);
+        return;
+      }
+
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+      const isGameDay = days === 0;
+
+      setGameCountdown({ days, hours, minutes, seconds, isGameDay });
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+
+    return () => clearInterval(interval);
+  }, [nextGame]);
 
   useEffect(() => {
     const fetchCommittee = async () => {
@@ -3057,66 +3153,337 @@ export default function Home() {
             
             {/* Expanded View */}
             {playerCardExpanded && (
-              <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
-                {/* Player Profile Pic */}
-                <div className="relative h-32 w-32 flex-shrink-0">
-                  <Image
-                    src={playerData.headshot || '/logos/liprobakin.png'}
-                    alt={playerData.name}
-                    fill
-                    className="rounded-full border-4 border-white/20 object-cover"
-                  />
-                </div>
-                
-                {/* Player Stats */}
-                <div className="flex-1 space-y-4">
-                  <div className="border-b border-white/10 pb-3">
-                    <h3 className="text-2xl font-bold text-white">{playerData.name}</h3>
-                    <p className="text-sm text-slate-400">#{playerData.number} • {userProfile.teamName}</p>
+              <div className="space-y-4">
+                <div className="flex flex-row items-start gap-4">
+                  {/* Player Profile Pic - Top left */}
+                  <div className="relative h-24 w-24 sm:h-32 sm:w-32 flex-shrink-0">
+                    <Image
+                      src={playerData.headshot || '/logos/liprobakin.png'}
+                      alt={playerData.name}
+                      fill
+                      className="rounded-full border-4 border-white/20 object-cover"
+                    />
                   </div>
                   
-                  <div className="grid grid-cols-4 gap-4 text-center">
-                    <div>
-                      <p className="text-xs font-medium uppercase tracking-wider text-slate-400">PTS</p>
-                      <p className="text-2xl font-bold text-white">{playerData.stats.pts}</p>
+                  {/* Player Info - Always on right */}
+                  <div className="flex-1 min-w-0 space-y-3">
+                    <div className="border-b border-white/10 pb-2">
+                      <h3 className="text-xl sm:text-2xl font-bold text-white truncate">{playerData.name}</h3>
+                      <p className="text-sm text-slate-400">#{playerData.number} • {userProfile.teamName}</p>
                     </div>
-                    <div>
-                      <p className="text-xs font-medium uppercase tracking-wider text-slate-400">REB</p>
-                      <p className="text-2xl font-bold text-white">{playerData.stats.reb}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-medium uppercase tracking-wider text-slate-400">AST</p>
-                      <p className="text-2xl font-bold text-white">{playerData.stats.pts ? Math.floor(Number(playerData.stats.pts) * 0.3) : '0'}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-medium uppercase tracking-wider text-slate-400">BLK</p>
-                      <p className="text-2xl font-bold text-white">{playerData.stats.stl}</p>
-                    </div>
-                  </div>
-                  
-                  {/* Next Game */}
-                  {nextGame && (
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Next Game</p>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <span className="text-lg font-bold text-white">vs</span>
-                          <span className="text-lg font-semibold text-white">
-                            {nextGame.homeTeam === userProfile.teamName ? nextGame.awayTeam : nextGame.homeTeam}
-                          </span>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm font-medium text-white">{nextGame.dateTime ? formatGameDateTime(nextGame.dateTime, language) : "TBD"}</p>
-                          <p className="text-xs text-slate-400">{nextGame.venue}</p>
-                        </div>
+                    
+                    <div className="grid grid-cols-4 gap-2 sm:gap-4 text-center">
+                      <div>
+                        <p className="text-[10px] sm:text-xs font-medium uppercase tracking-wider text-slate-400">PTS</p>
+                        <p className="text-lg sm:text-2xl font-bold text-white">{playerData.stats.pts}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] sm:text-xs font-medium uppercase tracking-wider text-slate-400">REB</p>
+                        <p className="text-lg sm:text-2xl font-bold text-white">{playerData.stats.reb}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] sm:text-xs font-medium uppercase tracking-wider text-slate-400">AST</p>
+                        <p className="text-lg sm:text-2xl font-bold text-white">{playerData.stats.pts ? Math.floor(Number(playerData.stats.pts) * 0.3) : '0'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] sm:text-xs font-medium uppercase tracking-wider text-slate-400">BLK</p>
+                        <p className="text-lg sm:text-2xl font-bold text-white">{playerData.stats.stl}</p>
                       </div>
                     </div>
-                  )}
+                  </div>
+                </div>
+                
+                {/* Next Game - Full width with countdown */}
+                {nextGame && (
+                  <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                    {/* Header with countdown */}
+                    <div className="mb-3">
+                      <p className="text-xs font-semibold uppercase tracking-wider">
+                        {gameCountdown?.isGameDay ? (
+                          <span className="text-yellow-400">
+                            🏀 Game Day in {gameCountdown.hours > 0 && `${gameCountdown.hours}h `}{gameCountdown.minutes}m {gameCountdown.seconds}s
+                          </span>
+                        ) : gameCountdown ? (
+                          <span>
+                            <span className="text-slate-400">Next Game in </span>
+                            <span className="text-blue-400 font-mono">
+                              {gameCountdown.days > 0 && `${gameCountdown.days}d `}{gameCountdown.hours}h {gameCountdown.minutes}m
+                            </span>
+                          </span>
+                        ) : (
+                          <span className="text-slate-400">Next Game</span>
+                        )}
+                      </p>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className="text-lg font-bold text-white">vs</span>
+                        <span className="text-lg font-semibold text-white">
+                          {nextGame.homeTeam === userProfile.teamName ? nextGame.awayTeam : nextGame.homeTeam}
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-medium text-white">
+                          {nextGame.dateTime ? formatGameDateTime(nextGame.dateTime, language) : "TBD"}
+                        </p>
+                        <p className="text-xs text-slate-400">{nextGame.venue}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Social Media Icons - Bottom right */}
+                <div className="flex justify-end gap-3 mt-2">
+                  <button
+                    onClick={() => generateShareCard('ig')}
+                    className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all"
+                    aria-label="Share to Instagram"
+                  >
+                    <svg className="w-4 h-4 text-white/60 hover:text-white" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => generateShareCard('fb')}
+                    className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all"
+                    aria-label="Share to Facebook"
+                  >
+                    <svg className="w-4 h-4 text-white/60 hover:text-white" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                    </svg>
+                  </button>
                 </div>
               </div>
             )}
           </div>
         </section>
+      )}
+
+      {/* Share Card Modal */}
+      {showShareCard && (
+        <div 
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+          onClick={() => {
+            setShowShareCard(null);
+            setShareCardImage(null);
+          }}
+        >
+          <div 
+            className="relative max-w-md w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close button */}
+            <button
+              onClick={() => {
+                setShowShareCard(null);
+                setShareCardImage(null);
+              }}
+              className="absolute -top-12 right-0 text-white/60 hover:text-white transition-colors"
+            >
+              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            {/* Generated image preview */}
+            {shareCardImage ? (
+              <div className="space-y-4">
+                <img 
+                  src={shareCardImage} 
+                  alt="Share card" 
+                  className="w-full rounded-2xl shadow-2xl"
+                />
+                <div className="flex gap-3">
+                  <button
+                    onClick={downloadShareCard}
+                    className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold py-3 px-6 rounded-xl hover:from-amber-600 hover:to-orange-600 transition-all"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    {language === 'fr' ? 'Télécharger' : 'Download'}
+                  </button>
+                </div>
+                <p className="text-center text-white/50 text-sm">
+                  {showShareCard === 'ig' 
+                    ? (language === 'fr' ? 'Parfait pour les stories Instagram !' : 'Perfect for Instagram stories!')
+                    : (language === 'fr' ? 'Parfait pour Facebook !' : 'Perfect for Facebook!')
+                  }
+                </p>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-64 bg-slate-900 rounded-2xl">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500"></div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Hidden Share Card Template - captured by html2canvas */}
+      {showShareCard && selectedPlayer && (
+        <div 
+          ref={shareCardRef}
+          className="fixed -left-[9999px] top-0"
+          style={{ 
+            width: showShareCard === 'ig' ? '1080px' : '1200px',
+            height: showShareCard === 'ig' ? '1920px' : '630px',
+          }}
+        >
+          <div 
+            className="w-full h-full flex flex-col items-center justify-center relative overflow-hidden"
+            style={{
+              background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)',
+            }}
+          >
+            {/* Background pattern */}
+            <div className="absolute inset-0 opacity-10">
+              <div className="absolute inset-0" style={{
+                backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+              }} />
+            </div>
+
+            {/* Gradient accents */}
+            <div className="absolute top-0 left-0 w-96 h-96 bg-amber-500/20 rounded-full blur-3xl" />
+            <div className="absolute bottom-0 right-0 w-96 h-96 bg-orange-500/20 rounded-full blur-3xl" />
+
+            {showShareCard === 'ig' ? (
+              /* Instagram Story Layout (9:16) */
+              <div className="relative z-10 flex flex-col items-center justify-center h-full px-12 py-16">
+                {/* Liprobakin logo at top */}
+                <div className="absolute top-16 left-0 right-0 flex justify-center">
+                  <div className="text-4xl font-bold bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent">
+                    LIPROBAKIN
+                  </div>
+                </div>
+
+                {/* Player photo */}
+                <div className="relative mb-8">
+                  <div className="w-80 h-80 rounded-full overflow-hidden border-8 border-amber-500/50 shadow-2xl shadow-amber-500/20">
+                    <img 
+                      src={selectedPlayer.photo || '/players/placeholder.jpg'}
+                      alt={selectedPlayer.name}
+                      className="w-full h-full object-cover"
+                      crossOrigin="anonymous"
+                    />
+                  </div>
+                  {/* Jersey number badge */}
+                  <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-5xl font-black px-8 py-3 rounded-2xl shadow-xl">
+                    #{selectedPlayer.number || '00'}
+                  </div>
+                </div>
+
+                {/* Player name */}
+                <h2 className="text-6xl font-black text-white text-center mt-8 mb-2 tracking-tight">
+                  {selectedPlayer.name}
+                </h2>
+
+                {/* Team name */}
+                <p className="text-3xl text-amber-400 font-medium mb-12">
+                  {selectedPlayer.team || 'FEBACO'}
+                </p>
+
+                {/* Stats grid */}
+                <div className="grid grid-cols-3 gap-6 w-full max-w-2xl">
+                  {[
+                    { label: 'PTS', value: selectedPlayer.leaderboard?.pts || 0 },
+                    { label: 'REB', value: selectedPlayer.leaderboard?.reb || 0 },
+                    { label: 'AST', value: selectedPlayer.leaderboard?.ast || 0 },
+                  ].map((stat, i) => (
+                    <div key={i} className="bg-white/5 backdrop-blur-sm rounded-3xl p-8 text-center border border-white/10">
+                      <div className="text-7xl font-black text-white mb-2">
+                        {Number(stat.value).toFixed(1)}
+                      </div>
+                      <div className="text-2xl font-bold text-amber-400">{stat.label}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Secondary stats */}
+                <div className="grid grid-cols-2 gap-6 w-full max-w-md mt-6">
+                  {[
+                    { label: 'STL', value: selectedPlayer.leaderboard?.stl || 0 },
+                    { label: 'BLK', value: selectedPlayer.leaderboard?.blk || 0 },
+                  ].map((stat, i) => (
+                    <div key={i} className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 text-center border border-white/10">
+                      <div className="text-5xl font-black text-white mb-1">
+                        {Number(stat.value).toFixed(1)}
+                      </div>
+                      <div className="text-xl font-bold text-amber-400">{stat.label}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Bottom branding */}
+                <div className="absolute bottom-16 left-0 right-0 flex flex-col items-center gap-2">
+                  <div className="text-white/40 text-xl">liprobakin.com</div>
+                </div>
+              </div>
+            ) : (
+              /* Facebook Layout (1.91:1) */
+              <div className="relative z-10 flex items-center h-full px-16 py-12 gap-12">
+                {/* Left side - Player photo */}
+                <div className="flex-shrink-0">
+                  <div className="relative">
+                    <div className="w-72 h-72 rounded-3xl overflow-hidden border-4 border-amber-500/50 shadow-2xl">
+                      <img 
+                        src={selectedPlayer.photo || '/players/placeholder.jpg'}
+                        alt={selectedPlayer.name}
+                        className="w-full h-full object-cover"
+                        crossOrigin="anonymous"
+                      />
+                    </div>
+                    {/* Jersey number badge */}
+                    <div className="absolute -bottom-4 -right-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-4xl font-black px-6 py-2 rounded-xl shadow-xl">
+                      #{selectedPlayer.number || '00'}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right side - Info */}
+                <div className="flex-1 flex flex-col justify-center">
+                  {/* Logo */}
+                  <div className="text-3xl font-bold bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent mb-4">
+                    LIPROBAKIN
+                  </div>
+
+                  {/* Player name */}
+                  <h2 className="text-5xl font-black text-white mb-2">
+                    {selectedPlayer.name}
+                  </h2>
+
+                  {/* Team */}
+                  <p className="text-2xl text-amber-400 font-medium mb-8">
+                    {selectedPlayer.team || 'FEBACO'}
+                  </p>
+
+                  {/* Stats row */}
+                  <div className="flex gap-4">
+                    {[
+                      { label: 'PTS', value: selectedPlayer.leaderboard?.pts || 0 },
+                      { label: 'REB', value: selectedPlayer.leaderboard?.reb || 0 },
+                      { label: 'AST', value: selectedPlayer.leaderboard?.ast || 0 },
+                      { label: 'STL', value: selectedPlayer.leaderboard?.stl || 0 },
+                      { label: 'BLK', value: selectedPlayer.leaderboard?.blk || 0 },
+                    ].map((stat, i) => (
+                      <div key={i} className="bg-white/5 backdrop-blur-sm rounded-2xl px-6 py-4 text-center border border-white/10">
+                        <div className="text-4xl font-black text-white">
+                          {Number(stat.value).toFixed(1)}
+                        </div>
+                        <div className="text-lg font-bold text-amber-400">{stat.label}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Website watermark */}
+                <div className="absolute bottom-6 right-8 text-white/30 text-lg">
+                  liprobakin.com
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       <main className="mx-auto max-w-6xl space-y-20 px-4 pb-20 pt-12 md:px-8">

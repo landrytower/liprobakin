@@ -351,7 +351,16 @@ export default function PlayerProfilePage() {
       <nav className="border-b border-white/10 bg-black/40 backdrop-blur-xl">
         <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
-            <span className="text-2xl font-bold text-white">LIPROBAKIN</span>
+            <div className="flex items-center gap-3">
+              <Image
+                src="/logos/liprobakin.png"
+                alt="Liprobakin"
+                width={40}
+                height={40}
+                className="rounded-lg"
+              />
+              <span className="text-2xl font-bold text-white">LIPROBAKIN</span>
+            </div>
             <div className="flex items-center gap-3">
               <button
                 onClick={() => router.push("/")}

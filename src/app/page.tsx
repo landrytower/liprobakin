@@ -3274,7 +3274,7 @@ export default function Home() {
       )}
 
       {/* Share Card Modal */}
-      {showShareCard && selectedPlayer && (
+      {showShareCard && playerData && (
         <div 
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 overflow-y-auto"
           onClick={() => {
@@ -3333,33 +3333,33 @@ export default function Home() {
                   <div className="relative mb-3 mt-8">
                     <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-amber-500/50 shadow-xl shadow-amber-500/20">
                       <img 
-                        src={selectedPlayer.photo || '/players/placeholder.jpg'}
-                        alt={selectedPlayer.name}
+                        src={playerData.headshot || '/players/placeholder.jpg'}
+                        alt={playerData.name}
                         className="w-full h-full object-cover"
                       />
                     </div>
                     {/* Jersey number badge */}
                     <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-lg font-black px-3 py-0.5 rounded-lg shadow-lg">
-                      #{selectedPlayer.number || '00'}
+                      #{playerData.number || '00'}
                     </div>
                   </div>
 
                   {/* Player name */}
                   <h2 className="text-xl font-black text-white text-center mt-4 mb-1 tracking-tight">
-                    {selectedPlayer.name}
+                    {playerData.name}
                   </h2>
 
                   {/* Team name */}
                   <p className="text-sm text-amber-400 font-medium mb-4">
-                    {selectedPlayer.team || 'FEBACO'}
+                    {userProfile?.teamName || 'FEBACO'}
                   </p>
 
                   {/* Stats grid */}
                   <div className="grid grid-cols-3 gap-2 w-full">
                     {[
-                      { label: 'PTS', value: selectedPlayer.leaderboard?.pts || 0 },
-                      { label: 'REB', value: selectedPlayer.leaderboard?.reb || 0 },
-                      { label: 'AST', value: selectedPlayer.leaderboard?.ast || 0 },
+                      { label: 'PTS', value: playerData.stats?.pts || 0 },
+                      { label: 'REB', value: playerData.stats?.reb || 0 },
+                      { label: 'AST', value: playerData.stats?.ast || 0 },
                     ].map((stat, i) => (
                       <div key={i} className="bg-white/10 backdrop-blur-sm rounded-xl p-2 text-center border border-white/10">
                         <div className="text-2xl font-black text-white">
@@ -3373,8 +3373,8 @@ export default function Home() {
                   {/* Secondary stats */}
                   <div className="grid grid-cols-2 gap-2 w-full max-w-[200px] mt-2">
                     {[
-                      { label: 'STL', value: selectedPlayer.leaderboard?.stl || 0 },
-                      { label: 'BLK', value: selectedPlayer.leaderboard?.blk || 0 },
+                      { label: 'STL', value: playerData.stats?.stl || 0 },
+                      { label: 'BLK', value: playerData.stats?.blk || 0 },
                     ].map((stat, i) => (
                       <div key={i} className="bg-white/10 backdrop-blur-sm rounded-lg p-1.5 text-center border border-white/10">
                         <div className="text-lg font-black text-white">
@@ -3398,14 +3398,14 @@ export default function Home() {
                     <div className="relative">
                       <div className="w-20 h-20 rounded-xl overflow-hidden border-2 border-amber-500/50 shadow-lg">
                         <img 
-                          src={selectedPlayer.photo || '/players/placeholder.jpg'}
-                          alt={selectedPlayer.name}
+                          src={playerData.headshot || '/players/placeholder.jpg'}
+                          alt={playerData.name}
                           className="w-full h-full object-cover"
                         />
                       </div>
                       {/* Jersey number badge */}
                       <div className="absolute -bottom-1 -right-1 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-black px-1.5 py-0.5 rounded-md shadow">
-                        #{selectedPlayer.number || '00'}
+                        #{playerData.number || '00'}
                       </div>
                     </div>
                   </div>
@@ -3419,22 +3419,22 @@ export default function Home() {
 
                     {/* Player name */}
                     <h2 className="text-base font-black text-white truncate">
-                      {selectedPlayer.name}
+                      {playerData.name}
                     </h2>
 
                     {/* Team */}
                     <p className="text-xs text-amber-400 font-medium mb-2">
-                      {selectedPlayer.team || 'FEBACO'}
+                      {userProfile?.teamName || 'FEBACO'}
                     </p>
 
                     {/* Stats row */}
                     <div className="flex gap-1">
                       {[
-                        { label: 'PTS', value: selectedPlayer.leaderboard?.pts || 0 },
-                        { label: 'REB', value: selectedPlayer.leaderboard?.reb || 0 },
-                        { label: 'AST', value: selectedPlayer.leaderboard?.ast || 0 },
-                        { label: 'STL', value: selectedPlayer.leaderboard?.stl || 0 },
-                        { label: 'BLK', value: selectedPlayer.leaderboard?.blk || 0 },
+                        { label: 'PTS', value: playerData.stats?.pts || 0 },
+                        { label: 'REB', value: playerData.stats?.reb || 0 },
+                        { label: 'AST', value: playerData.stats?.ast || 0 },
+                        { label: 'STL', value: playerData.stats?.stl || 0 },
+                        { label: 'BLK', value: playerData.stats?.blk || 0 },
                       ].map((stat, i) => (
                         <div key={i} className="bg-white/10 backdrop-blur-sm rounded-lg px-1.5 py-1 text-center border border-white/10">
                           <div className="text-sm font-black text-white">
@@ -3760,7 +3760,7 @@ export default function Home() {
           />
           <div className="rounded-3xl border border-white/10 bg-slate-950/80 p-6 overflow-hidden">
             <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-              <p className="text-xs uppercase tracking-[0.4em] text-slate-400">League Leaderboard</p>
+              <p className="text-xs uppercase tracking-[0.4em] text-slate-400">League Leader</p>
               <div className="flex flex-wrap gap-2">
                 {playerMetricFilters.map((filter) => (
                   <button

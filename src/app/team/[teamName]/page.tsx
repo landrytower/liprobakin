@@ -457,7 +457,35 @@ export default function TeamPage() {
                       className="object-cover"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent"></div>
-                    <div className="absolute bottom-0 left-0 right-0 p-1.5">
+                    
+                    {/* Hover overlay with stats - desktop only */}
+                    <div className="absolute inset-0 bg-blue-950/90 opacity-0 group-hover:opacity-100 transition-opacity duration-200 hidden md:flex flex-col items-center justify-center p-2">
+                      <span className="text-lg font-bold text-white mb-1">#{player.number}</span>
+                      <h3 className="text-xs font-semibold text-blue-400 text-center mb-3 leading-tight">
+                        {player.name}
+                      </h3>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-center">
+                        <div>
+                          <span className="text-lg font-bold text-white">{player.stats?.ppg?.toFixed(1) || '0.0'}</span>
+                          <span className="text-[10px] text-slate-400 block uppercase">PTS</span>
+                        </div>
+                        <div>
+                          <span className="text-lg font-bold text-white">{player.stats?.reb?.toFixed(1) || '0.0'}</span>
+                          <span className="text-[10px] text-slate-400 block uppercase">REB</span>
+                        </div>
+                        <div>
+                          <span className="text-lg font-bold text-white">{player.stats?.ast?.toFixed(1) || '0.0'}</span>
+                          <span className="text-[10px] text-slate-400 block uppercase">AST</span>
+                        </div>
+                        <div>
+                          <span className="text-lg font-bold text-white">{player.stats?.blk?.toFixed(1) || '0.0'}</span>
+                          <span className="text-[10px] text-slate-400 block uppercase">BLK</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Default view (visible on mobile, hidden on desktop hover) */}
+                    <div className="absolute bottom-0 left-0 right-0 p-1.5 md:group-hover:opacity-0 transition-opacity duration-200">
                       <div className="flex items-end justify-between">
                         <div className="flex-1">
                           <span className="text-xl font-bold text-blue-400 block">#{player.number}</span>

@@ -1342,38 +1342,56 @@ export default function Home() {
       canvas.toBlob(async (blob) => {
         if (!blob) return;
         
-        const file = new File([blob], `${playerData.name.replace(/\s+/g, '_')}_stats.png`, { type: 'image/png' });
+        const fileName = `${playerData.name.replace(/\s+/g, '_')}_stats.png`;
+        const file = new File([blob], fileName, { type: 'image/png' });
         
-        // Try native share
+        // Try native share (works on mobile - opens share sheet where user can pick Instagram/Facebook)
         if (navigator.share && navigator.canShare?.({ files: [file] })) {
           try {
             await navigator.share({
               files: [file],
               title: `${playerData.name} - Stats`,
-              text: `Check out ${playerData.name}'s stats on Liprobakin!`,
+              text: platform === 'ig' 
+                ? `Check out ${playerData.name}'s stats! 🏀 #Liprobakin #Basketball`
+                : `Check out ${playerData.name}'s stats on Liprobakin! 🏀`,
             });
+            return; // Share was successful
           } catch (err) {
-            // User cancelled or error - download instead
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = file.name;
-            a.click();
-            URL.revokeObjectURL(url);
+            // User cancelled or error - fall through to download
+            console.log('Share cancelled or failed, falling back to download');
           }
-        } else {
-          // Fallback - download the image
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = file.name;
-          a.click();
-          URL.revokeObjectURL(url);
         }
+        
+        // Fallback: Download the image
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        // After download, open Instagram/Facebook so user can post
+        setTimeout(() => {
+          if (platform === 'ig') {
+            // Try to open Instagram app, fallback to web
+            window.open('instagram://camera', '_blank');
+            // If app doesn't open after 2 seconds, open web version
+            setTimeout(() => {
+              window.open('https://www.instagram.com/', '_blank');
+            }, 1500);
+          } else {
+            // Open Facebook
+            window.open('https://www.facebook.com/', '_blank');
+          }
+        }, 500);
+        
       }, 'image/png');
       
     } catch (error) {
       console.error('Error creating share card:', error);
+      alert('Failed to create share card. Please try again.');
     }
   }, [playerData, userProfile]);
 

@@ -2108,7 +2108,7 @@ export default function Home() {
           <div className="flex items-center gap-4">
             <button
               type="button"
-              className="group relative flex items-center justify-center w-12 h-12 rounded-xl backdrop-blur-xl bg-white/5 border border-white/10 text-white/90 shadow-2xl transition-all duration-700 ease-out focus:outline-none focus:ring-2 focus:ring-white/20 lg:hidden active:scale-95 transform-gpu sm:hover:bg-white/10 sm:hover:border-white/20 sm:hover:shadow-white/10"
+              className="relative flex items-center justify-center w-12 h-12 rounded-xl backdrop-blur-xl bg-white/5 border border-white/10 text-white/90 shadow-2xl transition-all duration-700 ease-out focus:outline-none focus:ring-2 focus:ring-white/20 lg:hidden active:scale-95 transform-gpu"
               onClick={() => setMobileNavOpen((prev) => !prev)}
               aria-expanded={mobileNavOpen}
               aria-controls="mobile-nav-panel"
@@ -2133,10 +2133,10 @@ export default function Home() {
                 }`}>
                   {/* Modern Grid Icon (replacing hamburger) */}
                   <div className="w-6 h-6 grid grid-cols-2 grid-rows-2 gap-1 p-1">
-                    <div className="bg-white/80 rounded-sm transition-all duration-300 group-hover:bg-white"></div>
-                    <div className="bg-white/60 rounded-sm transition-all duration-300 group-hover:bg-white delay-75"></div>
-                    <div className="bg-white/60 rounded-sm transition-all duration-300 group-hover:bg-white delay-150"></div>
-                    <div className="bg-white/80 rounded-sm transition-all duration-300 group-hover:bg-white delay-75"></div>
+                    <div className="bg-white/80 rounded-sm transition-all duration-300"></div>
+                    <div className="bg-white/60 rounded-sm transition-all duration-300"></div>
+                    <div className="bg-white/60 rounded-sm transition-all duration-300"></div>
+                    <div className="bg-white/80 rounded-sm transition-all duration-300"></div>
                   </div>
                 </div>
                 
@@ -2151,8 +2151,7 @@ export default function Home() {
                 </div>
               </div>
               
-              {/* Subtle Shine Effect */}
-              <div className={`absolute inset-0 rounded-xl bg-gradient-to-tr from-transparent via-white/10 to-transparent translate-x-[-100%] transition-transform duration-1000 group-hover:translate-x-[100%]`} />
+              {/* Subtle Shine Effect removed for hover animation */}
             </button>
             <div className="hidden gap-8 text-xs font-medium uppercase tracking-[0.3em] text-slate-300 lg:flex">
               {navSections.map((section) => (
@@ -3583,7 +3582,7 @@ export default function Home() {
                 value={teamSearch}
                 onChange={(e) => setTeamSearch(e.target.value)}
                 placeholder={language === 'en' ? 'Choose your team...' : 'Choisissez votre équipe...'}
-                className="w-full px-3.5 py-2.5 bg-slate-900/50 border-2 border-blue-500/50 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all text-[0.85rem]"
+                className="w-full px-3.5 py-2.5 bg-slate-900/50 border-2 border-blue-500/50 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all text-base sm:text-[0.85rem]"
                 style={{
                   fontFamily: 'system-ui, -apple-system, sans-serif'
                 }}

@@ -35,6 +35,9 @@ export default function PlayerProfilePopup({ userProfile, onClose, language }: P
   const [loading, setLoading] = useState(true);
   const [playerData, setPlayerData] = useState<{ name: string; number: string; headshot: string; position: string } | null>(null);
 
+  const fullName = playerData?.name || userProfile.linkedPlayerName || `${userProfile.firstName} ${userProfile.lastName}`;
+  const firstNameOnly = (playerData?.name || userProfile.linkedPlayerName || userProfile.firstName || "").split(" ")[0];
+
   useEffect(() => {
     const fetchPlayerData = async () => {
       try {
@@ -162,9 +165,10 @@ export default function PlayerProfilePopup({ userProfile, onClose, language }: P
             const isHome = gameData.homeTeamName === userProfile.teamName;
             const opponent = isHome ? gameData.awayTeamName : gameData.homeTeamName;
             
+            const normalizedDate = typeof gameData.date?.toDate === "function" ? gameData.date.toDate() : gameData.date;
             setNextGame({
               opponent,
-              date: gameData.date,
+              date: normalizedDate,
               time: gameData.time,
               venue: gameData.venue || "TBD",
               isHome,
@@ -206,29 +210,31 @@ export default function PlayerProfilePopup({ userProfile, onClose, language }: P
           </svg>
         </button>
 
-        {/* Profile Header */}
+        {/* Profile Header - Horizontal layout: photo left, info right */}
         <div className="p-4 pb-3 sm:p-5">
-          <div className="flex items-center gap-3 sm:items-start">
-            {/* Player Photo */}
-            <div className="relative h-14 w-14 sm:h-16 sm:w-16 rounded-full overflow-hidden ring-2 ring-blue-500/50 flex-shrink-0">
-              {playerData?.headshot || userProfile.verificationImageUrl ? (
-                <Image
-                  src={playerData?.headshot || userProfile.verificationImageUrl || ""}
-                  alt={playerData?.name || userProfile.linkedPlayerName || `${userProfile.firstName} ${userProfile.lastName}`}
-                  fill
-                  className="object-cover"
-                />
-              ) : (
-                <div className="h-full w-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-lg sm:text-2xl font-bold">
-                  {playerData?.name?.[0] || userProfile.firstName[0]}{playerData?.name?.split(' ')[1]?.[0] || userProfile.lastName[0]}
-                </div>
-              )}
+          <div style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: "12px" }}>
+            {/* Player Photo - Fixed small size */}
+            <div style={{ width: "48px", height: "48px", minWidth: "48px", flexShrink: 0 }}>
+              <div className="relative w-full h-full rounded-full overflow-hidden ring-2 ring-blue-500/50">
+                {playerData?.headshot || userProfile.verificationImageUrl ? (
+                  <Image
+                    src={playerData?.headshot || userProfile.verificationImageUrl || ""}
+                    alt={playerData?.name || userProfile.linkedPlayerName || `${userProfile.firstName} ${userProfile.lastName}`}
+                    fill
+                    className="object-cover"
+                  />
+                ) : (
+                  <div className="h-full w-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-sm font-bold">
+                    {playerData?.name?.[0] || userProfile.firstName[0]}{playerData?.name?.split(' ')[1]?.[0] || userProfile.lastName[0]}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Player Info - Right side of headshot */}
-            <div className="flex-1 min-w-0 flex flex-col justify-center">
-              <h3 className="text-sm sm:text-base font-bold text-white truncate leading-tight">
-                {playerData?.name || userProfile.linkedPlayerName || `${userProfile.firstName} ${userProfile.lastName}`}
+            <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
+              <h3 className="text-sm font-bold text-white leading-tight truncate" title={fullName}>
+                {fullName}
               </h3>
               <p className="text-xs text-slate-300 mt-0.5">
                 #{playerData?.number || userProfile.playerNumber} • {playerData?.position || userProfile.position || "Player"}
@@ -313,25 +319,35 @@ export default function PlayerProfilePopup({ userProfile, onClose, language }: P
                   </div>
                   <div className="text-xs text-slate-300 mt-1">
                     {(() => {
-                      const gameDate = new Date(nextGame.date);
-                      const isValidDate = !isNaN(gameDate.getTime());
-                      
-                      if (!isValidDate) {
-                        return nextGame.date; // fallback to original if parsing fails
+                      const rawDate = nextGame.date as unknown;
+                      let parsedDate: Date | null = null;
+
+                      if (rawDate instanceof Date) {
+                        parsedDate = rawDate;
+                      } else if (typeof rawDate === "string" || typeof rawDate === "number") {
+                        const candidate = new Date(rawDate);
+                        parsedDate = isNaN(candidate.getTime()) ? null : candidate;
+                      } else if (rawDate && typeof rawDate === "object" && "toDate" in rawDate) {
+                        const candidate = (rawDate as { toDate?: () => Date }).toDate?.();
+                        parsedDate = candidate && !isNaN(candidate.getTime()) ? candidate : null;
                       }
-                      
-                      const dateStr = gameDate.toLocaleDateString("en-US", { 
+
+                      if (!parsedDate) {
+                        return typeof rawDate === "string" ? rawDate : "TBD";
+                      }
+
+                      const dateStr = parsedDate.toLocaleDateString("en-US", {
                         weekday: "short",
-                        month: "short", 
-                        day: "numeric" 
+                        month: "short",
+                        day: "numeric",
                       });
-                      
-                      const timeStr = gameDate.toLocaleTimeString("en-US", { 
-                        hour: "numeric", 
+
+                      const timeStr = parsedDate.toLocaleTimeString("en-US", {
+                        hour: "numeric",
                         minute: "2-digit",
-                        hour12: true 
+                        hour12: true,
                       });
-                      
+
                       return `${dateStr} • ${timeStr}`;
                     })()}
                   </div>

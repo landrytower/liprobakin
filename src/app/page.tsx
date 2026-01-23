@@ -1093,12 +1093,19 @@ export default function Home() {
 
   // Share player card using native share API
   const sharePlayerCard = useCallback(async (platform: 'ig' | 'fb') => {
-    if (!playerData) return;
+    if (!playerData) {
+      console.error('No player data available');
+      alert('No player data available');
+      return;
+    }
     
     // Create canvas for the share image
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!ctx) {
+      console.error('Could not get canvas context');
+      return;
+    }
     
     // Set dimensions (IG story or FB post)
     canvas.width = platform === 'ig' ? 1080 : 1200;
@@ -1123,18 +1130,22 @@ export default function Home() {
     ctx.fillStyle = 'rgba(249, 115, 22, 0.15)';
     ctx.fill();
     
-    // Load player image
-    const loadImage = (src: string): Promise<HTMLImageElement> => {
-      return new Promise((resolve, reject) => {
+    // Load player image with fallback
+    const loadImage = (src: string): Promise<HTMLImageElement | null> => {
+      return new Promise((resolve) => {
         const img = document.createElement('img');
         img.crossOrigin = 'anonymous';
         img.onload = () => resolve(img);
-        img.onerror = () => reject();
+        img.onerror = () => {
+          console.warn('Failed to load image:', src);
+          resolve(null);
+        };
         img.src = src;
       });
     };
     
     try {
+      // Try to load player image, use null if fails
       const playerImg = await loadImage(playerData.headshot || '/players/placeholder.jpg');
       
       if (platform === 'ig') {
@@ -1150,13 +1161,27 @@ export default function Home() {
         const photoX = (canvas.width - photoSize) / 2;
         const photoY = 250;
         
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(photoX + photoSize / 2, photoY + photoSize / 2, photoSize / 2, 0, Math.PI * 2);
-        ctx.closePath();
-        ctx.clip();
-        ctx.drawImage(playerImg, photoX, photoY, photoSize, photoSize);
-        ctx.restore();
+        // Draw photo placeholder or actual image
+        if (playerImg) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(photoX + photoSize / 2, photoY + photoSize / 2, photoSize / 2, 0, Math.PI * 2);
+          ctx.closePath();
+          ctx.clip();
+          ctx.drawImage(playerImg, photoX, photoY, photoSize, photoSize);
+          ctx.restore();
+        } else {
+          // Draw placeholder circle
+          ctx.fillStyle = '#374151';
+          ctx.beginPath();
+          ctx.arc(photoX + photoSize / 2, photoY + photoSize / 2, photoSize / 2, 0, Math.PI * 2);
+          ctx.fill();
+          // Draw initials
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 120px system-ui';
+          const initials = playerData.name.split(' ').map(n => n[0]).join('').slice(0, 2);
+          ctx.fillText(initials, photoX + photoSize / 2, photoY + photoSize / 2 + 40);
+        }
         
         // Photo border
         ctx.beginPath();
@@ -1221,14 +1246,28 @@ export default function Home() {
         const photoX = 80;
         const photoY = (canvas.height - photoSize) / 2;
         
-        // Player photo
-        ctx.save();
-        ctx.beginPath();
-        ctx.roundRect(photoX, photoY, photoSize, photoSize, 30);
-        ctx.closePath();
-        ctx.clip();
-        ctx.drawImage(playerImg, photoX, photoY, photoSize, photoSize);
-        ctx.restore();
+        // Player photo with fallback
+        if (playerImg) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.roundRect(photoX, photoY, photoSize, photoSize, 30);
+          ctx.closePath();
+          ctx.clip();
+          ctx.drawImage(playerImg, photoX, photoY, photoSize, photoSize);
+          ctx.restore();
+        } else {
+          // Placeholder
+          ctx.fillStyle = '#374151';
+          ctx.beginPath();
+          ctx.roundRect(photoX, photoY, photoSize, photoSize, 30);
+          ctx.fill();
+          // Draw initials
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 100px system-ui';
+          ctx.textAlign = 'center';
+          const initials = playerData.name.split(' ').map(n => n[0]).join('').slice(0, 2);
+          ctx.fillText(initials, photoX + photoSize / 2, photoY + photoSize / 2 + 35);
+        }
         
         // Photo border
         ctx.strokeStyle = 'rgba(245, 158, 11, 0.5)';

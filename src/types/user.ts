@@ -9,6 +9,7 @@ export interface UserProfile {
   firstName: string;
   lastName: string;
   role?: UserRole;
+  phoneVerified?: boolean; // Whether phone was verified via OTP
   createdAt: Date;
   updatedAt: Date;
   

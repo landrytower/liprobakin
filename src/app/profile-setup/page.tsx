@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -32,13 +32,13 @@ const translations = {
     mensLeague: "Men's League",
     womensLeague: "Women's League",
     chooseATeam: "Choose a team...",
-    changeGender: "← Change gender",
+    changeGender: "â† Change gender",
     selectPlayerStaff: "Select Your Name from Roster",
     chooseYourName: "Choose your name...",
     cantFindName: "Don't see your name in the roster?",
     createOwnProfile: "Create your own player profile",
     createPlayerProfile: "Create Player Profile",
-    backToRoster: "← Back to roster selection",
+    backToRoster: "â† Back to roster selection",
     firstName: "First Name",
     lastName: "Last Name",
     jerseyNumber: "Jersey #",
@@ -106,114 +106,114 @@ const translations = {
     showOnRosterYes: "Yes, show my profile on the team roster",
     showOnRosterNo: "No, keep my profile private",
     showOnRosterNote: "Your profile visibility will be approved by an administrator",
-    backToTeamSelection: "← Back to team selection",
-    backToCoachStaffChoice: "← Back to role selection",
+    backToTeamSelection: "â† Back to team selection",
+    backToCoachStaffChoice: "â† Back to role selection",
     coachSelected: "Coach selected",
     createCoachProfile: "Create Coach Profile",
     createStaffProfile: "Create Staff Profile",
     alreadyClaimed: "(Already Claimed)",
   },
   fr: {
-    completeYourProfile: "Complétez Votre Profil",
+    completeYourProfile: "ComplÃ©tez Votre Profil",
     letsGetYouSetup: "Configurons votre compte",
-    whatBringsYouHere: "Qu'est-ce qui vous amène ici ?",
-    chooseYourRole: "Choisissez votre rôle pour continuer",
+    whatBringsYouHere: "Qu'est-ce qui vous amÃ¨ne ici ?",
+    chooseYourRole: "Choisissez votre rÃ´le pour continuer",
     player: "Joueur",
     iAmAPlayer: "Je suis un joueur de basketball",
-    coachStaff: "Entraîneur / Staff",
-    iAmACoach: "Je suis un entraîneur ou membre du staff",
+    coachStaff: "EntraÃ®neur / Staff",
+    iAmACoach: "Je suis un entraÃ®neur ou membre du staff",
     fan: "Fan",
     iAmAFan: "Je suis un fan de basketball",
-    verificationRequired: "Vérification Requise",
-    accountWillBeReviewed: "Votre compte sera examiné par un administrateur avant approbation.",
-    selectGender: "Sélectionnez le Genre",
-    chooseToSeeTeams: "Choisissez pour voir les équipes disponibles",
+    verificationRequired: "VÃ©rification Requise",
+    accountWillBeReviewed: "Votre compte sera examinÃ© par un administrateur avant approbation.",
+    selectGender: "SÃ©lectionnez le Genre",
+    chooseToSeeTeams: "Choisissez pour voir les Ã©quipes disponibles",
     men: "Hommes",
     women: "Femmes",
-    selectYourTeam: "Sélectionnez Votre Équipe",
+    selectYourTeam: "SÃ©lectionnez Votre Ã‰quipe",
     mensLeague: "Ligue Masculine",
-    womensLeague: "Ligue Féminine",
-    chooseATeam: "Choisissez une équipe...",
-    changeGender: "← Changer de genre",
-    selectPlayerStaff: "Sélectionnez Votre Nom dans le Roster",
+    womensLeague: "Ligue FÃ©minine",
+    chooseATeam: "Choisissez une Ã©quipe...",
+    changeGender: "â† Changer de genre",
+    selectPlayerStaff: "SÃ©lectionnez Votre Nom dans le Roster",
     chooseYourName: "Choisissez votre nom...",
     cantFindName: "Vous ne voyez pas votre nom dans le roster ?",
-    createOwnProfile: "Créez votre propre profil de joueur",
-    createPlayerProfile: "Créer un Profil de Joueur",
-    backToRoster: "← Retour à la sélection du roster",
-    firstName: "Prénom",
+    createOwnProfile: "CrÃ©ez votre propre profil de joueur",
+    createPlayerProfile: "CrÃ©er un Profil de Joueur",
+    backToRoster: "â† Retour Ã  la sÃ©lection du roster",
+    firstName: "PrÃ©nom",
     lastName: "Nom de Famille",
-    jerseyNumber: "Numéro de Maillot",
+    jerseyNumber: "NumÃ©ro de Maillot",
     position: "Position",
-    selectPosition: "Sélectionnez une position",
+    selectPosition: "SÃ©lectionnez une position",
     height: "Taille",
     dateOfBirth: "Date de Naissance",
-    nationality: "Nationalité",
-    selectNationality: "Sélectionnez la nationalité",
-    secondNationality: "Deuxième Nationalité",
+    nationality: "NationalitÃ©",
+    selectNationality: "SÃ©lectionnez la nationalitÃ©",
+    secondNationality: "DeuxiÃ¨me NationalitÃ©",
     optional: "Optionnel",
     none: "Aucun",
     playerLicense: "Licence de Joueur",
     headshotPhoto: "Photo de Profil",
-    uploadHeadshotPhoto: "Téléchargez une photo de profil professionnelle",
-    uploadIdVerification: "Télécharger l'ID pour Vérification",
-    uploadIdHelper: "Téléchargez votre pièce d'identité ou badge si disponible pour une vérification plus rapide",
+    uploadHeadshotPhoto: "TÃ©lÃ©chargez une photo de profil professionnelle",
+    uploadIdVerification: "TÃ©lÃ©charger l'ID pour VÃ©rification",
+    uploadIdHelper: "TÃ©lÃ©chargez votre piÃ¨ce d'identitÃ© ou badge si disponible pour une vÃ©rification plus rapide",
     submitting: "Envoi en cours...",
-    submitForVerification: "Soumettre pour Vérification",
-    uploadId: "Veuillez télécharger une photo claire de votre pièce d'identité ou badge officiel",
-    completeAllFields: "Veuillez compléter tous les champs",
+    submitForVerification: "Soumettre pour VÃ©rification",
+    uploadId: "Veuillez tÃ©lÃ©charger une photo claire de votre piÃ¨ce d'identitÃ© ou badge officiel",
+    completeAllFields: "Veuillez complÃ©ter tous les champs",
     welcomeFan: "Bienvenue, Fan !",
-    fanWelcomeMessage: "Choisissez vos équipes favorites des ligues masculine et féminine. Vous pouvez les modifier à tout moment dans les paramètres de votre compte.",
+    fanWelcomeMessage: "Choisissez vos Ã©quipes favorites des ligues masculine et fÃ©minine. Vous pouvez les modifier Ã  tout moment dans les paramÃ¨tres de votre compte.",
     searchFavoritePlayer: "Recherchez Votre Joueur Favori",
     typePlayerName: "Tapez le nom du joueur pour rechercher...",
-    playerSelected: "Joueur sélectionné",
-    favoriteTeamMen: "Équipe Masculine Favorite",
-    favoriteTeamWomen: "Équipe Féminine Favorite",
-    typeToSearch: "Tapez pour rechercher des équipes...",
-    favoritePlayerMenTeam: "Joueur Favori de l'Équipe Masculine",
-    favoritePlayerWomenTeam: "Joueuse Favorite de l'Équipe Féminine",
+    playerSelected: "Joueur sÃ©lectionnÃ©",
+    favoriteTeamMen: "Ã‰quipe Masculine Favorite",
+    favoriteTeamWomen: "Ã‰quipe FÃ©minine Favorite",
+    typeToSearch: "Tapez pour rechercher des Ã©quipes...",
+    favoritePlayerMenTeam: "Joueur Favori de l'Ã‰quipe Masculine",
+    favoritePlayerWomenTeam: "Joueuse Favorite de l'Ã‰quipe FÃ©minine",
     typeToSearchPlayers: "Tapez pour rechercher des joueurs...",
     saving: "Enregistrement...",
     completeSetup: "Terminer la Configuration",
     required: "*",
     cm: "cm",
     // Coach/Staff specific translations
-    coachStaffSetup: "Configuration Entraîneur / Staff",
-    selectYourRole: "Quel est votre rôle ?",
-    coach: "Entraîneur",
-    iAmACoachRole: "Je suis entraîneur principal ou assistant",
-    staff: "Staff d'Équipe",
-    iAmTeamStaff: "Je suis membre du staff de l'équipe",
-    headCoach: "Entraîneur Principal",
-    assistantCoach: "Assistant Entraîneur",
-    selectCoachType: "Sélectionnez le type d'entraîneur",
-    claimExistingCoach: "Réclamer un Profil d'Entraîneur Existant",
-    selectCoachToClaim: "Sélectionnez un entraîneur à réclamer...",
-    noCoachesToClaim: "Aucun entraîneur disponible à réclamer",
-    createNewCoach: "Créer un Nouveau Profil d'Entraîneur",
-    coachPositionsFull: "Le poste d'entraîneur principal et les deux postes d'assistant sont occupés. Veuillez vous inscrire en tant que staff.",
-    staffRole: "Rôle Staff",
-    selectStaffRole: "Sélectionnez votre rôle...",
-    president: "Président",
-    vicePresident: "Vice-Président",
-    secretary: "Secrétaire",
-    treasurer: "Trésorier",
-    teamManager: "Manager d'Équipe",
-    mediaManager: "Responsable Médias",
-    equipmentManager: "Responsable Équipement",
-    medicalStaff: "Personnel Médical",
+    coachStaffSetup: "Configuration EntraÃ®neur / Staff",
+    selectYourRole: "Quel est votre rÃ´le ?",
+    coach: "EntraÃ®neur",
+    iAmACoachRole: "Je suis entraÃ®neur principal ou assistant",
+    staff: "Staff d'Ã‰quipe",
+    iAmTeamStaff: "Je suis membre du staff de l'Ã©quipe",
+    headCoach: "EntraÃ®neur Principal",
+    assistantCoach: "Assistant EntraÃ®neur",
+    selectCoachType: "SÃ©lectionnez le type d'entraÃ®neur",
+    claimExistingCoach: "RÃ©clamer un Profil d'EntraÃ®neur Existant",
+    selectCoachToClaim: "SÃ©lectionnez un entraÃ®neur Ã  rÃ©clamer...",
+    noCoachesToClaim: "Aucun entraÃ®neur disponible Ã  rÃ©clamer",
+    createNewCoach: "CrÃ©er un Nouveau Profil d'EntraÃ®neur",
+    coachPositionsFull: "Le poste d'entraÃ®neur principal et les deux postes d'assistant sont occupÃ©s. Veuillez vous inscrire en tant que staff.",
+    staffRole: "RÃ´le Staff",
+    selectStaffRole: "SÃ©lectionnez votre rÃ´le...",
+    president: "PrÃ©sident",
+    vicePresident: "Vice-PrÃ©sident",
+    secretary: "SecrÃ©taire",
+    treasurer: "TrÃ©sorier",
+    teamManager: "Manager d'Ã‰quipe",
+    mediaManager: "Responsable MÃ©dias",
+    equipmentManager: "Responsable Ã‰quipement",
+    medicalStaff: "Personnel MÃ©dical",
     statistician: "Statisticien",
     simpleStaff: "Membre du Staff",
-    showOnRoster: "Afficher sur le Roster de l'Équipe ?",
+    showOnRoster: "Afficher sur le Roster de l'Ã‰quipe ?",
     showOnRosterYes: "Oui, afficher mon profil sur le roster",
-    showOnRosterNo: "Non, garder mon profil privé",
-    showOnRosterNote: "La visibilité de votre profil sera approuvée par un administrateur",
-    backToTeamSelection: "← Retour à la sélection d'équipe",
-    backToCoachStaffChoice: "← Retour à la sélection du rôle",
-    coachSelected: "Entraîneur sélectionné",
-    createCoachProfile: "Créer un Profil d'Entraîneur",
-    createStaffProfile: "Créer un Profil Staff",
-    alreadyClaimed: "(Déjà Pris)",
+    showOnRosterNo: "Non, garder mon profil privÃ©",
+    showOnRosterNote: "La visibilitÃ© de votre profil sera approuvÃ©e par un administrateur",
+    backToTeamSelection: "â† Retour Ã  la sÃ©lection d'Ã©quipe",
+    backToCoachStaffChoice: "â† Retour Ã  la sÃ©lection du rÃ´le",
+    coachSelected: "EntraÃ®neur sÃ©lectionnÃ©",
+    createCoachProfile: "CrÃ©er un Profil d'EntraÃ®neur",
+    createStaffProfile: "CrÃ©er un Profil Staff",
+    alreadyClaimed: "(DÃ©jÃ  Pris)",
   },
 };
 
@@ -997,18 +997,18 @@ export default function ProfileSetup() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 relative overflow-hidden">
+    <div className="min-h-screen bg-[#040814] relative overflow-hidden">
       {/* Gradient Orbs Background */}
-      <div className="absolute -top-40 -right-40 h-80 w-80 rounded-full bg-gradient-to-br from-blue-500/20 to-purple-500/20 blur-3xl" />
-      <div className="absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-gradient-to-br from-orange-500/20 to-pink-500/20 blur-3xl" />
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-96 w-96 rounded-full bg-gradient-to-br from-cyan-500/10 to-blue-500/10 blur-3xl" />
+      <div className="absolute -top-40 -right-40 h-80 w-80 rounded-full bg-gradient-to-br from-cyan-500/10 to-blue-500/10 blur-3xl" />
+      <div className="absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-gradient-to-br from-cyan-500/10 to-sky-500/10 blur-3xl" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-96 w-96 rounded-full bg-gradient-to-br from-cyan-500/5 to-blue-500/5 blur-3xl" />
 
       <div className="relative z-10 mx-auto max-w-2xl px-4 py-12 sm:py-16">
-        <div className="rounded-3xl border border-white/20 bg-gradient-to-br from-white/10 via-white/5 to-transparent backdrop-blur-xl shadow-2xl shadow-black/50 p-6 sm:p-8">
+        <div className="rounded-2xl sm:rounded-3xl border border-white/10 bg-slate-900/80 backdrop-blur-xl shadow-2xl shadow-black/50 p-6 sm:p-8">
           {/* Header */}
           <div className="mb-6 sm:mb-8 text-center">
-            <div className="mx-auto mb-4 flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 backdrop-blur-sm border border-white/20">
-                  <svg className="h-7 w-7 sm:h-8 sm:w-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="mx-auto mb-4 flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-2xl bg-cyan-500/20 backdrop-blur-sm border border-cyan-500/30">
+                  <svg className="h-7 w-7 sm:h-8 sm:w-8 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
               </svg>
             </div>
@@ -1025,12 +1025,12 @@ export default function ProfileSetup() {
               <div className="grid gap-4">
                 <button
                   onClick={() => handleRoleSelection("player")}
-                  className="group relative overflow-hidden rounded-2xl border border-white/20 bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-sm p-5 sm:p-6 text-left transition-all duration-300 hover:border-green-400/50 hover:shadow-lg hover:shadow-green-500/20 hover:scale-[1.02]"
+                  className="group relative overflow-hidden rounded-xl sm:rounded-2xl border border-white/10 bg-slate-800/50 backdrop-blur-sm p-5 sm:p-6 text-left transition-all duration-300 hover:border-cyan-500/50 hover:bg-slate-800/70 hover:shadow-lg hover:shadow-cyan-500/10"
                   type="button"
                 >
                   <div className="flex items-start gap-3 sm:gap-4">
-                    <div className="flex h-10 w-10 sm:h-12 sm:w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-green-500/20 to-green-600/20 backdrop-blur-sm border border-white/20 group-hover:scale-110 transition-transform">
-                      <svg className="h-5 w-5 sm:h-6 sm:w-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="flex h-10 w-10 sm:h-12 sm:w-12 flex-shrink-0 items-center justify-center rounded-xl bg-cyan-500/20 backdrop-blur-sm border border-cyan-500/30 group-hover:scale-110 transition-transform">
+                      <svg className="h-5 w-5 sm:h-6 sm:w-6 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                       </svg>
                     </div>
@@ -1038,7 +1038,7 @@ export default function ProfileSetup() {
                       <h3 className="text-lg sm:text-xl font-bold text-white mb-1">{t.player}</h3>
                       <p className="text-sm text-slate-400">{t.iAmAPlayer}</p>
                     </div>
-                    <svg className="h-5 w-5 text-slate-400 group-hover:text-green-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="h-5 w-5 text-slate-500 group-hover:text-cyan-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
                   </div>
@@ -1046,12 +1046,12 @@ export default function ProfileSetup() {
 
                 <button
                   onClick={() => handleRoleSelection("coach")}
-                  className="group relative overflow-hidden rounded-2xl border border-white/20 bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-sm p-5 sm:p-6 text-left transition-all duration-300 hover:border-blue-400/50 hover:shadow-lg hover:shadow-blue-500/20 hover:scale-[1.02]"
+                  className="group relative overflow-hidden rounded-xl sm:rounded-2xl border border-white/10 bg-slate-800/50 backdrop-blur-sm p-5 sm:p-6 text-left transition-all duration-300 hover:border-sky-500/50 hover:bg-slate-800/70 hover:shadow-lg hover:shadow-sky-500/10"
                   type="button"
                 >
                   <div className="flex items-start gap-3 sm:gap-4">
-                    <div className="flex h-10 w-10 sm:h-12 sm:w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-900/30 to-blue-800/20 backdrop-blur-sm border border-white/20 group-hover:scale-110 transition-transform">
-                      <svg className="h-5 w-5 sm:h-6 sm:w-6 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="flex h-10 w-10 sm:h-12 sm:w-12 flex-shrink-0 items-center justify-center rounded-xl bg-sky-500/20 backdrop-blur-sm border border-sky-500/30 group-hover:scale-110 transition-transform">
+                      <svg className="h-5 w-5 sm:h-6 sm:w-6 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                       </svg>
                     </div>
@@ -1059,7 +1059,7 @@ export default function ProfileSetup() {
                       <h3 className="text-lg sm:text-xl font-bold text-white mb-1">{t.coachStaff}</h3>
                       <p className="text-sm text-slate-400">{t.iAmACoach}</p>
                     </div>
-                    <svg className="h-5 w-5 text-slate-400 group-hover:text-blue-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="h-5 w-5 text-slate-500 group-hover:text-sky-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
                   </div>
@@ -1067,12 +1067,12 @@ export default function ProfileSetup() {
 
                 <button
                   onClick={() => handleRoleSelection("fan")}
-                  className="group relative overflow-hidden rounded-2xl border border-white/20 bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-sm p-5 sm:p-6 text-left transition-all duration-300 hover:border-orange-400/50 hover:shadow-lg hover:shadow-orange-500/20 hover:scale-[1.02]"
+                  className="group relative overflow-hidden rounded-xl sm:rounded-2xl border border-white/10 bg-slate-800/50 backdrop-blur-sm p-5 sm:p-6 text-left transition-all duration-300 hover:border-amber-500/50 hover:bg-slate-800/70 hover:shadow-lg hover:shadow-amber-500/10"
                   type="button"
                 >
                   <div className="flex items-start gap-3 sm:gap-4">
-                    <div className="flex h-10 w-10 sm:h-12 sm:w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500/20 to-orange-600/20 backdrop-blur-sm border border-white/20 group-hover:scale-110 transition-transform">
-                      <svg className="h-5 w-5 sm:h-6 sm:w-6 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="flex h-10 w-10 sm:h-12 sm:w-12 flex-shrink-0 items-center justify-center rounded-xl bg-amber-500/20 backdrop-blur-sm border border-amber-500/30 group-hover:scale-110 transition-transform">
+                      <svg className="h-5 w-5 sm:h-6 sm:w-6 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                       </svg>
                     </div>
@@ -1080,7 +1080,7 @@ export default function ProfileSetup() {
                       <h3 className="text-lg sm:text-xl font-bold text-white mb-1">{t.fan}</h3>
                       <p className="text-sm text-slate-400">{t.iAmAFan}</p>
                     </div>
-                    <svg className="h-5 w-5 text-slate-400 group-hover:text-orange-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="h-5 w-5 text-slate-500 group-hover:text-amber-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
                   </div>
@@ -1092,13 +1092,13 @@ export default function ProfileSetup() {
           {step === "player-staff-setup" && (
             <div className="space-y-6">
               {/* Verification Notice */}
-              <div className="rounded-xl border border-green-400/50 bg-gradient-to-br from-green-500/10 to-green-600/5 backdrop-blur-sm p-4 flex items-start gap-3">
-                <svg className="h-5 w-5 text-green-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="rounded-xl border border-cyan-400/50 bg-cyan-500/10 backdrop-blur-sm p-4 flex items-start gap-3">
+                <svg className="h-5 w-5 text-cyan-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <div className="text-sm">
-                  <p className="font-semibold text-green-300 mb-1">{t.verificationRequired}</p>
-                  <p className="text-green-200/80">{t.accountWillBeReviewed}</p>
+                  <p className="font-semibold text-cyan-300 mb-1">{t.verificationRequired}</p>
+                  <p className="text-cyan-200/80">{t.accountWillBeReviewed}</p>
                 </div>
               </div>
 
@@ -1112,12 +1112,12 @@ export default function ProfileSetup() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <button
                       onClick={() => setSelectedGender("men")}
-                      className="group rounded-xl border border-white/20 bg-gradient-to-br from-green-500/10 to-green-600/5 backdrop-blur-sm p-5 sm:p-6 transition-all duration-300 hover:border-green-400/50 hover:shadow-lg hover:shadow-green-500/20 hover:scale-105"
+                      className="group rounded-xl border border-white/10 bg-slate-800/50 backdrop-blur-sm p-5 sm:p-6 transition-all duration-300 hover:border-cyan-400/50 hover:bg-slate-800/70 hover:shadow-lg hover:shadow-cyan-500/10"
                       type="button"
                     >
                       <div className="flex flex-col items-center gap-3">
-                        <div className="flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-full bg-green-500/20 backdrop-blur-sm border border-green-400/30 group-hover:scale-110 transition-transform">
-                          <svg className="h-6 w-6 sm:h-7 sm:w-7 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div className="flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-full bg-cyan-500/20 backdrop-blur-sm border border-cyan-400/30 group-hover:scale-110 transition-transform">
+                          <svg className="h-6 w-6 sm:h-7 sm:w-7 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                           </svg>
                         </div>
@@ -1127,7 +1127,7 @@ export default function ProfileSetup() {
 
                     <button
                       onClick={() => setSelectedGender("women")}
-                      className="group rounded-xl border border-white/20 bg-gradient-to-br from-pink-500/10 to-pink-600/5 backdrop-blur-sm p-5 sm:p-6 transition-all duration-300 hover:border-pink-400/50 hover:shadow-lg hover:shadow-pink-500/20 hover:scale-105"
+                      className="group rounded-xl border border-white/10 bg-slate-800/50 backdrop-blur-sm p-5 sm:p-6 transition-all duration-300 hover:border-pink-400/50 hover:bg-slate-800/70 hover:shadow-lg hover:shadow-pink-500/10"
                       type="button"
                     >
                       <div className="flex flex-col items-center gap-3">
@@ -1153,7 +1153,7 @@ export default function ProfileSetup() {
                     </label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
-                        <svg className="h-4 w-4 text-slate-400 group-focus-within:text-green-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="h-4 w-4 text-slate-400 group-focus-within:text-cyan-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                         </svg>
                       </div>
@@ -1161,7 +1161,7 @@ export default function ProfileSetup() {
                         value={selectedTeamId}
                         onChange={(e) => setSelectedTeamId(e.target.value)}
                         aria-label={t.selectYourTeam}
-                        className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm pl-11 pr-4 py-3 text-sm sm:text-base text-white focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all duration-300 appearance-none cursor-pointer"
+                        className="w-full rounded-xl border border-white/10 bg-slate-800/50 backdrop-blur-sm pl-11 pr-4 py-3 text-sm sm:text-base text-white focus:border-cyan-400/50 focus:outline-none focus:ring-2 focus:ring-cyan-400/30 transition-all duration-300 appearance-none cursor-pointer"
                       >
                         <option value="" className="bg-slate-900">{t.chooseATeam}</option>
                         {teams.map((team) => (
@@ -1182,7 +1182,7 @@ export default function ProfileSetup() {
                         setSelectedTeamId("");
                         setSelectedPersonId("");
                       }}
-                      className="mt-2 text-xs text-green-400 hover:text-green-300 transition-colors"
+                      className="mt-2 text-xs text-cyan-400 hover:text-cyan-300 transition-colors"
                       type="button"
                     >
                       {t.changeGender}
@@ -1197,7 +1197,7 @@ export default function ProfileSetup() {
                       </label>
                       <div className="relative">
                         <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
-                          <svg className="h-4 w-4 text-slate-400 group-focus-within:text-green-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="h-4 w-4 text-slate-400 group-focus-within:text-cyan-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                           </svg>
                         </div>
@@ -1205,7 +1205,7 @@ export default function ProfileSetup() {
                           value={selectedPersonId}
                           onChange={(e) => setSelectedPersonId(e.target.value)}
                           aria-label={t.selectPlayerStaff}
-                          className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm pl-11 pr-4 py-3 text-sm sm:text-base text-white focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all duration-300 appearance-none cursor-pointer"
+                          className="w-full rounded-xl border border-white/10 bg-slate-800/50 backdrop-blur-sm pl-11 pr-4 py-3 text-sm sm:text-base text-white focus:border-cyan-400/50 focus:outline-none focus:ring-2 focus:ring-cyan-400/30 transition-all duration-300 appearance-none cursor-pointer"
                         >
                           <option value="" className="bg-slate-900">{t.chooseYourName}</option>
                           {teamRoster.map((person) => (
@@ -1257,10 +1257,10 @@ export default function ProfileSetup() {
                             setPlayerLicense("");
                             setHeadshotPhoto(null);
                           }}
-                          className="text-xs text-green-400 hover:text-green-300 transition-colors"
+                          className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors"
                           type="button"
                         >
-                          ← Back to roster selection
+                          â† Back to roster selection
                         </button>
                       </div>
 
@@ -1275,7 +1275,7 @@ export default function ProfileSetup() {
                             type="text"
                             value={customFirstName}
                             onChange={(e) => setCustomFirstName(e.target.value)}
-                            className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all"
+                            className="w-full rounded-xl border border-white/10 bg-slate-800/50 backdrop-blur-sm px-4 py-3 text-white focus:border-cyan-400/50 focus:outline-none focus:ring-2 focus:ring-cyan-400/30 transition-all"
                             required
                           />
                         </div>
@@ -1288,7 +1288,7 @@ export default function ProfileSetup() {
                             type="text"
                             value={customLastName}
                             onChange={(e) => setCustomLastName(e.target.value)}
-                            className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all"
+                            className="w-full rounded-xl border border-white/10 bg-slate-800/50 backdrop-blur-sm px-4 py-3 text-white focus:border-cyan-400/50 focus:outline-none focus:ring-2 focus:ring-cyan-400/30 transition-all"
                             required
                           />
                         </div>
@@ -1303,7 +1303,7 @@ export default function ProfileSetup() {
                           type="text"
                           value={jerseyNumber}
                           onChange={(e) => setJerseyNumber(e.target.value)}
-                          className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all"
+                          className="w-full rounded-xl border border-white/10 bg-slate-800/50 backdrop-blur-sm px-4 py-3 text-white focus:border-cyan-400/50 focus:outline-none focus:ring-2 focus:ring-cyan-400/30 transition-all"
                           placeholder="e.g., 23"
                           required
                         />
@@ -1319,7 +1319,7 @@ export default function ProfileSetup() {
                             id="position"
                             value={position}
                             onChange={(e) => setPosition(e.target.value)}
-                            className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all appearance-none cursor-pointer"
+                            className="w-full rounded-xl border border-white/10 bg-slate-800/50 backdrop-blur-sm px-4 py-3 text-white focus:border-cyan-400/50 focus:outline-none focus:ring-2 focus:ring-cyan-400/30 transition-all appearance-none cursor-pointer"
                             required
                           >
                             <option value="" className="bg-slate-900">Select position</option>
@@ -1339,7 +1339,7 @@ export default function ProfileSetup() {
                               type="number"
                               value={heightCm}
                               onChange={(e) => setHeightCm(e.target.value)}
-                              className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 pr-16 text-white focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all"
+                              className="w-full rounded-xl border border-white/10 bg-slate-800/50 backdrop-blur-sm px-4 py-3 pr-16 text-white focus:border-cyan-400/50 focus:outline-none focus:ring-2 focus:ring-cyan-400/30 transition-all"
                               placeholder="185"
                               required
                             />
@@ -1360,7 +1360,7 @@ export default function ProfileSetup() {
                           type="date"
                           value={dateOfBirth}
                           onChange={(e) => setDateOfBirth(e.target.value)}
-                          className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all"
+                          className="w-full rounded-xl border border-white/10 bg-slate-800/50 backdrop-blur-sm px-4 py-3 text-white focus:border-cyan-400/50 focus:outline-none focus:ring-2 focus:ring-cyan-400/30 transition-all"
                           required
                         />
                       </div>
@@ -1374,7 +1374,7 @@ export default function ProfileSetup() {
                           id="nationality"
                           value={nationality}
                           onChange={(e) => setNationality(e.target.value)}
-                          className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all appearance-none cursor-pointer"
+                          className="w-full rounded-xl border border-white/10 bg-slate-800/50 backdrop-blur-sm px-4 py-3 text-white focus:border-cyan-400/50 focus:outline-none focus:ring-2 focus:ring-cyan-400/30 transition-all appearance-none cursor-pointer"
                           required
                         >
                           <option value="" className="bg-slate-900">Select nationality</option>
@@ -1395,7 +1395,7 @@ export default function ProfileSetup() {
                           id="secondNationality"
                           value={secondNationality}
                           onChange={(e) => setSecondNationality(e.target.value)}
-                          className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all appearance-none cursor-pointer"
+                          className="w-full rounded-xl border border-white/10 bg-slate-800/50 backdrop-blur-sm px-4 py-3 text-white focus:border-cyan-400/50 focus:outline-none focus:ring-2 focus:ring-cyan-400/30 transition-all appearance-none cursor-pointer"
                         >
                           <option value="" className="bg-slate-900">None</option>
                           {countries.map((country) => (
@@ -1415,7 +1415,7 @@ export default function ProfileSetup() {
                           type="text"
                           value={playerLicense}
                           onChange={(e) => setPlayerLicense(e.target.value)}
-                          className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all"
+                          className="w-full rounded-xl border border-white/10 bg-slate-800/50 backdrop-blur-sm px-4 py-3 text-white focus:border-cyan-400/50 focus:outline-none focus:ring-2 focus:ring-cyan-400/30 transition-all"
                           placeholder="Optional"
                         />
                       </div>
@@ -1431,7 +1431,7 @@ export default function ProfileSetup() {
                             type="file"
                             accept="image/*"
                             onChange={(e) => setHeadshotPhoto(e.target.files?.[0] || null)}
-                            className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white file:mr-4 file:rounded-lg file:border-0 file:bg-gradient-to-r file:from-blue-500 file:to-purple-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:shadow-lg transition-all cursor-pointer focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30"
+                            className="w-full rounded-xl border border-white/10 bg-slate-800/50 backdrop-blur-sm px-4 py-3 text-white file:mr-4 file:rounded-lg file:border-0 file:bg-gradient-to-r file:from-cyan-500 file:to-sky-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:shadow-lg transition-all cursor-pointer focus:border-cyan-400/50 focus:outline-none focus:ring-2 focus:ring-cyan-400/30"
                           />
                         </div>
                         <p className="mt-1 text-xs text-slate-400">Upload a professional headshot photo</p>
@@ -1448,7 +1448,7 @@ export default function ProfileSetup() {
                             type="file"
                             accept="image/*"
                             onChange={(e) => setIdImage(e.target.files?.[0] || null)}
-                            className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white file:mr-4 file:rounded-lg file:border-0 file:bg-gradient-to-r file:from-blue-500 file:to-purple-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:shadow-lg transition-all cursor-pointer focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30"
+                            className="w-full rounded-xl border border-white/10 bg-slate-800/50 backdrop-blur-sm px-4 py-3 text-white file:mr-4 file:rounded-lg file:border-0 file:bg-gradient-to-r file:from-cyan-500 file:to-sky-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:shadow-lg transition-all cursor-pointer focus:border-cyan-400/50 focus:outline-none focus:ring-2 focus:ring-cyan-400/30"
                           />
                         </div>
                         <div className="mt-2 flex items-start gap-2 text-xs text-slate-400">
@@ -1501,7 +1501,7 @@ export default function ProfileSetup() {
                           accept="image/*"
                           onChange={(e) => setIdImage(e.target.files?.[0] || null)}
                           aria-label="Upload ID for Verification"
-                          className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white file:mr-4 file:rounded-lg file:border-0 file:bg-gradient-to-r file:from-blue-500 file:to-purple-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:shadow-lg transition-all cursor-pointer focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30"
+                          className="w-full rounded-xl border border-white/10 bg-slate-800/50 backdrop-blur-sm px-4 py-3 text-white file:mr-4 file:rounded-lg file:border-0 file:bg-gradient-to-r file:from-cyan-500 file:to-sky-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:shadow-lg transition-all cursor-pointer focus:border-cyan-400/50 focus:outline-none focus:ring-2 focus:ring-cyan-400/30"
                         />
                       </div>
                       <div className="mt-2 flex items-start gap-2 text-xs text-slate-400">
@@ -1559,7 +1559,7 @@ export default function ProfileSetup() {
           {step === "coach-staff-setup" && (
             <div className="space-y-6">
               {/* Verification Notice */}
-              <div className="rounded-xl border border-blue-400/50 bg-gradient-to-br from-blue-500/10 to-blue-600/5 backdrop-blur-sm p-4 flex items-start gap-3">
+              <div className="rounded-xl border border-cyan-400/50 bg-gradient-to-br from-cyan-500/10 to-cyan-600/5 backdrop-blur-sm p-4 flex items-start gap-3">
                 <svg className="h-5 w-5 text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
@@ -1579,7 +1579,7 @@ export default function ProfileSetup() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <button
                       onClick={() => setSelectedGender("men")}
-                      className="group rounded-xl border border-white/20 bg-gradient-to-br from-blue-500/10 to-blue-600/5 backdrop-blur-sm p-5 sm:p-6 transition-all duration-300 hover:border-blue-400/50 hover:shadow-lg hover:shadow-blue-500/20 hover:scale-105"
+                      className="group rounded-xl border border-white/10 bg-gradient-to-br from-cyan-500/10 to-cyan-600/5 backdrop-blur-sm p-5 sm:p-6 transition-all duration-300 hover:border-cyan-400/50 hover:shadow-lg hover:shadow-cyan-500/20 hover:scale-105"
                       type="button"
                     >
                       <div className="flex flex-col items-center gap-3">
@@ -1594,7 +1594,7 @@ export default function ProfileSetup() {
 
                     <button
                       onClick={() => setSelectedGender("women")}
-                      className="group rounded-xl border border-white/20 bg-gradient-to-br from-pink-500/10 to-pink-600/5 backdrop-blur-sm p-5 sm:p-6 transition-all duration-300 hover:border-pink-400/50 hover:shadow-lg hover:shadow-pink-500/20 hover:scale-105"
+                      className="group rounded-xl border border-white/10 bg-gradient-to-br from-pink-500/10 to-pink-600/5 backdrop-blur-sm p-5 sm:p-6 transition-all duration-300 hover:border-pink-400/50 hover:shadow-lg hover:shadow-pink-500/20 hover:scale-105"
                       type="button"
                     >
                       <div className="flex flex-col items-center gap-3">
@@ -1633,7 +1633,7 @@ export default function ProfileSetup() {
                           setCreateNewCoach(false);
                         }}
                         aria-label={t.selectYourTeam}
-                        className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm pl-11 pr-4 py-3 text-sm sm:text-base text-white focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all duration-300 appearance-none cursor-pointer"
+                        className="w-full rounded-xl border border-white/10 bg-slate-800/50 backdrop-blur-sm pl-11 pr-4 py-3 text-sm sm:text-base text-white focus:border-cyan-400/50 focus:outline-none focus:ring-2 focus:ring-cyan-400/30 transition-all duration-300 appearance-none cursor-pointer"
                       >
                         <option value="" className="bg-slate-900">{t.chooseATeam}</option>
                         {teams.map((team) => (
@@ -1700,15 +1700,15 @@ export default function ProfileSetup() {
                             }
                           }}
                           disabled={coachPositionsFull}
-                          className={`group relative overflow-hidden rounded-2xl border border-white/20 bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-sm p-5 sm:p-6 text-left transition-all duration-300 ${
+                          className={`group relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-sm p-5 sm:p-6 text-left transition-all duration-300 ${
                             coachPositionsFull 
                               ? "opacity-50 cursor-not-allowed" 
-                              : "hover:border-blue-400/50 hover:shadow-lg hover:shadow-blue-500/20 hover:scale-[1.02]"
+                              : "hover:border-cyan-400/50 hover:shadow-lg hover:shadow-cyan-500/20 hover:scale-[1.02]"
                           }`}
                           type="button"
                         >
                           <div className="flex items-start gap-3 sm:gap-4">
-                            <div className="flex h-10 w-10 sm:h-12 sm:w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-600/20 backdrop-blur-sm border border-white/20 group-hover:scale-110 transition-transform">
+                            <div className="flex h-10 w-10 sm:h-12 sm:w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-600/20 backdrop-blur-sm border border-white/10 group-hover:scale-110 transition-transform">
                               <svg className="h-5 w-5 sm:h-6 sm:w-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                               </svg>
@@ -1735,11 +1735,11 @@ export default function ProfileSetup() {
                         setCoachStaffFirstName(userProfile?.firstName || "");
                         setCoachStaffLastName(userProfile?.lastName || "");
                       }}
-                      className="group relative overflow-hidden rounded-2xl border border-white/20 bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-sm p-5 sm:p-6 text-left transition-all duration-300 hover:border-purple-400/50 hover:shadow-lg hover:shadow-purple-500/20 hover:scale-[1.02]"
+                      className="group relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-sm p-5 sm:p-6 text-left transition-all duration-300 hover:border-purple-400/50 hover:shadow-lg hover:shadow-purple-500/20 hover:scale-[1.02]"
                       type="button"
                     >
                       <div className="flex items-start gap-3 sm:gap-4">
-                        <div className="flex h-10 w-10 sm:h-12 sm:w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-purple-500/20 to-purple-600/20 backdrop-blur-sm border border-white/20 group-hover:scale-110 transition-transform">
+                        <div className="flex h-10 w-10 sm:h-12 sm:w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-purple-500/20 to-purple-600/20 backdrop-blur-sm border border-white/10 group-hover:scale-110 transition-transform">
                           <svg className="h-5 w-5 sm:h-6 sm:w-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                           </svg>
@@ -1783,7 +1783,7 @@ export default function ProfileSetup() {
                             value={selectedCoachId}
                             onChange={(e) => setSelectedCoachId(e.target.value)}
                             aria-label={t.claimExistingCoach}
-                            className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-sm sm:text-base text-white focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all duration-300 appearance-none cursor-pointer"
+                            className="w-full rounded-xl border border-white/10 bg-slate-800/50 backdrop-blur-sm px-4 py-3 text-sm sm:text-base text-white focus:border-cyan-400/50 focus:outline-none focus:ring-2 focus:ring-cyan-400/30 transition-all duration-300 appearance-none cursor-pointer"
                           >
                             <option value="" className="bg-slate-900">{t.selectCoachToClaim}</option>
                             {teamCoaches.map((coach) => (
@@ -1825,7 +1825,7 @@ export default function ProfileSetup() {
                             type="file"
                             accept="image/*"
                             onChange={(e) => setIdImage(e.target.files?.[0] || null)}
-                            className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white file:mr-4 file:rounded-lg file:border-0 file:bg-gradient-to-r file:from-blue-500 file:to-purple-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:shadow-lg transition-all cursor-pointer focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30"
+                            className="w-full rounded-xl border border-white/10 bg-slate-800/50 backdrop-blur-sm px-4 py-3 text-white file:mr-4 file:rounded-lg file:border-0 file:bg-gradient-to-r file:from-cyan-500 file:to-sky-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:shadow-lg transition-all cursor-pointer focus:border-cyan-400/50 focus:outline-none focus:ring-2 focus:ring-cyan-400/30"
                           />
                           <p className="mt-1 text-xs text-slate-400">{t.uploadIdHelper}</p>
                         </div>
@@ -1910,7 +1910,7 @@ export default function ProfileSetup() {
                             type="text"
                             value={coachStaffFirstName}
                             onChange={(e) => setCoachStaffFirstName(e.target.value)}
-                            className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all"
+                            className="w-full rounded-xl border border-white/10 bg-slate-800/50 backdrop-blur-sm px-4 py-3 text-white focus:border-cyan-400/50 focus:outline-none focus:ring-2 focus:ring-cyan-400/30 transition-all"
                             required
                           />
                         </div>
@@ -1923,7 +1923,7 @@ export default function ProfileSetup() {
                             type="text"
                             value={coachStaffLastName}
                             onChange={(e) => setCoachStaffLastName(e.target.value)}
-                            className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all"
+                            className="w-full rounded-xl border border-white/10 bg-slate-800/50 backdrop-blur-sm px-4 py-3 text-white focus:border-cyan-400/50 focus:outline-none focus:ring-2 focus:ring-cyan-400/30 transition-all"
                             required
                           />
                         </div>
@@ -1945,9 +1945,9 @@ export default function ProfileSetup() {
                                 <div className="mb-3 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3">
                                   <p className="text-xs font-medium text-yellow-400 mb-1">Positions Already Filled:</p>
                                   <ul className="text-xs text-yellow-300/80 space-y-1">
-                                    {!canAddHeadCoach && <li>• Head Coach (claimed)</li>}
-                                    {assistantsAvailable === 0 && <li>• Assistant Coach 1 & 2 (both claimed)</li>}
-                                    {assistantsAvailable === 1 && <li>• Assistant Coach 1 (claimed)</li>}
+                                    {!canAddHeadCoach && <li>â€¢ Head Coach (claimed)</li>}
+                                    {assistantsAvailable === 0 && <li>â€¢ Assistant Coach 1 & 2 (both claimed)</li>}
+                                    {assistantsAvailable === 1 && <li>â€¢ Assistant Coach 1 (claimed)</li>}
                                   </ul>
                                 </div>
                               )}
@@ -1955,7 +1955,7 @@ export default function ProfileSetup() {
                                 id="coachType"
                                 value={coachType}
                                 onChange={(e) => setCoachType(e.target.value as CoachStaffRole)}
-                                className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all appearance-none cursor-pointer"
+                                className="w-full rounded-xl border border-white/10 bg-slate-800/50 backdrop-blur-sm px-4 py-3 text-white focus:border-cyan-400/50 focus:outline-none focus:ring-2 focus:ring-cyan-400/30 transition-all appearance-none cursor-pointer"
                                 required
                               >
                                 <option value="" className="bg-slate-900">{t.selectCoachType}</option>
@@ -1995,7 +1995,7 @@ export default function ProfileSetup() {
                           type="file"
                           accept="image/*"
                           onChange={(e) => setCoachStaffPhoto(e.target.files?.[0] || null)}
-                          className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white file:mr-4 file:rounded-lg file:border-0 file:bg-gradient-to-r file:from-blue-500 file:to-purple-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:shadow-lg transition-all cursor-pointer focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30"
+                          className="w-full rounded-xl border border-white/10 bg-slate-800/50 backdrop-blur-sm px-4 py-3 text-white file:mr-4 file:rounded-lg file:border-0 file:bg-gradient-to-r file:from-cyan-500 file:to-sky-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:shadow-lg transition-all cursor-pointer focus:border-cyan-400/50 focus:outline-none focus:ring-2 focus:ring-cyan-400/30"
                         />
                         <p className="mt-1 text-xs text-slate-400">{t.uploadHeadshotPhoto}</p>
                       </div>
@@ -2010,7 +2010,7 @@ export default function ProfileSetup() {
                           type="file"
                           accept="image/*"
                           onChange={(e) => setIdImage(e.target.files?.[0] || null)}
-                          className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white file:mr-4 file:rounded-lg file:border-0 file:bg-gradient-to-r file:from-blue-500 file:to-purple-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:shadow-lg transition-all cursor-pointer focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/30"
+                          className="w-full rounded-xl border border-white/10 bg-slate-800/50 backdrop-blur-sm px-4 py-3 text-white file:mr-4 file:rounded-lg file:border-0 file:bg-gradient-to-r file:from-cyan-500 file:to-sky-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:shadow-lg transition-all cursor-pointer focus:border-cyan-400/50 focus:outline-none focus:ring-2 focus:ring-cyan-400/30"
                         />
                         <p className="mt-1 text-xs text-slate-400">{t.uploadIdHelper}</p>
                       </div>
@@ -2076,7 +2076,7 @@ export default function ProfileSetup() {
                         value={coachStaffFirstName}
                         onChange={(e) => setCoachStaffFirstName(e.target.value)}
                         placeholder={userProfile?.firstName || ""}
-                        className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white focus:border-purple-400/50 focus:outline-none focus:ring-2 focus:ring-purple-400/30 transition-all"
+                        className="w-full rounded-xl border border-white/10 bg-slate-800/50 backdrop-blur-sm px-4 py-3 text-white focus:border-purple-400/50 focus:outline-none focus:ring-2 focus:ring-purple-400/30 transition-all"
                         required
                       />
                     </div>
@@ -2089,7 +2089,7 @@ export default function ProfileSetup() {
                         value={coachStaffLastName}
                         onChange={(e) => setCoachStaffLastName(e.target.value)}
                         placeholder={userProfile?.lastName || ""}
-                        className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white focus:border-purple-400/50 focus:outline-none focus:ring-2 focus:ring-purple-400/30 transition-all"
+                        className="w-full rounded-xl border border-white/10 bg-slate-800/50 backdrop-blur-sm px-4 py-3 text-white focus:border-purple-400/50 focus:outline-none focus:ring-2 focus:ring-purple-400/30 transition-all"
                         required
                       />
                     </div>
@@ -2104,7 +2104,7 @@ export default function ProfileSetup() {
                       id="staffPosition"
                       value={staffPosition}
                       onChange={(e) => setStaffPosition(e.target.value as StaffPosition)}
-                      className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white focus:border-purple-400/50 focus:outline-none focus:ring-2 focus:ring-purple-400/30 transition-all appearance-none cursor-pointer"
+                      className="w-full rounded-xl border border-white/10 bg-slate-800/50 backdrop-blur-sm px-4 py-3 text-white focus:border-purple-400/50 focus:outline-none focus:ring-2 focus:ring-purple-400/30 transition-all appearance-none cursor-pointer"
                       required
                     >
                       <option value="" className="bg-slate-900">{t.selectStaffRole}</option>
@@ -2125,12 +2125,12 @@ export default function ProfileSetup() {
                     {claimedStaffPositions.length > 0 && (
                       <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
                         <p className="text-xs font-medium text-amber-400 mb-2">
-                          ⚠️ {language === 'fr' ? 'Postes déjà pris :' : 'Positions already claimed:'}
+                          âš ï¸ {language === 'fr' ? 'Postes dÃ©jÃ  pris :' : 'Positions already claimed:'}
                         </p>
                         <ul className="text-xs text-amber-300/80 space-y-1">
                           {claimedStaffPositions.map((pos) => {
                             const posLabel = staffPositions.find(p => p.value === pos)?.label || pos;
-                            return <li key={pos}>• {posLabel}</li>;
+                            return <li key={pos}>â€¢ {posLabel}</li>;
                           })}
                         </ul>
                       </div>
@@ -2147,7 +2147,7 @@ export default function ProfileSetup() {
                       type="file"
                       accept="image/*"
                       onChange={(e) => setCoachStaffPhoto(e.target.files?.[0] || null)}
-                      className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white file:mr-4 file:rounded-lg file:border-0 file:bg-gradient-to-r file:from-purple-500 file:to-purple-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:shadow-lg transition-all cursor-pointer focus:border-purple-400/50 focus:outline-none focus:ring-2 focus:ring-purple-400/30"
+                      className="w-full rounded-xl border border-white/10 bg-slate-800/50 backdrop-blur-sm px-4 py-3 text-white file:mr-4 file:rounded-lg file:border-0 file:bg-gradient-to-r file:from-purple-500 file:to-purple-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:shadow-lg transition-all cursor-pointer focus:border-purple-400/50 focus:outline-none focus:ring-2 focus:ring-purple-400/30"
                     />
                     <p className="mt-1 text-xs text-slate-400">{t.uploadHeadshotPhoto}</p>
                   </div>
@@ -2162,7 +2162,7 @@ export default function ProfileSetup() {
                       type="file"
                       accept="image/*"
                       onChange={(e) => setIdImage(e.target.files?.[0] || null)}
-                      className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-white file:mr-4 file:rounded-lg file:border-0 file:bg-gradient-to-r file:from-purple-500 file:to-purple-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:shadow-lg transition-all cursor-pointer focus:border-purple-400/50 focus:outline-none focus:ring-2 focus:ring-purple-400/30"
+                      className="w-full rounded-xl border border-white/10 bg-slate-800/50 backdrop-blur-sm px-4 py-3 text-white file:mr-4 file:rounded-lg file:border-0 file:bg-gradient-to-r file:from-purple-500 file:to-purple-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:shadow-lg transition-all cursor-pointer focus:border-purple-400/50 focus:outline-none focus:ring-2 focus:ring-purple-400/30"
                     />
                     <p className="mt-1 text-xs text-slate-400">{t.uploadIdHelper}</p>
                   </div>
@@ -2252,7 +2252,7 @@ export default function ProfileSetup() {
                     onBlur={() => setTimeout(() => setShowGlobalPlayerDropdown(false), 200)}
                     placeholder="Type player name to search..."
                     aria-label="Search for favorite player"
-                    className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm pl-11 pr-10 py-3 text-white placeholder-slate-500 focus:border-orange-400/50 focus:outline-none focus:ring-2 focus:ring-orange-400/30 transition-all duration-300"
+                    className="w-full rounded-xl border border-white/10 bg-slate-800/50 backdrop-blur-sm pl-11 pr-10 py-3 text-white placeholder-slate-500 focus:border-orange-400/50 focus:outline-none focus:ring-2 focus:ring-orange-400/30 transition-all duration-300"
                   />
                   {globalPlayerSearch && (
                     <button
@@ -2272,7 +2272,7 @@ export default function ProfileSetup() {
                   {showGlobalPlayerDropdown && allPlayers.filter(player => 
                     player.name.toLowerCase().includes(globalPlayerSearch.toLowerCase())
                   ).length > 0 && (
-                    <div className="absolute z-20 mt-2 w-full rounded-xl border border-white/20 bg-slate-900 backdrop-blur-xl shadow-2xl max-h-80 overflow-y-auto">
+                    <div className="absolute z-20 mt-2 w-full rounded-xl border border-white/10 bg-slate-900 backdrop-blur-xl shadow-2xl max-h-80 overflow-y-auto">
                       {allPlayers
                         .filter(player => player.name.toLowerCase().includes(globalPlayerSearch.toLowerCase()))
                         .slice(0, 10)
@@ -2288,7 +2288,7 @@ export default function ProfileSetup() {
                             type="button"
                           >
                             {/* Player Headshot */}
-                            <div className="flex-shrink-0 h-12 w-12 rounded-full overflow-hidden bg-slate-800 border-2 border-white/20">
+                            <div className="flex-shrink-0 h-12 w-12 rounded-full overflow-hidden bg-slate-800 border-2 border-white/10">
                               {player.headshot ? (
                                 <img 
                                   src={player.headshot} 
@@ -2349,7 +2349,7 @@ export default function ProfileSetup() {
                     onBlur={() => setTimeout(() => setShowMenTeamDropdown(false), 200)}
                     placeholder="Type to search teams..."
                     aria-label="Search Men's Team"
-                    className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm pl-11 pr-10 py-3 text-white placeholder-slate-500 focus:border-orange-400/50 focus:outline-none focus:ring-2 focus:ring-orange-400/30 transition-all duration-300"
+                    className="w-full rounded-xl border border-white/10 bg-slate-800/50 backdrop-blur-sm pl-11 pr-10 py-3 text-white placeholder-slate-500 focus:border-orange-400/50 focus:outline-none focus:ring-2 focus:ring-orange-400/30 transition-all duration-300"
                   />
                   {menTeamSearch && (
                     <button
@@ -2370,7 +2370,7 @@ export default function ProfileSetup() {
                   {showMenTeamDropdown && menTeams.filter(team => 
                     team.name.toLowerCase().includes(menTeamSearch.toLowerCase())
                   ).length > 0 && (
-                    <div className="absolute z-20 mt-2 w-full rounded-xl border border-white/20 bg-slate-900 backdrop-blur-xl shadow-2xl max-h-60 overflow-y-auto">
+                    <div className="absolute z-20 mt-2 w-full rounded-xl border border-white/10 bg-slate-900 backdrop-blur-xl shadow-2xl max-h-60 overflow-y-auto">
                       {menTeams
                         .filter(team => team.name.toLowerCase().includes(menTeamSearch.toLowerCase()))
                         .map((team) => (
@@ -2413,7 +2413,7 @@ export default function ProfileSetup() {
                       onBlur={() => setTimeout(() => setShowMenPlayerDropdown(false), 200)}
                       placeholder="Type to search players..."
                       aria-label="Search Men's Player"
-                      className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm pl-11 pr-10 py-3 text-white placeholder-slate-500 focus:border-orange-400/50 focus:outline-none focus:ring-2 focus:ring-orange-400/30 transition-all duration-300"
+                      className="w-full rounded-xl border border-white/10 bg-slate-800/50 backdrop-blur-sm pl-11 pr-10 py-3 text-white placeholder-slate-500 focus:border-orange-400/50 focus:outline-none focus:ring-2 focus:ring-orange-400/30 transition-all duration-300"
                     />
                     {menPlayerSearch && (
                       <button
@@ -2433,7 +2433,7 @@ export default function ProfileSetup() {
                     {showMenTeamDropdown && menTeams.filter(team => 
                       team.name.toLowerCase().includes(menTeamSearch.toLowerCase())
                     ).length > 0 && (
-                      <div className="absolute z-20 mt-2 w-full rounded-xl border border-white/20 bg-slate-900 backdrop-blur-xl shadow-2xl max-h-60 overflow-y-auto">
+                      <div className="absolute z-20 mt-2 w-full rounded-xl border border-white/10 bg-slate-900 backdrop-blur-xl shadow-2xl max-h-60 overflow-y-auto">
                         {menTeams
                           .filter(team => team.name.toLowerCase().includes(menTeamSearch.toLowerCase()))
                           .map((team) => (
@@ -2476,7 +2476,7 @@ export default function ProfileSetup() {
                     onBlur={() => setTimeout(() => setShowWomenTeamDropdown(false), 200)}
                     placeholder="Type to search teams..."
                     aria-label="Search Women's Team"
-                    className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm pl-11 pr-10 py-3 text-white placeholder-slate-500 focus:border-orange-400/50 focus:outline-none focus:ring-2 focus:ring-orange-400/30 transition-all duration-300"
+                    className="w-full rounded-xl border border-white/10 bg-slate-800/50 backdrop-blur-sm pl-11 pr-10 py-3 text-white placeholder-slate-500 focus:border-orange-400/50 focus:outline-none focus:ring-2 focus:ring-orange-400/30 transition-all duration-300"
                   />
                   {womenTeamSearch && (
                     <button
@@ -2497,7 +2497,7 @@ export default function ProfileSetup() {
                   {showWomenTeamDropdown && womenTeams.filter(team => 
                     team.name.toLowerCase().includes(womenTeamSearch.toLowerCase())
                   ).length > 0 && (
-                    <div className="absolute z-20 mt-2 w-full rounded-xl border border-white/20 bg-slate-900 backdrop-blur-xl shadow-2xl max-h-60 overflow-y-auto">
+                    <div className="absolute z-20 mt-2 w-full rounded-xl border border-white/10 bg-slate-900 backdrop-blur-xl shadow-2xl max-h-60 overflow-y-auto">
                       {womenTeams
                         .filter(team => team.name.toLowerCase().includes(womenTeamSearch.toLowerCase()))
                         .map((team) => (
@@ -2540,7 +2540,7 @@ export default function ProfileSetup() {
                       onBlur={() => setTimeout(() => setShowWomenPlayerDropdown(false), 200)}
                       placeholder="Type to search players..."
                       aria-label="Search Women's Player"
-                      className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm pl-11 pr-10 py-3 text-white placeholder-slate-500 focus:border-orange-400/50 focus:outline-none focus:ring-2 focus:ring-orange-400/30 transition-all duration-300"
+                      className="w-full rounded-xl border border-white/10 bg-slate-800/50 backdrop-blur-sm pl-11 pr-10 py-3 text-white placeholder-slate-500 focus:border-orange-400/50 focus:outline-none focus:ring-2 focus:ring-orange-400/30 transition-all duration-300"
                     />
                     {womenPlayerSearch && (
                       <button
@@ -2560,7 +2560,7 @@ export default function ProfileSetup() {
                     {showWomenPlayerDropdown && womenTeamPlayers.filter(player => 
                       player.name.toLowerCase().includes(womenPlayerSearch.toLowerCase())
                     ).length > 0 && (
-                      <div className="absolute z-20 mt-2 w-full rounded-xl border border-white/20 bg-slate-900 backdrop-blur-xl shadow-2xl max-h-60 overflow-y-auto">
+                      <div className="absolute z-20 mt-2 w-full rounded-xl border border-white/10 bg-slate-900 backdrop-blur-xl shadow-2xl max-h-60 overflow-y-auto">
                         {womenTeamPlayers
                           .filter(player => player.name.toLowerCase().includes(womenPlayerSearch.toLowerCase()))
                           .map((player) => (

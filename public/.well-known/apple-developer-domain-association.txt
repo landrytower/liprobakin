@@ -1,0 +1,10 @@
+# Apple Domain Verification
+# Replace this content with the verification string from Apple Developer Console
+# 1. Go to: https://developer.apple.com/account/resources/identifiers/list/serviceId
+# 2. Click on your Services ID (com.liprobakin.web.service)
+# 3. Click Configure next to "Sign in with Apple"
+# 4. Add domain: liprobakin.com
+# 5. Click Download and copy the content here
+# 6. Delete these comment lines and paste only the verification string
+
+YOUR_APPLE_VERIFICATION_STRING_HERE

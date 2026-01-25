@@ -1,0 +1,169 @@
+// ═══════════════════════════════════════════════════════════════════════════════
+// FIRESTORE SECURITY RULES - BASKETBALL LEAGUE ADMIN SYSTEM
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// Copy these rules to your Firebase Console > Firestore > Rules
+//
+// ═══════════════════════════════════════════════════════════════════════════════
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // HELPER FUNCTIONS
+    // ─────────────────────────────────────────────────────────────────────────
+    
+    // Check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Check if user is an active admin
+    function isAdmin() {
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/adminUsers/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/adminUsers/$(request.auth.uid)).data.isActive == true;
+    }
+    
+    // Check if user is master admin
+    function isMasterAdmin() {
+      return isAdmin() &&
+        get(/databases/$(database)/documents/adminUsers/$(request.auth.uid)).data.role == 'master';
+    }
+    
+    // Check if admin has specific permission
+    function hasPermission(permission) {
+      return isAdmin() && 
+        get(/databases/$(database)/documents/adminUsers/$(request.auth.uid)).data.permissions[permission] == true;
+    }
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // ADMIN USERS
+    // ─────────────────────────────────────────────────────────────────────────
+    
+    match /adminUsers/{userId} {
+      // Only master admins can manage other admins
+      allow read: if isAdmin();
+      allow create, update, delete: if isMasterAdmin();
+      
+      // Users can read their own admin doc
+      allow read: if request.auth.uid == userId;
+    }
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // SEASONS
+    // ─────────────────────────────────────────────────────────────────────────
+    
+    match /seasons/{seasonId} {
+      // Public read access for seasons
+      allow read: if true;
+      
+      // Only admins with proper permissions can modify
+      allow create, update, delete: if hasPermission('canManageLeague') || isMasterAdmin();
+    }
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // TEAMS
+    // ─────────────────────────────────────────────────────────────────────────
+    
+    match /teams/{teamId} {
+      // Public read access
+      allow read: if true;
+      
+      // Only admins can modify teams
+      allow create, update, delete: if hasPermission('canManageTeams') || isMasterAdmin();
+      
+      // Roster subcollection
+      match /roster/{playerId} {
+        allow read: if true;
+        allow create, update, delete: if hasPermission('canManageTeams') || isMasterAdmin();
+      }
+      
+      // Staff subcollection
+      match /staff/{staffId} {
+        allow read: if true;
+        allow create, update, delete: if hasPermission('canManageTeams') || isMasterAdmin();
+      }
+    }
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // SEASON TEAM STATS (Standings)
+    // ─────────────────────────────────────────────────────────────────────────
+    
+    match /seasonTeamStats/{statsId} {
+      // Public read for standings
+      allow read: if true;
+      
+      // Only cloud functions should modify this (via admin SDK)
+      // Direct writes blocked for everyone
+      allow write: if false;
+    }
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // GAMES
+    // ─────────────────────────────────────────────────────────────────────────
+    
+    match /games/{gameId} {
+      // Public read access
+      allow read: if true;
+      
+      // Only admins can modify games
+      allow create, update, delete: if hasPermission('canManageGames') || isMasterAdmin();
+    }
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // PLAYERS
+    // ─────────────────────────────────────────────────────────────────────────
+    
+    match /players/{playerId} {
+      // Public read access
+      allow read: if true;
+      
+      // Only admins can modify players
+      allow create, update, delete: if hasPermission('canManageTeams') || isMasterAdmin();
+    }
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // PLAYER GAME STATS
+    // ─────────────────────────────────────────────────────────────────────────
+    
+    match /playerGameStats/{statsId} {
+      // Public read access for stats
+      allow read: if true;
+      
+      // Only admins can submit/modify stats
+      allow create, update, delete: if hasPermission('canManageGames') || isMasterAdmin();
+    }
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // PLAYER SEASON STATS (Aggregated)
+    // ─────────────────────────────────────────────────────────────────────────
+    
+    match /playerSeasonStats/{statsId} {
+      // Public read access
+      allow read: if true;
+      
+      // Only cloud functions should modify this (via admin SDK)
+      allow write: if false;
+    }
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // NEWS ARTICLES
+    // ─────────────────────────────────────────────────────────────────────────
+    
+    match /news/{articleId} {
+      allow read: if true;
+      allow create, update, delete: if hasPermission('canPublishNews') || isMasterAdmin();
+    }
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // AUDIT LOGS (Admin only, read only for most)
+    // ─────────────────────────────────────────────────────────────────────────
+    
+    match /auditLogs/{logId} {
+      allow read: if isMasterAdmin();
+      allow write: if false; // Only cloud functions write audit logs
+    }
+  }
+}

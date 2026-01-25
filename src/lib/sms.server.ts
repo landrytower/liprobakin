@@ -1,9 +1,8 @@
 /**
- * Server-only SMS/Email utilities using Twilio
- * This file should ONLY be imported in API routes (server-side)
+ * Server-only SMS/Email utilities
+ * SMS OTP is now handled by Firebase Phone Authentication
+ * This file is for password reset via email only
  */
-
-import twilio from 'twilio';
 
 /**
  * Send reset code via email
@@ -33,91 +32,53 @@ export async function sendResetCodeEmail(email: string, code: string, firstName:
 }
 
 /**
- * Send reset code via SMS using Twilio
- * Requires Twilio credentials in environment variables
+ * Send reset code via SMS
+ * NOTE: For phone authentication and OTP, use Firebase Phone Auth instead
+ * This is a fallback that logs to console for development
  */
 export async function sendResetCodeSMS(phoneNumber: string, code: string, firstName: string): Promise<boolean> {
   try {
-    // Check if Twilio credentials are available
-    const accountSid = process.env.TWILIO_ACCOUNT_SID;
-    const authToken = process.env.TWILIO_AUTH_TOKEN;
-    const fromNumber = process.env.TWILIO_PHONE_NUMBER;
-
-    if (!accountSid || !authToken || !fromNumber) {
-      console.warn("Twilio credentials not configured. Logging code to console instead.");
-      console.log(`
-        ====================================
-        PASSWORD RESET CODE (SMS)
-        Phone: ${phoneNumber}
-        Name: ${firstName}
-        Code: ${code}
-        Message: Your FEBACO password reset code is: ${code}. Valid for 10 minutes.
-        ====================================
-      `);
-      return true;
-    }
-
-    // Use Twilio to send SMS
-    const client = twilio(accountSid, authToken);
-
-    const message = await client.messages.create({
-      body: `Hi ${firstName}, your FEBACO password reset code is: ${code}. Valid for 10 minutes.`,
-      from: fromNumber,
-      to: phoneNumber,
-    });
-
-    console.log(`SMS sent successfully. Message SID: ${message.sid}`);
+    // Firebase Phone Auth handles SMS OTP automatically
+    // This is just a fallback for password reset codes
+    console.log(`
+      ====================================
+      PASSWORD RESET CODE (SMS)
+      Phone: ${phoneNumber}
+      Name: ${firstName}
+      Code: ${code}
+      Message: Your FEBACO password reset code is: ${code}. Valid for 10 minutes.
+      
+      NOTE: For OTP login, use Firebase Phone Authentication
+      ====================================
+    `);
     return true;
   } catch (error) {
-    console.error('Error sending SMS via Twilio:', error);
+    console.error('Error logging SMS code:', error);
     return false;
   }
 }
 
 /**
- * Send reset link via SMS using Twilio
- * Requires Twilio credentials in environment variables
+ * Send reset link via SMS
+ * NOTE: For phone authentication, use Firebase Phone Auth instead
  */
 export async function sendResetLinkSMS(phoneNumber: string, resetLink: string, firstName: string): Promise<boolean> {
   try {
-    // Check if Twilio credentials are available
-    const accountSid = process.env.TWILIO_ACCOUNT_SID;
-    const authToken = process.env.TWILIO_AUTH_TOKEN;
-    const fromNumber = process.env.TWILIO_PHONE_NUMBER;
-
-    if (!accountSid || !authToken || !fromNumber) {
-      console.warn("Twilio credentials not configured. Logging link to console instead.");
-      console.log(`
-        ====================================
-        PASSWORD RESET LINK (SMS)
-        Phone: ${phoneNumber}
-        Name: ${firstName}
-        Link: ${resetLink}
-        Message: Hi ${firstName}, reset your FEBACO password by clicking this link: ${resetLink}. Link expires in 1 hour.
-        ====================================
-      `);
-      return true;
-    }
-
-    // Use Twilio to send SMS
-    const client = twilio(accountSid, authToken);
-
-    console.log(`🔍 Sending SMS - From: ${fromNumber}, To: ${phoneNumber}`);
-    console.log(`📱 Message: Hi ${firstName}, reset your FEBACO password by clicking this link: ${resetLink}. Link expires in 1 hour.`);
-
-    const message = await client.messages.create({
-      body: `Hi ${firstName}, reset your FEBACO password by clicking this link: ${resetLink}. Link expires in 1 hour.`,
-      from: fromNumber,
-      to: phoneNumber,
-    });
-
-    console.log(`✅ SMS sent successfully. Message SID: ${message.sid}`);
-    console.log(`📊 Message Status: ${message.status}`);
-    console.log(`🔍 Message Error Code: ${message.errorCode || 'None'}`);
-    console.log(`📍 Message Direction: ${message.direction}`);
+    // Firebase Phone Auth handles SMS OTP automatically
+    // This is just a fallback for password reset links
+    console.log(`
+      ====================================
+      PASSWORD RESET LINK (SMS)
+      Phone: ${phoneNumber}
+      Name: ${firstName}
+      Link: ${resetLink}
+      
+      NOTE: For OTP login, use Firebase Phone Authentication
+      ====================================
+    `);
     return true;
   } catch (error) {
-    console.error('Error sending SMS via Twilio:', error);
+    console.error('Error logging SMS link:', error);
     return false;
   }
 }
@@ -150,32 +111,26 @@ export async function sendResetLinkEmail(email: string, resetLink: string, first
 }
 
 /**
- * Send generic SMS via Twilio
+ * Send generic SMS
+ * NOTE: For phone authentication and OTP, use Firebase Phone Auth instead
+ * This is a console log only for development purposes
  */
 export async function sendSMS(phoneNumber: string, message: string): Promise<boolean> {
   try {
-    const accountSid = process.env.TWILIO_ACCOUNT_SID;
-    const authToken = process.env.TWILIO_AUTH_TOKEN;
-    const fromNumber = process.env.TWILIO_PHONE_NUMBER;
-
-    if (!accountSid || !authToken || !fromNumber) {
-      console.warn("Twilio credentials not configured.");
-      console.log(`Would send SMS to ${phoneNumber}: ${message}`);
-      return true;
-    }
-
-    const client = twilio(accountSid, authToken);
-
-    const result = await client.messages.create({
-      body: message,
-      from: fromNumber,
-      to: phoneNumber,
-    });
-
-    console.log(`SMS sent successfully. Message SID: ${result.sid}`);
+    // Firebase Phone Auth handles SMS OTP automatically
+    // This is just for development logging
+    console.log(`
+      ====================================
+      SMS MESSAGE
+      Phone: ${phoneNumber}
+      Message: ${message}
+      
+      NOTE: For OTP login, use Firebase Phone Authentication
+      ====================================
+    `);
     return true;
   } catch (error) {
-    console.error('Error sending SMS:', error);
+    console.error('Error logging SMS:', error);
     return false;
   }
 }

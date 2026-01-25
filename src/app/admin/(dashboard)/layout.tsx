@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { firebaseAuth, firebaseDB } from "@/lib/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { doc, updateDoc, serverTimestamp, onSnapshot, collection, query, where } from "firebase/firestore";
+import { doc, updateDoc, setDoc, serverTimestamp, onSnapshot, collection, query, where } from "firebase/firestore";
 import type { AdminUser } from "@/types/admin";
 import { getAdminUser, updateLastActivity } from "@/lib/adminAuth";
 
@@ -99,11 +99,11 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
         }
         setCurrentAdminUser(adminUser);
         
-        // Update online status
-        await updateDoc(doc(firebaseDB, "admins", user.uid), {
+        // Update online status (use setDoc with merge to avoid errors if document doesn't exist)
+        await setDoc(doc(firebaseDB, "adminUsers", user.uid), {
           isOnline: true,
           lastActivity: serverTimestamp(),
-        });
+        }, { merge: true });
         
         await updateLastActivity(user.uid);
       } catch (error) {
@@ -119,7 +119,7 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
 
   // Listen for online admins
   useEffect(() => {
-    const adminsRef = collection(firebaseDB, "admins");
+    const adminsRef = collection(firebaseDB, "adminUsers");
     const q = query(adminsRef, where("isOnline", "==", true));
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -143,10 +143,10 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
   const handleSignOut = async () => {
     try {
       if (currentAdminUser) {
-        await updateDoc(doc(firebaseDB, "admins", currentAdminUser.id), {
+        await setDoc(doc(firebaseDB, "adminUsers", currentAdminUser.id), {
           isOnline: false,
           lastActivity: serverTimestamp(),
-        });
+        }, { merge: true });
       }
       await signOut(firebaseAuth);
       router.push("/admin");

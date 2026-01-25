@@ -22,7 +22,7 @@ Your FEBACO password reset system is now **complete and ready for production**. 
 - ✅ User enters code to verify ownership
 - ✅ User directly sets new password
 - ✅ Password is updated in Firebase using Admin SDK
-- ✅ **Status**: Ready to use (optional Twilio setup)
+- ✅ **Status**: Ready to use (Firebase Phone Auth)
 
 ### 3. **Security Features**
 - ✅ Codes expire after 10 minutes
@@ -51,12 +51,10 @@ Your FEBACO password reset system is now **complete and ready for production**. 
 5. **src/app/api/auth/send-reset-code/route.ts** - API to send codes
 6. **src/app/api/auth/verify-reset-code/route.ts** - API to verify codes
 7. **src/app/api/auth/reset-password/route.ts** - API to reset password
-8. **TWILIO_SMS_SETUP.md** - SMS setup guide
-9. **PASSWORD_RESET_GUIDE.md** - Complete setup guide
+8. **PASSWORD_RESET_GUIDE.md** - Complete setup guide
 
 ### Updated Files
-1. **src/components/AuthModal.tsx** - Added "Forgot Password?" button
-2. **.env.local** - Added Twilio configuration options
+1. **src/components/AuthModal.tsx** - Added "Forgot Password?" button and Firebase Phone Auth
 
 ---
 
@@ -127,21 +125,17 @@ Message: Your FEBACO password reset code is: 740941. Valid for 10 minutes.
 
 ---
 
-## 📱 Setting Up Real SMS (Optional)
+## 📱 SMS via Firebase Phone Auth
 
-### Quick Setup (5 minutes)
-1. Sign up at [twilio.com](https://twilio.com)
-2. Get your Account SID, Auth Token, and phone number
-3. Add to `.env.local`:
-   ```env
-   TWILIO_ACCOUNT_SID=your_account_sid
-   TWILIO_AUTH_TOKEN=your_auth_token
-   TWILIO_PHONE_NUMBER=+1234567890
-   ```
-4. Restart dev server
-5. SMS will now be sent automatically!
+Firebase Phone Authentication handles SMS OTP delivery automatically.
 
-For detailed instructions, see [TWILIO_SMS_SETUP.md](TWILIO_SMS_SETUP.md)
+### Setup (Already Configured)
+1. Firebase Console → Authentication → Sign-in method
+2. Enable "Phone" as a sign-in provider
+3. Add your domain to authorized domains
+4. Firebase handles SMS delivery automatically!
+
+**Note:** In development, SMS codes are logged to the console.
 
 ---
 
@@ -167,10 +161,9 @@ Auto-cleaned after use or expiration.
 
 ## 🛠️ Technologies Used
 
-- **Firebase Authentication** - User auth and email reset
+- **Firebase Authentication** - User auth, email reset, and Phone Auth for SMS OTP
 - **Firebase Firestore** - Store reset codes
 - **Firebase Admin SDK** - Server-side password updates
-- **Twilio** - SMS delivery (optional, integrated)
 - **Next.js** - API routes and React components
 - **TypeScript** - Type safety throughout
 
@@ -186,7 +179,7 @@ Auto-cleaned after use or expiration.
 - [ ] Test minimum password length (6 chars)
 - [ ] Test resend code functionality
 - [ ] Test successful sign-in with new password
-- [ ] (Optional) Set up Twilio and test real SMS
+- [ ] Test Firebase Phone Auth OTP login
 - [ ] Test on mobile devices
 
 ---
@@ -200,10 +193,7 @@ FIREBASE_PROJECT_ID=ppop-35930
 FIREBASE_CLIENT_EMAIL=firebase-adminsdk-fbsvc@ppop-35930.iam.gserviceaccount.com
 FIREBASE_PRIVATE_KEY=...
 
-# Twilio (optional, for SMS)
-TWILIO_ACCOUNT_SID=optional
-TWILIO_AUTH_TOKEN=optional
-TWILIO_PHONE_NUMBER=optional
+# Firebase Phone Auth handles SMS automatically - no additional setup needed
 ```
 
 ### Customization Options
@@ -245,9 +235,6 @@ if (recentCodes.size >= 3) {
    - `FIREBASE_PROJECT_ID`
    - `FIREBASE_CLIENT_EMAIL`
    - `FIREBASE_PRIVATE_KEY`
-   - `TWILIO_ACCOUNT_SID` (if using SMS)
-   - `TWILIO_AUTH_TOKEN` (if using SMS)
-   - `TWILIO_PHONE_NUMBER` (if using SMS)
 3. Redeploy project
 4. Test password reset on live site
 
@@ -258,7 +245,7 @@ Follow your platform's documentation for adding environment variables/secrets.
 
 ## 📚 Documentation
 
-- [TWILIO_SMS_SETUP.md](TWILIO_SMS_SETUP.md) - Detailed Twilio setup
+- [AUTH_SETUP_GUIDE.md](AUTH_SETUP_GUIDE.md) - Firebase Auth setup
 - [PASSWORD_RESET_GUIDE.md](PASSWORD_RESET_GUIDE.md) - Complete feature guide
 - [PASSWORD_RESET_IMPLEMENTATION.md](PASSWORD_RESET_IMPLEMENTATION.md) - Implementation details
 
@@ -292,7 +279,7 @@ Follow your platform's documentation for adding environment variables/secrets.
 ✅ **User interface**: Beautiful modal with guidance
 ✅ **Error handling**: Clear user messages
 ✅ **Development mode**: Console logging for codes
-✅ **Production ready**: Awaiting Twilio setup (optional)
+✅ **Production ready**: Firebase Phone Auth for SMS
 
 ---
 
@@ -301,7 +288,7 @@ Follow your platform's documentation for adding environment variables/secrets.
 If you encounter issues:
 
 1. **Check the terminal** for error messages
-2. **Review [TWILIO_SMS_SETUP.md](TWILIO_SMS_SETUP.md)** for SMS issues
+2. **Review [AUTH_SETUP_GUIDE.md](AUTH_SETUP_GUIDE.md)** for auth issues
 3. **Verify .env.local** has all required credentials
 4. **Restart dev server** after env changes
 5. **Check Firebase Console** for authentication logs
@@ -310,4 +297,4 @@ If you encounter issues:
 
 **Your password reset system is ready to deploy!** 🎉
 
-Test it out, gather feedback, and when ready, add your Twilio credentials for production SMS delivery.
+Test it out and gather feedback. Firebase Phone Auth handles SMS delivery automatically.

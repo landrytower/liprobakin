@@ -181,15 +181,13 @@ For production, you can enhance with:
 npm install firebase-admin
 ```
 
-### 2. **SendGrid** (Email service)
+### 2. **SendGrid** (Email service - optional)
 ```bash
 npm install @sendgrid/mail
 ```
 
-### 3. **Twilio** (SMS service)
-```bash
-npm install twilio
-```
+### 3. **Firebase Phone Auth** (SMS service)
+Firebase Phone Authentication handles SMS OTP automatically - no additional setup needed.
 
 See [PASSWORD_RESET_GUIDE.md](PASSWORD_RESET_GUIDE.md) for detailed setup instructions.
 
@@ -229,7 +227,6 @@ See [PASSWORD_RESET_GUIDE.md](PASSWORD_RESET_GUIDE.md) for detailed setup instru
 
 - [ ] Add rate limiting (max 3 attempts/hour)
 - [ ] Integrate SendGrid for production emails
-- [ ] Integrate Twilio for production SMS
 - [ ] Add reCAPTCHA to prevent bots
 - [ ] Multi-language support for emails/SMS
 - [ ] Password strength meter

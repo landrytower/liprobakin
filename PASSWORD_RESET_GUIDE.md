@@ -135,37 +135,21 @@ Add to `.env.local`:
 SENDGRID_API_KEY=SG.xxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
-### 3. SMS Service Setup (Twilio)
+### 3. SMS Service Setup (Firebase Phone Auth)
 
-```bash
-npm install twilio
-```
+Firebase Phone Authentication handles SMS OTP delivery automatically. No additional SMS service is required.
 
-Update `src/lib/passwordReset.ts`:
-```typescript
-import twilio from 'twilio';
+**To enable Firebase Phone Auth:**
+1. Go to Firebase Console → Authentication → Sign-in method
+2. Enable "Phone" as a sign-in provider
+3. Add your domain to authorized domains
+4. Firebase will handle SMS delivery automatically
 
-const client = twilio(
-  process.env.TWILIO_ACCOUNT_SID,
-  process.env.TWILIO_AUTH_TOKEN
-);
+**Note:** The phone auth is already integrated in the AuthModal component using:
+- `signInWithPhoneNumber()` - For login/signup with phone
+- `RecaptchaVerifier` - For verification
 
-export async function sendResetCodeSMS(phoneNumber: string, code: string, firstName: string) {
-  await client.messages.create({
-    body: `Hi ${firstName}, your FEBACO password reset code is: ${code}. Valid for 10 minutes.`,
-    from: process.env.TWILIO_PHONE_NUMBER,
-    to: phoneNumber,
-  });
-  return true;
-}
-```
-
-Add to `.env.local`:
-```env
-TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxx
-TWILIO_AUTH_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxx
-TWILIO_PHONE_NUMBER=+1234567890
-```
+For password reset via phone, the code is logged to console in development.
 
 ### 4. Update Password Reset Route
 
@@ -252,7 +236,7 @@ match /passwordResets/{userId} {
 ### Code Not Received
 - Check spam/junk folder for emails
 - Verify phone number format (include country code)
-- Check SendGrid/Twilio dashboards for delivery status
+- Check Firebase console for phone auth delivery status
 
 ### Code Expired
 - Codes expire after 10 minutes

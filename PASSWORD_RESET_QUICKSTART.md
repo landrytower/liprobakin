@@ -42,10 +42,10 @@ Phone: +12052189027
 | Feature | Status | Setup |
 |---------|--------|-------|
 | Email Reset | ✅ Ready | None needed |
-| Phone Reset | ✅ Ready | None needed (dev mode) |
+| Phone Reset | ✅ Ready | Firebase Phone Auth |
 | Code Generation | ✅ Ready | Automatic |
 | Password Update | ✅ Ready | Firebase Admin SDK |
-| SMS via Twilio | ⏰ Optional | [See guide](TWILIO_SMS_SETUP.md) |
+| Phone OTP Login | ✅ Ready | Firebase Phone Auth |
 
 ---
 
@@ -79,7 +79,7 @@ Phone: +12052189027
 | Modal | Click "Forgot Password?" on login |
 | Codes (dev) | Terminal output |
 | Documentation | [PASSWORD_RESET_COMPLETE.md](PASSWORD_RESET_COMPLETE.md) |
-| Twilio Setup | [TWILIO_SMS_SETUP.md](TWILIO_SMS_SETUP.md) |
+| Auth Setup | [AUTH_SETUP_GUIDE.md](AUTH_SETUP_GUIDE.md) |
 | Detailed Guide | [PASSWORD_RESET_GUIDE.md](PASSWORD_RESET_GUIDE.md) |
 
 ---
@@ -89,7 +89,7 @@ Phone: +12052189027
 ### If Testing Works ✅
 Great! Your system is ready. 
 
-**Optional**: [Set up Twilio](TWILIO_SMS_SETUP.md) for real SMS delivery
+**Note**: Firebase Phone Authentication handles SMS automatically
 
 ### If Issues ❌
 1. Check terminal for error messages
@@ -109,7 +109,7 @@ Great! Your system is ready.
 ### Production Ready
 - All security checks included
 - Rate limiting can be added
-- Twilio SMS ready to integrate
+- Firebase Phone Auth handles SMS automatically
 - Firebase Admin SDK configured
 
 ---
@@ -137,7 +137,7 @@ Great! Your system is ready.
 
 1. Check [PASSWORD_RESET_COMPLETE.md](PASSWORD_RESET_COMPLETE.md)
 2. Review [PASSWORD_RESET_GUIDE.md](PASSWORD_RESET_GUIDE.md)
-3. For SMS issues: [TWILIO_SMS_SETUP.md](TWILIO_SMS_SETUP.md)
+3. For auth issues: [AUTH_SETUP_GUIDE.md](AUTH_SETUP_GUIDE.md)
 
 ---
 

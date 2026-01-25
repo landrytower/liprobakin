@@ -11,6 +11,12 @@ import {
   signInWithPopup,
   GoogleAuthProvider,
   OAuthProvider,
+  RecaptchaVerifier,
+  signInWithPhoneNumber,
+  ConfirmationResult,
+  PhoneAuthProvider,
+  linkWithCredential,
+  updatePhoneNumber,
 } from "firebase/auth";
 import {
   doc,
@@ -44,6 +50,12 @@ interface AuthContextType {
   signInWithApple: () => Promise<void>;
   signOut: () => Promise<void>;
   refreshUserProfile: () => Promise<void>;
+  // Phone auth methods
+  sendPhoneOTP: (phoneNumber: string, recaptchaContainerId: string) => Promise<ConfirmationResult>;
+  verifyPhoneOTP: (confirmationResult: ConfirmationResult, otp: string, firstName?: string, lastName?: string) => Promise<void>;
+  setupRecaptcha: (containerId: string) => RecaptchaVerifier;
+  linkPhoneToAccount: (phoneNumber: string, recaptchaContainerId: string) => Promise<ConfirmationResult>;
+  confirmPhoneLink: (confirmationResult: ConfirmationResult, otp: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -151,7 +163,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     lastName: string,
     phoneNumber: string
   ) => {
-    // Normalize phone number to E.164 format for Twilio compatibility
+    // Normalize phone number to E.164 format for Firebase Phone Auth
     const normalizedPhone = normalizePhoneNumber(phoneNumber);
     
     // Check if email already exists in users collection
@@ -181,6 +193,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       phoneNumber: normalizedPhone, // Store normalized phone number
       firstName,
       lastName,
+      phoneVerified: false, // Phone needs OTP verification to use for login
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -308,6 +321,174 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await firebaseSignOut(firebaseAuth);
   };
 
+  // Phone Authentication Methods
+  const setupRecaptcha = (containerId: string): RecaptchaVerifier => {
+    // Clear any existing reCAPTCHA
+    const container = document.getElementById(containerId);
+    if (container) {
+      container.innerHTML = '';
+    }
+    
+    const recaptchaVerifier = new RecaptchaVerifier(firebaseAuth, containerId, {
+      size: "invisible",
+      callback: () => {
+        console.log("✅ reCAPTCHA solved");
+      },
+      "expired-callback": () => {
+        console.log("⚠️ reCAPTCHA expired");
+      },
+    });
+    return recaptchaVerifier;
+  };
+
+  const sendPhoneOTP = async (phoneNumber: string, recaptchaContainerId: string): Promise<ConfirmationResult> => {
+    // Normalize phone number
+    const normalizedPhone = normalizePhoneNumber(phoneNumber);
+    
+    // Setup reCAPTCHA
+    const recaptchaVerifier = setupRecaptcha(recaptchaContainerId);
+    
+    try {
+      console.log(`📱 Sending OTP to: ${normalizedPhone}`);
+      const confirmationResult = await signInWithPhoneNumber(firebaseAuth, normalizedPhone, recaptchaVerifier);
+      console.log("✅ OTP sent successfully!");
+      return confirmationResult;
+    } catch (error: any) {
+      // Clear reCAPTCHA on error
+      recaptchaVerifier.clear();
+      console.error("❌ Phone Auth Error:", error.code, error.message);
+      
+      // Provide helpful error messages
+      if (error.code === "auth/operation-not-allowed") {
+        throw new Error("Phone authentication is not enabled. Please enable it in Firebase Console → Authentication → Sign-in method → Phone");
+      } else if (error.code === "auth/invalid-app-credential") {
+        throw new Error("reCAPTCHA verification failed. Please refresh the page and try again.");
+      } else if (error.code === "auth/quota-exceeded") {
+        throw new Error("SMS quota exceeded. Please try again later or use a test phone number.");
+      }
+      throw error;
+    }
+  };
+
+  const verifyPhoneOTP = async (
+    confirmationResult: ConfirmationResult, 
+    otp: string,
+    firstName?: string,
+    lastName?: string
+  ): Promise<void> => {
+    const userCredential = await confirmationResult.confirm(otp);
+    const user = userCredential.user;
+
+    // Check if user profile exists
+    const userDocRef = doc(firebaseDB, "users", user.uid);
+    const userDocSnap = await getDoc(userDocRef);
+
+    if (!userDocSnap.exists()) {
+      // Check if this phone number was already used in another account (email signup)
+      const usersRef = collection(firebaseDB, "users");
+      const phoneQuery = query(usersRef, where("phoneNumber", "==", user.phoneNumber));
+      const phoneSnapshot = await getDocs(phoneQuery);
+
+      if (!phoneSnapshot.empty) {
+        // Phone exists in another account - this means they signed up with email
+        // We should merge or inform the user
+        const existingUserData = phoneSnapshot.docs[0].data();
+        
+        // Copy the data to the new phone auth account
+        const userProfile: Partial<UserProfile> = {
+          uid: user.uid,
+          email: existingUserData.email || "",
+          phoneNumber: user.phoneNumber || "",
+          firstName: existingUserData.firstName || firstName || "",
+          lastName: existingUserData.lastName || lastName || "",
+          phoneVerified: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+
+        await setDoc(userDocRef, {
+          ...userProfile,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        // Create new user profile for phone sign-in
+        const userProfile: Partial<UserProfile> = {
+          uid: user.uid,
+          email: "",
+          phoneNumber: user.phoneNumber || "",
+          firstName: firstName || "",
+          lastName: lastName || "",
+          phoneVerified: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+
+        await setDoc(userDocRef, {
+          ...userProfile,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+    } else {
+      // User exists, update phone verification status
+      await setDoc(userDocRef, {
+        phoneVerified: true,
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+    }
+  };
+
+  // Link phone number to existing account (for users who signed up with email)
+  const linkPhoneToAccount = async (phoneNumber: string, recaptchaContainerId: string): Promise<ConfirmationResult> => {
+    if (!firebaseAuth.currentUser) {
+      throw new Error("You must be logged in to link a phone number");
+    }
+
+    const normalizedPhone = normalizePhoneNumber(phoneNumber);
+    const recaptchaVerifier = setupRecaptcha(recaptchaContainerId);
+
+    try {
+      // Use signInWithPhoneNumber to get the verification ID
+      // Then we'll use linkWithCredential after verification
+      const confirmationResult = await signInWithPhoneNumber(firebaseAuth, normalizedPhone, recaptchaVerifier);
+      return confirmationResult;
+    } catch (error: any) {
+      recaptchaVerifier.clear();
+      throw error;
+    }
+  };
+
+  const confirmPhoneLink = async (confirmationResult: ConfirmationResult, otp: string): Promise<void> => {
+    if (!firebaseAuth.currentUser) {
+      throw new Error("You must be logged in to link a phone number");
+    }
+
+    // Create credential from the OTP
+    const credential = PhoneAuthProvider.credential(
+      confirmationResult.verificationId,
+      otp
+    );
+
+    try {
+      // Link the phone credential to the current user
+      await linkWithCredential(firebaseAuth.currentUser, credential);
+      
+      // Update phone number in the user's Firestore profile
+      const userDocRef = doc(firebaseDB, "users", firebaseAuth.currentUser.uid);
+      await setDoc(userDocRef, {
+        phoneNumber: firebaseAuth.currentUser.phoneNumber,
+        phoneVerified: true,
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+    } catch (error: any) {
+      if (error.code === "auth/credential-already-in-use") {
+        throw new Error("This phone number is already linked to another account");
+      }
+      throw error;
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -321,6 +502,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signInWithApple,
         signOut,
         refreshUserProfile,
+        sendPhoneOTP,
+        verifyPhoneOTP,
+        setupRecaptcha,
+        linkPhoneToAccount,
+        confirmPhoneLink,
       }}
     >
       {children}

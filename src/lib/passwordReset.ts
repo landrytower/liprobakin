@@ -2,11 +2,11 @@
  * Password Reset Utility Functions
  * Client-safe utilities for password reset flow
  * 
- * NOTE: For SMS sending, use sms.server.ts (server-only)
+ * NOTE: For SMS OTP, use Firebase Phone Authentication
  */
 
 /**
- * Normalize phone number to E.164 format required by Twilio
+ * Normalize phone number to E.164 format required by Firebase Phone Auth
  * E.164 format: +[country code][number] e.g., +12025551234, +447911123456, +33612345678
  * 
  * This handles various input formats from ANY country:

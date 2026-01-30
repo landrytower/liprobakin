@@ -4417,125 +4417,95 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Partners and Committee Sections */}
-        <div className="grid gap-4 grid-cols-2">
-          {/* Partners Section */}
-          <section className="space-y-3">
-            <SectionHeader
-              id="partners"
-              eyebrow={sectionCopy.partners.eyebrow}
-              title={sectionCopy.partners.title}
-              description={sectionCopy.partners.description}
-            />
-            <div className="relative aspect-[4/3] overflow-hidden rounded-xl border border-white/10 bg-slate-900/70 p-2">
-              {dynamicPartners.length > 0 ? (
-                <div className="grid grid-cols-2 gap-1.5 h-full">
-                  {visiblePartners.map((partnerIndex, position) => {
-                    const partner = dynamicPartners[partnerIndex];
-                    if (!partner) return null;
-                    
-                    return (
-                      <div
-                        key={`${position}-${partnerIndex}`}
-                         className={`relative flex items-center justify-center rounded-lg border overflow-hidden transition-all duration-500 ${
-                          partnerAnimating === position
-                            ? 'border-white/20 bg-black scale-95 brightness-50'
-                            : 'border-white/5 bg-slate-950/50 scale-100 brightness-100'
-                        }`}
-                      >
-                        <div className={`relative w-full h-full p-2 transition-all duration-500 ${
-                          partnerAnimating === position
-                            ? 'opacity-0 blur-sm'
-                            : 'opacity-100 blur-0'
-                        }`}>
-                          {partner.logo ? (
-                            <div className="relative w-full h-full">
-                              <Image
-                                src={partner.logo}
-                                alt={partner.name}
-                                fill
-                                className="object-contain"
-                              />
-                            </div>
-                          ) : (
-                            <p className="text-xs md:text-sm font-semibold text-white text-center h-full flex items-center justify-center">
-                              {partner.name}
-                            </p>
-                          )}
+        {/* Committee Section */}
+        <section className="space-y-3">
+          <SectionHeader
+            id="committee"
+            eyebrow={sectionCopy.committee.eyebrow}
+            title={sectionCopy.committee.title}
+            description={sectionCopy.committee.description}
+          />
+          {dynamicCommittee.length > 0 ? (
+            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2 md:gap-3">
+              {dynamicCommittee.map((member) => (
+                <Link
+                  key={member.id}
+                  href={`/staff/${member.id}`}
+                  className="group relative overflow-hidden rounded-lg border border-white/10 bg-slate-900/50 transition-all hover:border-orange-500/30 hover:shadow-lg hover:shadow-orange-500/10"
+                >
+                  <div className="aspect-[4/5] relative">
+                    {member.photo ? (
+                      <Image
+                        src={member.photo}
+                        alt={member.name}
+                        fill
+                        className="object-cover transition-transform duration-500 group-hover:scale-105"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-orange-900/20 via-slate-900 to-slate-900">
+                        <div className="flex h-12 w-12 md:h-14 md:w-14 items-center justify-center rounded-full bg-gradient-to-br from-orange-500 to-orange-600 text-xl md:text-2xl font-bold text-white shadow-lg">
+                          {member.name.charAt(0)}
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="flex h-full items-center justify-center text-slate-400">
-                  <p className="text-xs md:text-base">No partners yet</p>
-                </div>
-              )}
-            </div>
-          </section>
-
-          {/* Committee Section */}
-          <section className="space-y-3">
-            <SectionHeader
-              id="committee"
-              eyebrow={sectionCopy.committee.eyebrow}
-              title={sectionCopy.committee.title}
-              description={sectionCopy.committee.description}
-            />
-            <div className="relative aspect-[4/3] overflow-hidden rounded-xl border border-white/10 bg-slate-900/70">
-              {dynamicCommittee.length > 0 ? (
-                <div className="relative h-full">
-                  {dynamicCommittee[currentCommitteeIndex].photo ? (
-                    <Image
-                      src={dynamicCommittee[currentCommitteeIndex].photo}
-                      alt={dynamicCommittee[currentCommitteeIndex].name}
-                      fill
-                      className="object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-full items-center justify-center bg-gradient-to-br from-orange-900/20 to-slate-900">
-                      <div className="flex h-16 w-16 md:h-32 md:w-32 items-center justify-center rounded-full bg-orange-600 text-2xl md:text-5xl font-bold text-white">
-                        {dynamicCommittee[currentCommitteeIndex].name.charAt(0)}
-                      </div>
+                    )}
+                    {/* Gradient overlay */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
+                    {/* Info at bottom */}
+                    <div className="absolute bottom-0 left-0 right-0 p-2 md:p-3">
+                      <p className="font-semibold text-white text-xs md:text-sm truncate">{member.name}</p>
+                      <p className="text-[10px] md:text-xs text-orange-400 truncate">{member.role}</p>
                     </div>
-                  )}
-                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-3 md:p-6">
-                    <p className="text-sm md:text-xl font-semibold text-white truncate">
-                      {dynamicCommittee[currentCommitteeIndex].name}
-                    </p>
-                    <p className="text-xs md:text-sm text-orange-400 truncate">
-                      {dynamicCommittee[currentCommitteeIndex].role}
-                    </p>
+                    {/* Hover overlay */}
+                    <div className="absolute inset-0 bg-orange-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>
-                </div>
-              ) : (
-                <div className="flex h-full items-center justify-center text-slate-400">
-                  <p className="text-xs md:text-base">No committee members yet</p>
-                </div>
-              )}
-              {dynamicCommittee.length > 1 && (
-                <div className="absolute bottom-2 md:bottom-4 left-1/2 flex -translate-x-1/2 gap-1.5 md:gap-2">
-                  {dynamicCommittee.map((_, index) => (
-                    <button
-                      key={index}
-                      onClick={() => setCurrentCommitteeIndex(index)}
-                      className={`h-1.5 w-1.5 md:h-2 md:w-2 rounded-full transition ${
-                        index === currentCommitteeIndex
-                          ? "bg-orange-500"
-                          : "bg-white/30 hover:bg-white/50"
-                      }`}
-                      aria-label={`Go to committee member ${index + 1}`}
-                    />
-                  ))}
-                </div>
-              )}
+                </Link>
+              ))}
             </div>
-          </section>
-        </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-white/20 bg-slate-900/30 py-12 text-center">
+              <p className="text-slate-400">{language === "fr" ? "Aucun membre du comité" : "No committee members yet"}</p>
+            </div>
+          )}
+        </section>
       </main>
 
-      <footer className="border-t border-white/10 bg-black/50 py-8 text-slate-400">
+      {/* Partners Strip - Before Footer */}
+      {dynamicPartners.length > 0 && (
+        <div className="border-t border-white/5 bg-black/30 py-7">
+          <div className="mx-auto max-w-6xl px-4">
+            <div className="flex flex-col sm:flex-row items-center gap-5">
+              <p className="text-[11px] uppercase tracking-[0.3em] text-slate-500 whitespace-nowrap">
+                {language === "fr" ? "Nos Partenaires" : "Our Partners"}
+              </p>
+              <div className="flex-1 overflow-hidden">
+                <div className="flex items-center justify-center sm:justify-start gap-7 sm:gap-10 flex-wrap sm:flex-nowrap">
+                  {dynamicPartners.slice(0, 6).map((partner) => (
+                    <div 
+                      key={partner.id} 
+                      className="flex-shrink-0 h-9 sm:h-11 opacity-60 hover:opacity-100 transition-opacity"
+                    >
+                      {partner.logo ? (
+                        <div className="relative h-full w-18 sm:w-22" style={{ width: '4.5rem' }}>
+                          <Image
+                            src={partner.logo}
+                            alt={partner.name}
+                            fill
+                            className="object-contain"
+                          />
+                        </div>
+                      ) : (
+                        <span className="text-sm text-slate-400 font-medium">{partner.name}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <footer className="border-t border-white/10 bg-black/50 py-6 text-slate-400">
         <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 text-center text-xs uppercase tracking-[0.3em] sm:flex-row sm:items-center sm:justify-between">
           <p>
             {copy.footerTagline}

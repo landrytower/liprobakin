@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { useAdmin } from "../layout";
 import { firebaseDB, firebaseStorage } from "@/lib/firebase";
 import {
@@ -21,7 +22,7 @@ import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage
 // ─────────────────────────────────────────────────────────────────────────────
 
 type Referee = { id: string; firstName: string; lastName: string; phone: string; headshot?: string };
-type CommitteeMember = { id: string; firstName: string; lastName: string; role: string; email?: string; phone?: string; photo?: string };
+type CommitteeMember = { id: string; firstName: string; lastName: string; role: string; email?: string; phone?: string; photo?: string; bio?: string; experience?: string; education?: string; department?: string; twitter?: string; linkedin?: string; facebook?: string; instagram?: string };
 type Venue = { id: string; name: string; address: string; city: string; capacity?: number; photo?: string };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -53,6 +54,15 @@ const t = {
     noReferees: "No referees added",
     noCommittee: "No committee members",
     noVenues: "No venues added",
+    bio: "Biography",
+    experience: "Experience",
+    education: "Education",
+    department: "Department",
+    twitter: "Twitter URL",
+    linkedin: "LinkedIn URL",
+    facebook: "Facebook URL",
+    instagram: "Instagram URL",
+    viewProfile: "View Profile",
     databaseReset: "Database Reset",
     resetDescription: "Delete all games, standings and reset all team/player statistics to 0.",
     resetStats: "Reset All Stats",
@@ -83,6 +93,15 @@ const t = {
     noReferees: "Aucun arbitre ajouté",
     noCommittee: "Aucun membre du comité",
     noVenues: "Aucun site ajouté",
+    bio: "Biographie",
+    experience: "Expérience",
+    education: "Éducation",
+    department: "Département",
+    twitter: "URL Twitter",
+    linkedin: "URL LinkedIn",
+    facebook: "URL Facebook",
+    instagram: "URL Instagram",
+    viewProfile: "Voir le profil",
     databaseReset: "Réinitialisation",
     resetDescription: "Supprimer tous les matchs, classements et remettre les stats équipes/joueurs à 0.",
     resetStats: "Réinitialiser",
@@ -110,7 +129,7 @@ export default function LeaguePage() {
 
   const [showCommitteeModal, setShowCommitteeModal] = useState(false);
   const [editingCommittee, setEditingCommittee] = useState<CommitteeMember | null>(null);
-  const [committeeForm, setCommitteeForm] = useState({ firstName: "", lastName: "", role: "", email: "", phone: "", photo: "" });
+  const [committeeForm, setCommitteeForm] = useState({ firstName: "", lastName: "", role: "", email: "", phone: "", photo: "", bio: "", experience: "", education: "", department: "", twitter: "", linkedin: "", facebook: "", instagram: "" });
   const [committeePhoto, setCommitteePhoto] = useState<File | null>(null);
   const [committeePhotoPreview, setCommitteePhotoPreview] = useState("");
 
@@ -174,7 +193,7 @@ export default function LeaguePage() {
   // Committee CRUD
   const openCommitteeModal = (mem?: CommitteeMember) => {
     setEditingCommittee(mem || null);
-    setCommitteeForm(mem ? { firstName: mem.firstName, lastName: mem.lastName, role: mem.role, email: mem.email || "", phone: mem.phone || "", photo: mem.photo || "" } : { firstName: "", lastName: "", role: "", email: "", phone: "", photo: "" });
+    setCommitteeForm(mem ? { firstName: mem.firstName, lastName: mem.lastName, role: mem.role, email: mem.email || "", phone: mem.phone || "", photo: mem.photo || "", bio: mem.bio || "", experience: mem.experience || "", education: mem.education || "", department: mem.department || "", twitter: mem.twitter || "", linkedin: mem.linkedin || "", facebook: mem.facebook || "", instagram: mem.instagram || "" } : { firstName: "", lastName: "", role: "", email: "", phone: "", photo: "", bio: "", experience: "", education: "", department: "", twitter: "", linkedin: "", facebook: "", instagram: "" });
     setCommitteePhotoPreview(mem?.photo || ""); setCommitteePhoto(null); setShowCommitteeModal(true);
   };
 
@@ -189,11 +208,46 @@ export default function LeaguePage() {
         await uploadBytes(storageReference, committeePhoto);
         photoUrl = await getDownloadURL(storageReference);
       }
-      const data = { firstName: committeeForm.firstName.trim(), lastName: committeeForm.lastName.trim(), role: committeeForm.role.trim(), email: committeeForm.email || null, phone: committeeForm.phone || null, photo: photoUrl || null, updatedAt: serverTimestamp() };
-      if (editingCommittee) { await updateDoc(doc(firebaseDB, "committeeMembers", editingCommittee.id), data); }
-      else { await addDoc(collection(firebaseDB, "committeeMembers"), { ...data, createdAt: serverTimestamp() }); }
-      setShowCommitteeModal(false); fetchData();
-    } catch (error) { console.error("Error saving committee member:", error); }
+      
+      // Build clean data object with no undefined values
+      const baseData = { 
+        firstName: committeeForm.firstName.trim(), 
+        lastName: committeeForm.lastName.trim(), 
+        role: committeeForm.role.trim(), 
+        email: committeeForm.email?.trim() || "", 
+        phone: committeeForm.phone?.trim() || "", 
+        photo: photoUrl || "", 
+        bio: committeeForm.bio?.trim() || "", 
+        experience: committeeForm.experience?.trim() || "", 
+        education: committeeForm.education?.trim() || "", 
+        department: committeeForm.department?.trim() || "", 
+        twitter: committeeForm.twitter?.trim() || "", 
+        linkedin: committeeForm.linkedin?.trim() || "", 
+        facebook: committeeForm.facebook?.trim() || "", 
+        instagram: committeeForm.instagram?.trim() || ""
+      };
+      
+      if (editingCommittee) { 
+        // Update existing member
+        await updateDoc(doc(firebaseDB, "committeeMembers", editingCommittee.id), {
+          ...baseData,
+          updatedAt: serverTimestamp()
+        }); 
+      } else { 
+        // Create new member
+        await addDoc(collection(firebaseDB, "committeeMembers"), { 
+          ...baseData, 
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        }); 
+      }
+      
+      setShowCommitteeModal(false); 
+      fetchData();
+    } catch (error) { 
+      console.error("Error saving committee member:", error);
+      alert(language === "fr" ? "Erreur lors de l'enregistrement. Veuillez réessayer." : "Error saving. Please try again.");
+    }
     finally { setSaving(false); }
   };
 
@@ -324,21 +378,25 @@ export default function LeaguePage() {
               {committee.map((mem) => (
                 <div key={mem.id} className="rounded-xl border border-white/10 bg-gradient-to-br from-violet-600/10 to-indigo-600/10 p-4">
                   <div className="flex items-start gap-3">
-                    <div className="w-12 h-12 rounded-full bg-violet-600/20 flex items-center justify-center overflow-hidden flex-shrink-0">
-                      {mem.photo ? (<Image src={mem.photo} alt={mem.lastName} width={48} height={48} className="object-cover w-full h-full" unoptimized />) : (<span className="text-violet-400 font-bold">{mem.firstName[0]}{mem.lastName[0]}</span>)}
+                    <div className="w-14 h-14 rounded-full bg-violet-600/20 flex items-center justify-center overflow-hidden flex-shrink-0">
+                      {mem.photo ? (<Image src={mem.photo} alt={mem.lastName} width={56} height={56} className="object-cover w-full h-full" unoptimized />) : (<span className="text-violet-400 font-bold text-lg">{mem.firstName[0]}{mem.lastName[0]}</span>)}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-white truncate">{mem.firstName} {mem.lastName}</p>
                       <p className="text-xs text-violet-400">{mem.role}</p>
-                      {mem.email && <p className="text-xs text-slate-500 truncate">{mem.email}</p>}
+                      {mem.department && <p className="text-xs text-slate-500">{mem.department}</p>}
+                      {mem.email && <p className="text-xs text-slate-500 truncate mt-1">{mem.email}</p>}
                     </div>
                   </div>
-                  {canManage && (
-                    <div className="flex gap-2 mt-3">
-                      <button onClick={() => openCommitteeModal(mem)} className="flex-1 py-1.5 rounded-lg bg-violet-600/20 text-violet-300 text-xs hover:bg-violet-600/30">{copy.edit}</button>
-                      <button onClick={() => deleteCommittee(mem.id)} className="flex-1 py-1.5 rounded-lg bg-red-600/20 text-red-300 text-xs hover:bg-red-600/30">{copy.delete}</button>
-                    </div>
-                  )}
+                  <div className="flex gap-2 mt-3">
+                    <Link href={`/staff/${mem.id}`} target="_blank" className="flex-1 py-1.5 rounded-lg bg-slate-800/50 text-slate-300 text-xs hover:bg-slate-800 text-center transition">{copy.viewProfile}</Link>
+                    {canManage && (
+                      <>
+                        <button onClick={() => openCommitteeModal(mem)} className="flex-1 py-1.5 rounded-lg bg-violet-600/20 text-violet-300 text-xs hover:bg-violet-600/30">{copy.edit}</button>
+                        <button onClick={() => deleteCommittee(mem.id)} className="py-1.5 px-3 rounded-lg bg-red-600/20 text-red-300 text-xs hover:bg-red-600/30">{copy.delete}</button>
+                      </>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -394,18 +452,60 @@ export default function LeaguePage() {
 
       {/* Committee Modal */}
       {showCommitteeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-md bg-slate-900 rounded-2xl border border-white/10 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 overflow-y-auto">
+          <div className="w-full max-w-2xl bg-slate-900 rounded-2xl border border-white/10 shadow-2xl my-8">
             <div className="p-6 border-b border-white/10"><h3 className="text-xl font-bold text-white">{editingCommittee ? copy.edit : copy.add} {copy.committee}</h3></div>
-            <div className="p-6 space-y-4">
+            <div className="p-6 space-y-5 max-h-[70vh] overflow-y-auto">
+              {/* Basic Info Row */}
               <div className="grid grid-cols-2 gap-4">
                 <div><label className="block text-sm font-medium text-slate-400 mb-1">{copy.firstName}</label><input type="text" value={committeeForm.firstName} onChange={(e) => setCommitteeForm({ ...committeeForm, firstName: e.target.value })} placeholder={copy.firstName} className="w-full px-4 py-2 bg-slate-800 border border-white/10 rounded-xl text-white" /></div>
                 <div><label className="block text-sm font-medium text-slate-400 mb-1">{copy.lastName}</label><input type="text" value={committeeForm.lastName} onChange={(e) => setCommitteeForm({ ...committeeForm, lastName: e.target.value })} placeholder={copy.lastName} className="w-full px-4 py-2 bg-slate-800 border border-white/10 rounded-xl text-white" /></div>
               </div>
-              <div><label className="block text-sm font-medium text-slate-400 mb-1">{copy.role}</label><input type="text" value={committeeForm.role} onChange={(e) => setCommitteeForm({ ...committeeForm, role: e.target.value })} placeholder={copy.role} className="w-full px-4 py-2 bg-slate-800 border border-white/10 rounded-xl text-white" /></div>
-              <div><label className="block text-sm font-medium text-slate-400 mb-1">{copy.email}</label><input type="email" value={committeeForm.email} onChange={(e) => setCommitteeForm({ ...committeeForm, email: e.target.value })} placeholder={copy.email} className="w-full px-4 py-2 bg-slate-800 border border-white/10 rounded-xl text-white" /></div>
-              <div><label className="block text-sm font-medium text-slate-400 mb-1">{copy.phone}</label><input type="tel" value={committeeForm.phone} onChange={(e) => setCommitteeForm({ ...committeeForm, phone: e.target.value })} placeholder={copy.phone} className="w-full px-4 py-2 bg-slate-800 border border-white/10 rounded-xl text-white" /></div>
-              <div><label className="block text-sm font-medium text-slate-400 mb-1">{copy.photo}</label><div className="flex items-center gap-4">{committeePhotoPreview && (<div className="relative w-12 h-12 rounded-full overflow-hidden"><Image src={committeePhotoPreview} alt="Preview" fill className="object-cover" unoptimized /></div>)}<input type="file" accept="image/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) { setCommitteePhoto(f); setCommitteePhotoPreview(URL.createObjectURL(f)); } }} title={copy.photo} className="text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-violet-600 file:text-white" /></div></div>
+              {/* Role & Department Row */}
+              <div className="grid grid-cols-2 gap-4">
+                <div><label className="block text-sm font-medium text-slate-400 mb-1">{copy.role}</label><input type="text" value={committeeForm.role} onChange={(e) => setCommitteeForm({ ...committeeForm, role: e.target.value })} placeholder={copy.role} className="w-full px-4 py-2 bg-slate-800 border border-white/10 rounded-xl text-white" /></div>
+                <div><label className="block text-sm font-medium text-slate-400 mb-1">{copy.department}</label><input type="text" value={committeeForm.department} onChange={(e) => setCommitteeForm({ ...committeeForm, department: e.target.value })} placeholder={copy.department} className="w-full px-4 py-2 bg-slate-800 border border-white/10 rounded-xl text-white" /></div>
+              </div>
+              
+              {/* Biography Section - Prominent */}
+              <div className="pt-3 border-t border-violet-500/20">
+                <label className="block text-base font-semibold text-violet-400 mb-2 flex items-center gap-2">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  {copy.bio}
+                </label>
+                <textarea 
+                  value={committeeForm.bio} 
+                  onChange={(e) => setCommitteeForm({ ...committeeForm, bio: e.target.value })} 
+                  placeholder={language === "fr" ? "Présentez cette personne... Cette biographie sera affichée sur leur page de profil." : "Introduce this person... This biography will be shown on their profile page."} 
+                  rows={5} 
+                  className="w-full px-4 py-3 bg-slate-800 border border-violet-500/30 rounded-xl text-white resize-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition-all" 
+                />
+                <p className="text-xs text-slate-500 mt-1">{language === "fr" ? "📝 Sera visible sur la page du membre" : "📝 Will be visible on member's profile page"}</p>
+              </div>
+
+              {/* Contact Row */}
+              <div className="grid grid-cols-2 gap-4">
+                <div><label className="block text-sm font-medium text-slate-400 mb-1">{copy.email}</label><input type="email" value={committeeForm.email} onChange={(e) => setCommitteeForm({ ...committeeForm, email: e.target.value })} placeholder={copy.email} className="w-full px-4 py-2 bg-slate-800 border border-white/10 rounded-xl text-white" /></div>
+                <div><label className="block text-sm font-medium text-slate-400 mb-1">{copy.phone}</label><input type="tel" value={committeeForm.phone} onChange={(e) => setCommitteeForm({ ...committeeForm, phone: e.target.value })} placeholder={copy.phone} className="w-full px-4 py-2 bg-slate-800 border border-white/10 rounded-xl text-white" /></div>
+              </div>
+              {/* Photo */}
+              <div><label className="block text-sm font-medium text-slate-400 mb-1">{copy.photo}</label><div className="flex items-center gap-4">{committeePhotoPreview && (<div className="relative w-16 h-16 rounded-full overflow-hidden"><Image src={committeePhotoPreview} alt="Preview" fill className="object-cover" unoptimized /></div>)}<input type="file" accept="image/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) { setCommitteePhoto(f); setCommitteePhotoPreview(URL.createObjectURL(f)); } }} title={copy.photo} className="text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-violet-600 file:text-white" /></div></div>
+              {/* Experience */}
+              <div><label className="block text-sm font-medium text-slate-400 mb-1">{copy.experience}</label><textarea value={committeeForm.experience} onChange={(e) => setCommitteeForm({ ...committeeForm, experience: e.target.value })} placeholder={language === "fr" ? "Expérience professionnelle..." : "Professional experience..."} rows={3} className="w-full px-4 py-2 bg-slate-800 border border-white/10 rounded-xl text-white resize-none" /></div>
+              {/* Education */}
+              <div><label className="block text-sm font-medium text-slate-400 mb-1">{copy.education}</label><input type="text" value={committeeForm.education} onChange={(e) => setCommitteeForm({ ...committeeForm, education: e.target.value })} placeholder={language === "fr" ? "Formation académique..." : "Academic background..."} className="w-full px-4 py-2 bg-slate-800 border border-white/10 rounded-xl text-white" /></div>
+              {/* Social Media Section */}
+              <div className="pt-4 border-t border-white/10">
+                <p className="text-sm font-medium text-slate-400 mb-3">{language === "fr" ? "Réseaux sociaux" : "Social Media"}</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div><label className="block text-xs text-slate-500 mb-1">{copy.twitter}</label><input type="url" value={committeeForm.twitter} onChange={(e) => setCommitteeForm({ ...committeeForm, twitter: e.target.value })} placeholder="https://twitter.com/..." className="w-full px-3 py-2 bg-slate-800 border border-white/10 rounded-lg text-white text-sm" /></div>
+                  <div><label className="block text-xs text-slate-500 mb-1">{copy.linkedin}</label><input type="url" value={committeeForm.linkedin} onChange={(e) => setCommitteeForm({ ...committeeForm, linkedin: e.target.value })} placeholder="https://linkedin.com/in/..." className="w-full px-3 py-2 bg-slate-800 border border-white/10 rounded-lg text-white text-sm" /></div>
+                  <div><label className="block text-xs text-slate-500 mb-1">{copy.facebook}</label><input type="url" value={committeeForm.facebook} onChange={(e) => setCommitteeForm({ ...committeeForm, facebook: e.target.value })} placeholder="https://facebook.com/..." className="w-full px-3 py-2 bg-slate-800 border border-white/10 rounded-lg text-white text-sm" /></div>
+                  <div><label className="block text-xs text-slate-500 mb-1">{copy.instagram}</label><input type="url" value={committeeForm.instagram} onChange={(e) => setCommitteeForm({ ...committeeForm, instagram: e.target.value })} placeholder="https://instagram.com/..." className="w-full px-3 py-2 bg-slate-800 border border-white/10 rounded-lg text-white text-sm" /></div>
+                </div>
+              </div>
             </div>
             <div className="p-6 border-t border-white/10 flex gap-3">
               <button onClick={() => setShowCommitteeModal(false)} className="flex-1 py-2 bg-slate-800 text-slate-300 rounded-xl font-medium hover:bg-slate-700">{copy.cancel}</button>

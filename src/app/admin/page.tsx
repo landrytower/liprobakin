@@ -297,6 +297,7 @@ type CommitteeMember = {
   email?: string;
   phone?: string;
   photo?: string;
+  bio?: string;
   createdAt: Date | null;
 };
 
@@ -308,6 +309,7 @@ type CommitteeFormState = {
   email: string;
   phone: string;
   photo?: string;
+  bio: string;
 };
 
 type Venue = {
@@ -787,7 +789,7 @@ export default function AdminPage() {
   const [refereeHeadshotFile, setRefereeHeadshotFile] = useState<File | null>(null);
   const [refereeHeadshotPreview, setRefereeHeadshotPreview] = useState<string>("");
   const [committeeMembers, setCommitteeMembers] = useState<CommitteeMember[]>([]);
-  const [committeeForm, setCommitteeForm] = useState<CommitteeFormState>({ firstName: "", lastName: "", role: "", email: "", phone: "" });
+  const [committeeForm, setCommitteeForm] = useState<CommitteeFormState>({ firstName: "", lastName: "", role: "", email: "", phone: "", bio: "" });
   const [committeeFormVisible, setCommitteeFormVisible] = useState(false);
   const [committeePhotoFile, setCommitteePhotoFile] = useState<File | null>(null);
   const [committeePhotoPreview, setCommitteePhotoPreview] = useState<string>("");
@@ -1548,9 +1550,20 @@ export default function AdminPage() {
       
       // Log the login action
       await logAuditAction("user_login", user.uid, user.email || authForm.email, "admin");
-    } catch (error) {
-      console.error(error);
-      setAuthError("Unable to sign in. Double-check the credentials.");
+    } catch (error: unknown) {
+      console.error("Login error:", error);
+      const firebaseError = error as { code?: string; message?: string };
+      if (firebaseError.code === "auth/invalid-credential" || firebaseError.code === "auth/wrong-password") {
+        setAuthError("Invalid email or password. Please check your credentials and try again.");
+      } else if (firebaseError.code === "auth/user-not-found") {
+        setAuthError("No account found with this email address.");
+      } else if (firebaseError.code === "auth/too-many-requests") {
+        setAuthError("Too many failed attempts. Please try again later.");
+      } else if (firebaseError.code === "auth/network-request-failed") {
+        setAuthError("Network error. Please check your internet connection.");
+      } else {
+        setAuthError(`Unable to sign in: ${firebaseError.message || "Unknown error"}`);
+      }
     } finally {
       setAuthSubmitting(false);
     }
@@ -2595,27 +2608,34 @@ export default function AdminPage() {
         photoUrl = await getDownloadURL(photoRef);
       }
 
-      const committeeData = {
+      const committeeDataBase = {
         firstName,
         lastName,
         role,
-        email: committeeForm.email.trim() || null,
-        phone: committeeForm.phone.trim() || null,
-        photo: photoUrl || null,
-        createdAt: committeeForm.id ? undefined : serverTimestamp(),
+        email: committeeForm.email.trim() || "",
+        phone: committeeForm.phone.trim() || "",
+        photo: photoUrl || "",
+        bio: committeeForm.bio.trim() || "",
       };
 
       if (committeeForm.id) {
-        await updateDoc(doc(firebaseDB, "committee", committeeForm.id), committeeData);
+        await updateDoc(doc(firebaseDB, "committee", committeeForm.id), {
+          ...committeeDataBase,
+          updatedAt: serverTimestamp(),
+        });
         await logAuditAction("committee_updated", user.uid, user.email || "unknown", "committee", committeeForm.id, `${firstName} ${lastName}`);
         setLeagueGestionStatus({ type: "success", message: "Committee member updated." });
       } else {
-        const newCommitteeRef = await addDoc(collection(firebaseDB, "committee"), committeeData);
+        const newCommitteeRef = await addDoc(collection(firebaseDB, "committee"), {
+          ...committeeDataBase,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
         await logAuditAction("committee_added", user.uid, user.email || "unknown", "committee", newCommitteeRef.id, `${firstName} ${lastName}`);
         setLeagueGestionStatus({ type: "success", message: "Committee member added." });
       }
 
-      setCommitteeForm({ firstName: "", lastName: "", role: "", email: "", phone: "" });
+      setCommitteeForm({ firstName: "", lastName: "", role: "", email: "", phone: "", bio: "" });
       setCommitteePhotoFile(null);
       setCommitteePhotoPreview("");
       setCommitteeFormVisible(false);
@@ -2636,6 +2656,7 @@ export default function AdminPage() {
       email: member.email ?? "",
       phone: member.phone ?? "",
       photo: member.photo,
+      bio: member.bio ?? "",
     });
     if (member.photo) {
       setCommitteePhotoPreview(member.photo);
@@ -4337,16 +4358,16 @@ export default function AdminPage() {
 
       {user && currentAdminUser && !currentAdminUser.isFirstLogin && (
         <main className="fixed inset-0 overflow-auto bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
-          <div className="mx-auto flex max-w-7xl flex-col">
+          <div className="mx-auto flex max-w-7xl flex-col px-4 sm:px-6">
             {/* Header */}
             <div className="sticky top-0 z-30 border-b border-white/10 bg-slate-950/95 backdrop-blur-xl">
-              <div className="px-6 py-4">
-                <div className="flex items-center justify-between">
+              <div className="px-4 py-3 sm:px-6 sm:py-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <h1 className="text-xl font-bold text-white">{t.adminDashboard}</h1>
                     <p className="text-xs text-slate-400">{t.contentManagement}</p>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                     {/* Online Admins Display with Dropdown */}
                     {(() => {
                       const now = Date.now();
@@ -8308,7 +8329,7 @@ export default function AdminPage() {
                     <button
                       type="button"
                       onClick={() => {
-                        setCommitteeForm({ firstName: "", lastName: "", role: "", email: "", phone: "" });
+                        setCommitteeForm({ firstName: "", lastName: "", role: "", email: "", phone: "", bio: "" });
                         setCommitteePhotoPreview("");
                         setCommitteePhotoFile(null);
                         setCommitteeFormVisible(!committeeFormVisible);
@@ -8359,6 +8380,13 @@ export default function AdminPage() {
                           value={committeeForm.phone}
                           onChange={(e) => setCommitteeForm({ ...committeeForm, phone: e.target.value })}
                           className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-violet-500 focus:outline-none"
+                        />
+                        <textarea
+                          placeholder="Biographie"
+                          value={committeeForm.bio}
+                          onChange={(e) => setCommitteeForm({ ...committeeForm, bio: e.target.value })}
+                          rows={4}
+                          className="col-span-1 sm:col-span-2 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-violet-500 focus:outline-none resize-none"
                         />
                         <label htmlFor="committeePhoto" className="sr-only">Photo du comité</label>
                         <input

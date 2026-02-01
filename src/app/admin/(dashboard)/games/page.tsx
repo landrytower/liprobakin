@@ -4,6 +4,8 @@ import React, { useState, useEffect, FormEvent, useMemo } from "react";
 import Image from "next/image";
 import { useAdmin } from "../layout";
 import { firebaseDB } from "@/lib/firebase";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import {
   collection,
   query,
@@ -44,6 +46,17 @@ type Referee = {
   lastName: string;
 };
 
+type Matchday = {
+  id: string;
+  week: number;
+  startDate: string;
+  endDate: string;
+  gender: GenderKey | "all";
+  seasonId: string;
+  createdAt: Date | null;
+  updatedAt: Date | null;
+};
+
 type Game = {
   id: string;
   gender: GenderKey;
@@ -81,8 +94,17 @@ type GameFormState = {
   refereeIds: string[];
 };
 
-type ViewMode = "schedule" | "archive" | "matchday";
+type MatchdayFormState = {
+  id?: string;
+  week: number;
+  startDate: string;
+  endDate: string;
+  gender: GenderKey | "all";
+};
+
+type ViewMode = "schedule" | "archive" | "matchday" | "calendar";
 type FilterGender = "all" | "men" | "women";
+type CalendarViewType = "list" | "calendar";
 
 // ============================================================================
 // TRANSLATIONS
@@ -95,6 +117,8 @@ const translations = {
     scheduleView: "Schedule",
     archiveView: "Archive",
     matchdayView: "By Matchday",
+    calendarView: "Calendar",
+    listView: "List",
     allGenders: "All",
     mensLeague: "Men's",
     womensLeague: "Women's",
@@ -151,6 +175,23 @@ const translations = {
     totalGames: "Total Games",
     completed: "Completed",
     upcoming: "Upcoming",
+    createMatchday: "Create Matchday",
+    editMatchday: "Edit Matchday",
+    matchdayNumber: "Matchday Number",
+    startDate: "Start Date",
+    endDate: "End Date",
+    saveMatchday: "Save Matchday",
+    deleteMatchday: "Delete Matchday",
+    viewGames: "View Games",
+    noMatchdays: "No matchdays created yet",
+    createMatchdayDesc: "Create matchdays to organize games by week with date ranges",
+    matchday: "Matchday",
+    gamesInMatchday: "Games in this matchday",
+    backToMatchdays: "Back to Matchdays",
+    matchdayDateRange: "Date Range",
+    noGamesForDate: "No games scheduled for this date",
+    selectDate: "Select a date to view games",
+    downloadPDF: "Download PDF",
   },
   fr: {
     title: "Gestion des Matchs",
@@ -158,6 +199,8 @@ const translations = {
     scheduleView: "Calendrier",
     archiveView: "Archives",
     matchdayView: "Par Journée",
+    calendarView: "Calendrier",
+    listView: "Liste",
     allGenders: "Tous",
     mensLeague: "Hommes",
     womensLeague: "Femmes",
@@ -214,6 +257,23 @@ const translations = {
     totalGames: "Total des Matchs",
     completed: "Terminés",
     upcoming: "À Venir",
+    createMatchday: "Créer une Journée",
+    editMatchday: "Modifier la Journée",
+    matchdayNumber: "Numéro de Journée",
+    startDate: "Date de Début",
+    endDate: "Date de Fin",
+    saveMatchday: "Enregistrer",
+    deleteMatchday: "Supprimer la Journée",
+    viewGames: "Voir les Matchs",
+    noMatchdays: "Aucune journée créée",
+    createMatchdayDesc: "Créer des journées pour organiser les matchs par semaine avec des plages de dates",
+    matchday: "Journée",
+    gamesInMatchday: "Matchs de cette journée",
+    backToMatchdays: "Retour aux Journées",
+    matchdayDateRange: "Période",
+    noGamesForDate: "Aucun match programmé pour cette date",
+    selectDate: "Sélectionnez une date pour afficher les matchs",
+    downloadPDF: "Télécharger PDF",
   },
 };
 
@@ -228,6 +288,13 @@ const initialFormState: GameFormState = {
   refereeIds: [],
 };
 
+const initialMatchdayFormState: MatchdayFormState = {
+  week: 1,
+  startDate: "",
+  endDate: "",
+  gender: "all",
+};
+
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
@@ -238,19 +305,26 @@ export default function GamesPage() {
 
   // View state
   const [viewMode, setViewMode] = useState<ViewMode>("matchday");
+  const [calendarViewType, setCalendarViewType] = useState<CalendarViewType>("calendar");
   const [filterGender, setFilterGender] = useState<FilterGender>("all");
   const [selectedWeek, setSelectedWeek] = useState<number>(1);
+  const [selectedMatchday, setSelectedMatchday] = useState<Matchday | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [currentMonth, setCurrentMonth] = useState(new Date());
 
   // Data state
   const [games, setGames] = useState<Game[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [venues, setVenues] = useState<Venue[]>([]);
   const [referees, setReferees] = useState<Referee[]>([]);
+  const [matchdays, setMatchdays] = useState<Matchday[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Form state
   const [formVisible, setFormVisible] = useState(false);
   const [formState, setFormState] = useState<GameFormState>(initialFormState);
+  const [matchdayFormVisible, setMatchdayFormVisible] = useState(false);
+  const [matchdayFormState, setMatchdayFormState] = useState<MatchdayFormState>(initialMatchdayFormState);
   const [submitting, setSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
 
@@ -302,6 +376,33 @@ export default function GamesPage() {
       });
       setGames(fetchedGames);
       setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Fetch matchdays
+  useEffect(() => {
+    const matchdaysQuery = query(
+      collection(firebaseDB, "matchdays"),
+      orderBy("week", "asc")
+    );
+
+    const unsubscribe = onSnapshot(matchdaysQuery, (snapshot) => {
+      const fetchedMatchdays: Matchday[] = snapshot.docs.map((docSnap) => {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id,
+          week: data.week || 1,
+          startDate: data.startDate || "",
+          endDate: data.endDate || "",
+          gender: data.gender || "all",
+          seasonId: data.seasonId || currentSeasonId,
+          createdAt: data.createdAt?.toDate?.() || null,
+          updatedAt: data.updatedAt?.toDate?.() || null,
+        };
+      });
+      setMatchdays(fetchedMatchdays);
     });
 
     return () => unsubscribe();
@@ -374,13 +475,24 @@ export default function GamesPage() {
       result = result.filter((g) => g.gender === filterGender);
     }
 
-    // Filter by week in matchday view
-    if (viewMode === "matchday") {
+    // Filter by week in matchday view (when viewing games list)
+    if (viewMode === "matchday" && selectedMatchday) {
+      // Filter games by date range of the selected matchday
+      result = result.filter((g) => {
+        const gameDate = g.date;
+        return gameDate >= selectedMatchday.startDate && gameDate <= selectedMatchday.endDate;
+      });
+      // Also filter by matchday gender if not "all"
+      if (selectedMatchday.gender !== "all") {
+        result = result.filter((g) => g.gender === selectedMatchday.gender);
+      }
+    } else if (viewMode === "matchday" && !selectedMatchday) {
+      // If no matchday is selected, filter by selected week number
       result = result.filter((g) => g.week === selectedWeek);
     }
 
     return result;
-  }, [games, filterGender, viewMode, selectedWeek]);
+  }, [games, filterGender, viewMode, selectedWeek, selectedMatchday]);
 
   // Group games by date (for schedule view)
   const gamesByDate = useMemo(() => {
@@ -422,6 +534,84 @@ export default function GamesPage() {
     setFormState(initialFormState);
     setFormVisible(false);
     setStatusMessage(null);
+  };
+
+  const resetMatchdayForm = () => {
+    setMatchdayFormState(initialMatchdayFormState);
+    setMatchdayFormVisible(false);
+  };
+
+  const handleEditMatchday = (matchday: Matchday) => {
+    setMatchdayFormState({
+      id: matchday.id,
+      week: matchday.week,
+      startDate: matchday.startDate,
+      endDate: matchday.endDate,
+      gender: matchday.gender,
+    });
+    setMatchdayFormVisible(true);
+  };
+
+  const handleSubmitMatchday = async (e: FormEvent) => {
+    e.preventDefault();
+
+    if (!currentAdminUser) return;
+
+    if (!matchdayFormState.startDate || !matchdayFormState.endDate) {
+      setStatusMessage({ type: "error", message: "Please select start and end dates" });
+      return;
+    }
+
+    if (matchdayFormState.startDate > matchdayFormState.endDate) {
+      setStatusMessage({ type: "error", message: "Start date must be before end date" });
+      return;
+    }
+
+    setSubmitting(true);
+
+    try {
+      const payload = {
+        week: matchdayFormState.week,
+        startDate: matchdayFormState.startDate,
+        endDate: matchdayFormState.endDate,
+        gender: matchdayFormState.gender,
+        seasonId: currentSeasonId,
+        updatedAt: serverTimestamp(),
+      };
+
+      if (matchdayFormState.id) {
+        await updateDoc(doc(firebaseDB, "matchdays", matchdayFormState.id), payload);
+        setStatusMessage({ type: "success", message: "Matchday updated successfully" });
+      } else {
+        await addDoc(collection(firebaseDB, "matchdays"), {
+          ...payload,
+          createdAt: serverTimestamp(),
+        });
+        setStatusMessage({ type: "success", message: "Matchday created successfully" });
+      }
+
+      resetMatchdayForm();
+    } catch (error) {
+      console.error("Error saving matchday:", error);
+      setStatusMessage({ type: "error", message: "Failed to save matchday" });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDeleteMatchday = async (matchday: Matchday) => {
+    if (!window.confirm("Are you sure you want to delete this matchday?")) return;
+
+    try {
+      await deleteDoc(doc(firebaseDB, "matchdays", matchday.id));
+      setStatusMessage({ type: "success", message: "Matchday deleted successfully" });
+      if (selectedMatchday?.id === matchday.id) {
+        setSelectedMatchday(null);
+      }
+    } catch (error) {
+      console.error("Error deleting matchday:", error);
+      setStatusMessage({ type: "error", message: "Failed to delete matchday" });
+    }
   };
 
   const handleEditGame = (game: Game) => {
@@ -568,6 +758,107 @@ export default function GamesPage() {
     }
   };
 
+  const handleDownloadPDF = () => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    let yPosition = 20;
+
+    // Title
+    doc.setFontSize(18);
+    doc.text(language === "fr" ? "Liste des Matchs" : "Games List", pageWidth / 2, yPosition, { align: "center" });
+    yPosition += 15;
+
+    // Date/Matchday info
+    doc.setFontSize(12);
+    if (selectedMatchday) {
+      doc.text(
+        `${t.week} ${selectedMatchday.week} - ${selectedMatchday.startDate} ${language === "fr" ? "à" : "to"} ${selectedMatchday.endDate}`,
+        pageWidth / 2,
+        yPosition,
+        { align: "center" }
+      );
+    } else if (selectedDate) {
+      const dateFormatted = new Date(selectedDate + "T00:00:00").toLocaleDateString(language === "fr" ? "fr-FR" : "en-US", {
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+      });
+      doc.text(`${dateFormatted}`, pageWidth / 2, yPosition, { align: "center" });
+    }
+    yPosition += 12;
+
+    // Games table data
+    const tableData = filteredGames.map((game, idx) => [
+      idx + 1,
+      game.homeTeamName,
+      game.awayTeamName,
+      formatDate(game.date),
+      game.time,
+      game.venue,
+      game.status ? t.gameStatus[game.status] : "Unknown",
+      game.homeScore !== undefined && game.awayScore !== undefined ? `${game.homeScore}-${game.awayScore}` : "-",
+    ]);
+
+    // Add table using autotable
+    autoTable(doc, {
+      head: [
+        [
+          "#",
+          language === "fr" ? "Équipe Locale" : "Home Team",
+          language === "fr" ? "Équipe Visiteur" : "Away Team",
+          language === "fr" ? "Date" : "Date",
+          language === "fr" ? "Heure" : "Time",
+          language === "fr" ? "Lieu" : "Venue",
+          language === "fr" ? "Statut" : "Status",
+          language === "fr" ? "Score" : "Score",
+        ],
+      ],
+      body: tableData,
+      startY: yPosition,
+      margin: { top: 20, right: 10, bottom: 10, left: 10 },
+      styles: {
+        fontSize: 10,
+        cellPadding: 3,
+      },
+      headStyles: {
+        fillColor: [255, 140, 0],
+        textColor: [255, 255, 255],
+        fontStyle: "bold",
+      },
+      alternateRowStyles: {
+        fillColor: [240, 240, 240],
+      },
+    });
+
+    // Add timestamp at the bottom
+    const currentDate = new Date();
+    const timestamp = currentDate.toLocaleDateString(language === "fr" ? "fr-FR" : "en-US", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }) + " " + currentDate.toLocaleTimeString(language === "fr" ? "fr-FR" : "en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+
+    doc.setFontSize(8);
+    doc.setTextColor(128, 128, 128); // Grey color
+    doc.text(
+      `${language === "fr" ? "Téléchargé le" : "Downloaded"}: ${timestamp}`,
+      pageWidth / 2,
+      pageHeight - 10,
+      { align: "center" }
+    );
+
+    // Download the PDF
+    const filename = selectedMatchday
+      ? `games_week${selectedMatchday.week}_${new Date().getTime()}.pdf`
+      : `games_${selectedDate}_${new Date().getTime()}.pdf`;
+    doc.save(filename);
+  };
+
   // ============================================================================
   // RENDER HELPERS
   // ============================================================================
@@ -663,6 +954,14 @@ export default function GamesPage() {
             {t.matchdayView}
           </button>
           <button
+            onClick={() => setViewMode("calendar")}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+              viewMode === "calendar" ? "bg-orange-500 text-white" : "text-slate-400 hover:text-white"
+            }`}
+          >
+            {t.calendarView}
+          </button>
+          <button
             onClick={() => setViewMode("schedule")}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
               viewMode === "schedule" ? "bg-orange-500 text-white" : "text-slate-400 hover:text-white"
@@ -680,61 +979,197 @@ export default function GamesPage() {
           </button>
         </div>
 
-        {/* Gender Filter */}
-        <div className="flex rounded-xl bg-slate-900/60 border border-white/10 p-1">
-          <button
-            onClick={() => setFilterGender("all")}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-              filterGender === "all" ? "bg-slate-700 text-white" : "text-slate-400 hover:text-white"
-            }`}
-          >
-            {t.allGenders}
-          </button>
-          <button
-            onClick={() => setFilterGender("men")}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-              filterGender === "men" ? "bg-blue-500 text-white" : "text-slate-400 hover:text-white"
-            }`}
-          >
-            {t.mensLeague}
-          </button>
-          <button
-            onClick={() => setFilterGender("women")}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-              filterGender === "women" ? "bg-pink-500 text-white" : "text-slate-400 hover:text-white"
-            }`}
-          >
-            {t.womensLeague}
-          </button>
-        </div>
-
-        {/* Matchday Selector (only in matchday view) */}
-        {viewMode === "matchday" && (
-          <select
-            value={selectedWeek}
-            onChange={(e) => setSelectedWeek(parseInt(e.target.value))}
-            aria-label={t.selectWeek}
-            className="rounded-xl bg-slate-900/60 border border-white/10 px-4 py-2 text-sm text-white focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20"
-          >
-            {Array.from({ length: 30 }, (_, i) => i + 1).map((week) => (
-              <option key={week} value={week}>
-                {t.week} {week}
-              </option>
-            ))}
-          </select>
+        {/* Gender Filter - Hidden when viewing matchday grid, shown otherwise */}
+        {!(viewMode === "matchday" && !selectedMatchday) && (
+          <div className="flex rounded-xl bg-slate-900/60 border border-white/10 p-1">
+            <button
+              onClick={() => setFilterGender("all")}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+                filterGender === "all" ? "bg-slate-700 text-white" : "text-slate-400 hover:text-white"
+              }`}
+            >
+              {t.allGenders}
+            </button>
+            <button
+              onClick={() => setFilterGender("men")}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+                filterGender === "men" ? "bg-blue-500 text-white" : "text-slate-400 hover:text-white"
+              }`}
+            >
+              {t.mensLeague}
+            </button>
+            <button
+              onClick={() => setFilterGender("women")}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+                filterGender === "women" ? "bg-pink-500 text-white" : "text-slate-400 hover:text-white"
+              }`}
+            >
+              {t.womensLeague}
+            </button>
+          </div>
         )}
 
-        {/* Schedule Button */}
-        <button
-          onClick={() => {
-            setFormState({ ...initialFormState, week: selectedWeek });
-            setFormVisible(true);
-          }}
-          className="ml-auto rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 px-5 py-2 text-sm font-semibold text-white shadow-lg hover:shadow-xl transition"
-        >
-          + {t.scheduleGame}
-        </button>
+        {/* Create Matchday Button (only in matchday view when no matchday selected) */}
+        {viewMode === "matchday" && !selectedMatchday && (
+          <button
+            onClick={() => {
+              setMatchdayFormState(initialMatchdayFormState);
+              setMatchdayFormVisible(true);
+            }}
+            className="rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 px-5 py-2 text-sm font-semibold text-white shadow-lg hover:shadow-xl transition"
+          >
+            + {t.createMatchday}
+          </button>
+        )}
+
+        {/* Schedule Button (show when matchday is selected) */}
+        {viewMode === "matchday" && selectedMatchday && (
+          <button
+            onClick={() => {
+              setFormState({ ...initialFormState, week: selectedMatchday.week });
+              setFormVisible(true);
+            }}
+            className="ml-auto rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 px-5 py-2 text-sm font-semibold text-white shadow-lg hover:shadow-xl transition"
+          >
+            + {t.scheduleGame}
+          </button>
+        )}
+
+        {/* Schedule Button for non-matchday views */}
+        {viewMode !== "matchday" && (
+          <button
+            onClick={() => {
+              setFormState({ ...initialFormState, week: selectedWeek });
+              setFormVisible(true);
+            }}
+            className="ml-auto rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 px-5 py-2 text-sm font-semibold text-white shadow-lg hover:shadow-xl transition"
+          >
+            + {t.scheduleGame}
+          </button>
+        )}
+
+        {/* Download PDF Button */}
+        {(viewMode === "matchday" && selectedMatchday && filteredGames.length > 0) ||
+        (viewMode === "calendar" && selectedDate && filteredGames.length > 0) ? (
+          <button
+            onClick={handleDownloadPDF}
+            className="rounded-xl bg-gradient-to-r from-green-500 to-green-600 px-5 py-2 text-sm font-semibold text-white shadow-lg hover:shadow-xl transition flex items-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+            </svg>
+            {t.downloadPDF}
+          </button>
+        ) : null}
       </div>
+
+      {/* Matchday Form Modal */}
+      {matchdayFormVisible && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-900 p-6 shadow-2xl">
+            <h2 className="text-xl font-bold text-white mb-6">
+              {matchdayFormState.id ? t.editMatchday : t.createMatchday}
+            </h2>
+
+            <form onSubmit={handleSubmitMatchday} className="space-y-5">
+              {/* Matchday Number */}
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-2 uppercase tracking-wider">{t.matchdayNumber}</label>
+                <select
+                  value={matchdayFormState.week}
+                  onChange={(e) => setMatchdayFormState((prev) => ({ ...prev, week: parseInt(e.target.value) }))}
+                  aria-label={t.matchdayNumber}
+                  className="w-full rounded-lg border border-white/10 bg-slate-950/60 px-4 py-2.5 text-white focus:border-orange-500"
+                >
+                  {Array.from({ length: 30 }, (_, i) => i + 1).map((week) => (
+                    <option key={week} value={week}>
+                      {t.week} {week}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Gender */}
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-2 uppercase tracking-wider">League</label>
+                <div className="flex rounded-lg bg-slate-950/60 border border-white/10 p-1">
+                  <button
+                    type="button"
+                    onClick={() => setMatchdayFormState((prev) => ({ ...prev, gender: "all" }))}
+                    className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition ${
+                      matchdayFormState.gender === "all" ? "bg-slate-700 text-white" : "text-slate-400"
+                    }`}
+                  >
+                    {t.allGenders}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMatchdayFormState((prev) => ({ ...prev, gender: "men" }))}
+                    className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition ${
+                      matchdayFormState.gender === "men" ? "bg-blue-500 text-white" : "text-slate-400"
+                    }`}
+                  >
+                    {t.mensLeague}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMatchdayFormState((prev) => ({ ...prev, gender: "women" }))}
+                    className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition ${
+                      matchdayFormState.gender === "women" ? "bg-pink-500 text-white" : "text-slate-400"
+                    }`}
+                  >
+                    {t.womensLeague}
+                  </button>
+                </div>
+              </div>
+
+              {/* Date Range */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-2 uppercase tracking-wider">{t.startDate}</label>
+                  <input
+                    type="date"
+                    value={matchdayFormState.startDate}
+                    onChange={(e) => setMatchdayFormState((prev) => ({ ...prev, startDate: e.target.value }))}
+                    aria-label={t.startDate}
+                    className="w-full rounded-lg border border-white/10 bg-slate-950/60 px-4 py-2.5 text-white focus:border-orange-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-2 uppercase tracking-wider">{t.endDate}</label>
+                  <input
+                    type="date"
+                    value={matchdayFormState.endDate}
+                    onChange={(e) => setMatchdayFormState((prev) => ({ ...prev, endDate: e.target.value }))}
+                    aria-label={t.endDate}
+                    className="w-full rounded-lg border border-white/10 bg-slate-950/60 px-4 py-2.5 text-white focus:border-orange-500"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="flex-1 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-3 text-sm font-semibold text-white shadow-lg hover:shadow-xl transition disabled:opacity-50"
+                >
+                  {submitting ? t.loading : t.saveMatchday}
+                </button>
+                <button
+                  type="button"
+                  onClick={resetMatchdayForm}
+                  className="rounded-lg border border-white/10 px-6 py-3 text-sm font-medium text-slate-300 hover:bg-slate-800 transition"
+                >
+                  {t.cancelEdit}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Game Form Modal */}
       {formVisible && (
@@ -1003,73 +1438,167 @@ export default function GamesPage() {
       {/* Games Display */}
       {viewMode === "matchday" && (
         <div className="space-y-4">
-          {/* Matchday Header */}
-          <div className="rounded-2xl border border-indigo-500/30 bg-gradient-to-r from-indigo-500/10 to-purple-500/10 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-[0.3em] text-indigo-400">{t.currentSeason}</p>
-                <h2 className="text-2xl font-bold text-white mt-1">{t.week} {selectedWeek}</h2>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setSelectedWeek(Math.max(1, selectedWeek - 1))}
-                  disabled={selectedWeek === 1}
-                  aria-label={language === "fr" ? "Journée précédente" : "Previous matchday"}
-                  className="rounded-lg border border-white/10 p-2 text-slate-400 hover:text-white hover:border-white/20 disabled:opacity-30 transition"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                  </svg>
-                </button>
-                <button
-                  onClick={() => setSelectedWeek(Math.min(30, selectedWeek + 1))}
-                  disabled={selectedWeek === 30}
-                  aria-label={language === "fr" ? "Journée suivante" : "Next matchday"}
-                  className="rounded-lg border border-white/10 p-2 text-slate-400 hover:text-white hover:border-white/20 disabled:opacity-30 transition"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          </div>
+          {/* Show matchday list or games within selected matchday */}
+          {!selectedMatchday ? (
+            <>
+              {/* Matchday Grid */}
+              {matchdays.length === 0 ? (
+                <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-12 text-center">
+                  <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-indigo-500/20">
+                    <svg className="w-8 h-8 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-semibold text-white mb-2">{t.noMatchdays}</h3>
+                  <p className="text-slate-400 mb-4">{t.createMatchdayDesc}</p>
+                  <button
+                    onClick={() => setMatchdayFormVisible(true)}
+                    className="rounded-lg bg-indigo-500 px-6 py-2 text-sm font-medium text-white hover:bg-indigo-600 transition"
+                  >
+                    + {t.createMatchday}
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {matchdays
+                    .sort((a, b) => a.week - b.week)
+                    .map((matchday) => {
+                      // Count games in this matchday
+                      const matchdayGames = games.filter((g) => {
+                        if (!matchday.startDate || !matchday.endDate) return false;
+                        const gameDate = g.date;
+                        return gameDate >= matchday.startDate && gameDate <= matchday.endDate;
+                      });
+                      const startFormatted = matchday.startDate ? new Date(matchday.startDate + "T00:00:00").toLocaleDateString(language === "fr" ? "fr-FR" : "en-US", { month: "short", day: "numeric" }) : "";
+                      const endFormatted = matchday.endDate ? new Date(matchday.endDate + "T00:00:00").toLocaleDateString(language === "fr" ? "fr-FR" : "en-US", { month: "short", day: "numeric" }) : "";
 
-          {/* Games List */}
-          {filteredGames.length === 0 ? (
-            <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-12 text-center">
-              <p className="text-slate-400">{t.noGamesForWeek}</p>
-              <button
-                onClick={() => {
-                  setFormState({ ...initialFormState, week: selectedWeek });
-                  setFormVisible(true);
-                }}
-                className="mt-4 rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600 transition"
-              >
-                + {t.scheduleGame}
-              </button>
-            </div>
+                      return (
+                        <div
+                          key={matchday.id}
+                          className="group relative rounded-2xl border border-indigo-500/30 bg-gradient-to-br from-indigo-500/10 to-purple-500/10 p-6 cursor-pointer hover:border-indigo-500/50 hover:shadow-lg hover:shadow-indigo-500/10 transition-all duration-300"
+                          onClick={() => setSelectedMatchday(matchday)}
+                        >
+                          {/* Edit/Delete buttons */}
+                          <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEditMatchday(matchday);
+                              }}
+                              className="rounded-lg bg-slate-800/80 p-2 text-slate-400 hover:text-white hover:bg-slate-700 transition"
+                              title={t.editMatchday}
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteMatchday(matchday.id);
+                              }}
+                              className="rounded-lg bg-slate-800/80 p-2 text-slate-400 hover:text-red-400 hover:bg-slate-700 transition"
+                              title={t.deleteMatchday}
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </div>
+
+                          {/* Matchday Content */}
+                          <div className="text-center">
+                            <p className="text-xs uppercase tracking-[0.2em] text-indigo-400 mb-1">{t.matchday}</p>
+                            <h3 className="text-3xl font-bold text-white mb-3">{matchday.week}</h3>
+                            <div className="inline-flex items-center gap-1 rounded-full bg-slate-800/60 px-3 py-1 text-sm text-slate-300">
+                              <svg className="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                              {startFormatted} - {endFormatted}
+                            </div>
+                            <div className="mt-3 flex items-center justify-center gap-2 text-sm text-slate-400">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                              </svg>
+                              {matchdayGames.length} {matchdayGames.length === 1 ? (language === "fr" ? "match" : "game") : (language === "fr" ? "matchs" : "games")}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
+            </>
           ) : (
-            <div className="space-y-3">
-              {filteredGames.map((game) => (
-                <GameCard
-                  key={game.id}
-                  game={game}
-                  t={t}
-                  formatDate={formatDate}
-                  getStatusBadge={getStatusBadge}
-                  onEdit={handleEditGame}
-                  onDelete={handleDeleteGame}
-                  onEnterScore={() => {
-                    setScoreEntryGame(game);
-                    setScoreForm({
-                      homeScore: game.homeScore?.toString() || "",
-                      awayScore: game.awayScore?.toString() || "",
-                    });
-                  }}
-                />
-              ))}
-            </div>
+            <>
+              {/* Selected Matchday Header with Back Button */}
+              <div className="rounded-2xl border border-indigo-500/30 bg-gradient-to-r from-indigo-500/10 to-purple-500/10 p-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <button
+                      onClick={() => setSelectedMatchday(null)}
+                      className="rounded-lg border border-white/10 p-2 text-slate-400 hover:text-white hover:border-white/20 transition"
+                      title={t.backToMatchdays}
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                      </svg>
+                    </button>
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.3em] text-indigo-400">{t.matchday}</p>
+                      <h2 className="text-2xl font-bold text-white mt-1">{t.week} {selectedMatchday.week}</h2>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm text-slate-400">
+                      {selectedMatchday.startDate && new Date(selectedMatchday.startDate + "T00:00:00").toLocaleDateString(language === "fr" ? "fr-FR" : "en-US", { month: "long", day: "numeric" })}
+                      {" "}-{" "}
+                      {selectedMatchday.endDate && new Date(selectedMatchday.endDate + "T00:00:00").toLocaleDateString(language === "fr" ? "fr-FR" : "en-US", { month: "long", day: "numeric" })}
+                    </p>
+                    <p className="text-sm font-medium text-white mt-1">
+                      {filteredGames.length} {filteredGames.length === 1 ? (language === "fr" ? "match programmé" : "game scheduled") : (language === "fr" ? "matchs programmés" : "games scheduled")}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Games List for Selected Matchday */}
+              {filteredGames.length === 0 ? (
+                <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-12 text-center">
+                  <p className="text-slate-400">{t.noGamesForWeek}</p>
+                  <button
+                    onClick={() => {
+                      setFormState({ ...initialFormState, week: selectedMatchday.week });
+                      setFormVisible(true);
+                    }}
+                    className="mt-4 rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600 transition"
+                  >
+                    + {t.scheduleGame}
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {filteredGames.map((game) => (
+                    <GameCard
+                      key={game.id}
+                      game={game}
+                      t={t}
+                      formatDate={formatDate}
+                      getStatusBadge={getStatusBadge}
+                      onEdit={handleEditGame}
+                      onDelete={handleDeleteGame}
+                      onEnterScore={() => {
+                        setScoreEntryGame(game);
+                        setScoreForm({
+                          homeScore: game.homeScore?.toString() || "",
+                          awayScore: game.awayScore?.toString() || "",
+                        });
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
@@ -1178,6 +1707,176 @@ export default function GamesPage() {
           )}
         </div>
       )}
+
+      {viewMode === "calendar" && (
+        <div className="space-y-6">
+          {/* Calendar Header */}
+          <div className="rounded-2xl border border-indigo-500/30 bg-gradient-to-r from-indigo-500/10 to-purple-500/10 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-indigo-400">{t.calendarView}</p>
+                <h2 className="text-2xl font-bold text-white mt-1">
+                  {currentMonth.toLocaleDateString(language === "fr" ? "fr-FR" : "en-US", {
+                    month: "long",
+                    year: "numeric",
+                  })}
+                </h2>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1))}
+                  className="rounded-lg border border-white/10 p-2 text-slate-400 hover:text-white hover:border-white/20 transition"
+                  title={language === "fr" ? "Mois précédent" : "Previous month"}
+                  aria-label={language === "fr" ? "Mois précédent" : "Previous month"}
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1))}
+                  className="rounded-lg border border-white/10 p-2 text-slate-400 hover:text-white hover:border-white/20 transition"
+                  title={language === "fr" ? "Mois suivant" : "Next month"}
+                  aria-label={language === "fr" ? "Mois suivant" : "Next month"}
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Calendar and Games Layout */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Calendar Grid */}
+            <div className="lg:col-span-1">
+              <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-6">
+                {/* Day Headers */}
+                <div className="grid grid-cols-7 gap-2 mb-4">
+                  {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+                    <div key={day} className="text-center text-xs font-semibold text-slate-500 py-2">
+                      {language === "fr" ? (["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"][["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(day)]) : day}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Calendar Days */}
+                <div className="grid grid-cols-7 gap-2">
+                  {(() => {
+                    const year = currentMonth.getFullYear();
+                    const month = currentMonth.getMonth();
+                    const firstDay = new Date(year, month, 1).getDay();
+                    const daysInMonth = new Date(year, month + 1, 0).getDate();
+                    const days = [];
+
+                    // Empty cells for days before month starts
+                    for (let i = 0; i < firstDay; i++) {
+                      days.push(null);
+                    }
+
+                    // Days of the month
+                    for (let i = 1; i <= daysInMonth; i++) {
+                      days.push(i);
+                    }
+
+                    return days.map((day, idx) => {
+                      if (day === null) {
+                        return <div key={`empty-${idx}`} className="aspect-square" />;
+                      }
+
+                      const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+                      const dayGames = games.filter((g) => g.date === dateStr);
+                      const isSelected = selectedDate === dateStr;
+
+                      return (
+                        <button
+                          key={day}
+                          onClick={() => setSelectedDate(isSelected ? null : dateStr)}
+                          className={`aspect-square rounded-lg text-sm font-medium transition ${
+                            isSelected
+                              ? "bg-indigo-500 text-white border-indigo-500"
+                              : dayGames.length > 0
+                              ? "bg-slate-800 border-orange-500/50 text-white hover:border-orange-500 border"
+                              : "bg-slate-800/40 text-slate-500 hover:bg-slate-800/60"
+                          } border relative`}
+                        >
+                          <div className="flex flex-col items-center justify-center h-full">
+                            <span>{day}</span>
+                            {dayGames.length > 0 && <span className="text-xs text-orange-400 mt-1">{dayGames.length}</span>}
+                          </div>
+                        </button>
+                      );
+                    });
+                  })()}
+                </div>
+              </div>
+            </div>
+
+            {/* Games for Selected Date */}
+            <div className="lg:col-span-2">
+              {selectedDate ? (
+                <div className="rounded-2xl border border-indigo-500/30 bg-gradient-to-r from-indigo-500/10 to-purple-500/10 p-6 space-y-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.3em] text-indigo-400">{t.selectDate}</p>
+                    <h3 className="text-2xl font-bold text-white mt-1">
+                      {new Date(selectedDate + "T00:00:00").toLocaleDateString(language === "fr" ? "fr-FR" : "en-US", {
+                        weekday: "long",
+                        month: "long",
+                        day: "numeric",
+                      })}
+                    </h3>
+                  </div>
+
+                  {(() => {
+                    const dateGames = games.filter((g) => g.date === selectedDate);
+                    return dateGames.length === 0 ? (
+                      <div className="rounded-lg border border-white/10 bg-slate-800/40 p-8 text-center">
+                        <p className="text-slate-400">{t.noGamesForDate}</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {dateGames.map((game) => (
+                          <GameCard
+                            key={game.id}
+                            game={game}
+                            t={t}
+                            formatDate={formatDate}
+                            getStatusBadge={getStatusBadge}
+                            onEdit={handleEditGame}
+                            onDelete={handleDeleteGame}
+                            onEnterScore={() => {
+                              setScoreEntryGame(game);
+                              setScoreForm({
+                                homeScore: game.homeScore?.toString() || "",
+                                awayScore: game.awayScore?.toString() || "",
+                              });
+                            }}
+                          />
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-12 text-center">
+                  <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-indigo-500/20">
+                    <svg className="w-8 h-8 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-semibold text-white mb-2">{t.selectDate}</h3>
+                  <p className="text-slate-400">{t.noGamesForDate}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================================ */}
+      {/* GAME CARD COMPONENT */}
+      {/* ============================================================================ */}
     </div>
   );
 }

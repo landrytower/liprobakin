@@ -4473,33 +4473,26 @@ export default function Home() {
       {dynamicPartners.length > 0 && (
         <div className="border-t border-white/5 bg-black/30 py-7">
           <div className="mx-auto max-w-6xl px-4">
-            <div className="flex flex-col sm:flex-row items-center gap-5">
-              <p className="text-[11px] uppercase tracking-[0.3em] text-slate-500 whitespace-nowrap">
-                {language === "fr" ? "Nos Partenaires" : "Our Partners"}
-              </p>
-              <div className="flex-1 overflow-hidden">
-                <div className="flex items-center justify-center sm:justify-start gap-7 sm:gap-10 flex-wrap sm:flex-nowrap">
-                  {dynamicPartners.slice(0, 6).map((partner) => (
-                    <div 
-                      key={partner.id} 
-                      className="flex-shrink-0 h-9 sm:h-11 opacity-60 hover:opacity-100 transition-opacity"
-                    >
-                      {partner.logo ? (
-                        <div className="relative h-full w-18 sm:w-22" style={{ width: '4.5rem' }}>
-                          <Image
-                            src={partner.logo}
-                            alt={partner.name}
-                            fill
-                            className="object-contain"
-                          />
-                        </div>
-                      ) : (
-                        <span className="text-sm text-slate-400 font-medium">{partner.name}</span>
-                      )}
+            <div className="flex items-center justify-center gap-7 sm:gap-10 flex-wrap">
+              {dynamicPartners.slice(0, 6).map((partner) => (
+                <div 
+                  key={partner.id} 
+                  className="flex-shrink-0 h-9 sm:h-11 opacity-60 hover:opacity-100 transition-opacity"
+                >
+                  {partner.logo ? (
+                    <div className="relative h-full w-18 sm:w-22" style={{ width: '4.5rem' }}>
+                      <Image
+                        src={partner.logo}
+                        alt={partner.name}
+                        fill
+                        className="object-contain"
+                      />
                     </div>
-                  ))}
+                  ) : (
+                    <span className="text-sm text-slate-400 font-medium">{partner.name}</span>
+                  )}
                 </div>
-              </div>
+              ))}
             </div>
           </div>
         </div>

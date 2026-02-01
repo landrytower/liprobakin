@@ -28,7 +28,7 @@ import {
 
 import type { DocumentData, DocumentSnapshot } from "firebase/firestore";
 import { deleteObject, getDownloadURL, ref as storageRef, uploadBytes } from "firebase/storage";
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut, type User } from "firebase/auth";
+import { onAuthStateChanged, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, type User } from "firebase/auth";
 import type { AdminUser, AdminRole } from "@/types/admin";
 import type { AuditLog } from "@/types/auditLog";
 import RichTextEditor from "@/components/RichTextEditor";
@@ -658,6 +658,26 @@ export default function AdminPage() {
   const [authLoading, setAuthLoading] = useState(true);
   const [authForm, setAuthForm] = useState({ email: "", password: "" });
   const [authError, setAuthError] = useState<string | null>(null);
+  
+    const handleResetPassword = async () => {
+      const email = authForm.email.trim();
+      if (!email) {
+        setAuthError("Please enter your email address first.");
+        return;
+      }
+
+      try {
+        setAuthError(null);
+        await sendPasswordResetEmail(firebaseAuth, email);
+        setStatus({
+          type: "success",
+          message: "Password reset email sent. Please check your inbox (and spam folder).",
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to send reset email";
+        setAuthError(message);
+      }
+    };
   const [authSubmitting, setAuthSubmitting] = useState(false);
   const [news, setNews] = useState<AdminNewsArticle[]>([]);
   const [form, setForm] = useState<NewsFormState>(initialFormState);
@@ -4183,178 +4203,312 @@ export default function AdminPage() {
     }));
   }, [games]);
 
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4 py-10 text-white">
-      {authLoading ? (
-        <div className="text-slate-400">Loading...</div>
-      ) : !user ? (
-        <div className="w-full max-w-md space-y-6">
-          <div className="space-y-2">
-            <p className="text-xs uppercase tracking-[0.4em] text-slate-500">Admin console</p>
-            <h1 className="text-3xl font-semibold">News desk</h1>
-            <p className="text-sm text-slate-300">
-              Authenticate with Firebase, then curate the league storytelling vault. Add a headline, attach a hero image,
-              and the home feed will update in real time.
-            </p>
-          </div>
-
-          <form onSubmit={handleLogin} className="space-y-4 rounded-2xl border border-white/10 bg-black/30 p-4 text-left">
-            <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Firebase auth</p>
-            <div className="space-y-2 text-sm">
-              <label className="block text-slate-400">
-                Email
-                <input
-                  type="email"
-                  value={authForm.email}
-                  onChange={(event) => setAuthForm((prev) => ({ ...prev, email: event.target.value }))}
-                  className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900/70 px-4 py-3 text-base text-white placeholder:text-slate-500 focus:border-white"
-                  placeholder="admin@example.com"
-                  required
-                />
-              </label>
-              <label className="block text-slate-400">
-                Password
-                <input
-                  type="password"
-                  value={authForm.password}
-                  onChange={(event) => setAuthForm((prev) => ({ ...prev, password: event.target.value }))}
-                  className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900/70 px-4 py-3 text-base text-white placeholder:text-slate-500 focus:border-white"
-                  placeholder="••••••••"
-                  required
-                />
-              </label>
-              {authError && <p className="text-xs text-rose-300">{authError}</p>}
-            </div>
-            <button
-              type="submit"
-              disabled={authSubmitting}
-              className="w-full rounded-2xl border border-white/30 bg-white/10 px-4 py-3 text-sm font-semibold uppercase tracking-[0.4em] text-white transition hover:bg-white/20 disabled:opacity-50"
-            >
-              {authSubmitting ? t.signingIn : t.signIn}
-            </button>
-          </form>
-
-          <p className="text-sm text-slate-400">
-            {t.useCredentials}
-          </p>
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#0B1426] via-[#1A1B23] to-[#0F172A] relative overflow-hidden">
+        {/* Background Pattern */}
+        <div className="absolute inset-0 opacity-20">
+          <div className="absolute inset-0" style={{
+            backgroundImage: `radial-gradient(circle at 25% 25%, rgba(59, 130, 246, 0.3) 0%, transparent 50%),
+                            radial-gradient(circle at 75% 75%, rgba(139, 69, 19, 0.3) 0%, transparent 50%),
+                            radial-gradient(circle at 50% 0%, rgba(59, 130, 246, 0.2) 0%, transparent 50%)`
+          }} />
         </div>
-      ) : user && !currentAdminUser ? (
-        <div className="w-full max-w-2xl space-y-6">
-          <div className="space-y-4 text-center">
-            <div className="text-6xl">🔒</div>
-            <h1 className="text-2xl font-semibold text-white">{t.accessRequired}</h1>
-            <p className="text-sm text-slate-300">
-              {t.notAuthorized}
-            </p>
-          </div>
-          
-          <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-6 space-y-4">
-            <div className="flex items-start gap-3">
-              <div className="text-2xl">⚠️</div>
-              <div className="flex-1 space-y-3">
-                <p className="text-sm font-semibold text-yellow-200">Your account is not set up as an admin</p>
-                <div className="space-y-2 text-xs text-yellow-100">
-                  <p><strong>Logged in as:</strong> {user?.email}</p>
-                  <p><strong>User ID:</strong> {user?.uid}</p>
-                  <p><strong>Status:</strong> No admin document found in Firestore</p>
+
+        <div className="relative z-10 flex min-h-screen items-center justify-center px-4 py-10">
+          {authLoading ? (
+            <div className="rounded-3xl border border-white/20 bg-white/10 backdrop-blur-xl px-8 py-6">
+              <div className="flex items-center gap-3">
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/30 border-t-orange-500"></div>
+                <span className="text-white/80">Loading admin console...</span>
+              </div>
+            </div>
+          ) : !user ? (
+            <div className="w-full max-w-lg space-y-8">
+              {/* Header */}
+              <div className="text-center space-y-4">
+                <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-orange-500/20 to-blue-600/20 border border-white/20 backdrop-blur-xl">
+                  <svg className="w-10 h-10 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                  </svg>
                 </div>
-                
-                <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-4 space-y-2">
-                  <p className="text-xs font-semibold text-yellow-200">To fix this issue:</p>
-                  <ol className="list-decimal list-inside space-y-1 text-xs text-yellow-100">
-                    <li>If you are the master admin, run the setup script: <code className="bg-black/30 px-1 rounded">node scripts/create-master-admin.js</code></li>
-                    <li>Or visit: <a href="/setup-admin" className="text-yellow-300 underline hover:text-yellow-100">/setup-admin</a> and create your master account</li>
-                    <li>If you are not the master admin, ask a master admin to create an admin account for you</li>
-                    <li>After setup, refresh this page</li>
-                  </ol>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.4em] text-blue-400 font-medium">Admin Console</p>
+                  <h1 className="text-4xl font-bold text-white mt-2 bg-gradient-to-r from-white via-blue-100 to-orange-200 bg-clip-text text-transparent">
+                    League Dashboard
+                  </h1>
+                  <p className="text-slate-300/80 mt-3 text-sm leading-relaxed">
+                    Secure access to content management, team administration, and league operations.
+                  </p>
+                </div>
+              </div>
+
+              {/* Login Form */}
+              <div className="rounded-3xl border border-white/20 bg-white/5 backdrop-blur-xl p-8 shadow-2xl">
+                <form onSubmit={handleLogin} className="space-y-6">
+                  <div className="space-y-1 mb-6">
+                    <h2 className="text-lg font-semibold text-white">Sign In</h2>
+                    <p className="text-xs text-slate-400">Enter your credentials to access the admin panel</p>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-slate-300">
+                        Email Address
+                      </label>
+                      <input
+                        type="email"
+                        value={authForm.email}
+                        onChange={(event) => setAuthForm((prev) => ({ ...prev, email: event.target.value }))}
+                        className="w-full rounded-2xl border border-white/20 bg-white/10 backdrop-blur-xl px-4 py-3 text-white placeholder:text-slate-400 focus:border-orange-400/50 focus:bg-white/20 focus:outline-none transition-all"
+                        placeholder="admin@league.com"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-slate-300">
+                        Password
+                      </label>
+                      <input
+                        type="password"
+                        value={authForm.password}
+                        onChange={(event) => setAuthForm((prev) => ({ ...prev, password: event.target.value }))}
+                        className="w-full rounded-2xl border border-white/20 bg-white/10 backdrop-blur-xl px-4 py-3 text-white placeholder:text-slate-400 focus:border-orange-400/50 focus:bg-white/20 focus:outline-none transition-all"
+                        placeholder="••••••••"
+                        required
+                      />
+                    </div>
+                    {authError && (
+                      <div className="rounded-xl border border-red-500/30 bg-red-500/10 backdrop-blur-xl p-3">
+                        <p className="text-sm text-red-300">{authError}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={authSubmitting}
+                    className="w-full rounded-2xl bg-gradient-to-r from-orange-500 to-blue-600 px-6 py-3 font-semibold text-white shadow-lg hover:shadow-xl hover:from-orange-600 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-orange-400/50 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+                  >
+                    {authSubmitting ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"></div>
+                        <span>Signing In...</span>
+                      </div>
+                    ) : (
+                      "Access Dashboard"
+                    )}
+                  </button>
+                </form>
+
+                {/* Reset Password Link */}
+                <div className="mt-6 pt-6 border-t border-white/10">
+                  <div className="text-center">
+                    <button
+                      type="button"
+                      onClick={handleResetPassword}
+                      className="text-sm text-blue-400 hover:text-blue-300 transition-colors font-medium"
+                    >
+                      Forgot your password?
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Help Section */}
+              <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl p-6">
+                <div className="flex items-start gap-3">
+                  <div className="flex-shrink-0">
+                    <svg className="w-5 h-5 text-blue-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-white">Need Access?</p>
+                    <p className="text-xs text-slate-400 leading-relaxed">
+                      Contact your system administrator or master admin to set up your account. 
+                      Make sure you're using the correct email address associated with your admin privileges.
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-          
-          <div className="flex gap-3">
-            <button
-              onClick={() => window.location.reload()}
-              className="flex-1 rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-6 py-3 text-sm font-semibold text-emerald-200 transition hover:bg-emerald-500/30"
-            >
-              🔄 Refresh Page
-            </button>
-            <button
-              onClick={handleSignOut}
-              className="flex-1 rounded-xl border border-white/20 bg-white/5 px-6 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
-            >
-              {t.signOut}
-            </button>
-          </div>
-        </div>
-      ) : null}
-
-      {status && (
-        <div className={`fixed bottom-6 right-6 max-w-md rounded-2xl border ${statusClassMap[status.type]} p-4 text-sm shadow-2xl`}>
-          {status.message}
-        </div>
-      )}
-
-      {/* First Login Setup */}
-      {user && currentAdminUser?.isFirstLogin && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-          <div className="w-full max-w-md space-y-6 rounded-3xl border border-white/20 bg-slate-900 p-8 shadow-2xl">
-            <div className="space-y-2">
-              <h2 className="text-2xl font-bold text-white">Welcome! 👋</h2>
-              <p className="text-sm text-slate-300">
-                This is your first login. Please set your display name to continue.
-              </p>
+          ) : user && !currentAdminUser ? (
+            <div className="w-full max-w-2xl space-y-8">
+              {/* Access Required Header */}
+              <div className="text-center space-y-6">
+                <div className="inline-flex items-center justify-center w-24 h-24 rounded-3xl bg-gradient-to-br from-red-500/20 to-orange-500/20 border border-white/20 backdrop-blur-xl">
+                  <svg className="w-12 h-12 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                </div>
+                <div>
+                  <h1 className="text-3xl font-bold text-white mb-2">Access Required</h1>
+                  <p className="text-slate-300/80 text-lg">
+                    Your account needs admin privileges to access this dashboard.
+                  </p>
+                </div>
+              </div>
+              
+              {/* Account Info Card */}
+              <div className="rounded-3xl border border-white/20 bg-white/5 backdrop-blur-xl p-8">
+                <div className="space-y-6">
+                  <div className="flex items-start gap-4">
+                    <div className="flex-shrink-0">
+                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-yellow-500/20 to-orange-500/20 border border-white/20 backdrop-blur-xl flex items-center justify-center">
+                        <svg className="w-6 h-6 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.664-.833-2.464 0L4.35 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                        </svg>
+                      </div>
+                    </div>
+                    <div className="flex-1 space-y-4">
+                      <div>
+                        <p className="text-lg font-semibold text-white mb-2">Account Status</p>
+                        <div className="space-y-3">
+                          <div className="flex justify-between py-2 border-b border-white/10">
+                            <span className="text-slate-400">Logged in as:</span>
+                            <span className="text-white font-medium">{user?.email}</span>
+                          </div>
+                          <div className="flex justify-between py-2 border-b border-white/10">
+                            <span className="text-slate-400">User ID:</span>
+                            <span className="text-white font-mono text-sm">{user?.uid}</span>
+                          </div>
+                          <div className="flex justify-between py-2">
+                            <span className="text-slate-400">Status:</span>
+                            <span className="text-red-400 font-medium">No admin privileges found</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Setup Instructions */}
+                  <div className="rounded-2xl border border-yellow-500/30 bg-yellow-500/10 backdrop-blur-xl p-6">
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-3">
+                        <svg className="w-5 h-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <p className="font-semibold text-yellow-200">Setup Required</p>
+                      </div>
+                      <div className="space-y-3 text-sm text-yellow-100">
+                        <p><strong>To gain admin access, choose one option:</strong></p>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-4">
+                            <p className="font-medium text-yellow-200 mb-2">Master Admin Setup</p>
+                            <p className="text-xs text-yellow-100 mb-3">If you're the first admin:</p>
+                            <div className="space-y-2">
+                              <button 
+                                onClick={() => window.open('/setup-admin', '_blank')}
+                                className="w-full text-left px-3 py-2 rounded-lg bg-yellow-500/20 text-yellow-100 hover:bg-yellow-500/30 transition-colors text-xs"
+                              >
+                                → Visit Setup Page
+                              </button>
+                              <p className="text-xs text-yellow-200">or run: <code className="bg-black/30 px-1 rounded">node scripts/create-master-admin.js</code></p>
+                            </div>
+                          </div>
+                          <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-4">
+                            <p className="font-medium text-yellow-200 mb-2">Request Access</p>
+                            <p className="text-xs text-yellow-100 mb-3">If admin exists:</p>
+                            <p className="text-xs text-yellow-200">Ask a master admin to create an admin account for your email address.</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Action Buttons */}
+              <div className="grid grid-cols-2 gap-4">
+                <button
+                  onClick={() => window.location.reload()}
+                  className="flex items-center justify-center gap-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 backdrop-blur-xl px-6 py-4 font-semibold text-emerald-300 transition-all hover:bg-emerald-500/20 hover:scale-105"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Refresh
+                </button>
+                <button
+                  onClick={handleSignOut}
+                  className="flex items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white/5 backdrop-blur-xl px-6 py-4 font-semibold text-white transition-all hover:bg-white/10 hover:scale-105"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                  Sign Out
+                </button>
+              </div>
             </div>
+          ) : null}
 
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                const formData = new FormData(e.currentTarget);
-                const displayName = formData.get('displayName') as string;
-                
-                if (!displayName.trim()) return;
-                
-                setAdminSubmitting(true);
-                const result = await updateAdminProfile(user.uid, displayName.trim());
-                
-                if (result.success) {
-                  // Reload admin user data
-                  const updated = await getAdminUser(user.uid);
-                  setCurrentAdminUser(updated);
-                  setStatus({ type: 'success', message: 'Welcome! Your profile has been set up.' });
-                } else {
-                  setStatus({ type: 'error', message: result.error || 'Failed to update profile' });
-                }
-                setAdminSubmitting(false);
-              }}
-              className="space-y-4"
-            >
-              <label className="block space-y-2 text-sm text-slate-300">
-                Display Name *
-                <input
-                  type="text"
-                  name="displayName"
-                  required
-                  placeholder="Enter your name"
-                  className="w-full rounded-xl border border-white/20 bg-slate-800 px-4 py-3 text-white placeholder:text-slate-500 focus:border-white"
-                />
-              </label>
+        {status && (
+          <div className={`fixed bottom-6 right-6 max-w-md rounded-2xl border ${statusClassMap[status.type]} backdrop-blur-xl bg-black/20 p-4 text-sm shadow-2xl`}>
+            {status.message}
+          </div>
+        )}
 
-              <button
-                type="submit"
-                disabled={adminSubmitting}
-                className="w-full rounded-xl border border-white/20 bg-orange-500 px-4 py-3 text-sm font-semibold uppercase tracking-wider text-white transition hover:bg-orange-600 disabled:opacity-50"
+        {/* First Login Setup */}
+        {user && currentAdminUser?.isFirstLogin && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+            <div className="w-full max-w-md space-y-6 rounded-3xl border border-white/20 bg-white/10 backdrop-blur-xl p-8 shadow-2xl">
+              <div className="space-y-2">
+                <h2 className="text-2xl font-bold text-white">Welcome! 👋</h2>
+                <p className="text-sm text-slate-300">
+                  This is your first login. Please set your display name to continue.
+                </p>
+              </div>
+
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!user) return;
+                  const formData = new FormData(e.currentTarget);
+                  const displayName = formData.get('displayName') as string;
+                  
+                  if (!displayName.trim()) return;
+                  
+                  setAdminSubmitting(true);
+                  const result = await updateAdminProfile(user.uid, displayName.trim());
+                  
+                  if (result.success) {
+                    // Reload admin user data
+                    const updated = await getAdminUser(user.uid);
+                    setCurrentAdminUser(updated);
+                    setStatus({ type: 'success', message: 'Welcome! Your profile has been set up.' });
+                  } else {
+                    setStatus({ type: 'error', message: result.error || 'Failed to update profile' });
+                  }
+                  setAdminSubmitting(false);
+                }}
+                className="space-y-4"
               >
-                {adminSubmitting ? 'Setting up...' : 'Continue to Dashboard'}
-              </button>
-            </form>
+                <label className="block space-y-2 text-sm text-slate-300">
+                  Display Name *
+                  <input
+                    type="text"
+                    name="displayName"
+                    required
+                    placeholder="Enter your name"
+                    className="w-full rounded-xl border border-white/20 bg-white/10 backdrop-blur-xl px-4 py-3 text-white placeholder:text-slate-400 focus:border-orange-400/50 focus:outline-none transition-all"
+                  />
+                </label>
 
-            <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-4 text-xs text-blue-200">
-              <strong>Note:</strong> You can change your password anytime using the &quot;Change Password&quot; button in the dashboard.
+                <button
+                  type="submit"
+                  disabled={adminSubmitting}
+                  className="w-full rounded-xl bg-gradient-to-r from-orange-500 to-blue-600 px-4 py-3 font-semibold text-white shadow-lg hover:shadow-xl hover:from-orange-600 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-orange-400/50 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  {adminSubmitting ? 'Setting up...' : 'Continue to Dashboard'}
+                </button>
+              </form>
+
+              <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 backdrop-blur-xl p-4 text-xs text-blue-200">
+                <strong>Note:</strong> You can change your password anytime using the &quot;Change Password&quot; button in the dashboard.
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
       {user && currentAdminUser && !currentAdminUser.isFirstLogin && (
         <main className="fixed inset-0 overflow-auto bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
@@ -9368,6 +9522,7 @@ export default function AdminPage() {
         </div>
       )}
     </div>
+  </div>
   );
 }
 

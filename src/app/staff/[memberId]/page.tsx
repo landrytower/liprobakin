@@ -467,16 +467,16 @@ export default function StaffDetailPage() {
 
         {/* Other Committee Members */}
         {otherMembers.length > 0 && (
-          <section className="border-t border-white/5 pt-12 lg:pt-16">
-            <h2 className="text-2xl font-bold text-white mb-8">{t.otherMembers}</h2>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <section className="border-t border-white/5 pt-8 sm:pt-12 lg:pt-16">
+            <h2 className="text-lg sm:text-xl font-bold text-white mb-4 sm:mb-6">{t.otherMembers}</h2>
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
               {otherMembers.map((other) => (
                 <Link
                   key={other.id}
                   href={`/staff/${other.id}`}
-                  className="group relative overflow-hidden rounded-2xl border border-white/5 bg-white/[0.02] hover:border-orange-500/30 hover:bg-orange-500/5 transition-all"
+                  className="group relative overflow-hidden rounded-lg sm:rounded-2xl border border-white/5 bg-white/[0.02] hover:border-orange-500/30 hover:bg-orange-500/5 transition-all"
                 >
-                  <div className="aspect-[4/5] relative">
+                  <div className="aspect-square sm:aspect-[4/5] relative">
                     {other.photo ? (
                       <Image
                         src={other.photo}
@@ -486,15 +486,15 @@ export default function StaffDetailPage() {
                       />
                     ) : (
                       <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-800/50 to-slate-900">
-                        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-orange-500 to-orange-600 text-3xl font-bold text-white">
+                        <div className="flex h-10 w-10 sm:h-20 sm:w-20 items-center justify-center rounded-full bg-gradient-to-br from-orange-500 to-orange-600 text-base sm:text-3xl font-bold text-white">
                           {other.name.charAt(0)}
                         </div>
                       </div>
                     )}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
-                    <div className="absolute bottom-0 left-0 right-0 p-4">
-                      <p className="font-semibold text-white truncate">{other.name}</p>
-                      <p className="text-sm text-orange-400 truncate">{other.role}</p>
+                    <div className="absolute bottom-0 left-0 right-0 p-1.5 sm:p-4">
+                      <p className="text-[10px] sm:text-base font-semibold text-white truncate">{other.name}</p>
+                      <p className="text-[8px] sm:text-sm text-orange-400 truncate">{other.role}</p>
                     </div>
                   </div>
                 </Link>

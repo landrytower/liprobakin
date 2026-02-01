@@ -208,9 +208,7 @@ export default function LeaguePage() {
         await uploadBytes(storageReference, committeePhoto);
         photoUrl = await getDownloadURL(storageReference);
       }
-      
-      // Build clean data object with no undefined values
-      const baseData = { 
+      const data: any = { 
         firstName: committeeForm.firstName.trim(), 
         lastName: committeeForm.lastName.trim(), 
         role: committeeForm.role.trim(), 
@@ -224,30 +222,16 @@ export default function LeaguePage() {
         twitter: committeeForm.twitter?.trim() || "", 
         linkedin: committeeForm.linkedin?.trim() || "", 
         facebook: committeeForm.facebook?.trim() || "", 
-        instagram: committeeForm.instagram?.trim() || ""
+        instagram: committeeForm.instagram?.trim() || "", 
+        updatedAt: serverTimestamp() 
       };
-      
       if (editingCommittee) { 
-        // Update existing member
-        await updateDoc(doc(firebaseDB, "committeeMembers", editingCommittee.id), {
-          ...baseData,
-          updatedAt: serverTimestamp()
-        }); 
+        await updateDoc(doc(firebaseDB, "committeeMembers", editingCommittee.id), data); 
       } else { 
-        // Create new member
-        await addDoc(collection(firebaseDB, "committeeMembers"), { 
-          ...baseData, 
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
-        }); 
+        await addDoc(collection(firebaseDB, "committeeMembers"), { ...data, createdAt: serverTimestamp() }); 
       }
-      
-      setShowCommitteeModal(false); 
-      fetchData();
-    } catch (error) { 
-      console.error("Error saving committee member:", error);
-      alert(language === "fr" ? "Erreur lors de l'enregistrement. Veuillez réessayer." : "Error saving. Please try again.");
-    }
+      setShowCommitteeModal(false); fetchData();
+    } catch (error) { console.error("Error saving committee member:", error); }
     finally { setSaving(false); }
   };
 

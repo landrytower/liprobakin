@@ -668,52 +668,52 @@ export default function EditTeamPage() {
     <div className="fixed inset-0 overflow-auto bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
       {/* Header */}
       <div className="sticky top-0 z-30 border-b border-white/10 bg-slate-950/95 backdrop-blur-xl">
-        <div className="mx-auto max-w-7xl px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+        <div className="mx-auto max-w-7xl px-3 sm:px-6 py-3 sm:py-4">
+          <div className="flex items-center justify-between gap-2 sm:gap-4">
+            <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
               <button
                 onClick={() => router.push("/admin")}
-                className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/20 bg-white/5 text-white transition hover:bg-white/10"
+                className="flex h-8 w-8 sm:h-10 sm:w-10 flex-shrink-0 items-center justify-center rounded-lg border border-white/20 bg-white/5 text-white transition hover:bg-white/10"
                 title="Back to Admin"
               >
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
               
               {team.logo && (
-                <img src={team.logo} alt={team.name} className="h-12 w-12 rounded-lg object-contain" />
+                <img src={team.logo} alt={team.name} className="h-8 w-8 sm:h-12 sm:w-12 rounded-lg object-contain flex-shrink-0" />
               )}
               
-              <div>
-                <h1 className="text-2xl font-bold text-white">{team.name}</h1>
-                <p className="text-sm text-slate-400">
-                  {team.city} • {team.gender} • {team.wins}W - {team.losses}L
+              <div className="min-w-0 flex-1">
+                <h1 className="text-base sm:text-2xl font-bold text-white truncate">{team.name}</h1>
+                <p className="text-xs sm:text-sm text-slate-400 truncate">
+                  <span className="hidden sm:inline">{team.city} • </span>{team.gender} • {team.wins}W - {team.losses}L
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
               <button
                 onClick={() => navigateToTeam("prev")}
-                className="flex h-10 items-center gap-2 rounded-lg border border-white/20 bg-white/5 px-4 text-sm font-medium text-white transition hover:bg-white/10"
+                className="flex h-8 sm:h-10 items-center gap-1 sm:gap-2 rounded-lg border border-white/20 bg-white/5 px-2 sm:px-4 text-xs sm:text-sm font-medium text-white transition hover:bg-white/10"
               >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="h-3 w-3 sm:h-4 sm:w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
-                Previous
+                <span className="hidden sm:inline">Previous</span>
               </button>
               
-              <span className="text-sm text-slate-400">
+              <span className="text-xs sm:text-sm text-slate-400 whitespace-nowrap">
                 {currentTeamIndex + 1} / {allTeams.length}
               </span>
               
               <button
                 onClick={() => navigateToTeam("next")}
-                className="flex h-10 items-center gap-2 rounded-lg border border-white/20 bg-white/5 px-4 text-sm font-medium text-white transition hover:bg-white/10"
+                className="flex h-8 sm:h-10 items-center gap-1 sm:gap-2 rounded-lg border border-white/20 bg-white/5 px-2 sm:px-4 text-xs sm:text-sm font-medium text-white transition hover:bg-white/10"
               >
-                Next
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <span className="hidden sm:inline">Next</span>
+                <svg className="h-3 w-3 sm:h-4 sm:w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
               </button>
@@ -722,15 +722,15 @@ export default function EditTeamPage() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-7xl p-6">
+      <div className="mx-auto max-w-7xl p-3 sm:p-6">
         {/* Team Details Section */}
-        <div className="mb-6 rounded-xl border border-white/10 bg-slate-900/50 p-6">
+        <div className="mb-4 sm:mb-6 rounded-xl border border-white/10 bg-slate-900/50 p-4 sm:p-6">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-xl font-bold text-white">Team Details</h2>
+            <h2 className="text-lg sm:text-xl font-bold text-white">Team Details</h2>
             {!editingTeam && (
               <button
                 onClick={() => setEditingTeam(true)}
-                className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-2 text-sm font-medium text-blue-300 transition hover:bg-blue-500/20"
+                className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-blue-300 transition hover:bg-blue-500/20"
               >
                 Edit Team
               </button>
@@ -901,7 +901,7 @@ export default function EditTeamPage() {
           <div className="flex border-b border-white/10 bg-slate-900/80">
             <button
               onClick={() => setActiveTab('roster')}
-              className={`flex-1 px-6 py-4 text-sm font-semibold uppercase tracking-wider transition ${
+              className={`flex-1 px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-semibold uppercase tracking-wider transition ${
                 activeTab === 'roster'
                   ? 'bg-slate-800 text-white border-b-2 border-emerald-500'
                   : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
@@ -911,23 +911,23 @@ export default function EditTeamPage() {
             </button>
             <button
               onClick={() => setActiveTab('staff')}
-              className={`flex-1 px-6 py-4 text-sm font-semibold uppercase tracking-wider transition ${
+              className={`flex-1 px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-semibold uppercase tracking-wider transition ${
                 activeTab === 'staff'
                   ? 'bg-slate-800 text-white border-b-2 border-emerald-500'
                   : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
               }`}
             >
-              Coaching Staff ({coachStaffList.length})
+              <span className="hidden sm:inline">Coaching </span>Staff ({coachStaffList.length})
             </button>
           </div>
 
           {/* Roster Tab Content */}
           {activeTab === 'roster' && (
-            <div className="p-6">
-              <div className="mb-4 flex items-center justify-between">
+            <div className="p-3 sm:p-6">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
                 <button
                   onClick={() => setRosterExpanded(!rosterExpanded)}
-                  className="flex items-center gap-2 text-lg font-bold text-white hover:text-emerald-400 transition"
+                  className="flex items-center gap-2 text-base sm:text-lg font-bold text-white hover:text-emerald-400 transition"
                 >
                   <span>{rosterExpanded ? '−' : '+'}</span>
                   <span>Players ({players.length})</span>
@@ -935,9 +935,9 @@ export default function EditTeamPage() {
                 {!addingPlayer && (
                   <button
                     onClick={() => setAddingPlayer(true)}
-                    className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-300 transition hover:bg-emerald-500/20"
+                    className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-emerald-300 transition hover:bg-emerald-500/20"
                   >
-                    + Add Player
+                    + Add<span className="hidden sm:inline"> Player</span>
                   </button>
                 )}
               </div>
@@ -1328,24 +1328,57 @@ export default function EditTeamPage() {
               return (
                 <div
                   key={player.id}
-                  className="rounded-lg border border-white/10 bg-slate-800/50 p-4 transition hover:bg-slate-800/70"
+                  className="rounded-lg border border-white/10 bg-slate-800/50 p-3 sm:p-4 transition hover:bg-slate-800/70"
                 >
                   {!isEditing ? (
-                    <div className="flex items-center gap-4">
-                      <img
-                        src={player.headshot || "/placeholder-player.png"}
-                        alt={`${player.firstName} ${player.lastName}`}
-                        className="h-16 w-16 rounded-lg object-cover"
-                      />
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+                      {/* Player Photo and Basic Info - Mobile Layout */}
+                      <div className="flex items-center gap-3 sm:gap-4">
+                        <img
+                          src={player.headshot || "/placeholder-player.png"}
+                          alt={`${player.firstName} ${player.lastName}`}
+                          className="h-12 w-12 sm:h-16 sm:w-16 rounded-lg object-cover flex-shrink-0"
+                        />
+                        
+                        {/* Mobile: Show name and number inline */}
+                        <div className="sm:hidden flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg font-bold text-white">#{player.number}</span>
+                            <span className="text-white truncate">{player.firstName} {player.lastName}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-slate-400">
+                            <span>{player.position}</span>
+                            <span>•</span>
+                            <span>{player.height}</span>
+                            {player.nationality && (
+                              <>
+                                <span>•</span>
+                                <img
+                                  src={`https://flagcdn.com/w20/${player.nationality.toLowerCase()}.png`}
+                                  alt={nameForCountryCode(player.nationality) || "Flag"}
+                                  width={16}
+                                  height={12}
+                                  className="rounded"
+                                  onError={(e) => {
+                                    const target = e.target as HTMLImageElement;
+                                    target.style.display = 'none';
+                                  }}
+                                />
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
                       
-                      <div className="flex-1 grid grid-cols-5 gap-4">
+                      {/* Desktop: Grid Layout for Player Details */}
+                      <div className="hidden sm:grid flex-1 grid-cols-2 md:grid-cols-5 gap-3 sm:gap-4">
                         <div>
                           <div className="text-xs text-slate-400">Number</div>
                           <div className="text-lg font-bold text-white">#{player.number}</div>
                         </div>
                         <div>
                           <div className="text-xs text-slate-400">Name</div>
-                          <div className="text-white">{player.firstName} {player.lastName}</div>
+                          <div className="text-white truncate">{player.firstName} {player.lastName}</div>
                         </div>
                         <div>
                           <div className="text-xs text-slate-400">Position</div>
@@ -1371,29 +1404,30 @@ export default function EditTeamPage() {
                                     target.style.display = 'none';
                                   }}
                                 />
-                                <span>{nameForCountryCode(player.nationality) || player.nationality}</span>
+                                <span className="hidden lg:inline">{nameForCountryCode(player.nationality) || player.nationality}</span>
                               </>
                             )}
                           </div>
                         </div>
                       </div>
 
-                      <div className="flex gap-2">
+                      {/* Action Buttons - Stack on mobile */}
+                      <div className="flex gap-2 flex-wrap sm:flex-nowrap">
                         <button
                           onClick={() => setEditingPlayerId(player.id)}
-                          className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-2 text-sm font-medium text-blue-300 transition hover:bg-blue-500/20"
+                          className="flex-1 sm:flex-none rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-blue-300 transition hover:bg-blue-500/20"
                         >
                           Edit
                         </button>
                         <button
                           onClick={() => handleInitiateTransfer(player)}
-                          className="rounded-lg border border-sky-500/30 bg-sky-500/10 px-4 py-2 text-sm font-medium text-sky-300 transition hover:bg-sky-500/20"
+                          className="flex-1 sm:flex-none rounded-lg border border-sky-500/30 bg-sky-500/10 px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-sky-300 transition hover:bg-sky-500/20"
                         >
                           Transfer
                         </button>
                         <button
                           onClick={() => handleDeletePlayer(player.id)}
-                          className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-300 transition hover:bg-red-500/20"
+                          className="flex-1 sm:flex-none rounded-lg border border-red-500/30 bg-red-500/10 px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-red-300 transition hover:bg-red-500/20"
                         >
                           Delete
                         </button>

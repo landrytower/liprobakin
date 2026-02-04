@@ -1495,7 +1495,7 @@ export default function GamesPage() {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleDeleteMatchday(matchday.id);
+                                handleDeleteMatchday(matchday);
                               }}
                               className="rounded-lg bg-slate-800/80 p-2 text-slate-400 hover:text-red-400 hover:bg-slate-700 transition"
                               title={t.deleteMatchday}

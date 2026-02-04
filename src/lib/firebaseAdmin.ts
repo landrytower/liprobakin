@@ -10,7 +10,12 @@ function initializeFirebaseAdmin() {
     // Use environment variables for credentials
     const projectId = process.env.FIREBASE_PROJECT_ID;
     const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-    const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+    // Properly clean the private key - handle both escaped newlines and Windows line breaks
+    const privateKey = process.env.FIREBASE_PRIVATE_KEY
+      ?.replace(/\\r\\n/g, '\n')
+      .replace(/\\n/g, '\n')
+      .replace(/\r\n/g, '\n')
+      .replace(/\r/g, '\n');
     
     if (projectId && clientEmail && privateKey) {
       try {

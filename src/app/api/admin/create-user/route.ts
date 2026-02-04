@@ -55,13 +55,18 @@ if (
   process.env.FIREBASE_CLIENT_EMAIL &&
   process.env.FIREBASE_PRIVATE_KEY
 ) {
-  // For production, use environment variables
-  // For now, you'll need to add your service account
+  // Properly clean the private key - handle both escaped newlines and Windows line breaks
+  const privateKey = (process.env.FIREBASE_PRIVATE_KEY as string)
+    .replace(/\\r\\n/g, '\n')
+    .replace(/\\n/g, '\n')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n');
+  
   initializeApp({
     credential: cert({
       projectId: process.env.FIREBASE_PROJECT_ID as string,
       clientEmail: process.env.FIREBASE_CLIENT_EMAIL as string,
-      privateKey: (process.env.FIREBASE_PRIVATE_KEY as string).replace(/\\n/g, '\n'),
+      privateKey,
     }),
   });
 }

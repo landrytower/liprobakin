@@ -14,7 +14,11 @@ if (
     credential: cert({
       projectId: process.env.FIREBASE_PROJECT_ID as string,
       clientEmail: process.env.FIREBASE_CLIENT_EMAIL as string,
-      privateKey: (process.env.FIREBASE_PRIVATE_KEY as string).replace(/\\n/g, '\n'),
+      privateKey: (process.env.FIREBASE_PRIVATE_KEY as string)
+        .replace(/\\r\\n/g, '\n')
+        .replace(/\\n/g, '\n')
+        .replace(/\r\n/g, '\n')
+        .replace(/\r/g, '\n'),
     }),
   });
 }

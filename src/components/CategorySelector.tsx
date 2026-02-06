@@ -209,11 +209,11 @@ export default function CategorySelector({ value, onChange, language = 'fr' }: C
 
           {/* Breadcrumb */}
           {selectedParent && !searchQuery && (
-            <div className="px-3 py-2 border-b border-white/10 bg-slate-800/30">
+            <div className="px-3 py-2 border-b border-white/10 bg-slate-800/30 animate-in fade-in slide-in-from-top-1 duration-200">
               <button
                 type="button"
                 onClick={handleBackToParents}
-                className="flex items-center gap-1 text-xs text-orange-400 hover:text-orange-300"
+                className="flex items-center gap-1 text-xs text-orange-400 hover:text-orange-300 transition-colors duration-150"
               >
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -233,17 +233,17 @@ export default function CategorySelector({ value, onChange, language = 'fr' }: C
           )}
 
           {/* Categories List */}
-          <div className="max-h-96 overflow-y-auto">
+          <div className="max-h-96 overflow-y-auto transition-all duration-300">
             {/* Search Results or Child Categories */}
             {(searchQuery || selectedParent) ? (
               filteredCategories.length > 0 ? (
-                <div className="p-2 space-y-1">
+                <div className="p-2 space-y-1 animate-in fade-in slide-in-from-right-2 duration-200">
                   {filteredCategories.map((category, index) => (
                     <button
                       key={category.id}
                       type="button"
                       onClick={() => handleSelectCategory(category.id)}
-                      className={`w-full text-left px-3 py-2.5 rounded-lg transition-colors ${
+                      className={`w-full text-left px-3 py-2.5 rounded-lg transition-all duration-150 ${
                         highlightedIndex === index
                           ? 'bg-orange-500/20 border border-orange-500/30'
                           : 'hover:bg-white/5 border border-transparent'
@@ -281,13 +281,13 @@ export default function CategorySelector({ value, onChange, language = 'fr' }: C
               )
             ) : (
               /* Parent Categories Grid */
-              <div className="p-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="p-2 grid grid-cols-1 sm:grid-cols-2 gap-2 animate-in fade-in duration-200">
                 {parentCategories.map((category, index) => {
                   const childCount = getChildCategories(category.id).length;
                   return (
                     <div
                       key={category.id}
-                      className={`relative text-left px-3 py-3 rounded-lg transition-colors ${
+                      className={`relative text-left px-3 py-3 rounded-lg transition-all duration-150 ${
                         highlightedIndex === index
                           ? 'bg-orange-500/20 border border-orange-500/30'
                           : 'hover:bg-white/5 border border-transparent'
@@ -321,10 +321,10 @@ export default function CategorySelector({ value, onChange, language = 'fr' }: C
                         <button
                           type="button"
                           onClick={(e) => handleViewChildren(e, category.id)}
-                          className="absolute top-2 right-2 p-1.5 rounded-md hover:bg-orange-500/20 transition-colors"
+                          className="absolute top-2 right-2 p-1.5 rounded-md bg-slate-700/50 hover:bg-orange-500/30 border border-white/10 hover:border-orange-500/50 transition-all duration-150"
                           title={language === 'fr' ? 'Voir les sous-catégories' : 'View subcategories'}
                         >
-                          <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-4 h-4 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                           </svg>
                         </button>

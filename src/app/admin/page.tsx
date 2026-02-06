@@ -33,6 +33,8 @@ import type { AdminUser, AdminRole } from "@/types/admin";
 import type { AuditLog } from "@/types/auditLog";
 import RichTextEditor from "@/components/RichTextEditor";
 import ArticleContent from "@/components/ArticleContent";
+import CategorySelector from "@/components/CategorySelector";
+import { getCategoryById } from "@/data/newsCategories";
 import { 
   getAllAdminUsers, 
   updateAdminRoles, 
@@ -4909,11 +4911,10 @@ export default function AdminPage() {
                   </label>
                   <label className="space-y-1 text-xs text-slate-300">
                     {t.category}
-                    <input
-                      className="w-full rounded-lg border border-white/10 bg-slate-800/50 px-3 py-2 text-sm text-white focus:border-orange-500 focus:outline-none"
+                    <CategorySelector
                       value={form.category}
-                      onChange={(event) => updateFormField("category", event.target.value)}
-                      placeholder=""
+                      onChange={(categoryId) => updateFormField("category", categoryId)}
+                      language={language}
                     />
                   </label>
                 </div>
@@ -5023,8 +5024,15 @@ export default function AdminPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0">
-                            {article.category && (
-                              <span className="text-[10px] text-orange-400 uppercase">{article.category}</span>
+                            {article.category && getCategoryById(article.category) && (
+                              <div className="flex items-center gap-1 mb-1">
+                                <span className="text-sm">{getCategoryById(article.category)?.icon}</span>
+                                <span className="text-[10px] text-orange-400">
+                                  {language === 'fr' 
+                                    ? getCategoryById(article.category)?.labelFr 
+                                    : getCategoryById(article.category)?.label}
+                                </span>
+                              </div>
                             )}
                             <h3 className="text-sm font-semibold text-white truncate">{article.title}</h3>
                             <p className="text-xs text-slate-400 line-clamp-1">{article.headline}</p>
@@ -9482,10 +9490,15 @@ export default function AdminPage() {
                     <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/50 to-transparent" />
                     
                     {/* Category Badge */}
-                    {form.category && (
+                    {form.category && getCategoryById(form.category) && (
                       <div className="absolute top-3 left-3 sm:top-4 sm:left-4">
-                        <span className="rounded-full bg-orange-500 px-2.5 py-0.5 sm:px-3 sm:py-1 text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-white">
-                          {form.category}
+                        <span className="flex items-center gap-1.5 rounded-full bg-orange-500 px-2.5 py-0.5 sm:px-3 sm:py-1 text-[10px] sm:text-xs font-semibold text-white">
+                          <span>{getCategoryById(form.category)?.icon}</span>
+                          <span>
+                            {language === 'fr' 
+                              ? getCategoryById(form.category)?.labelFr 
+                              : getCategoryById(form.category)?.label}
+                          </span>
                         </span>
                       </div>
                     )}

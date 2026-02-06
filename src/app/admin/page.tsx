@@ -4912,6 +4912,7 @@ export default function AdminPage() {
                   <label className="space-y-1 text-xs text-slate-300">
                     {t.category}
                     <CategorySelector
+                      key={`category-${form.category}`}
                       value={form.category}
                       onChange={(categoryId) => updateFormField("category", categoryId)}
                       language={language}

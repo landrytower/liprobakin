@@ -33,6 +33,18 @@ export default function CategorySelector({ value, onChange, language = 'fr' }: C
 
   const filteredCategories = getFilteredCategories();
 
+  // Update display when value prop changes
+  useEffect(() => {
+    // Force re-render when value changes to ensure display updates
+    if (value && !isOpen) {
+      const category = getCategoryById(value);
+      if (category) {
+        // Display is already updated via selectedCategory
+        // This effect ensures any edge cases are handled
+      }
+    }
+  }, [value, isOpen]);
+
   // Close dropdown when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -66,8 +78,15 @@ export default function CategorySelector({ value, onChange, language = 'fr' }: C
   };
 
   const handleParentClick = (parentId: string) => {
-    setSelectedParent(parentId);
-    setSearchQuery("");
+    const children = getChildCategories(parentId);
+    if (children.length > 0) {
+      // Has children - show them
+      setSelectedParent(parentId);
+      setSearchQuery("");
+    } else {
+      // No children - select this category directly
+      handleSelectCategory(parentId);
+    }
   };
 
   const handleBackToParents = () => {

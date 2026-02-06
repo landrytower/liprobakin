@@ -33,11 +33,18 @@ function serverTimestamp(): FirebaseFirestore.FieldValue {
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, displayName, roles, createdByUid } = await request.json();
+    const { email, displayName, password, roles, createdByUid } = await request.json();
 
-    if (!email || !displayName || !createdByUid || !Array.isArray(roles) || roles.length === 0) {
+    if (!email || !displayName || !password || !createdByUid || !Array.isArray(roles) || roles.length === 0) {
       return NextResponse.json(
-        { success: false, error: 'Missing required fields: email, displayName, roles, createdByUid' },
+        { success: false, error: 'Missing required fields: email, displayName, password, roles, createdByUid' },
+        { status: 400 }
+      );
+    }
+
+    if (password.length < 6) {
+      return NextResponse.json(
+        { success: false, error: 'Password must be at least 6 characters' },
         { status: 400 }
       );
     }
@@ -70,16 +77,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Generate a secure random temporary password (user will never see this)
-    const tempPassword = Array.from(crypto.getRandomValues(new Uint8Array(24)))
-      .map(b => b.toString(36).padStart(2, '0'))
-      .join('')
-      .slice(0, 32);
-
-    // Create user in Firebase Auth with temp password (no email verification needed)
+    // Create user in Firebase Auth with the provided password
     const userRecord = await auth.createUser({
       email,
-      password: tempPassword,
+      password,
       displayName,
       emailVerified: false,
     });
@@ -92,7 +93,7 @@ export async function POST(request: NextRequest) {
       roles: roles as AdminRole[],
       permissions: mergePermissions(roles as AdminRole[]),
       isFirstLogin: true,
-      isPendingSetup: true,
+      isPendingSetup: false,
       createdAt: serverTimestamp(),
       createdBy: createdByUid,
       lastLogin: null,
@@ -100,32 +101,21 @@ export async function POST(request: NextRequest) {
       isOnline: false,
     });
 
-    // Generate a password reset link via Firebase Admin SDK — this sends a REAL email
-    const actionCodeSettings = {
-      url: `${process.env.NEXT_PUBLIC_BASE_URL || 'https://liprobakin.com'}/admin`,
-      handleCodeInApp: false,
-    };
-
-    const resetLink = await auth.generatePasswordResetLink(email, actionCodeSettings);
-
-    // Send the invite email using Firebase Admin SDK's built-in email
-    // The generatePasswordResetLink already triggers Firebase's email if configured,
-    // but we also store the link for manual sharing as backup
+    // Store invite record for audit purposes
     await db.collection('adminInvites').doc(userRecord.uid).set({
       uid: userRecord.uid,
       email,
       displayName,
       roles,
-      resetLink,
       createdBy: createdByUid,
       createdAt: serverTimestamp(),
-      status: 'pending',
+      status: 'active',
     });
 
     // Log audit trail
     const creatorEmail = creatorData?.email || 'unknown';
     await db.collection('auditLogs').add({
-      action: 'admin_user_invited',
+      action: 'admin_user_created',
       userId: createdByUid,
       userEmail: creatorEmail,
       targetType: 'admin',
@@ -144,13 +134,12 @@ export async function POST(request: NextRequest) {
       timestamp: serverTimestamp(),
     });
 
-    console.log(`✅ Admin invite sent to ${email} with roles:`, roles);
+    console.log(`✅ Admin account created for ${email} with roles:`, roles);
 
     return NextResponse.json({
       success: true,
       userId: userRecord.uid,
-      resetLink, // Return link so master admin can share it manually if email doesn't arrive
-      message: `Invitation sent to ${email}. They will receive an email to set their password.`,
+      message: `Admin account created successfully for ${email}.`,
     });
   } catch (error: any) {
     console.error('Error inviting admin:', error);

@@ -34,7 +34,6 @@ import type { AuditLog } from "@/types/auditLog";
 import RichTextEditor from "@/components/RichTextEditor";
 import ArticleContent from "@/components/ArticleContent";
 import { 
-  createAdminAccount, 
   getAllAdminUsers, 
   updateAdminRoles, 
   deactivateAdminUser, 
@@ -927,12 +926,12 @@ export default function AdminPage() {
     accessRequired: language === 'fr' ? 'Accès requis' : 'Access Required',
     notAuthorized: language === 'fr' ? 'Votre compte n\'est pas autorisé. Contactez un administrateur principal.' : 'Your account is not authorized for admin access. Please contact a master administrator to grant you permissions.',
     adminUserManagement: language === 'fr' ? 'Gestion des utilisateurs admin' : 'Admin User Management',
-    createAdminAccounts: language === 'fr' ? 'Créer des comptes admin, attribuer des rôles et gérer les autorisations.' : 'Create admin accounts, assign roles, and manage access permissions.',
-    createNewAdmin: language === 'fr' ? '+ Créer un nouvel admin' : '+ Create New Admin',
+    createAdminAccounts: language === 'fr' ? 'Créez des comptes admin directement, attribuez des rôles et gérez les autorisations.' : 'Create admin accounts directly, assign roles, and manage access permissions.',
+    createNewAdmin: language === 'fr' ? '+ Créer un admin' : '+ Create Admin',
     allAdminUsers: language === 'fr' ? 'Tous les utilisateurs admin' : 'All Admin Users',
     displayName: language === 'fr' ? 'Nom d\'affichage' : 'Display Name',
     assignRoles: language === 'fr' ? 'Attribuer des rôles' : 'Assign Roles',
-    createAdminAccount: language === 'fr' ? 'Créer un compte admin' : 'Create Admin Account',
+    createAdminAccount: language === 'fr' ? 'Créer le compte' : 'Create Account',
     creating: language === 'fr' ? 'Création...' : 'Creating...',
     cancel: language === 'fr' ? 'Annuler' : 'Cancel',
     lastLogin: language === 'fr' ? 'Dernière connexion' : 'Last login',
@@ -8912,17 +8911,19 @@ export default function AdminPage() {
                   </div>
                 )}
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAdminFormVisible(!adminFormVisible);
-                    setNewAdminEmail("");
-                    setNewAdminRoles([]);
-                  }}
-                  className="mb-4 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white hover:bg-white/20"
-                >
-                  {adminFormVisible ? 'Cancel' : '+ Create New Admin'}
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAdminFormVisible(!adminFormVisible);
+                      setNewAdminEmail("");
+                      setNewAdminName("");
+                      setNewAdminPassword("");
+                      setNewAdminRoles([]);
+                    }}
+                    className="mb-4 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white hover:bg-white/20"
+                  >
+                    {adminFormVisible ? t.cancel : t.createNewAdmin}
+                  </button>
 
                 {adminFormVisible && (
                   <form
@@ -8934,12 +8935,25 @@ export default function AdminPage() {
                       setAdminStatus(null);
                       
                       try {
-                        const result = await createAdminAccount(newAdminEmail, newAdminName, newAdminPassword, newAdminRoles, user.uid);
+                        const response = await fetch('/api/admin/invite-admin', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            email: newAdminEmail.trim(),
+                            displayName: newAdminName.trim(),
+                            password: newAdminPassword,
+                            roles: newAdminRoles,
+                            createdByUid: user.uid,
+                          }),
+                        });
+                        const result = await response.json();
                         
-                        if (result.success) {
+                        if (response.ok && result.success) {
                           setAdminStatus({ 
                             type: 'success', 
-                            message: `✅ Admin account created for ${newAdminEmail}! They can now log in with the password you provided.` 
+                            message: language === 'fr'
+                              ? `✅ Compte admin créé pour ${newAdminEmail}. L'admin peut maintenant se connecter avec ses identifiants.`
+                              : `✅ Admin account created for ${newAdminEmail}. They can now log in with the credentials provided.`
                           });
                           setNewAdminEmail("");
                           setNewAdminName("");
@@ -8953,13 +8967,13 @@ export default function AdminPage() {
                         } else {
                           setAdminStatus({ 
                             type: 'error', 
-                            message: result.error || 'Failed to create admin account' 
+                            message: result?.error || (language === 'fr' ? 'Échec de la création du compte admin' : 'Failed to create admin account')
                           });
                         }
                       } catch (error) {
                         setAdminStatus({ 
                           type: 'error', 
-                          message: 'An unexpected error occurred' 
+                          message: language === 'fr' ? 'Une erreur inattendue est survenue' : 'An unexpected error occurred' 
                         });
                       } finally {
                         setAdminSubmitting(false);
@@ -9002,7 +9016,7 @@ export default function AdminPage() {
                         minLength={6}
                         className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-white"
                       />
-                      <p className="text-[10px] text-slate-400">They can change this after logging in</p>
+                      <p className="text-[10px] text-slate-400">{language === 'fr' ? 'Ils pourront le changer après connexion' : 'They can change this after logging in'}</p>
                     </label>
 
                     <div className="space-y-2">
@@ -9046,7 +9060,7 @@ export default function AdminPage() {
                         disabled={adminSubmitting || !newAdminEmail.trim() || !newAdminName.trim() || newAdminPassword.length < 6 || newAdminRoles.length === 0}
                         className="rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white hover:bg-white/20 disabled:opacity-40"
                       >
-                        {adminSubmitting ? 'Creating...' : 'Create Admin Account'}
+                        {adminSubmitting ? t.creating : t.createAdminAccount}
                       </button>
                       <button
                         type="button"
@@ -9059,7 +9073,7 @@ export default function AdminPage() {
                         }}
                         className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white hover:bg-white/10"
                       >
-                        Cancel
+                        {t.cancel}
                       </button>
                     </div>
                   </form>

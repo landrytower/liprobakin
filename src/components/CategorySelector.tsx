@@ -78,14 +78,16 @@ export default function CategorySelector({ value, onChange, language = 'fr' }: C
   };
 
   const handleParentClick = (parentId: string) => {
+    // Always select the category when clicking on the card
+    handleSelectCategory(parentId);
+  };
+
+  const handleViewChildren = (e: React.MouseEvent, parentId: string) => {
+    e.stopPropagation();
     const children = getChildCategories(parentId);
     if (children.length > 0) {
-      // Has children - show them
       setSelectedParent(parentId);
       setSearchQuery("");
-    } else {
-      // No children - select this category directly
-      handleSelectCategory(parentId);
     }
   };
 
@@ -283,41 +285,53 @@ export default function CategorySelector({ value, onChange, language = 'fr' }: C
                 {parentCategories.map((category, index) => {
                   const childCount = getChildCategories(category.id).length;
                   return (
-                    <button
+                    <div
                       key={category.id}
-                      type="button"
-                      onClick={() => handleParentClick(category.id)}
-                      className={`text-left px-3 py-3 rounded-lg transition-colors ${
+                      className={`relative text-left px-3 py-3 rounded-lg transition-colors ${
                         highlightedIndex === index
                           ? 'bg-orange-500/20 border border-orange-500/30'
                           : 'hover:bg-white/5 border border-transparent'
                       }`}
                     >
-                      <div className="flex items-start gap-2">
-                        <span className="text-xl">{category.icon}</span>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="font-medium text-white text-sm truncate">
-                              {language === 'fr' ? category.labelFr : category.label}
-                            </span>
-                            {childCount > 0 && (
-                              <span className="flex-shrink-0 text-[10px] text-orange-400 bg-orange-500/10 px-1.5 py-0.5 rounded">
-                                {childCount}
+                      <button
+                        type="button"
+                        onClick={() => handleParentClick(category.id)}
+                        className="w-full text-left"
+                      >
+                        <div className="flex items-start gap-2">
+                          <span className="text-xl">{category.icon}</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-medium text-white text-sm truncate">
+                                {language === 'fr' ? category.labelFr : category.label}
                               </span>
-                            )}
+                              {childCount > 0 && (
+                                <span className="flex-shrink-0 text-[10px] text-orange-400 bg-orange-500/10 px-1.5 py-0.5 rounded">
+                                  {childCount}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-slate-400 leading-snug line-clamp-2">
+                              {language === 'fr' ? category.descriptionFr : category.description}
+                            </p>
                           </div>
-                          <p className="text-[11px] text-slate-400 leading-snug line-clamp-2">
-                            {language === 'fr' ? category.descriptionFr : category.description}
-                          </p>
                         </div>
-                        {childCount > 0 && (
-                          <svg className="w-4 h-4 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      </button>
+                      {childCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={(e) => handleViewChildren(e, category.id)}
+                          className="absolute top-2 right-2 p-1.5 rounded-md hover:bg-orange-500/20 transition-colors"
+                          title={language === 'fr' ? 'Voir les sous-catégories' : 'View subcategories'}
+                        >
+                          <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                           </svg>
-                        )}
-                      </div>
-                    </button>
+                        </button>
+                      )}
+                    </div>
                   );
+                })}
                 })}
               </div>
             )}

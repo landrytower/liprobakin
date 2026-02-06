@@ -332,7 +332,6 @@ export default function CategorySelector({ value, onChange, language = 'fr' }: C
                     </div>
                   );
                 })}
-                })}
               </div>
             )}
           </div>

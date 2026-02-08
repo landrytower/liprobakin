@@ -124,6 +124,7 @@ type TeamFormState = {
   gender: "men" | "women";
   colorsInput: string;
   logo: string;
+  teamPhoto: string;
   nationality: string;
   nationality2: string;
 };
@@ -389,6 +390,7 @@ const initialTeamFormState: TeamFormState = {
   gender: "men",
   colorsInput: "",
   logo: "",
+  teamPhoto: "",
   nationality: "DRC",
   nationality2: "",
 };
@@ -434,6 +436,7 @@ const sanitizeFilename = (filename: string) => filename.toLowerCase().replace(/[
 
 const buildImagePath = (filename: string) => `news-images/${Date.now()}-${sanitizeFilename(filename)}`;
 const buildTeamLogoPath = (filename: string) => `team-logos/${Date.now()}-${sanitizeFilename(filename)}`;
+const buildTeamPhotoPath = (filename: string) => `team-photos/${Date.now()}-${sanitizeFilename(filename)}`;
 const buildPlayerHeadshotPath = (filename: string) => `player-headshots/${Date.now()}-${sanitizeFilename(filename)}`;
 const buildCoachHeadshotPath = (filename: string) => `coach-headshots/${Date.now()}-${sanitizeFilename(filename)}`;
 
@@ -690,6 +693,8 @@ export default function AdminPage() {
   const [teamForm, setTeamForm] = useState<TeamFormState>(initialTeamFormState);
   const [teamLogoFile, setTeamLogoFile] = useState<File | null>(null);
   const [teamLogoPreview, setTeamLogoPreview] = useState<string>("");
+  const [teamPhotoFile, setTeamPhotoFile] = useState<File | null>(null);
+  const [teamPhotoPreview, setTeamPhotoPreview] = useState<string>("");
   const [teamFormExpanded, setTeamFormExpanded] = useState(false);
   const [teamSubmitting, setTeamSubmitting] = useState(false);
   const [teamStatus, setTeamStatus] = useState<StatusCallout | null>(null);
@@ -1778,6 +1783,8 @@ export default function AdminPage() {
     setTeamForm(initialTeamFormState);
     setTeamLogoFile(null);
     updateTeamLogoPreview("");
+    setTeamPhotoFile(null);
+    setTeamPhotoPreview("");
   };
 
   const closeTeamForm = () => {
@@ -1819,6 +1826,23 @@ export default function AdminPage() {
     updateTeamLogoPreview(fallback);
   };
 
+  const handleTeamPhotoChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    setTeamPhotoFile(file);
+    if (file) {
+      const previewUrl = URL.createObjectURL(file);
+      setTeamPhotoPreview(previewUrl);
+    } else {
+      setTeamPhotoPreview(teamForm.teamPhoto ?? "");
+    }
+  };
+
+  const clearTeamPhotoSelection = () => {
+    setTeamPhotoFile(null);
+    const fallback = teamForm.teamPhoto.trim();
+    setTeamPhotoPreview(fallback);
+  };
+
   const handlePlayerHeadshotChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] ?? null;
     setPlayerHeadshotFile(file);
@@ -1858,6 +1882,7 @@ export default function AdminPage() {
       logo: team.logo,
       nationality: team.nationality || "DRC",
       nationality2: team.nationality2 || "",
+      teamPhoto: "",
     });
     setTeamLogoFile(null);
     updateTeamLogoPreview(team.logo ?? "");
@@ -2066,6 +2091,19 @@ export default function AdminPage() {
         logo = await getDownloadURL(uploadSnapshot.ref);
         payload.logo = logo;
       }
+      
+      // Handle team photo upload
+      let teamPhoto = teamForm.teamPhoto.trim();
+      if (teamPhotoFile) {
+        const photoPath = buildTeamPhotoPath(teamPhotoFile.name);
+        const photoStorageRef = storageRef(firebaseStorage, photoPath);
+        const photoUploadSnapshot = await uploadBytes(photoStorageRef, teamPhotoFile);
+        teamPhoto = await getDownloadURL(photoUploadSnapshot.ref);
+        payload.teamPhoto = teamPhoto;
+      } else if (teamPhoto) {
+        payload.teamPhoto = teamPhoto;
+      }
+      
       if (teamForm.id) {
         // Create update payload
         const updatePayload: any = {
@@ -2076,6 +2114,13 @@ export default function AdminPage() {
           nationality: payload.nationality,
           updatedAt: serverTimestamp(),
         };
+        
+        // Handle teamPhoto: either set it or remove it
+        if (teamPhoto) {
+          updatePayload.teamPhoto = teamPhoto;
+        } else {
+          updatePayload.teamPhoto = deleteField();
+        }
         
         // Handle nationality2: either set it or remove it
         if (teamForm.nationality2 && teamForm.nationality2.trim() !== "") {
@@ -2103,11 +2148,14 @@ export default function AdminPage() {
           name,
           colorsInput: colors.join(", "),
           logo,
+          teamPhoto,
           nationality: payload.nationality,
           nationality2: teamForm.nationality2,
         });
         setTeamLogoFile(null);
         updateTeamLogoPreview(logo);
+        setTeamPhotoFile(null);
+        setTeamPhotoPreview(teamPhoto);
       } else {
         const newTeamRef = await addDoc(collection(firebaseDB, "teams"), {
           ...payload,
@@ -5226,6 +5274,47 @@ export default function AdminPage() {
                           </div>
                         </div>
                       </div>
+                      
+                      {/* Team Photo Upload (Group Photo) */}
+                      <div className="grid gap-3 sm:gap-4 grid-cols-1 md:grid-cols-[260px_1fr]">
+                        <label className="space-y-1 text-xs sm:text-sm text-slate-300 min-w-0">
+                          Upload team photo (optional)
+                          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 min-w-0">
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleTeamPhotoChange}
+                              className="w-full min-w-0 rounded-2xl border border-dashed border-white/20 bg-slate-900/40 px-2 sm:px-3 py-2 text-[10px] sm:text-xs text-slate-300"
+                            />
+                            {teamPhotoFile || teamPhotoPreview ? (
+                              <button
+                                type="button"
+                                onClick={clearTeamPhotoSelection}
+                                className="rounded-full border border-white/20 px-2 sm:px-3 py-1 text-[10px] sm:text-xs uppercase tracking-[0.4em] text-slate-300 whitespace-nowrap"
+                              >
+                                Clear
+                              </button>
+                            ) : null}
+                          </div>
+                          <p className="text-[10px] sm:text-xs text-slate-500">Group photo shown behind player profiles</p>
+                        </label>
+                        <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-900/40 p-3 sm:p-4 min-w-0">
+                          {teamPhotoPreview ? (
+                            <div className="relative h-16 w-24 sm:h-20 sm:w-32 flex-shrink-0 overflow-hidden rounded-xl border border-white/10 bg-black/40">
+                              <Image src={teamPhotoPreview} alt="Team photo preview" fill className="object-cover" unoptimized />
+                            </div>
+                          ) : (
+                            <div className="flex h-16 w-24 sm:h-20 sm:w-32 flex-shrink-0 items-center justify-center rounded-xl border border-dashed border-white/10 text-[10px] uppercase tracking-[0.4em] text-slate-500">
+                              Team Photo
+                            </div>
+                          )}
+                          <div className="text-xs text-slate-400 min-w-0">
+                            <p className="truncate">{teamPhotoFile ? "Using new upload" : teamPhotoPreview ? "Using stored photo" : "No photo selected"}</p>
+                            <p className="text-[10px] sm:text-[11px] text-slate-500">Shown as background on player pages.</p>
+                          </div>
+                        </div>
+                      </div>
+                      
                       <div className="flex flex-wrap items-center gap-3">
                         <button
                           type="submit"

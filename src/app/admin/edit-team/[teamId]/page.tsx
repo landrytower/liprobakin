@@ -85,6 +85,7 @@ export default function EditTeamPage() {
   const [addingPlayer, setAddingPlayer] = useState(false);
   const [playerHeadshotFile, setPlayerHeadshotFile] = useState<File | null>(null);
   const [teamLogoFile, setTeamLogoFile] = useState<File | null>(null);
+  const [teamPhotoFile, setTeamPhotoFile] = useState<File | null>(null);
   const [transferModalVisible, setTransferModalVisible] = useState(false);
   const [transferPlayerId, setTransferPlayerId] = useState<string | null>(null);
   const [transferPlayerName, setTransferPlayerName] = useState<string>("");
@@ -98,6 +99,8 @@ export default function EditTeamPage() {
   const [coachHeadshotFile, setCoachHeadshotFile] = useState<File | null>(null);
   const [coachHeadshotPreview, setCoachHeadshotPreview] = useState<string>("");
   const [coachStaffSubmitting, setCoachStaffSubmitting] = useState(false);
+  const [showPhotoPositionModal, setShowPhotoPositionModal] = useState(false);
+  const [photoPositionY, setPhotoPositionY] = useState(50); // 0-100, 50 = center
 
   const [teamForm, setTeamForm] = useState({
     name: "",
@@ -107,6 +110,8 @@ export default function EditTeamPage() {
     color2: "",
     logo: "",
     venue: "",
+    teamPhoto: "",
+    teamPhotoPosition: 50, // 0-100, vertical position
   });
 
   // Persist teamForm changes to sessionStorage
@@ -204,8 +209,10 @@ export default function EditTeamPage() {
         if (savedForm) {
           // Restore the saved form state (preserves user edits like gender toggle)
           setTeamForm(JSON.parse(savedForm));
+          setPhotoPositionY(JSON.parse(savedForm).teamPhotoPosition || 50);
         } else {
           // Load fresh data from database
+          const photoPos = (teamData as any).teamPhotoPosition || 50;
           setTeamForm({
             name: teamData.name || "",
             city: teamData.city || "",
@@ -214,7 +221,10 @@ export default function EditTeamPage() {
             color2: teamData.colors?.[1] || "",
             logo: teamData.logo || "",
             venue: teamData.venue || "",
+            teamPhoto: (teamData as any).teamPhoto || "",
+            teamPhotoPosition: photoPos,
           });
+          setPhotoPositionY(photoPos);
         }
       }
 
@@ -260,6 +270,7 @@ export default function EditTeamPage() {
     // Clear saved form state and restore original data
     const savedFormKey = `teamForm_${team.id}`;
     sessionStorage.removeItem(savedFormKey);
+    const photoPos = (team as any).teamPhotoPosition || 50;
     setTeamForm({
       name: team.name || "",
       city: team.city || "",
@@ -268,8 +279,12 @@ export default function EditTeamPage() {
       color2: team.colors?.[1] || "",
       logo: team.logo || "",
       venue: team.venue || "",
+      teamPhoto: (team as any).teamPhoto || "",
+      teamPhotoPosition: photoPos,
     });
+    setPhotoPositionY(photoPos);
     setTeamLogoFile(null);
+    setTeamPhotoFile(null);
     setEditingTeam(false);
   };
 
@@ -313,6 +328,14 @@ export default function EditTeamPage() {
         logoUrl = await getDownloadURL(storageRefPath);
       }
       
+      // Upload team photo if file selected
+      let teamPhotoUrl = teamForm.teamPhoto;
+      if (teamPhotoFile) {
+        const photoStorageRef = ref(firebaseStorage, `team-photos/${Date.now()}_${teamPhotoFile.name}`);
+        await uploadBytes(photoStorageRef, teamPhotoFile);
+        teamPhotoUrl = await getDownloadURL(photoStorageRef);
+      }
+      
       // Update team document
       await updateDoc(doc(firebaseDB, "teams", team.id), {
         name: teamForm.name,
@@ -321,6 +344,8 @@ export default function EditTeamPage() {
         colors: [teamForm.color1, teamForm.color2],
         logo: logoUrl,
         venue: teamForm.venue,
+        teamPhoto: teamPhotoUrl,
+        teamPhotoPosition: teamForm.teamPhotoPosition,
       });
       
       // If team name changed, update all references
@@ -728,12 +753,36 @@ export default function EditTeamPage() {
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg sm:text-xl font-bold text-white">Team Details</h2>
             {!editingTeam && (
-              <button
-                onClick={() => setEditingTeam(true)}
-                className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-blue-300 transition hover:bg-blue-500/20"
-              >
-                Edit Team
-              </button>
+              <div className="flex gap-2">
+                <label
+                  htmlFor="quick-team-photo-upload"
+                  className="rounded-lg border border-sky-500/30 bg-sky-500/10 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-sky-300 transition hover:bg-sky-500/20 cursor-pointer"
+                >
+                  Team Photo
+                </label>
+                <input
+                  type="file"
+                  id="quick-team-photo-upload"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setTeamPhotoFile(file);
+                      setEditingTeam(true);
+                      // Open position modal after a short delay
+                      setTimeout(() => setShowPhotoPositionModal(true), 100);
+                    }
+                  }}
+                  className="hidden"
+                  aria-label="Upload team photo"
+                />
+                <button
+                  onClick={() => setEditingTeam(true)}
+                  className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-blue-300 transition hover:bg-blue-500/20"
+                >
+                  Edit Team
+                </button>
+              </div>
             )}
           </div>
 
@@ -814,6 +863,103 @@ export default function EditTeamPage() {
                   </label>
                 </div>
               </div>
+              
+              {/* Team Photo (Group Photo) */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  {language === 'fr' ? 'Photo d\'équipe (groupe)' : 'Team Photo (Group)'}
+                </label>
+                <p className="text-xs text-slate-500 mb-2">
+                  {language === 'fr' ? 'Affichée en arrière-plan sur la page d\'équipe' : 'Shown as background on the team page'}
+                </p>
+                <div className="flex flex-wrap gap-4 items-start">
+                  <div className="relative">
+                    <input
+                      type="file"
+                      id="team-photo-upload"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setTeamPhotoFile(file);
+                          // Open position modal when a new file is selected
+                          setTimeout(() => setShowPhotoPositionModal(true), 100);
+                        }
+                      }}
+                      className="hidden"
+                      aria-label="Upload team photo"
+                    />
+                    <label
+                      htmlFor="team-photo-upload"
+                      className="flex flex-col items-center justify-center w-48 h-32 rounded-xl border-2 border-dashed border-white/30 bg-white/5 cursor-pointer hover:bg-white/10 hover:border-white/50 transition"
+                    >
+                      {teamPhotoFile ? (
+                        <div className="flex flex-col items-center gap-2">
+                          <div className="w-32 h-20 rounded-lg overflow-hidden">
+                            <img
+                              src={URL.createObjectURL(teamPhotoFile)}
+                              alt="Preview"
+                              className="w-full h-full object-cover"
+                              style={{ objectPosition: `center ${photoPositionY}%` }}
+                            />
+                          </div>
+                          <p className="text-xs text-emerald-400 text-center px-2 truncate w-full">✓ {teamPhotoFile.name}</p>
+                        </div>
+                      ) : teamForm.teamPhoto ? (
+                        <div className="flex flex-col items-center gap-2">
+                          <div className="w-32 h-20 rounded-lg overflow-hidden">
+                            <img
+                              src={teamForm.teamPhoto}
+                              alt="Current"
+                              className="w-full h-full object-cover"
+                              style={{ objectPosition: `center ${teamForm.teamPhotoPosition}%` }}
+                            />
+                          </div>
+                          <p className="text-xs text-slate-400 text-center">
+                            {language === 'fr' ? 'Changer' : 'Change'}
+                          </p>
+                        </div>
+                      ) : (
+                        <>
+                          <svg className="w-8 h-8 text-slate-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                          <p className="text-xs text-slate-400 text-center px-2">
+                            {language === 'fr' ? 'Photo de groupe' : 'Group photo'}
+                          </p>
+                        </>
+                      )}
+                    </label>
+                    {(teamPhotoFile || teamForm.teamPhoto) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTeamPhotoFile(null);
+                          setTeamForm({ ...teamForm, teamPhoto: "" });
+                        }}
+                        className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-red-500/80 text-white flex items-center justify-center hover:bg-red-500 transition"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                  
+                  {/* Adjust Position Button */}
+                  {(teamPhotoFile || teamForm.teamPhoto) && (
+                    <button
+                      type="button"
+                      onClick={() => setShowPhotoPositionModal(true)}
+                      className="flex items-center gap-2 rounded-lg border border-purple-500/30 bg-purple-500/10 px-4 py-2 text-sm font-medium text-purple-300 transition hover:bg-purple-500/20"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                      </svg>
+                      {language === 'fr' ? 'Ajuster position' : 'Adjust Position'}
+                    </button>
+                  )}
+                </div>
+              </div>
+              
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2">
                   {language === 'fr' ? 'Couleurs de l\'équipe' : 'Team Colors'}
@@ -1668,6 +1814,158 @@ export default function EditTeamPage() {
                 className="rounded-lg border border-white/10 px-4 py-2 text-sm uppercase tracking-wider text-slate-300 hover:bg-white/5 disabled:cursor-not-allowed"
               >
                 Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Photo Position Modal */}
+      {showPhotoPositionModal && (teamPhotoFile || teamForm.teamPhoto) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setShowPhotoPositionModal(false)}>
+          <div className="w-full max-w-4xl rounded-2xl border border-white/10 bg-slate-900 p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-white">
+                {language === 'fr' ? 'Ajuster la position de la photo' : 'Adjust Photo Position'}
+              </h3>
+              <button
+                onClick={() => setShowPhotoPositionModal(false)}
+                className="text-slate-400 hover:text-white transition"
+                aria-label="Close"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <p className="text-sm text-slate-400 mb-4">
+              {language === 'fr' 
+                ? 'Ajustez le curseur pour positionner les visages des joueurs correctement dans la bannière de l\'équipe.'
+                : 'Adjust the slider to position player faces correctly in the team banner.'}
+            </p>
+            
+            {/* Preview showing exactly how it will look on team page */}
+            <div className="mb-6">
+              <p className="text-xs text-slate-500 mb-2">
+                {language === 'fr' ? 'Aperçu (taille réelle de la bannière)' : 'Preview (actual banner size)'}
+              </p>
+              <div 
+                className="relative w-full h-56 sm:h-64 rounded-xl overflow-hidden border border-white/10"
+                style={{
+                  backgroundImage: teamPhotoFile 
+                    ? `linear-gradient(135deg, ${teamForm.color1 || '#000000'}CC, ${teamForm.color2 || '#FFFFFF'}99), url(${URL.createObjectURL(teamPhotoFile)})`
+                    : `linear-gradient(135deg, ${teamForm.color1 || '#000000'}CC, ${teamForm.color2 || '#FFFFFF'}99), url(${teamForm.teamPhoto})`,
+                  backgroundSize: 'cover',
+                  backgroundPosition: `center ${photoPositionY}%`,
+                }}
+              >
+                {/* Simulated team info overlay */}
+                <div className="absolute inset-0 flex items-center px-8">
+                  <div className="flex items-center gap-6">
+                    {teamForm.logo && (
+                      <div className="w-24 h-24 rounded-full border-4 border-white/20 bg-slate-800 flex items-center justify-center overflow-hidden">
+                        <img src={teamForm.logo} alt="Logo" className="w-full h-full object-cover" />
+                      </div>
+                    )}
+                    <div>
+                      <h4 className="text-3xl font-bold text-white drop-shadow-lg">{teamForm.name || 'Team Name'}</h4>
+                      <p className="text-lg text-white/80 drop-shadow">Record: {team?.wins || 0}W - {team?.losses || 0}L</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Vertical Position Slider */}
+            <div className="mb-6">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium text-slate-300">
+                  {language === 'fr' ? 'Position verticale' : 'Vertical Position'}
+                </label>
+                <span className="text-sm text-slate-400">{photoPositionY}%</span>
+              </div>
+              <div className="flex items-center gap-4">
+                <span className="text-xs text-slate-500">
+                  {language === 'fr' ? 'Haut' : 'Top'}
+                </span>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={photoPositionY}
+                  onChange={(e) => {
+                    const newValue = parseInt(e.target.value);
+                    setPhotoPositionY(newValue);
+                    setTeamForm({ ...teamForm, teamPhotoPosition: newValue });
+                  }}
+                  className="flex-1 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                  aria-label="Photo vertical position"
+                />
+                <span className="text-xs text-slate-500">
+                  {language === 'fr' ? 'Bas' : 'Bottom'}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-2 text-center">
+                {language === 'fr' 
+                  ? '0% = montre le haut de l\'image, 50% = centré, 100% = montre le bas'
+                  : '0% = shows top of image, 50% = centered, 100% = shows bottom'}
+              </p>
+            </div>
+            
+            {/* Quick position buttons */}
+            <div className="flex justify-center gap-2 mb-6">
+              <button
+                type="button"
+                onClick={() => {
+                  setPhotoPositionY(25);
+                  setTeamForm({ ...teamForm, teamPhotoPosition: 25 });
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                  photoPositionY === 25 
+                    ? 'bg-purple-500/30 border border-purple-500/50 text-purple-300'
+                    : 'bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10'
+                }`}
+              >
+                {language === 'fr' ? 'Visages en haut' : 'Faces at top'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPhotoPositionY(50);
+                  setTeamForm({ ...teamForm, teamPhotoPosition: 50 });
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                  photoPositionY === 50 
+                    ? 'bg-purple-500/30 border border-purple-500/50 text-purple-300'
+                    : 'bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10'
+                }`}
+              >
+                {language === 'fr' ? 'Centré' : 'Centered'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPhotoPositionY(75);
+                  setTeamForm({ ...teamForm, teamPhotoPosition: 75 });
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                  photoPositionY === 75 
+                    ? 'bg-purple-500/30 border border-purple-500/50 text-purple-300'
+                    : 'bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10'
+                }`}
+              >
+                {language === 'fr' ? 'Visages en bas' : 'Faces at bottom'}
+              </button>
+            </div>
+            
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowPhotoPositionModal(false)}
+                className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-6 py-2 text-sm font-medium text-emerald-300 transition hover:bg-emerald-500/20"
+              >
+                {language === 'fr' ? 'Terminé' : 'Done'}
               </button>
             </div>
           </div>

@@ -77,6 +77,8 @@ type TeamData = {
   name: string;
   city?: string;
   logo?: string;
+  teamPhoto?: string;
+  teamPhotoPosition?: number;
   colors?: string[];
   wins: number;
   losses: number;
@@ -184,6 +186,8 @@ export default function TeamPage() {
           name: data.name,
           city: data.city,
           logo: data.logo,
+          teamPhoto: data.teamPhoto,
+          teamPhotoPosition: data.teamPhotoPosition ?? 50,
           colors: data.colors || ["#000000", "#FFFFFF"],
           wins: data.wins || 0,
           losses: data.losses || 0,
@@ -213,6 +217,8 @@ export default function TeamPage() {
           name: foundTeam.name,
           city: foundTeam.city,
           logo: foundTeam.logo,
+          teamPhoto: foundTeam.teamPhoto,
+          teamPhotoPosition: foundTeam.teamPhotoPosition,
           colors: foundTeam.colors,
           conference: foundTeam.conference,
           nationality: foundTeam.nationality,
@@ -420,23 +426,17 @@ export default function TeamPage() {
         </div>
       </header>
 
-      {/* Google Ad banner */}
-      <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
-        <GoogleAd
-          slot="6159195090622597" 
-          format="horizontal"
-          className="w-full"
-          style={{ minHeight: "120px" }}
-        />
-      </div>
-
       {/* Team Header */}
       <div 
-        className={`relative overflow-hidden border-b border-white/10 transition-all duration-1000 ${
+        className={`relative overflow-hidden border-b border-white/10 transition-all duration-1000 h-56 sm:h-64 md:h-72 ${
           isTransitioning ? 'opacity-0 -translate-x-12' : 'opacity-100 translate-x-0'
         }`}
         style={{
-          backgroundImage: `linear-gradient(135deg, ${teamData.colors?.[0] || '#000000'}33, ${teamData.colors?.[1] || '#FFFFFF'}22)`,
+          backgroundImage: teamData.teamPhoto 
+            ? `linear-gradient(135deg, ${teamData.colors?.[0] || '#000000'}CC, ${teamData.colors?.[1] || '#FFFFFF'}99), url(${teamData.teamPhoto})`
+            : `linear-gradient(135deg, ${teamData.colors?.[0] || '#000000'}33, ${teamData.colors?.[1] || '#FFFFFF'}22)`,
+          backgroundSize: 'cover',
+          backgroundPosition: `center ${teamData.teamPhotoPosition ?? 50}%`,
         }}
       >
         <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">

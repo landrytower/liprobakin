@@ -23,23 +23,44 @@ interface Player {
   lastName: string;
   teamName: string;
   number: number | null;
+  type: 'player';
 }
+
+interface Team {
+  id: string;
+  name: string;
+  type: 'team';
+}
+
+type MentionItem = Player | Team;
 
 export default function RichTextEditor({ content, onChange, placeholder = "Écrivez votre article ici..." }: RichTextEditorProps) {
   const [players, setPlayers] = useState<Player[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [allMentionItems, setAllMentionItems] = useState<MentionItem[]>([]);
 
   useEffect(() => {
-    // Fetch all players for mention suggestions
-    const fetchPlayers = async () => {
+    // Fetch all players and teams for mention suggestions
+    const fetchData = async () => {
       try {
-        console.log('🏀 Fetching teams...');
+        console.log('🏀 Fetching teams and players...');
         const teamsSnapshot = await getDocs(collection(firebaseDB, 'teams'));
         console.log('🏀 Found teams:', teamsSnapshot.size);
         const allPlayers: Player[] = [];
+        const allTeams: Team[] = [];
 
         for (const teamDoc of teamsSnapshot.docs) {
           const teamData = teamDoc.data();
           console.log('🏀 Processing team:', teamDoc.id, 'Name:', teamData.name);
+          
+          // Add team to teams list
+          allTeams.push({
+            id: teamDoc.id,
+            name: teamData.name || '',
+            type: 'team',
+          });
+
+          // Fetch roster
           const rosterSnapshot = await getDocs(collection(firebaseDB, `teams/${teamDoc.id}/roster`));
           console.log('🏀 Roster size for', teamData.name, ':', rosterSnapshot.size);
           
@@ -52,19 +73,22 @@ export default function RichTextEditor({ content, onChange, placeholder = "Écri
               lastName: playerData.lastName || '',
               teamName: teamData.name || '',
               number: playerData.number || null,
+              type: 'player',
             });
           });
         }
 
         console.log('🏀 Total players loaded:', allPlayers.length);
-        console.log('🏀 Players:', allPlayers);
+        console.log('🏀 Total teams loaded:', allTeams.length);
         setPlayers(allPlayers);
+        setTeams(allTeams);
+        setAllMentionItems([...allPlayers, ...allTeams]);
       } catch (error) {
-        console.error('❌ Error fetching players:', error);
+        console.error('❌ Error fetching data:', error);
       }
     };
 
-    fetchPlayers();
+    fetchData();
   }, []);
 
   const editor = useEditor({
@@ -72,7 +96,22 @@ export default function RichTextEditor({ content, onChange, placeholder = "Écri
       StarterKit,
       TextStyle,
       Color,
-      Mention.configure({
+      Mention.extend({
+        addAttributes() {
+          return {
+            ...this.parent?.(),
+            type: {
+              default: 'player',
+              parseHTML: element => element.getAttribute('data-mention-type'),
+              renderHTML: attributes => {
+                return {
+                  'data-mention-type': attributes.type,
+                };
+              },
+            },
+          };
+        },
+      }).configure({
         HTMLAttributes: {
           'data-type': 'mention',
           class: 'mention-highlight',
@@ -82,18 +121,22 @@ export default function RichTextEditor({ content, onChange, placeholder = "Écri
         },
         suggestion: {
           items: ({ query }: { query: string }) => {
-            console.log('🔍 Searching with query:', query, 'Players available:', players.length);
+            console.log('🔍 Searching with query:', query, 'Items available:', allMentionItems.length);
             if (query.length === 0) {
-              const result = players.slice(0, 5);
-              console.log('🔍 Empty query, returning first 5:', result);
+              const result = allMentionItems.slice(0, 8);
+              console.log('🔍 Empty query, returning first 8:', result);
               return result;
             }
-            const result = players
-              .filter(player => {
-                const fullName = `${player.firstName} ${player.lastName}`.toLowerCase();
-                return fullName.includes(query.toLowerCase());
+            const result = allMentionItems
+              .filter(item => {
+                if (item.type === 'player') {
+                  const fullName = `${item.firstName} ${item.lastName}`.toLowerCase();
+                  return fullName.includes(query.toLowerCase());
+                } else {
+                  return item.name.toLowerCase().includes(query.toLowerCase());
+                }
               })
-              .slice(0, 10);
+              .slice(0, 15);
             console.log('🔍 Filtered result:', result);
             return result;
           },

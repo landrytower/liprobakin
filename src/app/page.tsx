@@ -12,6 +12,7 @@ import AuthModal from "@/components/AuthModal";
 import PlayerProfilePopup from "@/components/PlayerProfilePopup";
 import AnimatedButton from "@/components/AnimatedButton";
 import ArticleContent from "@/components/ArticleContent";
+import MentionedEntities from "@/components/MentionedEntities";
 import html2canvas from "html2canvas";
 
 import {
@@ -3150,6 +3151,12 @@ export default function Home() {
                                       className="text-base md:text-lg leading-relaxed text-slate-200 space-y-4"
                                     />
                                   </div>
+
+                                  {/* Players/Teams Mentioned */}
+                                  <MentionedEntities 
+                                    htmlContent={language === 'en' && featured.summary_en ? featured.summary_en : featured.summary}
+                                    language={language}
+                                  />
 
                                   {/* Article Footer */}
                                   <div className="mt-8 pt-6 border-t border-white/10">

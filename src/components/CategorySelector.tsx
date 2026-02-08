@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { NEWS_CATEGORIES, getParentCategories, getChildCategories, searchCategories, getCategoryById, type NewsCategory } from "@/data/newsCategories";
+import { getParentCategories, getChildCategories, searchCategories, getCategoryById, type NewsCategory } from "@/data/newsCategories";
 
 type CategorySelectorProps = {
   value: string;
@@ -12,38 +12,12 @@ type CategorySelectorProps = {
 export default function CategorySelector({ value, onChange, language = 'fr' }: CategorySelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedParent, setSelectedParent] = useState<string | null>(null);
-  const [highlightedIndex, setHighlightedIndex] = useState(0);
+  const [expandedParent, setExpandedParent] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const selectedCategory = getCategoryById(value);
   const parentCategories = getParentCategories();
-  
-  // Get filtered results based on search or parent selection
-  const getFilteredCategories = (): NewsCategory[] => {
-    if (searchQuery.trim()) {
-      return searchCategories(searchQuery, language);
-    }
-    if (selectedParent) {
-      return getChildCategories(selectedParent);
-    }
-    return [];
-  };
-
-  const filteredCategories = getFilteredCategories();
-
-  // Update display when value prop changes
-  useEffect(() => {
-    // Force re-render when value changes to ensure display updates
-    if (value && !isOpen) {
-      const category = getCategoryById(value);
-      if (category) {
-        // Display is already updated via selectedCategory
-        // This effect ensures any edge cases are handled
-      }
-    }
-  }, [value, isOpen]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -51,7 +25,7 @@ export default function CategorySelector({ value, onChange, language = 'fr' }: C
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsOpen(false);
         setSearchQuery("");
-        setSelectedParent(null);
+        setExpandedParent(null);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -65,87 +39,28 @@ export default function CategorySelector({ value, onChange, language = 'fr' }: C
     }
   }, [isOpen]);
 
-  // Reset highlighted index when filtered categories change
-  useEffect(() => {
-    setHighlightedIndex(0);
-  }, [searchQuery, selectedParent]);
-
-  const handleSelectCategory = (categoryId: string) => {
+  const handleSelectChild = (categoryId: string) => {
     onChange(categoryId);
     setIsOpen(false);
     setSearchQuery("");
-    setSelectedParent(null);
+    setExpandedParent(null);
   };
 
   const handleParentClick = (parentId: string) => {
-    // Always select the category when clicking on the card
-    handleSelectCategory(parentId);
-  };
-
-  const handleViewChildren = (e: React.MouseEvent, parentId: string) => {
-    e.stopPropagation();
-    const children = getChildCategories(parentId);
-    if (children.length > 0) {
-      setSelectedParent(parentId);
-      setSearchQuery("");
+    // Toggle expand - click to show children
+    if (expandedParent === parentId) {
+      setExpandedParent(null);
+    } else {
+      setExpandedParent(parentId);
     }
   };
 
-  const handleBackToParents = () => {
-    setSelectedParent(null);
+  const getSearchResults = (): NewsCategory[] => {
+    if (!searchQuery.trim()) return [];
+    return searchCategories(searchQuery, language);
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (!isOpen) {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        setIsOpen(true);
-      }
-      return;
-    }
-
-    switch (e.key) {
-      case "ArrowDown":
-        e.preventDefault();
-        setHighlightedIndex(prev => 
-          Math.min(prev + 1, (searchQuery || selectedParent ? filteredCategories : parentCategories).length - 1)
-        );
-        break;
-      case "ArrowUp":
-        e.preventDefault();
-        setHighlightedIndex(prev => Math.max(prev - 1, 0));
-        break;
-      case "Enter":
-        e.preventDefault();
-        if (searchQuery || selectedParent) {
-          const target = filteredCategories[highlightedIndex];
-          if (target) {
-            handleSelectCategory(target.id);
-          }
-        } else {
-          const target = parentCategories[highlightedIndex];
-          if (target) {
-            handleParentClick(target.id);
-          }
-        }
-        break;
-      case "Escape":
-        e.preventDefault();
-        if (selectedParent) {
-          handleBackToParents();
-        } else {
-          setIsOpen(false);
-          setSearchQuery("");
-        }
-        break;
-      case "Backspace":
-        if (!searchQuery && selectedParent) {
-          e.preventDefault();
-          handleBackToParents();
-        }
-        break;
-    }
-  };
+  const searchResults = getSearchResults();
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -153,7 +68,6 @@ export default function CategorySelector({ value, onChange, language = 'fr' }: C
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        onKeyDown={handleKeyDown}
         className="w-full flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-slate-800/50 px-3 py-2 text-sm text-white hover:border-orange-500/50 focus:border-orange-500 focus:outline-none transition-colors"
       >
         <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -169,7 +83,7 @@ export default function CategorySelector({ value, onChange, language = 'fr' }: C
           )}
         </div>
         <svg 
-          className={`w-4 h-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
           fill="none" 
           stroke="currentColor" 
           viewBox="0 0 24 24"
@@ -196,77 +110,39 @@ export default function CategorySelector({ value, onChange, language = 'fr' }: C
                 ref={searchInputRef}
                 type="text"
                 value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  setSelectedParent(null);
-                }}
-                onKeyDown={handleKeyDown}
-                placeholder={language === 'fr' ? "Rechercher..." : "Search..."}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={language === 'fr' ? "Rechercher une catégorie..." : "Search categories..."}
                 className="w-full pl-10 pr-3 py-2 bg-slate-800/50 border border-white/10 rounded-lg text-sm text-white placeholder-slate-400 focus:border-orange-500 focus:outline-none"
               />
             </div>
           </div>
 
-          {/* Breadcrumb */}
-          {selectedParent && !searchQuery && (
-            <div className="px-3 py-2 border-b border-white/10 bg-slate-800/30 animate-in fade-in slide-in-from-top-1 duration-200">
-              <button
-                type="button"
-                onClick={handleBackToParents}
-                className="flex items-center gap-1 text-xs text-orange-400 hover:text-orange-300 transition-colors duration-150"
-              >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-                {language === 'fr' ? 'Retour aux catégories' : 'Back to categories'}
-              </button>
-              <div className="mt-1 text-xs text-slate-400">
-                {getCategoryById(selectedParent) && (
-                  <span>
-                    {language === 'fr' 
-                      ? getCategoryById(selectedParent)?.labelFr 
-                      : getCategoryById(selectedParent)?.label}
-                  </span>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Categories List */}
-          <div className="max-h-96 overflow-y-auto transition-all duration-300">
-            {/* Search Results or Child Categories */}
-            {(searchQuery || selectedParent) ? (
-              filteredCategories.length > 0 ? (
-                <div className="p-2 space-y-1 animate-in fade-in slide-in-from-right-2 duration-200">
-                  {filteredCategories.map((category, index) => (
+          {/* Content Area */}
+          <div className="max-h-80 overflow-y-auto">
+            {/* Search Results */}
+            {searchQuery.trim() ? (
+              searchResults.length > 0 ? (
+                <div className="p-2 space-y-1">
+                  {searchResults.map((category) => (
                     <button
                       key={category.id}
                       type="button"
-                      onClick={() => handleSelectCategory(category.id)}
-                      className={`w-full text-left px-3 py-2.5 rounded-lg transition-all duration-150 ${
-                        highlightedIndex === index
-                          ? 'bg-orange-500/20 border border-orange-500/30'
-                          : 'hover:bg-white/5 border border-transparent'
-                      }`}
+                      onClick={() => handleSelectChild(category.id)}
+                      className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-orange-500/20 transition-colors"
                     >
-                      <div className="flex items-start gap-3">
-                        <span className="text-2xl">{category.icon}</span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-xl">{category.icon}</span>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="font-medium text-white text-sm">
-                              {language === 'fr' ? category.labelFr : category.label}
+                          <span className="font-medium text-white text-sm">
+                            {language === 'fr' ? category.labelFr : category.label}
+                          </span>
+                          {category.parent && (
+                            <span className="ml-2 text-[10px] text-slate-400 bg-slate-700/50 px-1.5 py-0.5 rounded">
+                              {language === 'fr' 
+                                ? getCategoryById(category.parent)?.labelFr 
+                                : getCategoryById(category.parent)?.label}
                             </span>
-                            {category.parent && (
-                              <span className="text-[10px] text-slate-400 bg-slate-700/50 px-1.5 py-0.5 rounded">
-                                {language === 'fr' 
-                                  ? getCategoryById(category.parent)?.labelFr 
-                                  : getCategoryById(category.parent)?.label}
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-xs text-slate-400 leading-relaxed">
-                            {language === 'fr' ? category.descriptionFr : category.description}
-                          </p>
+                          )}
                         </div>
                       </div>
                     </button>
@@ -274,60 +150,71 @@ export default function CategorySelector({ value, onChange, language = 'fr' }: C
                 </div>
               ) : (
                 <div className="px-4 py-8 text-center text-sm text-slate-400">
-                  {language === 'fr' 
-                    ? 'Aucune catégorie trouvée' 
-                    : 'No categories found'}
+                  {language === 'fr' ? 'Aucune catégorie trouvée' : 'No categories found'}
                 </div>
               )
             ) : (
-              /* Parent Categories Grid */
-              <div className="p-2 grid grid-cols-1 sm:grid-cols-2 gap-2 animate-in fade-in duration-200">
-                {parentCategories.map((category, index) => {
-                  const childCount = getChildCategories(category.id).length;
+              /* Parent Categories with Expandable Children */
+              <div className="p-2 space-y-1">
+                {parentCategories.map((parent) => {
+                  const children = getChildCategories(parent.id);
+                  const isExpanded = expandedParent === parent.id;
+                  
                   return (
-                    <div
-                      key={category.id}
-                      className={`relative text-left px-3 py-3 rounded-lg transition-all duration-150 ${
-                        highlightedIndex === index
-                          ? 'bg-orange-500/20 border border-orange-500/30'
-                          : 'hover:bg-white/5 border border-transparent'
-                      }`}
-                    >
+                    <div key={parent.id} className="rounded-lg overflow-hidden">
+                      {/* Parent Category Header */}
                       <button
                         type="button"
-                        onClick={() => handleParentClick(category.id)}
-                        className="w-full text-left"
+                        onClick={() => handleParentClick(parent.id)}
+                        className={`w-full text-left px-3 py-3 flex items-center justify-between transition-all duration-200 ${
+                          isExpanded 
+                            ? 'bg-orange-500/20 border-l-2 border-orange-500' 
+                            : 'hover:bg-white/5'
+                        }`}
                       >
-                        <div className="flex items-start gap-2">
-                          <span className="text-xl">{category.icon}</span>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="font-medium text-white text-sm truncate">
-                                {language === 'fr' ? category.labelFr : category.label}
-                              </span>
-                              {childCount > 0 && (
-                                <span className="flex-shrink-0 text-[10px] text-orange-400 bg-orange-500/10 px-1.5 py-0.5 rounded">
-                                  {childCount}
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-[11px] text-slate-400 leading-snug line-clamp-2">
-                              {language === 'fr' ? category.descriptionFr : category.description}
+                        <div className="flex items-center gap-3">
+                          <span className="text-xl">{parent.icon}</span>
+                          <div>
+                            <span className="font-medium text-white text-sm">
+                              {language === 'fr' ? parent.labelFr : parent.label}
+                            </span>
+                            <p className="text-[11px] text-slate-400 mt-0.5">
+                              {children.length} {language === 'fr' ? 'sous-catégories' : 'subcategories'}
                             </p>
                           </div>
                         </div>
-                      </button>
-                      {childCount > 0 && (
-                        <button
-                          type="button"
-                          onClick={(e) => handleViewChildren(e, category.id)}
-                          className="absolute top-2 right-2 p-1.5 rounded-md bg-slate-700/50 hover:bg-orange-500/30 border border-white/10 hover:border-orange-500/50 transition-all duration-150"
-                          title={language === 'fr' ? 'Voir les sous-catégories' : 'View subcategories'}
+                        <svg 
+                          className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`}
+                          fill="none" 
+                          stroke="currentColor" 
+                          viewBox="0 0 24 24"
                         >
-                          <svg className="w-4 h-4 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
-                        </button>
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+                      
+                      {/* Children - Expandable */}
+                      {isExpanded && children.length > 0 && (
+                        <div className="bg-slate-800/30 border-l-2 border-orange-500/30 ml-4 animate-in slide-in-from-top-2 duration-200">
+                          {children.map((child) => (
+                            <button
+                              key={child.id}
+                              type="button"
+                              onClick={() => handleSelectChild(child.id)}
+                              className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-orange-500/20 transition-colors border-b border-white/5 last:border-b-0"
+                            >
+                              <span className="text-lg">{child.icon}</span>
+                              <div className="flex-1 min-w-0">
+                                <span className="text-sm text-white">
+                                  {language === 'fr' ? child.labelFr : child.label}
+                                </span>
+                                <p className="text-[10px] text-slate-400 mt-0.5 line-clamp-1">
+                                  {language === 'fr' ? child.descriptionFr : child.description}
+                                </p>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
                       )}
                     </div>
                   );
@@ -336,12 +223,12 @@ export default function CategorySelector({ value, onChange, language = 'fr' }: C
             )}
           </div>
 
-          {/* Footer Hint */}
+          {/* Footer */}
           <div className="px-3 py-2 border-t border-white/10 bg-slate-800/30">
             <p className="text-[10px] text-slate-400 text-center">
               {language === 'fr' 
-                ? '↑↓ Naviguer • Entrée Sélectionner • Échap Fermer' 
-                : '↑↓ Navigate • Enter Select • Esc Close'}
+                ? 'Cliquez sur une catégorie pour voir les options' 
+                : 'Click a category to see options'}
             </p>
           </div>
         </div>

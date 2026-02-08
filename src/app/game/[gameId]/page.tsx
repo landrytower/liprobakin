@@ -198,14 +198,17 @@ export default function GamePage() {
     <div className="min-h-screen bg-gradient-to-b from-[#050816] via-[#050816] to-[#020407] text-white">
       {/* Header */}
       <header className="sticky top-0 z-50 border-b border-white/10 bg-black/50 backdrop-blur-xl">
-        <div className="mx-auto max-w-7xl px-4 py-4">
-          <div className="flex items-center justify-between">
-            <Link href="/" className="flex items-center gap-3">
-              <Image src="/logos/liprobakin.png" alt="Liprobakin" width={32} height={32} className="rounded-full" />
-              <span className="text-xl font-bold tracking-wider">LIPROBAKIN</span>
+        <div className="mx-auto max-w-7xl px-3 py-3 sm:px-4 sm:py-4">
+          <div className="flex items-center justify-between gap-2">
+            <Link href="/" className="flex items-center gap-2 sm:gap-3">
+              <Image src="/logos/liprobakin.png" alt="Liprobakin" width={32} height={32} className="h-7 w-7 sm:h-8 sm:w-8 rounded-full" />
+              <span className="hidden sm:inline text-lg sm:text-xl font-bold tracking-wider">LIPROBAKIN</span>
             </Link>
-            <Link href="/" className="text-sm text-slate-400 hover:text-white transition">
-              ← Back
+            <Link href="/" className="flex items-center gap-1.5 sm:gap-2 rounded-lg border border-white/10 bg-slate-900/60 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-slate-400 hover:text-white hover:border-white/30 transition-colors">
+              <svg className="h-3.5 w-3.5 sm:h-4 sm:w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              <span className="hidden xs:inline">{t.backToHome.replace('← ', '')}</span>
             </Link>
           </div>
         </div>

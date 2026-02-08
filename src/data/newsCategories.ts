@@ -9,210 +9,197 @@ export type NewsCategory = {
 };
 
 export const NEWS_CATEGORIES: NewsCategory[] = [
-  // Breaking News & Headlines
+  // ============================================
+  // CORE NEWS CATEGORIES (Parent)
+  // ============================================
+  {
+    id: "core-news",
+    label: "Core News Categories",
+    labelFr: "Catégories d'actualités principales",
+    description: "Breaking news, game coverage, and essential updates",
+    descriptionFr: "Nouvelles de dernière minute, couverture de jeux et mises à jour essentielles",
+    icon: "📰"
+  },
+  
+  // Core News Children
   {
     id: "headlines",
     label: "Headlines / Breaking News",
     labelFr: "Gros titres / Dernière minute",
-    description: "Major announcements, urgent news, and breaking stories",
-    descriptionFr: "Annonces majeures, nouvelles urgentes et événements de dernière minute",
+    description: "Major announcements and urgent breaking stories",
+    descriptionFr: "Annonces majeures et nouvelles urgentes",
+    parent: "core-news",
     icon: "🔥"
   },
-  
-  // Transfers & Transactions
   {
     id: "transfers",
-    label: "Transfers / Trades",
-    labelFr: "Transferts / Échanges",
-    description: "Player movements, trade announcements, and transaction updates",
-    descriptionFr: "Mouvements de joueurs, annonces d'échanges et mises à jour de transactions",
-    parent: "transactions",
+    label: "Transfers / Trades / Transactions",
+    labelFr: "Transferts / Échanges / Transactions",
+    description: "Player movements, trades, and roster changes",
+    descriptionFr: "Mouvements de joueurs, échanges et changements d'effectif",
+    parent: "core-news",
     icon: "🔄"
   },
-  {
-    id: "transactions",
-    label: "Transactions",
-    labelFr: "Transactions",
-    description: "All team roster changes and signings",
-    descriptionFr: "Tous les changements d'effectif et signatures",
-    icon: "📝"
-  },
-  
-  // Health & Injuries
   {
     id: "injuries",
     label: "Injuries & Health Updates",
     labelFr: "Blessures et santé",
     description: "Injury reports, recovery updates, and health status",
-    descriptionFr: "Rapports de blessures, mises à jour de récupération et état de santé",
-    parent: "health",
+    descriptionFr: "Rapports de blessures, mises à jour de récupération",
+    parent: "core-news",
     icon: "🏥"
   },
-  {
-    id: "health",
-    label: "Health",
-    labelFr: "Santé",
-    description: "Player health and medical updates",
-    descriptionFr: "Santé des joueurs et mises à jour médicales",
-    icon: "⚕️"
-  },
-  
-  // Rumors & Reports
   {
     id: "rumors",
     label: "Rumors & Reports",
     labelFr: "Rumeurs et rapports",
-    description: "Unconfirmed reports, speculation, and insider information",
-    descriptionFr: "Rapports non confirmés, spéculations et informations d'initiés",
+    description: "Unconfirmed reports and insider speculation",
+    descriptionFr: "Rapports non confirmés et spéculations",
+    parent: "core-news",
     icon: "👂"
   },
-  
-  // Game Coverage
   {
     id: "game-results",
     label: "Game Results / Recaps",
     labelFr: "Résultats / Résumés",
-    description: "Post-game summaries, final scores, and match reports",
-    descriptionFr: "Résumés après-match, scores finaux et rapports de match",
-    parent: "games",
+    description: "Post-game summaries and final scores",
+    descriptionFr: "Résumés après-match et scores finaux",
+    parent: "core-news",
     icon: "📊"
   },
   {
-    id: "game-previews",
+    id: "previews",
     label: "Previews / Matchups",
-    labelFr: "Aperçus / Affiches",
-    description: "Upcoming game analysis, matchup breakdowns, and predictions",
-    descriptionFr: "Analyse des matchs à venir, décryptage des affiches et prédictions",
-    parent: "games",
+    labelFr: "Aperçus / Affrontements",
+    description: "Upcoming game previews and matchup analysis",
+    descriptionFr: "Aperçus de jeux à venir et analyses d'affrontements",
+    parent: "core-news",
     icon: "🔮"
   },
-  {
-    id: "games",
-    label: "Games",
-    labelFr: "Matchs",
-    description: "Game coverage and match analysis",
-    descriptionFr: "Couverture des matchs et analyses",
-    icon: "🏀"
-  },
-  
-  // Standings & Rankings
   {
     id: "standings",
     label: "Standings / Rankings",
     labelFr: "Classements",
-    description: "League tables, team rankings, and playoff positions",
-    descriptionFr: "Tableaux de classement, positions des équipes et playoffs",
+    description: "League standings and team rankings",
+    descriptionFr: "Classements de ligue et positions des équipes",
+    parent: "core-news",
     icon: "📈"
   },
   {
     id: "power-rankings",
     label: "Power Rankings",
     labelFr: "Classements de puissance",
-    description: "Weekly team performance rankings and analysis",
-    descriptionFr: "Classements hebdomadaires des performances d'équipes",
+    description: "Weekly power rankings and team assessments",
+    descriptionFr: "Classements hebdomadaires et évaluations d'équipes",
+    parent: "core-news",
     icon: "💪"
   },
-  
-  // Press & Quotes
   {
-    id: "press",
+    id: "press-conferences",
     label: "Press Conferences / Quotes",
     labelFr: "Conférences de presse / Citations",
-    description: "Coach and player statements, press conference highlights",
-    descriptionFr: "Déclarations d'entraîneurs et joueurs, moments forts des conférences",
+    description: "Coach and player statements and press conference highlights",
+    descriptionFr: "Déclarations d'entraîneurs et joueurs",
+    parent: "core-news",
     icon: "🎤"
   },
+
+  // ============================================
+  // PLAYER & TEAM FOCUS (Parent)
+  // ============================================
+  {
+    id: "player-team-focus",
+    label: "Player & Team Focus",
+    labelFr: "Focus joueurs et équipes",
+    description: "In-depth player and team features and stories",
+    descriptionFr: "Reportages approfondis sur les joueurs et les équipes",
+    icon: "⭐"
+  },
   
-  // Player Focus
+  // Player & Team Focus Children
   {
     id: "player-spotlight",
-    label: "Player Spotlight",
-    labelFr: "Joueur à l'honneur",
-    description: "Individual player features and performance highlights",
-    descriptionFr: "Reportages individuels et moments forts des performances",
-    parent: "player-focus",
-    icon: "⭐"
+    label: "Player Spotlight / Features",
+    labelFr: "Vedette joueur / Reportages",
+    description: "Featured player stories and spotlights",
+    descriptionFr: "Histoires et reportages sur les joueurs vedettes",
+    parent: "player-team-focus",
+    icon: "🌟"
+  },
+  {
+    id: "team-spotlight",
+    label: "Team Spotlight / Features",
+    labelFr: "Vedette équipe / Reportages",
+    description: "Featured team stories and analysis",
+    descriptionFr: "Histoires et analyses d'équipes vedettes",
+    parent: "player-team-focus",
+    icon: "🏀"
   },
   {
     id: "player-profiles",
     label: "Player Profiles / Bios",
     labelFr: "Profils de joueurs",
-    description: "In-depth player biographies and career stories",
-    descriptionFr: "Biographies détaillées et parcours de carrière",
-    parent: "player-focus",
-    icon: "👤"
+    description: "Detailed player biographies and profiles",
+    descriptionFr: "Biographies et profils détaillés de joueurs",
+    parent: "player-team-focus",
+    icon: "📋"
   },
   {
     id: "rookie-watch",
     label: "Rookie Watch",
     labelFr: "Surveillance des recrues",
-    description: "Rookie performance tracking and development updates",
-    descriptionFr: "Suivi des performances et développement des recrues",
-    parent: "player-focus",
-    icon: "🌟"
+    description: "Rookie performance tracking and updates",
+    descriptionFr: "Suivi des performances des recrues",
+    parent: "player-team-focus",
+    icon: "🆕"
   },
   {
     id: "veteran-stories",
     label: "Veteran Stories",
     labelFr: "Histoires de vétérans",
-    description: "Features on experienced players and their impact",
-    descriptionFr: "Reportages sur les joueurs expérimentés et leur impact",
-    parent: "player-focus",
-    icon: "🏆"
+    description: "Veteran player stories and achievements",
+    descriptionFr: "Histoires et réalisations de joueurs vétérans",
+    parent: "player-team-focus",
+    icon: "🎖️"
   },
   {
-    id: "player-focus",
-    label: "Player Focus",
-    labelFr: "Focus joueurs",
-    description: "Individual player stories and profiles",
-    descriptionFr: "Histoires et profils de joueurs individuels",
-    icon: "👥"
-  },
-  
-  // Team Focus
-  {
-    id: "team-spotlight",
-    label: "Team Spotlight",
-    labelFr: "Équipe à l'honneur",
-    description: "Team-focused features and deep dives",
-    descriptionFr: "Reportages et analyses approfondies sur les équipes",
-    parent: "team-focus",
-    icon: "🔦"
-  },
-  {
-    id: "team-focus",
-    label: "Team Focus",
-    labelFr: "Focus équipes",
-    description: "Team-centered stories and analysis",
-    descriptionFr: "Histoires et analyses centrées sur les équipes",
-    icon: "👕"
-  },
-  
-  // Contracts & Career
-  {
-    id: "contracts",
+    id: "contract-extensions",
     label: "Contract Extensions",
     labelFr: "Extensions de contrat",
-    description: "Contract renewals, extensions, and negotiations",
-    descriptionFr: "Renouvellements, extensions et négociations de contrats",
-    icon: "✍️"
+    description: "Contract extension news and negotiations",
+    descriptionFr: "Nouvelles d'extensions de contrat et négociations",
+    parent: "player-team-focus",
+    icon: "📝"
   },
   {
     id: "retirements",
     label: "Retirements",
     labelFr: "Retraites",
-    description: "Player retirement announcements and farewell tributes",
-    descriptionFr: "Annonces de retraite et hommages d'adieu",
+    description: "Player retirement announcements and tributes",
+    descriptionFr: "Annonces de retraite et hommages",
+    parent: "player-team-focus",
     icon: "👋"
   },
+
+  // ============================================
+  // ANALYSIS & DEEP DIVES (Parent)
+  // ============================================
+  {
+    id: "analysis",
+    label: "Analysis & Deep Dives",
+    labelFr: "Analyses approfondies",
+    description: "Tactical breakdowns, stats, and expert analysis",
+    descriptionFr: "Analyses tactiques, statistiques et analyses d'experts",
+    icon: "🔍"
+  },
   
-  // Analysis & Deep Dives
+  // Analysis Children
   {
     id: "film-breakdown",
     label: "Film Breakdown",
     labelFr: "Analyse vidéo",
-    description: "Detailed video analysis of plays and strategies",
-    descriptionFr: "Analyse vidéo détaillée des actions et stratégies",
+    description: "Detailed game film analysis and breakdowns",
+    descriptionFr: "Analyses détaillées de vidéos de jeu",
     parent: "analysis",
     icon: "🎬"
   },
@@ -220,26 +207,26 @@ export const NEWS_CATEGORIES: NewsCategory[] = [
     id: "tactical-analysis",
     label: "Tactical Analysis",
     labelFr: "Analyse tactique",
-    description: "Strategic breakdowns and coaching decisions",
-    descriptionFr: "Décryptage stratégique et décisions d'entraîneurs",
+    description: "Strategic and tactical game analysis",
+    descriptionFr: "Analyses stratégiques et tactiques",
     parent: "analysis",
-    icon: "📋"
+    icon: "♟️"
   },
   {
     id: "advanced-stats",
     label: "Advanced Stats / Analytics",
     labelFr: "Statistiques avancées",
-    description: "Data-driven analysis and statistical insights",
-    descriptionFr: "Analyse basée sur les données et insights statistiques",
+    description: "Advanced statistics and data analytics",
+    descriptionFr: "Statistiques avancées et analyses de données",
     parent: "analysis",
     icon: "📊"
   },
   {
     id: "playbook",
     label: "Playbook / Strategy",
-    labelFr: "Livre de jeu / Stratégie",
-    description: "Play designs, offensive/defensive schemes",
-    descriptionFr: "Conception de jeux, schémas offensifs/défensifs",
+    labelFr: "Livre de jeux / Stratégie",
+    description: "Play designs, strategy breakdowns, and coaching insights",
+    descriptionFr: "Conceptions de jeux, analyses stratégiques",
     parent: "analysis",
     icon: "📖"
   },
@@ -247,109 +234,135 @@ export const NEWS_CATEGORIES: NewsCategory[] = [
     id: "opinion",
     label: "Opinion / Editorials",
     labelFr: "Opinion / Éditoriaux",
-    description: "Columnist perspectives and editorial commentary",
-    descriptionFr: "Perspectives de chroniqueurs et commentaires éditoriaux",
+    description: "Expert opinions and editorial pieces",
+    descriptionFr: "Opinions d'experts et articles éditoriaux",
     parent: "analysis",
-    icon: "💭"
+    icon: "✍️"
   },
   {
     id: "scouting",
     label: "Scouting Reports",
     labelFr: "Rapports de dépistage",
-    description: "Player evaluations and prospect analysis",
-    descriptionFr: "Évaluations de joueurs et analyses de prospects",
+    description: "Player and team scouting reports",
+    descriptionFr: "Rapports de dépistage de joueurs et d'équipes",
     parent: "analysis",
-    icon: "🔍"
+    icon: "🔎"
   },
+
+  // ============================================
+  // MEDIA & HIGHLIGHTS (Parent)
+  // ============================================
   {
-    id: "analysis",
-    label: "Analysis & Deep Dives",
-    labelFr: "Analyses approfondies",
-    description: "In-depth tactical and statistical analysis",
-    descriptionFr: "Analyses tactiques et statistiques approfondies",
-    icon: "🧠"
+    id: "media-highlights",
+    label: "Media & Highlights",
+    labelFr: "Médias et faits saillants",
+    description: "Videos, highlights, and multimedia content",
+    descriptionFr: "Vidéos, faits saillants et contenu multimédia",
+    icon: "🎥"
   },
   
-  // Media & Highlights
+  // Media & Highlights Children
   {
     id: "highlights",
     label: "Highlights / Top Plays",
-    labelFr: "Moments forts / Meilleurs actions",
-    description: "Best plays, game highlights, and standout moments",
-    descriptionFr: "Meilleures actions, moments forts et performances exceptionnelles",
-    parent: "media",
+    labelFr: "Faits saillants / Meilleurs jeux",
+    description: "Game highlights and top plays",
+    descriptionFr: "Faits saillants de jeux et meilleurs jeux",
+    parent: "media-highlights",
     icon: "⚡"
   },
   {
     id: "signature-plays",
     label: "Dunks / Blocks / Crossovers",
-    labelFr: "Dunks / Contres / Dribbles",
-    description: "Spectacular individual plays and skills",
-    descriptionFr: "Actions individuelles spectaculaires et compétences",
-    parent: "media",
+    labelFr: "Dunks / Blocs / Croisements",
+    description: "Best dunks, blocks, and crossovers",
+    descriptionFr: "Meilleurs dunks, blocs et croisements",
+    parent: "media-highlights",
     icon: "💥"
+  },
+  {
+    id: "full-game-highlights",
+    label: "Full Game Highlights",
+    labelFr: "Faits saillants complets",
+    description: "Complete game highlight packages",
+    descriptionFr: "Forfaits complets de faits saillants",
+    parent: "media-highlights",
+    icon: "📹"
   },
   {
     id: "interviews",
     label: "Interviews",
     labelFr: "Entrevues",
-    description: "One-on-one interviews with players and coaches",
-    descriptionFr: "Entrevues individuelles avec joueurs et entraîneurs",
-    parent: "media",
+    description: "Player and coach interviews",
+    descriptionFr: "Entrevues de joueurs et entraîneurs",
+    parent: "media-highlights",
     icon: "🎙️"
+  },
+  {
+    id: "micd-up",
+    label: "Mic'd Up Moments",
+    labelFr: "Moments avec micro",
+    description: "Behind-the-scenes audio from players",
+    descriptionFr: "Audio des coulisses avec les joueurs",
+    parent: "media-highlights",
+    icon: "🔊"
   },
   {
     id: "behind-scenes",
     label: "Behind the Scenes",
     labelFr: "Dans les coulisses",
-    description: "Exclusive access to team facilities and practices",
-    descriptionFr: "Accès exclusif aux installations et entraînements",
-    parent: "media",
-    icon: "🎥"
+    description: "Exclusive behind-the-scenes content",
+    descriptionFr: "Contenu exclusif des coulisses",
+    parent: "media-highlights",
+    icon: "🎬"
   },
+
+  // ============================================
+  // LEAGUE & BUSINESS (Parent)
+  // ============================================
   {
-    id: "media",
-    label: "Media & Highlights",
-    labelFr: "Médias et moments forts",
-    description: "Video content and visual features",
-    descriptionFr: "Contenu vidéo et reportages visuels",
-    icon: "📹"
+    id: "league-business",
+    label: "League & Business",
+    labelFr: "Ligue et affaires",
+    description: "League operations, rules, and business news",
+    descriptionFr: "Opérations de ligue, règles et nouvelles d'affaires",
+    icon: "🏛️"
   },
   
-  // League & Business
+  // League & Business Children
   {
-    id: "league-news",
+    id: "league-announcements",
     label: "League Announcements",
-    labelFr: "Annonces de la ligue",
-    description: "Official league statements and policy changes",
-    descriptionFr: "Déclarations officielles et changements de politique",
+    labelFr: "Annonces de ligue",
+    description: "Official league announcements and updates",
+    descriptionFr: "Annonces officielles de la ligue",
     parent: "league-business",
     icon: "📢"
   },
   {
-    id: "rules",
+    id: "rules-changes",
     label: "CBA / Rules Changes",
-    labelFr: "Convention / Changements de règles",
-    description: "Collective bargaining and rule modifications",
-    descriptionFr: "Négociation collective et modifications des règles",
+    labelFr: "CBA / Changements de règles",
+    description: "Collective bargaining and rule changes",
+    descriptionFr: "Négociations collectives et changements de règles",
     parent: "league-business",
-    icon: "⚖️"
+    icon: "📜"
   },
   {
     id: "salary-cap",
     label: "Salary Cap News",
     labelFr: "Nouvelles du plafond salarial",
-    description: "Salary cap updates and financial implications",
-    descriptionFr: "Mises à jour du plafond salarial et implications financières",
+    description: "Salary cap updates and financial news",
+    descriptionFr: "Mises à jour du plafond salarial",
     parent: "league-business",
     icon: "💰"
   },
   {
     id: "front-office",
-    label: "Ownership / Front Office",
-    labelFr: "Propriété / Bureau",
-    description: "Management changes and organizational updates",
-    descriptionFr: "Changements de direction et mises à jour organisationnelles",
+    label: "Ownership / Front Office Moves",
+    labelFr: "Propriété / Mouvements administratifs",
+    description: "Front office changes and ownership news",
+    descriptionFr: "Changements administratifs et nouvelles de propriété",
     parent: "league-business",
     icon: "🏢"
   },
@@ -357,267 +370,301 @@ export const NEWS_CATEGORIES: NewsCategory[] = [
     id: "coaching-changes",
     label: "Coaching Changes",
     labelFr: "Changements d'entraîneurs",
-    description: "Coaching hires, fires, and staff movements",
-    descriptionFr: "Embauches, licenciements et mouvements du personnel",
+    description: "Coaching hires, fires, and changes",
+    descriptionFr: "Embauches, licenciements et changements d'entraîneurs",
     parent: "league-business",
     icon: "👔"
   },
   {
-    id: "league-business",
-    label: "League & Business",
-    labelFr: "Ligue et affaires",
-    description: "League operations and business matters",
-    descriptionFr: "Opérations de la ligue et questions commerciales",
-    icon: "💼"
+    id: "referee-reports",
+    label: "Referee Reports",
+    labelFr: "Rapports d'arbitrage",
+    description: "Officiating reports and referee news",
+    descriptionFr: "Rapports d'arbitrage et nouvelles des arbitres",
+    parent: "league-business",
+    icon: "👨‍⚖️"
+  },
+
+  // ============================================
+  // FAN ENGAGEMENT (Parent)
+  // ============================================
+  {
+    id: "fan-engagement",
+    label: "Fan Engagement",
+    labelFr: "Engagement des fans",
+    description: "Fan content, polls, fantasy, and community",
+    descriptionFr: "Contenu pour fans, sondages, fantasy et communauté",
+    icon: "🙌"
   },
   
-  // Fan Engagement
+  // Fan Engagement Children
   {
     id: "fan-zone",
     label: "Fan Zone",
     labelFr: "Zone des fans",
-    description: "Fan perspectives, reactions, and community voices",
-    descriptionFr: "Perspectives des fans, réactions et voix de la communauté",
+    description: "Fan content, reactions, and community",
+    descriptionFr: "Contenu des fans, réactions et communauté",
     parent: "fan-engagement",
-    icon: "🎭"
+    icon: "🎉"
   },
   {
-    id: "polls",
+    id: "polls-debates",
     label: "Polls & Debates",
     labelFr: "Sondages et débats",
-    description: "Fan polls, debates, and interactive content",
-    descriptionFr: "Sondages, débats et contenu interactif",
+    description: "Fan polls, debates, and discussions",
+    descriptionFr: "Sondages, débats et discussions des fans",
     parent: "fan-engagement",
     icon: "🗳️"
   },
   {
     id: "social-buzz",
-    label: "Social Media Buzz",
-    labelFr: "Buzz sur les réseaux sociaux",
-    description: "Trending topics and viral moments",
-    descriptionFr: "Sujets tendance et moments viraux",
+    label: "Memes & Social Media Buzz",
+    labelFr: "Mèmes et buzz social",
+    description: "Trending memes and social media moments",
+    descriptionFr: "Mèmes tendance et moments des médias sociaux",
     parent: "fan-engagement",
-    icon: "📱"
+    icon: "😂"
+  },
+  {
+    id: "community",
+    label: "Community Stories",
+    labelFr: "Histoires de communauté",
+    description: "Community events and local stories",
+    descriptionFr: "Événements communautaires et histoires locales",
+    parent: "fan-engagement",
+    icon: "🤝"
   },
   {
     id: "fantasy",
     label: "Fantasy Basketball",
     labelFr: "Basketball fantastique",
-    description: "Fantasy tips, rankings, and player outlooks",
-    descriptionFr: "Conseils fantasy, classements et perspectives de joueurs",
+    description: "Fantasy basketball tips and updates",
+    descriptionFr: "Conseils et mises à jour de basketball fantastique",
     parent: "fan-engagement",
     icon: "🎮"
   },
   {
     id: "betting",
-    label: "Betting / Odds",
-    labelFr: "Paris / Cotes",
-    description: "Betting lines, odds analysis, and predictions",
-    descriptionFr: "Lignes de paris, analyses des cotes et prédictions",
+    label: "Betting / Odds / Predictions",
+    labelFr: "Paris / Cotes / Prédictions",
+    description: "Betting odds, predictions, and analysis",
+    descriptionFr: "Cotes de paris, prédictions et analyses",
     parent: "fan-engagement",
     icon: "🎲"
   },
+
+  // ============================================
+  // HISTORY & CULTURE (Parent)
+  // ============================================
   {
-    id: "fan-engagement",
-    label: "Fan Engagement",
-    labelFr: "Engagement des fans",
-    description: "Interactive fan content and community features",
-    descriptionFr: "Contenu interactif et fonctionnalités communautaires",
-    icon: "🙌"
+    id: "history-culture",
+    label: "History & Culture",
+    labelFr: "Histoire et culture",
+    description: "Basketball history, legends, and cultural moments",
+    descriptionFr: "Histoire du basketball, légendes et moments culturels",
+    icon: "📚"
   },
   
-  // History & Culture
+  // History & Culture Children
   {
     id: "throwback",
     label: "Throwback / History",
     labelFr: "Retour en arrière / Histoire",
-    description: "Historical moments and nostalgic content",
-    descriptionFr: "Moments historiques et contenu nostalgique",
+    description: "Historical moments and throwback content",
+    descriptionFr: "Moments historiques et contenu rétro",
     parent: "history-culture",
-    icon: "⏪"
+    icon: "⏮️"
   },
   {
     id: "legends",
     label: "Legends & Hall of Fame",
     labelFr: "Légendes et temple de la renommée",
-    description: "Tributes to basketball greats and hall of famers",
-    descriptionFr: "Hommages aux grands du basketball et membres du temple",
+    description: "Legendary players and Hall of Fame inductees",
+    descriptionFr: "Joueurs légendaires et intronisés au temple",
     parent: "history-culture",
-    icon: "🏅"
+    icon: "🏆"
   },
   {
     id: "anniversaries",
     label: "Anniversaries",
     labelFr: "Anniversaires",
-    description: "Commemorating historic dates and milestones",
-    descriptionFr: "Commémoration de dates historiques et jalons",
+    description: "Historical anniversaries and milestones",
+    descriptionFr: "Anniversaires historiques et jalons",
     parent: "history-culture",
     icon: "🎂"
   },
   {
-    id: "culture",
+    id: "classic-games",
+    label: "Classic Games",
+    labelFr: "Jeux classiques",
+    description: "Iconic and memorable games from the past",
+    descriptionFr: "Jeux emblématiques et mémorables du passé",
+    parent: "history-culture",
+    icon: "📼"
+  },
+  {
+    id: "basketball-culture",
     label: "Basketball Culture",
     labelFr: "Culture du basketball",
-    description: "Fashion, music, and cultural impact of basketball",
-    descriptionFr: "Mode, musique et impact culturel du basketball",
+    description: "Cultural impact and lifestyle content",
+    descriptionFr: "Impact culturel et contenu lifestyle",
     parent: "history-culture",
     icon: "🎨"
   },
   {
     id: "sneakers",
     label: "Sneakers / Gear",
-    labelFr: "Baskets / Équipement",
-    description: "Sneaker releases, equipment reviews, and gear news",
-    descriptionFr: "Sorties de baskets, critiques d'équipement et nouvelles",
+    labelFr: "Chaussures / Équipement",
+    description: "Sneaker releases, gear, and equipment news",
+    descriptionFr: "Sorties de chaussures, équipement et matériel",
     parent: "history-culture",
     icon: "👟"
   },
+
+  // ============================================
+  // YOUTH & DEVELOPMENT (Parent)
+  // ============================================
   {
-    id: "history-culture",
-    label: "History & Culture",
-    labelFr: "Histoire et culture",
-    description: "Basketball heritage and cultural impact",
-    descriptionFr: "Patrimoine et impact culturel du basketball",
-    icon: "📜"
+    id: "youth-development",
+    label: "Youth & Development",
+    labelFr: "Jeunesse et développement",
+    description: "Youth basketball, prospects, and development leagues",
+    descriptionFr: "Basketball jeunesse, espoirs et ligues de développement",
+    icon: "🌱"
   },
   
-  // Youth & Development
+  // Youth & Development Children
   {
     id: "high-school",
     label: "High School Basketball",
-    labelFr: "Basketball lycéen",
-    description: "High school tournaments and top prospects",
-    descriptionFr: "Tournois lycéens et meilleurs prospects",
+    labelFr: "Basketball secondaire",
+    description: "High school basketball coverage",
+    descriptionFr: "Couverture du basketball secondaire",
     parent: "youth-development",
     icon: "🎓"
+  },
+  {
+    id: "aau",
+    label: "AAU / Travel Ball",
+    labelFr: "AAU / Ligues voyages",
+    description: "AAU and travel basketball coverage",
+    descriptionFr: "Couverture AAU et basketball de voyage",
+    parent: "youth-development",
+    icon: "✈️"
   },
   {
     id: "college",
     label: "College Basketball",
     labelFr: "Basketball universitaire",
-    description: "College game coverage and NCAA updates",
-    descriptionFr: "Couverture universitaire et mises à jour NCAA",
+    description: "College basketball news and updates",
+    descriptionFr: "Nouvelles et mises à jour du basketball universitaire",
     parent: "youth-development",
-    icon: "🏫"
+    icon: "🎓"
   },
   {
-    id: "draft",
+    id: "draft-prospects",
     label: "Draft Prospects",
-    labelFr: "Prospects du repêchage",
-    description: "Draft analysis, mock drafts, and prospect rankings",
-    descriptionFr: "Analyse du repêchage, simulations et classements",
+    labelFr: "Espoirs du repêchage",
+    description: "Draft prospect evaluations and rankings",
+    descriptionFr: "Évaluations et classements des espoirs",
     parent: "youth-development",
-    icon: "📝"
+    icon: "🔝"
   },
   {
-    id: "international",
+    id: "international-prospects",
     label: "International Prospects",
-    labelFr: "Prospects internationaux",
-    description: "International player scouting and global talent",
-    descriptionFr: "Dépistage international et talents mondiaux",
+    labelFr: "Espoirs internationaux",
+    description: "International player prospects and scouting",
+    descriptionFr: "Espoirs internationaux et dépistage",
     parent: "youth-development",
     icon: "🌍"
   },
   {
-    id: "development",
-    label: "G League / Development",
-    labelFr: "G League / Développement",
-    description: "Development league updates and player progression",
-    descriptionFr: "Mises à jour des ligues de développement et progression",
+    id: "development-leagues",
+    label: "Development Leagues",
+    labelFr: "Ligues de développement",
+    description: "G League and other development league coverage",
+    descriptionFr: "Couverture de G League et autres ligues",
     parent: "youth-development",
-    icon: "📈"
+    icon: "🏀"
   },
+
+  // ============================================
+  // EVENTS & SPECIAL COVERAGE (Parent)
+  // ============================================
   {
-    id: "youth-development",
-    label: "Youth & Development",
-    labelFr: "Jeunesse et développement",
-    description: "Amateur and development basketball",
-    descriptionFr: "Basketball amateur et développement",
-    icon: "🌱"
+    id: "events",
+    label: "Events & Special Coverage",
+    labelFr: "Événements et couverture spéciale",
+    description: "Major events and special coverage throughout the season",
+    descriptionFr: "Événements majeurs et couverture spéciale de la saison",
+    icon: "🎊"
   },
   
-  // Events & Special Coverage
+  // Events Children
   {
     id: "all-star",
     label: "All-Star Weekend",
-    labelFr: "Week-end des étoiles",
-    description: "All-Star game coverage and festivities",
-    descriptionFr: "Couverture du match des étoiles et festivités",
+    labelFr: "Fin de semaine des étoiles",
+    description: "All-Star Weekend coverage and highlights",
+    descriptionFr: "Couverture de la fin de semaine des étoiles",
     parent: "events",
     icon: "⭐"
   },
   {
     id: "playoffs",
     label: "Playoffs",
-    labelFr: "Séries éliminatoires",
-    description: "Playoff coverage, brackets, and predictions",
-    descriptionFr: "Couverture des séries, tableaux et prédictions",
+    labelFr: "Éliminatoires",
+    description: "Playoff coverage, previews, and analysis",
+    descriptionFr: "Couverture, aperçus et analyses des éliminatoires",
     parent: "events",
-    icon: "🏆"
+    icon: "🏀"
   },
   {
     id: "finals",
     label: "Finals",
     labelFr: "Finales",
-    description: "Championship series coverage and analysis",
-    descriptionFr: "Couverture et analyse de la série de championnats",
+    description: "Championship finals coverage",
+    descriptionFr: "Couverture des finales de championnat",
     parent: "events",
-    icon: "👑"
+    icon: "🏆"
   },
   {
     id: "draft-night",
     label: "Draft Night",
     labelFr: "Soirée du repêchage",
-    description: "Live draft coverage and pick analysis",
-    descriptionFr: "Couverture en direct et analyse des choix",
+    description: "Draft night coverage and analysis",
+    descriptionFr: "Couverture et analyse de la soirée du repêchage",
     parent: "events",
-    icon: "🎯"
+    icon: "📋"
+  },
+  {
+    id: "summer-league",
+    label: "Summer League",
+    labelFr: "Ligue d'été",
+    description: "Summer league games and player development",
+    descriptionFr: "Jeux de ligue d'été et développement des joueurs",
+    parent: "events",
+    icon: "☀️"
   },
   {
     id: "training-camp",
     label: "Training Camp",
     labelFr: "Camp d'entraînement",
-    description: "Preseason camp reports and roster battles",
-    descriptionFr: "Rapports de camp et batailles pour l'effectif",
+    description: "Training camp updates and roster battles",
+    descriptionFr: "Mises à jour du camp et batailles de roster",
     parent: "events",
     icon: "🏋️"
   },
   {
-    id: "events",
-    label: "Events & Special Coverage",
-    labelFr: "Événements et couverture spéciale",
-    description: "Major basketball events and tournaments",
-    descriptionFr: "Événements majeurs et tournois de basketball",
-    icon: "🎪"
-  },
-  
-  // Miscellaneous
-  {
-    id: "lifestyle",
-    label: "Lifestyle",
-    labelFr: "Style de vie",
-    description: "Off-court lives, hobbies, and personal interests",
-    descriptionFr: "Vie hors terrain, loisirs et intérêts personnels",
-    parent: "misc",
-    icon: "🌟"
-  },
-  {
-    id: "charity",
-    label: "Charity / Community",
-    labelFr: "Charité / Communauté",
-    description: "Community outreach and charitable activities",
-    descriptionFr: "Sensibilisation communautaire et activités caritatives",
-    parent: "misc",
-    icon: "❤️"
-  },
-  {
-    id: "misc",
-    label: "Miscellaneous",
-    labelFr: "Divers",
-    description: "Other basketball-related content",
-    descriptionFr: "Autre contenu lié au basketball",
-    icon: "📦"
-  },
+    id: "media-day",
+    label: "Media Day",
+    labelFr: "Journée médias",
+    description: "Media day coverage and team previews",
+    descriptionFr: "Couverture de la journée médias et aperçus d'équipes",
+    parent: "events",
+    icon: "📸"
+  }
 ];
 
 // Helper functions
@@ -636,8 +683,9 @@ export function getCategoryById(id: string): NewsCategory | undefined {
 export function searchCategories(query: string, language: 'en' | 'fr' = 'en'): NewsCategory[] {
   const lowerQuery = query.toLowerCase();
   return NEWS_CATEGORIES.filter(cat => {
-    const label = (language === 'fr' ? cat.labelFr : cat.label).toLowerCase();
-    const description = (language === 'fr' ? cat.descriptionFr : cat.description).toLowerCase();
-    return label.includes(lowerQuery) || description.includes(lowerQuery);
+    const label = language === 'fr' ? cat.labelFr : cat.label;
+    const description = language === 'fr' ? cat.descriptionFr : cat.description;
+    return label.toLowerCase().includes(lowerQuery) || 
+           description.toLowerCase().includes(lowerQuery);
   });
 }

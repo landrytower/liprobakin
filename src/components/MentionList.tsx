@@ -10,11 +10,20 @@ interface Player {
   lastName: string;
   teamName: string;
   number: number | null;
+  type: 'player';
 }
 
+interface Team {
+  id: string;
+  name: string;
+  type: 'team';
+}
+
+type MentionItem = Player | Team;
+
 interface MentionListProps {
-  items: Player[];
-  command: (item: { id: string; label: string }) => void;
+  items: MentionItem[];
+  command: (item: { id: string; label: string; type: 'player' | 'team' }) => void;
 }
 
 const MentionList = forwardRef((props: MentionListProps, ref) => {
@@ -23,7 +32,10 @@ const MentionList = forwardRef((props: MentionListProps, ref) => {
   const selectItem = (index: number) => {
     const item = props.items[index];
     if (item) {
-      props.command({ id: item.id, label: `${item.firstName} ${item.lastName}` });
+      const label = item.type === 'player' 
+        ? `${item.firstName} ${item.lastName}`
+        : item.name;
+      props.command({ id: item.id, label, type: item.type });
     }
   };
 
@@ -72,13 +84,21 @@ const MentionList = forwardRef((props: MentionListProps, ref) => {
             onClick={() => selectItem(index)}
             type="button"
           >
-            {item.firstName} {item.lastName}
-            {item.number && ` #${item.number}`}
-            <span className="team-name"> - {item.teamName}</span>
+            {item.type === 'player' ? (
+              <>
+                {item.firstName} {item.lastName}
+                {item.number && ` #${item.number}`}
+                <span className="team-name"> - {item.teamName}</span>
+              </>
+            ) : (
+              <>
+                <span className="font-semibold">🏀 {item.name}</span>
+              </>
+            )}
           </button>
         ))
       ) : (
-        <div className="mention-dropdown-item empty">Aucun joueur trouvé</div>
+        <div className="mention-dropdown-item empty">Aucun résultat trouvé</div>
       )}
     </div>
   );

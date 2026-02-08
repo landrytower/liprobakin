@@ -32,9 +32,14 @@ interface PlayerProfilePopupProps {
 export default function PlayerProfilePopup({ userProfile, onClose, language }: PlayerProfilePopupProps) {
   const [stats, setStats] = useState<PlayerStats | null>(null);
   const [nextGame, setNextGame] = useState<NextGame | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [statsLoading, setStatsLoading] = useState(true);
   const [isClosing, setIsClosing] = useState(false);
-  const [playerData, setPlayerData] = useState<{ name: string; number: string; headshot: string; position: string } | null>(null);
+  const [playerData, setPlayerData] = useState<{ name: string; number: string; headshot: string; position: string }>({
+    name: userProfile.linkedPlayerName || `${userProfile.firstName} ${userProfile.lastName}`,
+    number: userProfile.playerNumber || "",
+    headshot: "",
+    position: userProfile.position || "Player",
+  });
 
   const fullName = playerData?.name || userProfile.linkedPlayerName || `${userProfile.firstName} ${userProfile.lastName}`;
   const firstNameOnly = (playerData?.name || userProfile.linkedPlayerName || userProfile.firstName || "").split(" ")[0];
@@ -42,63 +47,33 @@ export default function PlayerProfilePopup({ userProfile, onClose, language }: P
   useEffect(() => {
     const fetchPlayerData = async () => {
       try {
-        console.log("🔍 PlayerProfilePopup Debug:", {
-          linkedPlayerId: userProfile.linkedPlayerId,
-          linkedPlayerName: userProfile.linkedPlayerName,
-          teamId: userProfile.teamId,
-          teamName: userProfile.teamName,
-          playerNumber: userProfile.playerNumber
-        });
-
-        // First priority: Use linkedPlayerName if available (this is set during verification)
-        if (userProfile.linkedPlayerName) {
-          console.log("✅ Using linkedPlayerName:", userProfile.linkedPlayerName);
-          setPlayerData({
-            name: userProfile.linkedPlayerName,
-            number: userProfile.playerNumber || "",
-            headshot: "",
-            position: userProfile.position || "Player",
-          });
-
-          // Try to fetch additional data like headshot from roster if we have teamId
-          if (userProfile.linkedPlayerId && userProfile.teamId) {
-            try {
-              const rosterRef = collection(firebaseDB, "teams", userProfile.teamId, "roster");
-              const rosterSnapshot = await getDocs(rosterRef);
-              
-              const matchingPlayer = rosterSnapshot.docs.find(doc => doc.id === userProfile.linkedPlayerId);
-              
-              if (matchingPlayer) {
-                const data = matchingPlayer.data();
-                console.log("✅ Found roster data:", data);
-                setPlayerData(prev => ({
-                  ...prev!,
-                  headshot: data.headshot || prev!.headshot,
-                  position: data.position || prev!.position,
-                }));
-              } else {
-                console.log("⚠️ No matching roster player found for ID:", userProfile.linkedPlayerId);
-              }
-            } catch (error) {
-              console.error("Error fetching roster data:", error);
+        // Fetch additional headshot data in background (non-blocking)
+        if (userProfile.linkedPlayerId && userProfile.teamId) {
+          try {
+            const rosterRef = collection(firebaseDB, "teams", userProfile.teamId, "roster");
+            const rosterSnapshot = await getDocs(rosterRef);
+            
+            const matchingPlayer = rosterSnapshot.docs.find(doc => doc.id === userProfile.linkedPlayerId);
+            
+            if (matchingPlayer) {
+              const data = matchingPlayer.data();
+              setPlayerData(prev => ({
+                ...prev,
+                headshot: data.headshot || prev.headshot,
+                position: data.position || prev.position,
+              }));
             }
+          } catch (error) {
+            console.error("Error fetching roster data:", error);
           }
-        } else {
-          console.log("❌ No linkedPlayerName found, falling back to registration name");
-          setPlayerData({
-            name: `${userProfile.firstName} ${userProfile.lastName}`,
-            number: userProfile.playerNumber || "",
-            headshot: "",
-            position: userProfile.position || "Player",
-          });
         }
 
-        // Fetch player stats using the linked player's number
+        // Fetch player stats using the linked player's number (limit to 20 games for speed)
         const gamesRef = collection(firebaseDB, "games");
         const completedGamesQuery = query(
           gamesRef,
           orderBy("date", "desc"),
-          limit(50)
+          limit(20)
         );
         
         const gamesSnapshot = await getDocs(completedGamesQuery);
@@ -144,11 +119,11 @@ export default function PlayerProfilePopup({ userProfile, onClose, language }: P
           });
         }
 
-        // Fetch next game
+        // Fetch next game (limit to 10 for speed)
         const upcomingGamesQuery = query(
           gamesRef,
           orderBy("date", "asc"),
-          limit(50)
+          limit(10)
         );
 
         const upcomingSnapshot = await getDocs(upcomingGamesQuery);
@@ -180,14 +155,14 @@ export default function PlayerProfilePopup({ userProfile, onClose, language }: P
       } catch (error) {
         console.error("Error fetching player data:", error);
       } finally {
-        setLoading(false);
+        setStatsLoading(false);
       }
     };
 
     if (userProfile.role === "player" && userProfile.teamName) {
       fetchPlayerData();
     } else {
-      setLoading(false);
+      setStatsLoading(false);
     }
   }, [userProfile]);
 
@@ -449,9 +424,9 @@ export default function PlayerProfilePopup({ userProfile, onClose, language }: P
           </div>
         </div>
 
-        {loading ? (
+        {statsLoading ? (
           <div className="px-6 pb-6 flex justify-center">
-            <div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full"></div>
+            <div className="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full"></div>
           </div>
         ) : (
           <>

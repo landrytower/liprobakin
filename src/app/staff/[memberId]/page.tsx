@@ -218,20 +218,20 @@ export default function StaffDetailPage() {
 
       {/* Navigation */}
       <nav className="sticky top-0 z-50 border-b border-white/5 bg-black/60 backdrop-blur-xl">
-        <div className="mx-auto max-w-6xl px-4 py-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between">
+        <div className="mx-auto max-w-6xl px-3 py-3 sm:px-6 sm:py-4 lg:px-8">
+          <div className="flex items-center justify-between gap-2">
             <button
               onClick={() => router.push("/")}
-              className="group flex items-center gap-3 text-slate-400 hover:text-white transition-colors"
+              className="group flex items-center gap-2 sm:gap-3 text-slate-400 hover:text-white transition-colors"
             >
-              <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 group-hover:border-white/20 group-hover:bg-white/10 transition-all">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 group-hover:border-white/20 group-hover:bg-white/10 transition-all">
+                <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
               </div>
-              <span className="font-medium">{t.backToHome}</span>
+              <span className="hidden sm:inline font-medium">{t.backToHome}</span>
             </button>
-            <div className="text-sm text-slate-500 uppercase tracking-widest">{t.leagueStaff}</div>
+            <div className="text-xs sm:text-sm text-slate-500 uppercase tracking-widest truncate">{t.leagueStaff}</div>
           </div>
         </div>
       </nav>

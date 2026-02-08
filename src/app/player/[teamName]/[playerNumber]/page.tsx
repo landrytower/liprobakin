@@ -1,6 +1,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { collection, getDocs, query, where } from "firebase/firestore";
@@ -172,6 +173,7 @@ export default function PlayerProfilePage() {
   const [loading, setLoading] = useState(true);
   const [rankings, setRankings] = useState({ pts: 0, reb: 0, stl: 0, blk: 0 });
   const [gameLogs, setGameLogs] = useState<GameLog[]>([]);
+  const [teamPhoto, setTeamPhoto] = useState<string | null>(null);
   
   // Check if the logged-in user is viewing their own profile
   const isOwnProfile = user && userProfile && userProfile.teamName === teamName && userProfile.playerNumber?.toString() === playerNumber;
@@ -212,6 +214,12 @@ export default function PlayerProfilePage() {
         if (!targetTeamDoc) {
           setLoading(false);
           return;
+        }
+        
+        // Extract team photo URL if available
+        const teamData = targetTeamDoc.data();
+        if (teamData.teamPhoto) {
+          setTeamPhoto(teamData.teamPhoto);
         }
         
         // Fetch only the target team's roster
@@ -351,7 +359,7 @@ export default function PlayerProfilePage() {
       <nav className="border-b border-white/10 bg-black/40 backdrop-blur-xl">
         <div className="mx-auto max-w-7xl px-3 py-3 sm:px-6 sm:py-4 lg:px-8">
           <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 sm:gap-3">
+            <Link href="/" className="flex items-center gap-2 sm:gap-3 hover:opacity-80 transition-opacity cursor-pointer">
               <Image
                 src="/logos/liprobakin.png"
                 alt="Liprobakin"
@@ -360,7 +368,7 @@ export default function PlayerProfilePage() {
                 className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg"
               />
               <span className="hidden sm:inline text-lg sm:text-2xl font-bold text-white">LIPROBAKIN</span>
-            </div>
+            </Link>
             <div className="flex items-center gap-1.5 sm:gap-3">
               <button
                 onClick={() => router.push("/")}
@@ -388,8 +396,21 @@ export default function PlayerProfilePage() {
 
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Player Hero Section */}
-        <div className="mb-6 overflow-hidden rounded-3xl border border-white/10 bg-white/5 backdrop-blur-2xl shadow-2xl sm:mb-8">
-          <div className="p-6 sm:p-8 lg:p-12">
+        <div className="relative mb-6 overflow-hidden rounded-3xl border border-white/10 bg-white/5 backdrop-blur-2xl shadow-2xl sm:mb-8">
+          {/* Team Photo Background */}
+          {teamPhoto && (
+            <div className="absolute inset-0 z-0">
+              <Image
+                src={teamPhoto}
+                alt="Team Photo"
+                fill
+                className="object-cover opacity-20"
+                unoptimized
+              />
+              <div className="absolute inset-0 bg-gradient-to-r from-slate-950/90 via-slate-900/80 to-slate-950/90" />
+            </div>
+          )}
+          <div className="relative z-10 p-6 sm:p-8 lg:p-12">
             <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-start sm:gap-8">
               {/* Player Photo */}
               {player.headshot ? (

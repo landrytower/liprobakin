@@ -89,6 +89,7 @@ type NewsFormState = {
   category: string;
   headline: string;
   imageUrl?: string;
+  imagePosition?: number;
   author?: string;
 };
 
@@ -382,6 +383,7 @@ const initialFormState: NewsFormState = {
   category: "",
   headline: "",
   imageUrl: "",
+  imagePosition: 50,
   author: "",
 };
 
@@ -686,6 +688,8 @@ export default function AdminPage() {
   const [news, setNews] = useState<AdminNewsArticle[]>([]);
   const [form, setForm] = useState<NewsFormState>(initialFormState);
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
+  const [showStoryImagePositionModal, setShowStoryImagePositionModal] = useState(false);
+  const [storyImagePositionY, setStoryImagePositionY] = useState(50);
   const [imagePreview, setImagePreview] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
   const [status, setStatus] = useState<StatusCallout | null>(null);
@@ -833,6 +837,15 @@ export default function AdminPage() {
   const [leagueGestionStatus, setLeagueGestionStatus] = useState<StatusCallout | null>(null);
   const [resetSubmitting, setResetSubmitting] = useState(false);
   const [resetStatus, setResetStatus] = useState<StatusCallout | null>(null);
+  // Stats Management Section
+  const [statsManagementOpen, setStatsManagementOpen] = useState(false);
+  const [statsManagementTab, setStatsManagementTab] = useState<'all' | 'team' | 'player' | 'modify'>('all');
+  const [statsSelectedTeamId, setStatsSelectedTeamId] = useState<string>('');
+  const [statsSelectedPlayerId, setStatsSelectedPlayerId] = useState<string>('');
+  const [statsTeamRoster, setStatsTeamRoster] = useState<AdminRosterPlayer[]>([]);
+  const [statsModifyForm, setStatsModifyForm] = useState({ pts: '', reb: '', ast: '', stl: '', blk: '', gamesPlayed: '' });
+  const [statsMgmtStatus, setStatsMgmtStatus] = useState<StatusCallout | null>(null);
+  const [statsMgmtSubmitting, setStatsMgmtSubmitting] = useState(false);
   const newsPreviewBlobRef = useRef<string | null>(null);
   const teamLogoPreviewBlobRef = useRef<string | null>(null);
   const playerHeadshotPreviewBlobRef = useRef<string | null>(null);
@@ -960,6 +973,25 @@ export default function AdminPage() {
     resetAllStatsUpper: language === 'fr' ? '⚠️ RÉINITIALISER TOUTES LES STATS' : '⚠️ RESET ALL STATS',
     men: language === 'fr' ? 'HOMMES' : 'MEN',
     women: language === 'fr' ? 'FEMMES' : 'WOMEN',
+    // Stats Management translations
+    statsManagement: language === 'fr' ? 'Gestion des Statistiques' : 'Stats Management',
+    statsManagementDesc: language === 'fr' ? 'Réinitialisez ou modifiez les statistiques des joueurs et des équipes pour la nouvelle saison.' : 'Reset or modify player and team statistics for the new season.',
+    resetAllPlayersStats: language === 'fr' ? 'Réinitialiser toutes les stats' : 'Reset All Stats',
+    resetTeamStats: language === 'fr' ? 'Réinitialiser une équipe' : 'Reset Team Stats',
+    resetPlayerStats: language === 'fr' ? 'Réinitialiser un joueur' : 'Reset Player Stats',
+    modifyPlayerStats: language === 'fr' ? 'Modifier les stats' : 'Modify Stats',
+    selectTeam: language === 'fr' ? 'Sélectionner une équipe' : 'Select Team',
+    selectPlayer: language === 'fr' ? 'Sélectionner un joueur' : 'Select Player',
+    points: language === 'fr' ? 'Points' : 'Points',
+    rebounds: language === 'fr' ? 'Rebonds' : 'Rebounds',
+    assists: language === 'fr' ? 'Passes' : 'Assists',
+    steals: language === 'fr' ? 'Interceptions' : 'Steals',
+    blocks: language === 'fr' ? 'Contres' : 'Blocks',
+    gamesPlayed: language === 'fr' ? 'Matchs joués' : 'Games Played',
+    saveChanges: language === 'fr' ? 'Enregistrer' : 'Save Changes',
+    resetConfirmAll: language === 'fr' ? 'Voulez-vous vraiment réinitialiser TOUTES les statistiques de la ligue? Cette action supprimera aussi tous les matchs.' : 'Are you sure you want to reset ALL league statistics? This will also delete all games.',
+    resetConfirmTeam: language === 'fr' ? 'Voulez-vous vraiment réinitialiser les statistiques de cette équipe?' : 'Are you sure you want to reset this team\'s stats?',
+    resetConfirmPlayer: language === 'fr' ? 'Voulez-vous vraiment réinitialiser les statistiques de ce joueur?' : 'Are you sure you want to reset this player\'s stats?',
   };
 
   useEffect(() => {
@@ -1623,6 +1655,7 @@ export default function AdminPage() {
   };
 
   const handleEdit = (article: AdminNewsArticle) => {
+    const imagePos = (article as any).imagePosition ?? 50;
     setForm({
       id: article.id,
       title: article.title,
@@ -1630,8 +1663,10 @@ export default function AdminPage() {
       category: article.category,
       headline: article.headline,
       imageUrl: article.imageUrl ?? "",
+      imagePosition: imagePos,
       author: article.author ?? "",
     });
+    setStoryImagePositionY(imagePos);
     setSelectedImageFile(null);
     updateNewsPreview(article.imageUrl ?? "");
     setStatus({ type: "info", message: "Loaded the story for editing." });
@@ -1674,6 +1709,8 @@ export default function AdminPage() {
     if (file) {
       const previewUrl = URL.createObjectURL(file);
       updateNewsPreview(previewUrl);
+      // Open position modal when a new image is selected
+      setTimeout(() => setShowStoryImagePositionModal(true), 100);
     } else {
       updateNewsPreview(form.imageUrl ?? "");
     }
@@ -1728,6 +1765,7 @@ export default function AdminPage() {
         ...translatedContent,
         category: form.category.trim() || "News",
         imageUrl: finalImage,
+        imagePosition: form.imagePosition ?? 50,
         author: form.author?.trim() || user?.email || "LIPROBAKIN Staff",
       };
       
@@ -1998,6 +2036,206 @@ export default function AdminPage() {
       setResetStatus({ type: "error", message: "Failed to reset stats. Check console for details." });
     } finally {
       setResetSubmitting(false);
+    }
+  };
+
+  // Load roster when team is selected in stats management
+  const handleStatsTeamSelect = async (teamId: string) => {
+    setStatsSelectedTeamId(teamId);
+    setStatsSelectedPlayerId('');
+    setStatsTeamRoster([]);
+    setStatsModifyForm({ pts: '', reb: '', ast: '', stl: '', blk: '', gamesPlayed: '' });
+    
+    if (teamId) {
+      try {
+        const rosterSnapshot = await getDocs(collection(firebaseDB, `teams/${teamId}/roster`));
+        const players: AdminRosterPlayer[] = rosterSnapshot.docs.map((doc) => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            firstName: data.firstName || '',
+            lastName: data.lastName || '',
+            number: data.number ?? null,
+            playerLicense: data.playerLicense || '',
+            height: data.height || '',
+            dateOfBirth: data.dateOfBirth || '',
+            position: data.position || '',
+            nationality: data.nationality || '',
+            nationality2: data.nationality2 || '',
+            headshot: data.headshot || '',
+            stats: {
+              pts: data.stats?.pts || '0.0',
+              reb: data.stats?.reb || '0.0',
+              stl: data.stats?.stl || '0.0',
+            },
+          };
+        });
+        setStatsTeamRoster(players.sort((a, b) => a.lastName.localeCompare(b.lastName)));
+      } catch (error) {
+        console.error('Error loading roster:', error);
+        setStatsMgmtStatus({ type: 'error', message: 'Failed to load team roster.' });
+      }
+    }
+  };
+
+  // Load player stats when player is selected
+  const handleStatsPlayerSelect = async (playerId: string) => {
+    setStatsSelectedPlayerId(playerId);
+    setStatsModifyForm({ pts: '', reb: '', ast: '', stl: '', blk: '', gamesPlayed: '' });
+    
+    if (playerId && statsSelectedTeamId) {
+      try {
+        const playerDoc = await getDoc(doc(firebaseDB, `teams/${statsSelectedTeamId}/roster/${playerId}`));
+        if (playerDoc.exists()) {
+          const data = playerDoc.data();
+          setStatsModifyForm({
+            pts: data.stats?.pts || '0.0',
+            reb: data.stats?.reb || '0.0',
+            ast: data.stats?.ast || '0.0',
+            stl: data.stats?.stl || '0.0',
+            blk: data.stats?.blk || '0.0',
+            gamesPlayed: String(data.gamesPlayed || 0),
+          });
+        }
+      } catch (error) {
+        console.error('Error loading player stats:', error);
+        setStatsMgmtStatus({ type: 'error', message: 'Failed to load player stats.' });
+      }
+    }
+  };
+
+  // Reset stats for a single team
+  const handleResetTeamStats = async () => {
+    if (!statsSelectedTeamId) {
+      setStatsMgmtStatus({ type: 'error', message: 'Please select a team first.' });
+      return;
+    }
+
+    const team = teams.find(t => t.id === statsSelectedTeamId);
+    const confirmed = window.confirm(
+      `⚠️ This will reset ALL player stats for ${team?.name || 'this team'} to 0.\n\nAre you sure?`
+    );
+
+    if (!confirmed) return;
+
+    setStatsMgmtSubmitting(true);
+    setStatsMgmtStatus({ type: 'info', message: 'Resetting team stats...' });
+
+    try {
+      // Reset team win/loss record
+      await updateDoc(doc(firebaseDB, `teams/${statsSelectedTeamId}`), {
+        wins: 0,
+        losses: 0,
+        totalPoints: 0,
+        updatedAt: serverTimestamp(),
+      });
+
+      // Reset all players in roster
+      const rosterSnapshot = await getDocs(collection(firebaseDB, `teams/${statsSelectedTeamId}/roster`));
+      const resetPromises = rosterSnapshot.docs.map(playerDoc =>
+        updateDoc(playerDoc.ref, {
+          stats: {
+            pts: '0.0',
+            reb: '0.0',
+            ast: '0.0',
+            stl: '0.0',
+            blk: '0.0',
+          },
+          gamesPlayed: 0,
+          updatedAt: serverTimestamp(),
+        })
+      );
+      await Promise.all(resetPromises);
+
+      // Reload roster to show updated stats
+      await handleStatsTeamSelect(statsSelectedTeamId);
+      
+      setStatsMgmtStatus({ type: 'success', message: `✓ Reset ${rosterSnapshot.docs.length} players to 0 stats for ${team?.name}.` });
+    } catch (error) {
+      console.error('Error resetting team stats:', error);
+      setStatsMgmtStatus({ type: 'error', message: 'Failed to reset team stats.' });
+    } finally {
+      setStatsMgmtSubmitting(false);
+    }
+  };
+
+  // Reset stats for a single player
+  const handleResetPlayerStats = async () => {
+    if (!statsSelectedTeamId || !statsSelectedPlayerId) {
+      setStatsMgmtStatus({ type: 'error', message: 'Please select a team and player first.' });
+      return;
+    }
+
+    const player = statsTeamRoster.find(p => p.id === statsSelectedPlayerId);
+    const confirmed = window.confirm(
+      `⚠️ This will reset stats for ${player?.firstName} ${player?.lastName} to 0.\n\nAre you sure?`
+    );
+
+    if (!confirmed) return;
+
+    setStatsMgmtSubmitting(true);
+    setStatsMgmtStatus({ type: 'info', message: 'Resetting player stats...' });
+
+    try {
+      await updateDoc(doc(firebaseDB, `teams/${statsSelectedTeamId}/roster/${statsSelectedPlayerId}`), {
+        stats: {
+          pts: '0.0',
+          reb: '0.0',
+          ast: '0.0',
+          stl: '0.0',
+          blk: '0.0',
+        },
+        gamesPlayed: 0,
+        updatedAt: serverTimestamp(),
+      });
+
+      // Reload roster to show updated stats
+      await handleStatsTeamSelect(statsSelectedTeamId);
+      setStatsSelectedPlayerId('');
+      
+      setStatsMgmtStatus({ type: 'success', message: `✓ Reset stats for ${player?.firstName} ${player?.lastName}.` });
+    } catch (error) {
+      console.error('Error resetting player stats:', error);
+      setStatsMgmtStatus({ type: 'error', message: 'Failed to reset player stats.' });
+    } finally {
+      setStatsMgmtSubmitting(false);
+    }
+  };
+
+  // Modify player stats
+  const handleModifyPlayerStats = async () => {
+    if (!statsSelectedTeamId || !statsSelectedPlayerId) {
+      setStatsMgmtStatus({ type: 'error', message: 'Please select a team and player first.' });
+      return;
+    }
+
+    setStatsMgmtSubmitting(true);
+    setStatsMgmtStatus({ type: 'info', message: 'Updating player stats...' });
+
+    try {
+      const player = statsTeamRoster.find(p => p.id === statsSelectedPlayerId);
+      
+      await updateDoc(doc(firebaseDB, `teams/${statsSelectedTeamId}/roster/${statsSelectedPlayerId}`), {
+        stats: {
+          pts: statsModifyForm.pts || '0.0',
+          reb: statsModifyForm.reb || '0.0',
+          ast: statsModifyForm.ast || '0.0',
+          stl: statsModifyForm.stl || '0.0',
+          blk: statsModifyForm.blk || '0.0',
+        },
+        gamesPlayed: parseInt(statsModifyForm.gamesPlayed) || 0,
+        updatedAt: serverTimestamp(),
+      });
+
+      // Reload roster to show updated stats
+      await handleStatsTeamSelect(statsSelectedTeamId);
+      
+      setStatsMgmtStatus({ type: 'success', message: `✓ Updated stats for ${player?.firstName} ${player?.lastName}.` });
+    } catch (error) {
+      console.error('Error modifying player stats:', error);
+      setStatsMgmtStatus({ type: 'error', message: 'Failed to update player stats.' });
+    } finally {
+      setStatsMgmtSubmitting(false);
     }
   };
 
@@ -4995,28 +5233,44 @@ export default function AdminPage() {
                     placeholder={language === 'fr' ? 'Nom de l\'auteur (optionnel)' : 'Author name (optional)'}
                   />
                 </label>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="space-y-1">
-                    <label htmlFor="coverPhoto" className="text-xs text-slate-300">{t.coverPhoto}</label>
-                    <input
-                      id="coverPhoto"
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageChange}
-                      className="w-full rounded-lg border border-white/10 bg-slate-800/50 px-3 py-2 text-xs text-slate-400 file:mr-2 file:rounded file:border-0 file:bg-orange-500 file:px-2 file:py-1 file:text-xs file:text-white hover:file:bg-orange-600"
-                    />
-                  </div>
-                  {imagePreview && (
-                    <div className="relative h-20 overflow-hidden rounded-lg border border-white/10">
-                      <Image
-                        src={imagePreview}
-                        alt="Preview"
-                        fill
-                        className="object-cover"
-                        sizes="200px"
-                        unoptimized
+                <div className="space-y-3">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1">
+                      <label htmlFor="coverPhoto" className="text-xs text-slate-300">{t.coverPhoto}</label>
+                      <input
+                        id="coverPhoto"
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageChange}
+                        className="w-full rounded-lg border border-white/10 bg-slate-800/50 px-3 py-2 text-xs text-slate-400 file:mr-2 file:rounded file:border-0 file:bg-orange-500 file:px-2 file:py-1 file:text-xs file:text-white hover:file:bg-orange-600"
                       />
                     </div>
+                    {imagePreview && (
+                      <div className="relative h-20 overflow-hidden rounded-lg border border-white/10">
+                        <Image
+                          src={imagePreview}
+                          alt="Preview"
+                          fill
+                          className="object-cover"
+                          sizes="200px"
+                          unoptimized
+                          style={{ objectPosition: `center ${form.imagePosition ?? 50}%` }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                  {/* Adjust Position Button */}
+                  {imagePreview && (
+                    <button
+                      type="button"
+                      onClick={() => setShowStoryImagePositionModal(true)}
+                      className="flex items-center gap-2 rounded-lg border border-purple-500/30 bg-purple-500/10 px-3 py-1.5 text-xs font-medium text-purple-300 transition hover:bg-purple-500/20"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                      </svg>
+                      {language === 'fr' ? 'Ajuster position' : 'Adjust Position'}
+                    </button>
                   )}
                 </div>
                 <div className="flex gap-2 pt-2">
@@ -6001,6 +6255,373 @@ export default function AdminPage() {
                 </div>
               )}
               </div>
+            )}
+
+            {/* Stats Management Section */}
+            <button
+              type="button"
+              onClick={() => setStatsManagementOpen(!statsManagementOpen)}
+              className="group relative w-full overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-rose-600/20 to-orange-600/20 p-8 text-left shadow-xl transition hover:border-white/30 hover:shadow-2xl"
+            >
+              <div className="relative z-10 flex items-center justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.4em] text-slate-400">{t.module}</p>
+                  <h2 className="mt-2 text-3xl font-bold text-white">📊 {t.statsManagement}</h2>
+                  <p className="mt-3 text-sm text-slate-300">
+                    {t.statsManagementDesc}
+                  </p>
+                </div>
+                <span className="text-2xl text-white">{statsManagementOpen ? '−' : '+'}</span>
+              </div>
+              <div className="absolute inset-0 bg-gradient-to-br from-rose-500/5 to-orange-500/5 opacity-0 transition group-hover:opacity-100"></div>
+            </button>
+
+            {statsManagementOpen && (
+              <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl space-y-6">
+                {/* Stats Status */}
+                {statsMgmtStatus && (
+                  <div className={`rounded-2xl border ${statusClassMap[statsMgmtStatus.type]} p-4 text-sm`}>
+                    {statsMgmtStatus.message}
+                  </div>
+                )}
+
+                {/* Tab Navigation */}
+                <div className="flex flex-wrap gap-2 border-b border-white/10 pb-4">
+                  <button
+                    type="button"
+                    onClick={() => setStatsManagementTab('all')}
+                    className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wider transition ${
+                      statsManagementTab === 'all'
+                        ? 'bg-rose-500/30 text-rose-200 border border-rose-500/50'
+                        : 'bg-slate-800 text-slate-400 border border-white/10 hover:bg-slate-700'
+                    }`}
+                  >
+                    🔄 {t.resetAllPlayersStats}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStatsManagementTab('team')}
+                    className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wider transition ${
+                      statsManagementTab === 'team'
+                        ? 'bg-orange-500/30 text-orange-200 border border-orange-500/50'
+                        : 'bg-slate-800 text-slate-400 border border-white/10 hover:bg-slate-700'
+                    }`}
+                  >
+                    👥 {t.resetTeamStats}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStatsManagementTab('player')}
+                    className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wider transition ${
+                      statsManagementTab === 'player'
+                        ? 'bg-yellow-500/30 text-yellow-200 border border-yellow-500/50'
+                        : 'bg-slate-800 text-slate-400 border border-white/10 hover:bg-slate-700'
+                    }`}
+                  >
+                    👤 {t.resetPlayerStats}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStatsManagementTab('modify')}
+                    className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wider transition ${
+                      statsManagementTab === 'modify'
+                        ? 'bg-emerald-500/30 text-emerald-200 border border-emerald-500/50'
+                        : 'bg-slate-800 text-slate-400 border border-white/10 hover:bg-slate-700'
+                    }`}
+                  >
+                    ✏️ {t.modifyPlayerStats}
+                  </button>
+                </div>
+
+                {/* Tab Content */}
+                <div className="space-y-4">
+                  {/* Reset All Stats Tab */}
+                  {statsManagementTab === 'all' && (
+                    <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-6">
+                      <div className="flex items-start gap-4">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-rose-500/20 text-2xl">
+                          ⚠️
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="text-lg font-semibold text-rose-200">{language === 'fr' ? 'Réinitialisation complète de la saison' : 'Complete Season Reset'}</h3>
+                          <p className="mt-2 text-sm text-rose-300/80">
+                            {language === 'fr' 
+                              ? 'Cette action supprimera TOUS les matchs, classements et réinitialisera les statistiques de tous les joueurs et équipes à 0. Idéal pour démarrer une nouvelle saison.'
+                              : 'This will delete ALL games, standings, and reset all player and team stats to 0. Ideal for starting a new season.'
+                            }
+                          </p>
+                          <ul className="mt-3 text-xs text-rose-300/70 space-y-1">
+                            <li>• {language === 'fr' ? 'Tous les matchs seront supprimés' : 'All games will be deleted'}</li>
+                            <li>• {language === 'fr' ? 'Tous les classements seront effacés' : 'All standings will be cleared'}</li>
+                            <li>• {language === 'fr' ? 'Toutes les victoires/défaites des équipes: 0-0' : 'All team wins/losses: 0-0'}</li>
+                            <li>• {language === 'fr' ? 'Toutes les stats des joueurs: 0.0' : 'All player stats: 0.0'}</li>
+                          </ul>
+                          <button
+                            type="button"
+                            onClick={handleResetAllStats}
+                            disabled={resetSubmitting}
+                            className="mt-4 rounded-full border border-rose-400/60 bg-rose-500/20 px-6 py-2 text-xs font-semibold uppercase tracking-[0.4em] text-rose-100 transition hover:border-rose-400/80 hover:bg-rose-500/30 disabled:opacity-50"
+                          >
+                            {resetSubmitting ? t.resetting : t.resetAllPlayersStats}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Reset Team Stats Tab */}
+                  {statsManagementTab === 'team' && (
+                    <div className="space-y-4">
+                      <div className="rounded-2xl border border-orange-500/30 bg-orange-500/10 p-6">
+                        <h3 className="text-lg font-semibold text-orange-200 mb-4">{t.resetTeamStats}</h3>
+                        <p className="text-sm text-orange-300/80 mb-4">
+                          {language === 'fr' 
+                            ? 'Réinitialisez les statistiques de tous les joueurs d\'une équipe spécifique.'
+                            : 'Reset all player stats for a specific team to 0.'
+                          }
+                        </p>
+                        <div className="space-y-4">
+                          <label className="block text-xs text-slate-300">
+                            {t.selectTeam}
+                            <select
+                              value={statsSelectedTeamId}
+                              onChange={(e) => handleStatsTeamSelect(e.target.value)}
+                              className="mt-1 w-full rounded-xl border border-white/10 bg-slate-800 px-3 py-2 text-sm text-white focus:border-orange-500"
+                            >
+                              <option value="">-- {t.selectTeam} --</option>
+                              {teams.sort((a, b) => a.name.localeCompare(b.name)).map((team) => (
+                                <option key={team.id} value={team.id}>
+                                  {team.name} ({team.gender === 'men' ? language === 'fr' ? 'Hommes' : 'Men' : language === 'fr' ? 'Femmes' : 'Women'})
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          
+                          {statsSelectedTeamId && statsTeamRoster.length > 0 && (
+                            <div className="rounded-xl border border-white/10 bg-slate-800/50 p-4">
+                              <p className="text-xs text-slate-400 mb-3">
+                                {language === 'fr' ? 'Joueurs dans l\'effectif:' : 'Players in roster:'} <span className="text-white font-semibold">{statsTeamRoster.length}</span>
+                              </p>
+                              <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+                                {statsTeamRoster.map((player) => (
+                                  <span key={player.id} className="inline-flex items-center gap-1 rounded-full bg-slate-700 px-2 py-1 text-xs text-slate-300">
+                                    #{player.number || '?'} {player.firstName} {player.lastName}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={handleResetTeamStats}
+                            disabled={statsMgmtSubmitting || !statsSelectedTeamId}
+                            className="rounded-full border border-orange-400/60 bg-orange-500/20 px-6 py-2 text-xs font-semibold uppercase tracking-[0.4em] text-orange-100 transition hover:border-orange-400/80 hover:bg-orange-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {statsMgmtSubmitting ? t.resetting : t.resetTeamStats}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Reset Player Stats Tab */}
+                  {statsManagementTab === 'player' && (
+                    <div className="space-y-4">
+                      <div className="rounded-2xl border border-yellow-500/30 bg-yellow-500/10 p-6">
+                        <h3 className="text-lg font-semibold text-yellow-200 mb-4">{t.resetPlayerStats}</h3>
+                        <p className="text-sm text-yellow-300/80 mb-4">
+                          {language === 'fr' 
+                            ? 'Réinitialisez les statistiques d\'un joueur spécifique.'
+                            : 'Reset a specific player\'s stats to 0.'
+                          }
+                        </p>
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <label className="block text-xs text-slate-300">
+                            {t.selectTeam}
+                            <select
+                              value={statsSelectedTeamId}
+                              onChange={(e) => handleStatsTeamSelect(e.target.value)}
+                              className="mt-1 w-full rounded-xl border border-white/10 bg-slate-800 px-3 py-2 text-sm text-white focus:border-yellow-500"
+                            >
+                              <option value="">-- {t.selectTeam} --</option>
+                              {teams.sort((a, b) => a.name.localeCompare(b.name)).map((team) => (
+                                <option key={team.id} value={team.id}>
+                                  {team.name} ({team.gender === 'men' ? language === 'fr' ? 'Hommes' : 'Men' : language === 'fr' ? 'Femmes' : 'Women'})
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="block text-xs text-slate-300">
+                            {t.selectPlayer}
+                            <select
+                              value={statsSelectedPlayerId}
+                              onChange={(e) => handleStatsPlayerSelect(e.target.value)}
+                              disabled={!statsSelectedTeamId}
+                              className="mt-1 w-full rounded-xl border border-white/10 bg-slate-800 px-3 py-2 text-sm text-white focus:border-yellow-500 disabled:opacity-50"
+                            >
+                              <option value="">-- {t.selectPlayer} --</option>
+                              {statsTeamRoster.map((player) => (
+                                <option key={player.id} value={player.id}>
+                                  #{player.number || '?'} {player.firstName} {player.lastName}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        </div>
+
+                        {statsSelectedPlayerId && (
+                          <div className="mt-4 rounded-xl border border-white/10 bg-slate-800/50 p-4">
+                            <p className="text-xs text-slate-400 mb-2">{language === 'fr' ? 'Statistiques actuelles:' : 'Current stats:'}</p>
+                            <div className="flex flex-wrap gap-3">
+                              <span className="text-sm text-white"><span className="text-yellow-400">PTS:</span> {statsModifyForm.pts}</span>
+                              <span className="text-sm text-white"><span className="text-yellow-400">REB:</span> {statsModifyForm.reb}</span>
+                              <span className="text-sm text-white"><span className="text-yellow-400">AST:</span> {statsModifyForm.ast}</span>
+                              <span className="text-sm text-white"><span className="text-yellow-400">STL:</span> {statsModifyForm.stl}</span>
+                              <span className="text-sm text-white"><span className="text-yellow-400">BLK:</span> {statsModifyForm.blk}</span>
+                              <span className="text-sm text-white"><span className="text-yellow-400">GP:</span> {statsModifyForm.gamesPlayed}</span>
+                            </div>
+                          </div>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={handleResetPlayerStats}
+                          disabled={statsMgmtSubmitting || !statsSelectedPlayerId}
+                          className="mt-4 rounded-full border border-yellow-400/60 bg-yellow-500/20 px-6 py-2 text-xs font-semibold uppercase tracking-[0.4em] text-yellow-100 transition hover:border-yellow-400/80 hover:bg-yellow-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {statsMgmtSubmitting ? t.resetting : t.resetPlayerStats}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Modify Player Stats Tab */}
+                  {statsManagementTab === 'modify' && (
+                    <div className="space-y-4">
+                      <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-6">
+                        <h3 className="text-lg font-semibold text-emerald-200 mb-4">{t.modifyPlayerStats}</h3>
+                        <p className="text-sm text-emerald-300/80 mb-4">
+                          {language === 'fr' 
+                            ? 'Modifiez manuellement les statistiques moyennes d\'un joueur.'
+                            : 'Manually edit a player\'s average statistics.'
+                          }
+                        </p>
+                        <div className="grid gap-4 sm:grid-cols-2 mb-4">
+                          <label className="block text-xs text-slate-300">
+                            {t.selectTeam}
+                            <select
+                              value={statsSelectedTeamId}
+                              onChange={(e) => handleStatsTeamSelect(e.target.value)}
+                              className="mt-1 w-full rounded-xl border border-white/10 bg-slate-800 px-3 py-2 text-sm text-white focus:border-emerald-500"
+                            >
+                              <option value="">-- {t.selectTeam} --</option>
+                              {teams.sort((a, b) => a.name.localeCompare(b.name)).map((team) => (
+                                <option key={team.id} value={team.id}>
+                                  {team.name} ({team.gender === 'men' ? language === 'fr' ? 'Hommes' : 'Men' : language === 'fr' ? 'Femmes' : 'Women'})
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="block text-xs text-slate-300">
+                            {t.selectPlayer}
+                            <select
+                              value={statsSelectedPlayerId}
+                              onChange={(e) => handleStatsPlayerSelect(e.target.value)}
+                              disabled={!statsSelectedTeamId}
+                              className="mt-1 w-full rounded-xl border border-white/10 bg-slate-800 px-3 py-2 text-sm text-white focus:border-emerald-500 disabled:opacity-50"
+                            >
+                              <option value="">-- {t.selectPlayer} --</option>
+                              {statsTeamRoster.map((player) => (
+                                <option key={player.id} value={player.id}>
+                                  #{player.number || '?'} {player.firstName} {player.lastName}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        </div>
+
+                        {statsSelectedPlayerId && (
+                          <div className="space-y-4">
+                            <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-6">
+                              <label className="block text-xs text-slate-300">
+                                {t.points}
+                                <input
+                                  type="text"
+                                  value={statsModifyForm.pts}
+                                  onChange={(e) => setStatsModifyForm({ ...statsModifyForm, pts: e.target.value })}
+                                  className="mt-1 w-full rounded-xl border border-white/10 bg-slate-800 px-3 py-2 text-sm text-white focus:border-emerald-500"
+                                  placeholder="0.0"
+                                />
+                              </label>
+                              <label className="block text-xs text-slate-300">
+                                {t.rebounds}
+                                <input
+                                  type="text"
+                                  value={statsModifyForm.reb}
+                                  onChange={(e) => setStatsModifyForm({ ...statsModifyForm, reb: e.target.value })}
+                                  className="mt-1 w-full rounded-xl border border-white/10 bg-slate-800 px-3 py-2 text-sm text-white focus:border-emerald-500"
+                                  placeholder="0.0"
+                                />
+                              </label>
+                              <label className="block text-xs text-slate-300">
+                                {t.assists}
+                                <input
+                                  type="text"
+                                  value={statsModifyForm.ast}
+                                  onChange={(e) => setStatsModifyForm({ ...statsModifyForm, ast: e.target.value })}
+                                  className="mt-1 w-full rounded-xl border border-white/10 bg-slate-800 px-3 py-2 text-sm text-white focus:border-emerald-500"
+                                  placeholder="0.0"
+                                />
+                              </label>
+                              <label className="block text-xs text-slate-300">
+                                {t.steals}
+                                <input
+                                  type="text"
+                                  value={statsModifyForm.stl}
+                                  onChange={(e) => setStatsModifyForm({ ...statsModifyForm, stl: e.target.value })}
+                                  className="mt-1 w-full rounded-xl border border-white/10 bg-slate-800 px-3 py-2 text-sm text-white focus:border-emerald-500"
+                                  placeholder="0.0"
+                                />
+                              </label>
+                              <label className="block text-xs text-slate-300">
+                                {t.blocks}
+                                <input
+                                  type="text"
+                                  value={statsModifyForm.blk}
+                                  onChange={(e) => setStatsModifyForm({ ...statsModifyForm, blk: e.target.value })}
+                                  className="mt-1 w-full rounded-xl border border-white/10 bg-slate-800 px-3 py-2 text-sm text-white focus:border-emerald-500"
+                                  placeholder="0.0"
+                                />
+                              </label>
+                              <label className="block text-xs text-slate-300">
+                                {t.gamesPlayed}
+                                <input
+                                  type="number"
+                                  value={statsModifyForm.gamesPlayed}
+                                  onChange={(e) => setStatsModifyForm({ ...statsModifyForm, gamesPlayed: e.target.value })}
+                                  className="mt-1 w-full rounded-xl border border-white/10 bg-slate-800 px-3 py-2 text-sm text-white focus:border-emerald-500"
+                                  placeholder="0"
+                                  min="0"
+                                />
+                              </label>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={handleModifyPlayerStats}
+                              disabled={statsMgmtSubmitting}
+                              className="rounded-full border border-emerald-400/60 bg-emerald-500/20 px-6 py-2 text-xs font-semibold uppercase tracking-[0.4em] text-emerald-100 transition hover:border-emerald-400/80 hover:bg-emerald-500/30 disabled:opacity-50"
+                            >
+                              {statsMgmtSubmitting ? t.saving : t.saveChanges}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </section>
             )}
               </>
               )}
@@ -9632,6 +10253,153 @@ export default function AdminPage() {
                 className="w-full sm:w-auto rounded-lg bg-orange-500 px-6 py-2.5 sm:py-2 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-50 transition-colors"
               >
                 {submitting ? t.publishing : form.id ? t.confirmUpdate : t.confirmPublish}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Story Image Position Modal */}
+      {showStoryImagePositionModal && imagePreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setShowStoryImagePositionModal(false)}>
+          <div className="w-full max-w-4xl rounded-2xl border border-white/10 bg-slate-900 p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-white">
+                {language === 'fr' ? 'Ajuster la position de l\'image' : 'Adjust Image Position'}
+              </h3>
+              <button
+                onClick={() => setShowStoryImagePositionModal(false)}
+                className="text-slate-400 hover:text-white transition"
+                aria-label="Close"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <p className="text-sm text-slate-400 mb-4">
+              {language === 'fr' 
+                ? 'Ajustez le curseur pour positionner l\'image correctement dans la carte de l\'histoire.'
+                : 'Adjust the slider to position the image correctly in the story card.'}
+            </p>
+            
+            {/* Preview showing how it will look on the story card */}
+            <div className="mb-6">
+              <p className="text-xs text-slate-500 mb-2">
+                {language === 'fr' ? 'Aperçu (carte d\'histoire)' : 'Preview (story card)'}
+              </p>
+              <div className="max-w-md mx-auto rounded-xl overflow-hidden border border-white/10 bg-slate-800/50">
+                <div 
+                  className="relative w-full h-48 overflow-hidden"
+                  style={{
+                    backgroundImage: `url(${imagePreview})`,
+                    backgroundSize: 'cover',
+                    backgroundPosition: `center ${storyImagePositionY}%`,
+                  }}
+                >
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+                  <div className="absolute bottom-0 left-0 right-0 p-4">
+                    <h4 className="text-white font-bold text-lg line-clamp-2 drop-shadow-lg">
+                      {form.title || 'Story Title'}
+                    </h4>
+                    <p className="text-orange-400 text-sm mt-1 drop-shadow">
+                      {form.headline || 'Headline'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Vertical Position Slider */}
+            <div className="mb-6">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium text-slate-300">
+                  {language === 'fr' ? 'Position verticale' : 'Vertical Position'}
+                </label>
+                <span className="text-sm text-slate-400">{storyImagePositionY}%</span>
+              </div>
+              <div className="flex items-center gap-4">
+                <span className="text-xs text-slate-500">
+                  {language === 'fr' ? 'Haut' : 'Top'}
+                </span>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={storyImagePositionY}
+                  onChange={(e) => {
+                    const newValue = parseInt(e.target.value);
+                    setStoryImagePositionY(newValue);
+                    setForm({ ...form, imagePosition: newValue });
+                  }}
+                  className="flex-1 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                  aria-label="Image vertical position"
+                />
+                <span className="text-xs text-slate-500">
+                  {language === 'fr' ? 'Bas' : 'Bottom'}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-2 text-center">
+                {language === 'fr' 
+                  ? '0% = montre le haut de l\'image, 50% = centré, 100% = montre le bas'
+                  : '0% = shows top of image, 50% = centered, 100% = shows bottom'}
+              </p>
+            </div>
+            
+            {/* Quick position buttons */}
+            <div className="flex justify-center gap-2 mb-6">
+              <button
+                type="button"
+                onClick={() => {
+                  setStoryImagePositionY(25);
+                  setForm({ ...form, imagePosition: 25 });
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                  storyImagePositionY === 25 
+                    ? 'bg-purple-500/30 border border-purple-500/50 text-purple-300'
+                    : 'bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10'
+                }`}
+              >
+                {language === 'fr' ? 'Haut' : 'Top'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setStoryImagePositionY(50);
+                  setForm({ ...form, imagePosition: 50 });
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                  storyImagePositionY === 50 
+                    ? 'bg-purple-500/30 border border-purple-500/50 text-purple-300'
+                    : 'bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10'
+                }`}
+              >
+                {language === 'fr' ? 'Centré' : 'Centered'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setStoryImagePositionY(75);
+                  setForm({ ...form, imagePosition: 75 });
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                  storyImagePositionY === 75 
+                    ? 'bg-purple-500/30 border border-purple-500/50 text-purple-300'
+                    : 'bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10'
+                }`}
+              >
+                {language === 'fr' ? 'Bas' : 'Bottom'}
+              </button>
+            </div>
+            
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowStoryImagePositionModal(false)}
+                className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-6 py-2 text-sm font-medium text-emerald-300 transition hover:bg-emerald-500/20"
+              >
+                {language === 'fr' ? 'Terminé' : 'Done'}
               </button>
             </div>
           </div>

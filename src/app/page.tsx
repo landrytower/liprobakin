@@ -49,6 +49,7 @@ type NewsArticle = {
   headline: string; // French (base/default)
   headline_en?: string; // English translation
   imageUrl?: string;
+  imagePosition?: number;
   createdAt: Date | null;
   author?: string; // Author name
 };
@@ -1567,6 +1568,7 @@ export default function Home() {
           headline: data.headline || "",
           headline_en: data.headline_en || "",
           imageUrl: data.imageUrl,
+          imagePosition: data.imagePosition ?? 50,
           createdAt: data.createdAt?.toDate() || null,
           author: data.author || "LIPROBAKIN Staff",
         };
@@ -2857,6 +2859,7 @@ export default function Home() {
                         alt={language === 'en' && featured.title_en ? featured.title_en : featured.title}
                         fill
                         className="object-cover"
+                        style={{ objectPosition: `center ${featured.imagePosition ?? 50}%` }}
                         priority
                       />
                       <div className="absolute inset-0 bg-gradient-to-b from-slate-950/80 via-slate-950/40 to-slate-950" />
@@ -2926,6 +2929,7 @@ export default function Home() {
                                                 alt={language === 'en' && article.title_en ? article.title_en : article.title}
                                                 fill
                                                 className="object-cover transition duration-300 group-hover:scale-105"
+                                                style={{ objectPosition: `center ${article.imagePosition ?? 50}%` }}
                                               />
                                               <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent" />
                                             </div>
@@ -3012,6 +3016,7 @@ export default function Home() {
                                           alt={language === 'en' && article.title_en ? article.title_en : article.title}
                                           fill
                                           className="object-cover transition duration-300 group-hover:scale-105"
+                                          style={{ objectPosition: `center ${article.imagePosition ?? 50}%` }}
                                         />
                                         <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent" />
                                       </div>

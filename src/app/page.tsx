@@ -3102,19 +3102,59 @@ export default function Home() {
                                 : 'translate-y-8 scale-95'
                             }`}>
                               <div className="relative rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/95 via-slate-950/95 to-black/95 backdrop-blur-xl p-6 md:p-8 shadow-2xl">
-                                {/* Close button - top right */}
+                                {/* Close button - top right with basketball theme */}
                                 <button
                                   onClick={(e) => {
                                     e.preventDefault();
                                     e.stopPropagation();
-                                    setExpandedArticleId(null);
+                                    // Add basketball bounce animation
+                                    const button = e.currentTarget;
+                                    button.style.animation = 'basketball-bounce 0.6s ease-out';
+                                    setTimeout(() => {
+                                      setExpandedArticleId(null);
+                                    }, 400);
                                   }}
-                                  className="absolute top-4 right-4 flex items-center justify-center w-8 h-8 rounded-full border border-white/20 bg-white/10 backdrop-blur-md text-white transition hover:border-white/40 hover:bg-white/20 hover:rotate-90 active:scale-95 cursor-pointer z-50"
+                                  className="absolute top-4 right-4 flex items-center justify-center w-10 h-10 rounded-full border-2 border-orange-500/40 bg-gradient-to-br from-orange-600/20 to-orange-800/20 backdrop-blur-md text-orange-400 transition-all hover:border-orange-400 hover:from-orange-500/30 hover:to-orange-700/30 hover:text-orange-300 hover:scale-110 hover:rotate-12 active:scale-95 cursor-pointer z-50 group"
                                   type="button"
                                   aria-label="Close article"
+                                  style={{ boxShadow: '0 0 20px rgba(249, 115, 22, 0.3), inset 0 0 10px rgba(249, 115, 22, 0.1)' }}
                                 >
-                                  <span className="text-xl leading-none">×</span>
+                                  {/* Basketball seams effect */}
+                                  <div className="absolute inset-0 rounded-full overflow-hidden opacity-30">
+                                    <div className="absolute top-0 left-1/2 w-px h-full bg-orange-400/50 -translate-x-1/2"></div>
+                                    <div className="absolute top-1/2 left-0 w-full h-px bg-orange-400/50 -translate-y-1/2"></div>
+                                  </div>
+                                  <span className="text-xl leading-none relative z-10 group-hover:scale-125 transition-transform">×</span>
                                 </button>
+                                
+                                <style jsx>{`
+                                  @keyframes basketball-bounce {
+                                    0% {
+                                      transform: translateY(0) scale(1) rotate(0deg);
+                                      opacity: 1;
+                                    }
+                                    25% {
+                                      transform: translateY(-15px) scale(1.1) rotate(90deg);
+                                      opacity: 0.9;
+                                    }
+                                    50% {
+                                      transform: translateY(0) scale(0.95) rotate(180deg);
+                                      opacity: 0.7;
+                                    }
+                                    70% {
+                                      transform: translateY(-8px) scale(1.05) rotate(270deg);
+                                      opacity: 0.5;
+                                    }
+                                    85% {
+                                      transform: translateY(0) scale(0.98) rotate(340deg);
+                                      opacity: 0.3;
+                                    }
+                                    100% {
+                                      transform: translateY(50px) scale(0.5) rotate(360deg);
+                                      opacity: 0;
+                                    }
+                                  }
+                                `}</style>
 
                                 {/* Decorative gradient line */}
                                 <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-t-2xl" />
@@ -4512,9 +4552,29 @@ export default function Home() {
 
       <footer className="border-t border-white/10 bg-black/50 py-6 text-slate-400">
         <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 text-center text-xs uppercase tracking-[0.3em] sm:flex-row sm:items-center sm:justify-between">
-          <p>
-            {copy.footerTagline}
-          </p>
+          <div className="flex flex-col sm:flex-row items-center gap-3">
+            <p>
+              {copy.footerTagline}
+            </p>
+            <span className="hidden sm:inline text-slate-600">•</span>
+            <a 
+              href="https://www.landrypalata.com" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="group flex items-center gap-2 text-[10px] tracking-[0.4em] text-slate-500 hover:text-orange-400 transition-all duration-300"
+            >
+              <span className="uppercase">Built by</span>
+              <span className="relative">
+                <span className="font-bold bg-gradient-to-r from-orange-400 via-amber-500 to-orange-600 bg-clip-text text-transparent group-hover:from-orange-300 group-hover:via-amber-400 group-hover:to-orange-500 transition-all duration-300">
+                  Landry Palata
+                </span>
+                <span className="absolute -bottom-0.5 left-0 w-0 h-px bg-gradient-to-r from-orange-400 to-amber-500 group-hover:w-full transition-all duration-300"></span>
+              </span>
+              <svg className="w-3 h-3 text-orange-400 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+            </a>
+          </div>
           <div className="flex items-center justify-center gap-6">
             <div className="flex items-center gap-3">
               <span className="text-[10px] uppercase tracking-[0.4em] text-slate-500">{copy.languageLabel}</span>

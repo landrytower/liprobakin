@@ -3089,72 +3089,98 @@ export default function Home() {
                         </div>
                           
                           {/* Expandable Article Content - Modern slide-in overlay with animations */}
-                          <div 
-                            className={`overflow-hidden transition-all duration-700 ease-in-out ${
-                              isExpanded 
-                                ? 'max-h-[800px] opacity-100 mt-8' 
-                                : 'max-h-0 opacity-0 mt-0'
-                            }`}
-                          >
-                            <div className={`transform transition-all duration-700 ease-in-out ${
-                              isExpanded 
-                                ? 'translate-y-0 scale-100 delay-100' 
-                                : 'translate-y-8 scale-95'
-                            }`}>
-                              <div className="relative rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/95 via-slate-950/95 to-black/95 backdrop-blur-xl p-6 md:p-8 shadow-2xl">
-                                {/* Close button - top right with basketball theme */}
-                                <button
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    // Add basketball bounce animation
-                                    const button = e.currentTarget;
-                                    button.style.animation = 'basketball-bounce 0.6s ease-out';
-                                    setTimeout(() => {
-                                      setExpandedArticleId(null);
-                                    }, 400);
-                                  }}
-                                  className="absolute top-4 right-4 flex items-center justify-center w-10 h-10 rounded-full border-2 border-orange-500/40 bg-gradient-to-br from-orange-600/20 to-orange-800/20 backdrop-blur-md text-orange-400 transition-all hover:border-orange-400 hover:from-orange-500/30 hover:to-orange-700/30 hover:text-orange-300 hover:scale-110 hover:rotate-12 active:scale-95 cursor-pointer z-50 group"
-                                  type="button"
-                                  aria-label="Close article"
-                                  style={{ boxShadow: '0 0 20px rgba(249, 115, 22, 0.3), inset 0 0 10px rgba(249, 115, 22, 0.1)' }}
-                                >
-                                  {/* Basketball seams effect */}
-                                  <div className="absolute inset-0 rounded-full overflow-hidden opacity-30">
-                                    <div className="absolute top-0 left-1/2 w-px h-full bg-orange-400/50 -translate-x-1/2"></div>
-                                    <div className="absolute top-1/2 left-0 w-full h-px bg-orange-400/50 -translate-y-1/2"></div>
-                                  </div>
-                                  <span className="text-xl leading-none relative z-10 group-hover:scale-125 transition-transform">×</span>
-                                </button>
-                                
-                                <style jsx>{`
-                                  @keyframes basketball-bounce {
-                                    0% {
-                                      transform: translateY(0) scale(1) rotate(0deg);
-                                      opacity: 1;
-                                    }
-                                    25% {
-                                      transform: translateY(-15px) scale(1.1) rotate(90deg);
-                                      opacity: 0.9;
-                                    }
-                                    50% {
-                                      transform: translateY(0) scale(0.95) rotate(180deg);
-                                      opacity: 0.7;
-                                    }
-                                    70% {
-                                      transform: translateY(-8px) scale(1.05) rotate(270deg);
-                                      opacity: 0.5;
-                                    }
-                                    85% {
-                                      transform: translateY(0) scale(0.98) rotate(340deg);
-                                      opacity: 0.3;
-                                    }
-                                    100% {
-                                      transform: translateY(50px) scale(0.5) rotate(360deg);
-                                      opacity: 0;
-                                    }
+                          {isExpanded && (
+                            <>
+                              {/* Backdrop overlay for click-outside to close */}
+                              <div 
+                                className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 animate-in fade-in duration-300"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  // Trigger basketball animation on the close button
+                                  const closeButton = document.querySelector(`[data-article-close="${featured.id}"]`) as HTMLElement;
+                                  if (closeButton) {
+                                    closeButton.style.animation = 'basketball-bounce 0.6s ease-out';
                                   }
-                                `}</style>
+                                  setTimeout(() => {
+                                    setExpandedArticleId(null);
+                                  }, 400);
+                                }}
+                                aria-label="Close article overlay"
+                              />
+                              
+                              {/* Article content positioned above backdrop */}
+                              <div className="relative z-50">
+                                <div 
+                                  className={`overflow-hidden transition-all duration-700 ease-in-out ${
+                                    isExpanded 
+                                      ? 'max-h-[800px] opacity-100 mt-8' 
+                                      : 'max-h-0 opacity-0 mt-0'
+                                  }`}
+                                >
+                                  <div className={`transform transition-all duration-700 ease-in-out ${
+                                    isExpanded 
+                                      ? 'translate-y-0 scale-100 delay-100' 
+                                      : 'translate-y-8 scale-95'
+                                  }`}>
+                                    <div 
+                                      className="relative rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/95 via-slate-950/95 to-black/95 backdrop-blur-xl p-6 md:p-8 shadow-2xl"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      {/* Close button - top right with basketball theme */}
+                                      <button
+                                        data-article-close={featured.id}
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                          // Add basketball bounce animation
+                                          const button = e.currentTarget;
+                                          button.style.animation = 'basketball-bounce 0.6s ease-out';
+                                          setTimeout(() => {
+                                            setExpandedArticleId(null);
+                                          }, 400);
+                                        }}
+                                        className="absolute top-4 right-4 flex items-center justify-center w-10 h-10 rounded-full border-2 border-orange-500/40 bg-gradient-to-br from-orange-600/20 to-orange-800/20 backdrop-blur-md text-orange-400 transition-all hover:border-orange-400 hover:from-orange-500/30 hover:to-orange-700/30 hover:text-orange-300 hover:scale-110 hover:rotate-12 active:scale-95 cursor-pointer z-50 group"
+                                        type="button"
+                                        aria-label="Close article"
+                                        style={{ boxShadow: '0 0 20px rgba(249, 115, 22, 0.3), inset 0 0 10px rgba(249, 115, 22, 0.1)' }}
+                                      >
+                                        {/* Basketball seams effect */}
+                                        <div className="absolute inset-0 rounded-full overflow-hidden opacity-30">
+                                          <div className="absolute top-0 left-1/2 w-px h-full bg-orange-400/50 -translate-x-1/2"></div>
+                                          <div className="absolute top-1/2 left-0 w-full h-px bg-orange-400/50 -translate-y-1/2"></div>
+                                        </div>
+                                        <span className="text-xl leading-none relative z-10 group-hover:scale-125 transition-transform">×</span>
+                                      </button>
+                                      
+                                      <style jsx>{`
+                                        @keyframes basketball-bounce {
+                                          0% {
+                                            transform: translateY(0) scale(1) rotate(0deg);
+                                            opacity: 1;
+                                          }
+                                          25% {
+                                            transform: translateY(-15px) scale(1.1) rotate(90deg);
+                                            opacity: 0.9;
+                                          }
+                                          50% {
+                                            transform: translateY(0) scale(0.95) rotate(180deg);
+                                            opacity: 0.7;
+                                          }
+                                          70% {
+                                            transform: translateY(-8px) scale(1.05) rotate(270deg);
+                                            opacity: 0.5;
+                                          }
+                                          85% {
+                                            transform: translateY(0) scale(0.98) rotate(340deg);
+                                            opacity: 0.3;
+                                          }
+                                          100% {
+                                            transform: translateY(50px) scale(0.5) rotate(360deg);
+                                            opacity: 0;
+                                          }
+                                        }
+                                      `}</style>
 
                                 {/* Decorative gradient line */}
                                 <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-t-2xl" />
@@ -3262,9 +3288,12 @@ export default function Home() {
 
                                 {/* Gradient fade at bottom */}
                                 <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-slate-950 to-transparent pointer-events-none rounded-b-2xl" />
+                                    </div>
+                                  </div>
+                                </div>
                               </div>
-                            </div>
-                          </div>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>

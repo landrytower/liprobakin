@@ -2887,8 +2887,15 @@ export default function Home() {
                                   msOverflowStyle: 'none'
                                 }}
                               >
-                                {/* Individual scrollable cards */}
-                                {newsArticles.map((article) => (
+                                {/* Individual scrollable cards - reordered to start from current featured */}
+                                {(() => {
+                                  const currentFeaturedIndex = newsArticles.findIndex(a => a.id === featuredArticleId);
+                                  const reorderedArticles = [];
+                                  for (let i = 0; i < newsArticles.length; i++) {
+                                    const articleIndex = (currentFeaturedIndex + i) % newsArticles.length;
+                                    reorderedArticles.push(newsArticles[articleIndex]);
+                                  }
+                                  return reorderedArticles.map((article) => (
                                         <button
                                           key={article.id}
                                           onClick={() => {
@@ -2958,7 +2965,8 @@ export default function Home() {
                                             )}
                                           </div>
                                         </button>
-                                ))}
+                                  ));
+                                })()}
                               </div>
                             </div>
                           </div>
@@ -2970,9 +2978,13 @@ export default function Home() {
                                 const articlesToShow = 3;
                                 const gridArticles = [];
                                 
-                                // Desktop: always show first 3 articles
+                                // Find the current featured article index
+                                const currentFeaturedIndex = newsArticles.findIndex(a => a.id === featuredArticleId);
+                                
+                                // Show current featured + next 2 articles (wrapping around)
                                 for (let i = 0; i < Math.min(articlesToShow, newsArticles.length); i++) {
-                                  gridArticles.push(newsArticles[i]);
+                                  const articleIndex = (currentFeaturedIndex + i) % newsArticles.length;
+                                  gridArticles.push(newsArticles[articleIndex]);
                                 }
                                 
                                 return gridArticles.map((article, index) => (

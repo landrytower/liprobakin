@@ -9,15 +9,17 @@ export type AdminRole =
   | "partner_manager";
 
 export type AdminPermissions = {
-  canManageNews: boolean;
-  canManageGames: boolean;
-  canManageTeams: boolean;
+  canManageNews: boolean;          // 📰 HISTOIRES
+  canManageTeams: boolean;         // 🏀 ÉQUIPES
+  canManageUsers: boolean;         // 👥 ACCOUNTS + ✓ VERIFICATIONS
+  canManageGames: boolean;         // 🗓️ MATCHS + 📊 STATISTIQUES
+  canManageLeague: boolean;        // ⚙️ LIGUE  
+  canManageAdmins: boolean;        // 👥 ADMINISTRATEURS
   canManagePlayers: boolean;
   canManageReferees: boolean;
   canManageVenues: boolean;
   canManagePartners: boolean;
   canManageCommittee: boolean;
-  canManageAdmins: boolean;
 };
 
 export type AdminUser = {
@@ -40,6 +42,8 @@ export const ROLE_PERMISSIONS: Record<AdminRole, AdminPermissions> = {
     canManageNews: true,
     canManageGames: true,
     canManageTeams: true,
+    canManageUsers: true,
+    canManageLeague: true,
     canManagePlayers: true,
     canManageReferees: true,
     canManageVenues: true,
@@ -51,6 +55,8 @@ export const ROLE_PERMISSIONS: Record<AdminRole, AdminPermissions> = {
     canManageNews: true,
     canManageGames: true,
     canManageTeams: true,
+    canManageUsers: true,
+    canManageLeague: true,
     canManagePlayers: true,
     canManageReferees: true,
     canManageVenues: true,
@@ -62,6 +68,8 @@ export const ROLE_PERMISSIONS: Record<AdminRole, AdminPermissions> = {
     canManageNews: true,
     canManageGames: false,
     canManageTeams: false,
+    canManageUsers: false,
+    canManageLeague: false,
     canManagePlayers: false,
     canManageReferees: false,
     canManageVenues: false,
@@ -73,6 +81,8 @@ export const ROLE_PERMISSIONS: Record<AdminRole, AdminPermissions> = {
     canManageNews: false,
     canManageGames: true,
     canManageTeams: false,
+    canManageUsers: false,
+    canManageLeague: false,
     canManagePlayers: false,
     canManageReferees: false,
     canManageVenues: false,
@@ -84,6 +94,8 @@ export const ROLE_PERMISSIONS: Record<AdminRole, AdminPermissions> = {
     canManageNews: false,
     canManageGames: false,
     canManageTeams: true,
+    canManageUsers: false,
+    canManageLeague: false,
     canManagePlayers: true,
     canManageReferees: false,
     canManageVenues: false,
@@ -95,6 +107,8 @@ export const ROLE_PERMISSIONS: Record<AdminRole, AdminPermissions> = {
     canManageNews: false,
     canManageGames: false,
     canManageTeams: false,
+    canManageUsers: false,
+    canManageLeague: false,
     canManagePlayers: false,
     canManageReferees: true,
     canManageVenues: false,
@@ -106,6 +120,8 @@ export const ROLE_PERMISSIONS: Record<AdminRole, AdminPermissions> = {
     canManageNews: false,
     canManageGames: false,
     canManageTeams: false,
+    canManageUsers: false,
+    canManageLeague: false,
     canManagePlayers: false,
     canManageReferees: false,
     canManageVenues: true,
@@ -117,6 +133,8 @@ export const ROLE_PERMISSIONS: Record<AdminRole, AdminPermissions> = {
     canManageNews: false,
     canManageGames: false,
     canManageTeams: false,
+    canManageUsers: false,
+    canManageLeague: false,
     canManagePlayers: false,
     canManageReferees: false,
     canManageVenues: false,
@@ -131,6 +149,8 @@ export function mergePermissions(roles: AdminRole[]): AdminPermissions {
     canManageNews: false,
     canManageGames: false,
     canManageTeams: false,
+    canManageUsers: false,
+    canManageLeague: false,
     canManagePlayers: false,
     canManageReferees: false,
     canManageVenues: false,

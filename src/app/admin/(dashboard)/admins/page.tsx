@@ -5,7 +5,7 @@ import Image from "next/image";
 import { useAdmin } from "../layout";
 import { firebaseDB, firebaseAuth } from "@/lib/firebase";
 import { collection, getDocs, doc, updateDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
-import type { AdminRole } from "@/types/admin";
+import type { AdminRole, AdminPermissions } from "@/types/admin";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -83,7 +83,7 @@ const translations = {
     role: "Role",
     permissions: "Permissions",
     allPermissions: "All Permissions",
-    edit: "Edit Roles",
+    edit: "Edit Permissions",
     remove: "Remove",
     copyLink: "Copy Invite Link",
     resend: "Resend Invite",
@@ -98,7 +98,7 @@ const translations = {
     confirmRemove: "Are you sure you want to remove this admin? This action cannot be undone.",
     removeSuccess: "Admin removed successfully",
     removeFailed: "Failed to remove admin",
-    editRoles: "Edit Roles",
+    editRoles: "Edit Permissions",
     saveChanges: "Save Changes",
     saving: "Saving...",
   },
@@ -153,7 +153,7 @@ const translations = {
     role: "Rôle",
     permissions: "Permissions",
     allPermissions: "Toutes les Permissions",
-    edit: "Modifier les Rôles",
+    edit: "Modifier les Permissions",
     remove: "Supprimer",
     copyLink: "Copier le Lien",
     resend: "Renvoyer l'Invitation",
@@ -168,7 +168,7 @@ const translations = {
     confirmRemove: "Êtes-vous sûr de vouloir supprimer cet admin ? Cette action est irréversible.",
     removeSuccess: "Admin supprimé avec succès",
     removeFailed: "Échec de la suppression",
-    editRoles: "Modifier les Rôles",
+    editRoles: "Modifier les Permissions",
     saveChanges: "Enregistrer",
     saving: "Enregistrement...",
   },
@@ -183,6 +183,16 @@ const ROLE_CONFIG: { role: AdminRole; icon: string; color: string; gradient: str
   { role: "referee_manager", icon: "🔵", color: "sky", gradient: "from-sky-500 to-blue-500" },
   { role: "venue_manager", icon: "🏟️", color: "orange", gradient: "from-orange-500 to-red-500" },
   { role: "partner_manager", icon: "🤝", color: "yellow", gradient: "from-yellow-500 to-amber-500" },
+];
+
+// Permission-based navigation sections
+const PERMISSION_CONFIG: { key: keyof AdminPermissions; icon: string; label: { en: string; fr: string }; gradient: string }[] = [
+  { key: "canManageNews", icon: "📰", label: { en: "Stories", fr: "Histoires" }, gradient: "from-blue-500 to-cyan-500" },
+  { key: "canManageTeams", icon: "🏀", label: { en: "Teams", fr: "Équipes" }, gradient: "from-rose-500 to-pink-500" },
+  { key: "canManageUsers", icon: "👥", label: { en: "Accounts & Verifications", fr: "Accounts & Vérifications" }, gradient: "from-purple-500 to-indigo-500" },
+  { key: "canManageGames", icon: "🗓️", label: { en: "Matches & Statistics", fr: "Matchs & Statistiques" }, gradient: "from-emerald-500 to-teal-500" },
+  { key: "canManageLeague", icon: "⚙️", label: { en: "League Settings", fr: "Paramètres League" }, gradient: "from-orange-500 to-amber-500" },
+  { key: "canManageAdmins", icon: "👥", label: { en: "Administrators", fr: "Administrateurs" }, gradient: "from-amber-500 to-orange-500" },
 ];
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -209,6 +219,7 @@ export default function AdminsPage() {
   // Edit modal
   const [editingAdmin, setEditingAdmin] = useState<AdminUserData | null>(null);
   const [editRoles, setEditRoles] = useState<AdminRole[]>([]);
+  const [editPermissions, setEditPermissions] = useState<Partial<AdminPermissions>>({});
   const [editSaving, setEditSaving] = useState(false);
 
   // ─── Fetch admins ────────────────────────────────────────────────────────
@@ -322,19 +333,25 @@ export default function AdminsPage() {
   };
 
   const handleSaveRoles = async () => {
-    if (!editingAdmin || editRoles.length === 0) return;
+    if (!editingAdmin) return;
     setEditSaving(true);
     try {
-      const { mergePermissions } = await import("@/types/admin");
+      // Convert permissions object to boolean values (remove undefined/null)
+      const cleanPermissions: Partial<AdminPermissions> = {};
+      Object.keys(editPermissions).forEach((key) => {
+        if (editPermissions[key as keyof AdminPermissions] === true) {
+          cleanPermissions[key as keyof AdminPermissions] = true;
+        }
+      });
+
       await updateDoc(doc(firebaseDB, "adminUsers", editingAdmin.id), {
-        roles: editRoles,
-        permissions: mergePermissions(editRoles),
+        permissions: cleanPermissions,
         updatedAt: serverTimestamp(),
       });
       setEditingAdmin(null);
       fetchAdmins();
     } catch (error) {
-      console.error("Error saving roles:", error);
+      console.error("Error saving permissions:", error);
     } finally {
       setEditSaving(false);
     }
@@ -501,7 +518,11 @@ export default function AdminsPage() {
                   {canManageAdmins && !isMaster(admin.roles) && (
                     <div className="flex flex-col gap-2 sm:flex-row flex-shrink-0 opacity-60 group-hover:opacity-100 transition-opacity">
                       <button
-                        onClick={() => { setEditingAdmin(admin); setEditRoles(admin.roles || []); }}
+                        onClick={() => { 
+                          setEditingAdmin(admin); 
+                          setEditRoles(admin.roles || []); 
+                          setEditPermissions(admin.permissions || {});
+                        }}
                         className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-300 transition-all hover:bg-white/10 hover:text-white"
                       >
                         {t.edit}
@@ -757,18 +778,17 @@ export default function AdminsPage() {
               <p className="mt-1 text-sm text-slate-400">{editingAdmin.displayName || editingAdmin.email}</p>
             </div>
             <div className="p-6 space-y-2 max-h-[60vh] overflow-y-auto">
-              {ROLE_CONFIG.map(({ role, icon, gradient }) => {
-                const selected = editRoles.includes(role);
+              {PERMISSION_CONFIG.map(({ key, icon, label, gradient }) => {
+                const selected = editPermissions[key as keyof AdminPermissions] === true;
                 return (
                   <button
-                    key={role}
+                    key={key}
                     type="button"
                     onClick={() => {
-                      setEditRoles(
-                        selected
-                          ? editRoles.filter(r => r !== role)
-                          : [...editRoles, role]
-                      );
+                      setEditPermissions({
+                        ...editPermissions,
+                        [key]: !selected
+                      });
                     }}
                     className={`flex w-full items-center gap-3 rounded-xl border p-3.5 text-left transition-all ${
                       selected
@@ -786,8 +806,7 @@ export default function AdminsPage() {
                       )}
                     </div>
                     <div>
-                      <p className="text-sm font-semibold text-white">{icon} {getRoleLabel(role)}</p>
-                      <p className="text-[11px] text-slate-400">{(t as Record<string, string>)[`${role}Desc`] || ""}</p>
+                      <p className="text-sm font-semibold text-white">{icon} {language === "fr" ? label.fr : label.en}</p>
                     </div>
                   </button>
                 );
@@ -802,7 +821,7 @@ export default function AdminsPage() {
               </button>
               <button
                 onClick={handleSaveRoles}
-                disabled={editSaving || editRoles.length === 0}
+                disabled={editSaving}
                 className="flex-1 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 py-2.5 text-sm font-bold text-white transition-all hover:shadow-lg disabled:opacity-50"
               >
                 {editSaving ? t.saving : t.saveChanges}

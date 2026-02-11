@@ -142,7 +142,7 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const pageStartTime = useRef<number>(Date.now());
   const scrollTracker = useRef<ReturnType<typeof createScrollTracker> | null>(null);
-  const engagementInterval = useRef<NodeJS.Timeout | null>(null);
+  const engagementInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Track page view
   const trackPageView = useCallback(() => {

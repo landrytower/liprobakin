@@ -7,15 +7,16 @@ let adminApp: App | undefined;
 
 function initializeFirebaseAdmin() {
   if (getApps().length === 0) {
-    // Use environment variables for credentials
-    const projectId = process.env.FIREBASE_PROJECT_ID;
-    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+    // Use environment variables for credentials - trim all values to remove accidental whitespace/newlines
+    const projectId = process.env.FIREBASE_PROJECT_ID?.trim();
+    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL?.trim();
     // Properly clean the private key - handle both escaped newlines and Windows line breaks
     const privateKey = process.env.FIREBASE_PRIVATE_KEY
       ?.replace(/\\r\\n/g, '\n')
       .replace(/\\n/g, '\n')
       .replace(/\r\n/g, '\n')
-      .replace(/\r/g, '\n');
+      .replace(/\r/g, '\n')
+      .trim();
     
     if (projectId && clientEmail && privateKey) {
       try {

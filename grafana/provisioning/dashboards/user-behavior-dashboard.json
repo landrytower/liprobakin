@@ -696,6 +696,7 @@
               }
             },
             "location": {
+              "gazetteer": "public/gazetteer/countries.json",
               "lookup": "country",
               "mode": "lookup"
             },

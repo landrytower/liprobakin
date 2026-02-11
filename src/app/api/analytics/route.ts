@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { existsSync, readFileSync, writeFileSync } from 'fs';
-import { join } from 'path';
-
-// Persistent metrics file path (use /tmp on Vercel to avoid read-only FS)
-const METRICS_FILE = process.env.ANALYTICS_METRICS_FILE
-  || (process.env.VERCEL ? '/tmp/analytics-metrics.json' : join(process.cwd(), '.analytics-metrics.json'));
+import { getAdminFirestore } from '@/lib/firebaseAdmin';
+import { FieldValue } from 'firebase-admin/firestore';
 
 // Type definitions
 type AnalyticsEvent = {
@@ -19,77 +15,18 @@ type AnalyticsEvent = {
   [key: string]: unknown;
 };
 
-type MetricsData = {
-  pageviews_total: number;
-  clicks_total: number;
-  scroll_depth_sum: number;
-  scroll_depth_count: number;
-  time_on_page_sum: number;
-  time_on_page_count: number;
-  errors_total: number;
-  engagement_total: number;
-  active_sessions: string[];
-  last_event_time: number;
-  pageViewsByPage: Record<string, number>;
-  pageViewsByCountry: Record<string, number>;
-  clicksByElement: Record<string, number>;
-  timeOnPageByPage: Record<string, { sum: number; count: number }>;
-  scrollDepthByPage: Record<string, { sum: number; count: number }>;
-};
-
-// Load metrics from file or initialize defaults
-function loadMetrics(): MetricsData {
-  try {
-    if (existsSync(METRICS_FILE)) {
-      const data = readFileSync(METRICS_FILE, 'utf-8');
-      const parsed = JSON.parse(data);
-      parsed.pageViewsByCountry = parsed.pageViewsByCountry || {};
-      return parsed;
-    }
-  } catch (error) {
-    console.error('Error loading metrics:', error);
-  }
-  return {
-    pageviews_total: 0,
-    clicks_total: 0,
-    scroll_depth_sum: 0,
-    scroll_depth_count: 0,
-    time_on_page_sum: 0,
-    time_on_page_count: 0,
-    errors_total: 0,
-    engagement_total: 0,
-    active_sessions: [],
-    last_event_time: Date.now(),
-    pageViewsByPage: {},
-    pageViewsByCountry: {},
-    clicksByElement: {},
-    timeOnPageByPage: {},
-    scrollDepthByPage: {},
-  };
-}
-
-// Save metrics to file
-function saveMetrics(data: MetricsData): void {
-  try {
-    writeFileSync(METRICS_FILE, JSON.stringify(data, null, 2));
-  } catch (error) {
-    console.error('Error saving metrics:', error);
-  }
-}
-
-// Initialize from file
-let persistentMetrics = loadMetrics();
-
-// In-memory session tracking (sessions are ephemeral)
-const activeSessionsSet = new Set<string>(persistentMetrics.active_sessions);
+// In-memory cache for active sessions (ephemeral is fine for this)
+const activeSessionsSet = new Set<string>();
 const recentEvents: AnalyticsEvent[] = [];
+let lastEventTime = Date.now();
 
 // Simple in-memory IP -> country cache to reduce remote lookups
 const geoCache = new Map<string, { country: string; expires: number }>();
 
 function getClientIp(req: NextRequest): string | null {
+  // Vercel provides country code directly in headers
   const vercelCountry = req.headers.get('x-vercel-ip-country');
-  if (vercelCountry) return `vercel-${vercelCountry}`; // use country header directly
+  if (vercelCountry) return `vercel-${vercelCountry}`;
 
   const forwarded = req.headers.get('x-forwarded-for') || '';
   const first = forwarded.split(',')[0]?.trim();
@@ -98,7 +35,6 @@ function getClientIp(req: NextRequest): string | null {
   if (cf) return cf;
   const real = req.headers.get('x-real-ip');
   if (real) return real;
-  // NextRequest.ip is available on Vercel runtimes
   if ((req as any).ip) return (req as any).ip as string;
   return null;
 }
@@ -110,15 +46,18 @@ async function lookupCountry(ip: string): Promise<string> {
 
   // If the IP already encodes a country (vercel-XX), short-circuit
   if (ip.startsWith('vercel-')) {
-    const country = ip.replace('vercel-', '') || 'unknown';
+    const country = ip.replace('vercel-', '').toUpperCase() || 'UNKNOWN';
     geoCache.set(ip, { country, expires: now + 60 * 60 * 1000 });
     return country;
   }
 
   try {
-    const res = await fetch(`https://ipapi.co/${encodeURIComponent(ip)}/country/`, { next: { revalidate: 3600 } });
+    const res = await fetch(`https://ipapi.co/${encodeURIComponent(ip)}/country/`, { 
+      signal: AbortSignal.timeout(3000),
+      cache: 'force-cache'
+    });
     if (res.ok) {
-      const country = (await res.text()).trim() || 'unknown';
+      const country = (await res.text()).trim().toUpperCase() || 'UNKNOWN';
       geoCache.set(ip, { country, expires: now + 60 * 60 * 1000 });
       return country;
     }
@@ -126,14 +65,118 @@ async function lookupCountry(ip: string): Promise<string> {
     console.error('Geo lookup failed', error);
   }
 
-  return 'unknown';
+  return 'UNKNOWN';
 }
 
 // Clean up stale sessions (older than 30 minutes)
 function cleanupStaleSessions() {
   const now = Date.now();
-  if (now - persistentMetrics.last_event_time > 30 * 60 * 1000) {
+  if (now - lastEventTime > 30 * 60 * 1000) {
     activeSessionsSet.clear();
+  }
+}
+
+// Firestore collection for analytics metrics
+const ANALYTICS_COLLECTION = 'analytics_metrics';
+const METRICS_DOC_ID = 'global_metrics';
+
+// Update metrics in Firestore atomically
+async function updateFirestoreMetrics(updates: {
+  pageviews_total?: number;
+  clicks_total?: number;
+  errors_total?: number;
+  engagement_total?: number;
+  scroll_depth_sum?: number;
+  scroll_depth_count?: number;
+  time_on_page_sum?: number;
+  time_on_page_count?: number;
+  pageByPagePath?: string;
+  countryCode?: string;
+  element?: string;
+  pageForTime?: { path: string; seconds: number };
+  pageForScroll?: { path: string; depth: number };
+}) {
+  try {
+    const db = getAdminFirestore();
+    const metricsRef = db.collection(ANALYTICS_COLLECTION).doc(METRICS_DOC_ID);
+    
+    const batch: Record<string, any> = {
+      last_updated: FieldValue.serverTimestamp()
+    };
+    
+    if (updates.pageviews_total) {
+      batch['pageviews_total'] = FieldValue.increment(updates.pageviews_total);
+    }
+    if (updates.clicks_total) {
+      batch['clicks_total'] = FieldValue.increment(updates.clicks_total);
+    }
+    if (updates.errors_total) {
+      batch['errors_total'] = FieldValue.increment(updates.errors_total);
+    }
+    if (updates.engagement_total) {
+      batch['engagement_total'] = FieldValue.increment(updates.engagement_total);
+    }
+    if (updates.scroll_depth_sum) {
+      batch['scroll_depth_sum'] = FieldValue.increment(updates.scroll_depth_sum);
+      batch['scroll_depth_count'] = FieldValue.increment(updates.scroll_depth_count || 1);
+    }
+    if (updates.time_on_page_sum) {
+      batch['time_on_page_sum'] = FieldValue.increment(updates.time_on_page_sum);
+      batch['time_on_page_count'] = FieldValue.increment(updates.time_on_page_count || 1);
+    }
+    
+    // Update page views by page
+    if (updates.pageByPagePath) {
+      const safePage = updates.pageByPagePath.replace(/\./g, '_').replace(/\//g, '_');
+      batch[`pageViewsByPage.${safePage}`] = FieldValue.increment(1);
+    }
+    
+    // Update country pageviews - THIS IS KEY FOR GEO MAP
+    if (updates.countryCode && updates.countryCode !== 'UNKNOWN') {
+      batch[`pageViewsByCountry.${updates.countryCode}`] = FieldValue.increment(1);
+    }
+    
+    // Update clicks by element
+    if (updates.element) {
+      const safeElement = updates.element.replace(/\./g, '_').replace(/[^a-zA-Z0-9_]/g, '_');
+      batch[`clicksByElement.${safeElement}`] = FieldValue.increment(1);
+    }
+    
+    // Update time on page by page
+    if (updates.pageForTime) {
+      const safePage = updates.pageForTime.path.replace(/\./g, '_').replace(/\//g, '_');
+      batch[`timeOnPageByPage.${safePage}.sum`] = FieldValue.increment(updates.pageForTime.seconds);
+      batch[`timeOnPageByPage.${safePage}.count`] = FieldValue.increment(1);
+    }
+    
+    // Update scroll depth by page
+    if (updates.pageForScroll) {
+      const safePage = updates.pageForScroll.path.replace(/\./g, '_').replace(/\//g, '_');
+      batch[`scrollDepthByPage.${safePage}.sum`] = FieldValue.increment(updates.pageForScroll.depth);
+      batch[`scrollDepthByPage.${safePage}.count`] = FieldValue.increment(1);
+    }
+    
+    await metricsRef.set(batch, { merge: true });
+  } catch (error) {
+    console.error('Failed to update Firestore metrics:', error);
+    // Don't throw - we don't want to break analytics if Firestore fails
+  }
+}
+
+// Read metrics from Firestore
+async function getFirestoreMetrics() {
+  try {
+    const db = getAdminFirestore();
+    const metricsRef = db.collection(ANALYTICS_COLLECTION).doc(METRICS_DOC_ID);
+    const doc = await metricsRef.get();
+    
+    if (doc.exists) {
+      return doc.data() || {};
+    }
+    return {};
+  } catch (error) {
+    console.error('Failed to read Firestore metrics:', error);
+    return {};
   }
 }
 
@@ -148,57 +191,54 @@ export async function POST(request: NextRequest) {
     const data = body.data || {};
     const value = data.seconds || data.depth || body.value || 0;
     const element = data.element || body.element || 'unknown';
+    
+    // Get country for pageviews
     const clientIp = getClientIp(request);
-    const country = eventType === 'pageview' && clientIp ? await lookupCountry(clientIp) : 'unknown';
+    const country = eventType === 'pageview' && clientIp ? await lookupCountry(clientIp) : 'UNKNOWN';
 
-    // Update last event time
-    persistentMetrics.last_event_time = Date.now();
+    // Update last event time and cleanup
+    lastEventTime = Date.now();
     cleanupStaleSessions();
 
-    // Update metrics based on event type
-    if (eventType === 'pageview') {
-      persistentMetrics.pageviews_total++;
-      if (sessionId) {
-        activeSessionsSet.add(sessionId);
-      }
-      // Track by page
-      persistentMetrics.pageViewsByPage[page] = (persistentMetrics.pageViewsByPage[page] || 0) + 1;
-      // Track by country
-      persistentMetrics.pageViewsByCountry[country] = (persistentMetrics.pageViewsByCountry[country] || 0) + 1;
-    } else if (eventType === 'click') {
-      persistentMetrics.clicks_total++;
-      // Track by element type
-      persistentMetrics.clicksByElement[element] = (persistentMetrics.clicksByElement[element] || 0) + 1;
-    } else if (eventType === 'scroll') {
-      const depth = data.depth || data.maxDepth || value || 0;
-      persistentMetrics.scroll_depth_sum += depth;
-      persistentMetrics.scroll_depth_count++;
-      // Track by page
-      if (!persistentMetrics.scrollDepthByPage[page]) {
-        persistentMetrics.scrollDepthByPage[page] = { sum: 0, count: 0 };
-      }
-      persistentMetrics.scrollDepthByPage[page].sum += depth;
-      persistentMetrics.scrollDepthByPage[page].count++;
-    } else if (eventType === 'time_on_page') {
-      const seconds = data.seconds || value || 0;
-      persistentMetrics.time_on_page_sum += seconds;
-      persistentMetrics.time_on_page_count++;
-      // Track by page
-      if (!persistentMetrics.timeOnPageByPage[page]) {
-        persistentMetrics.timeOnPageByPage[page] = { sum: 0, count: 0 };
-      }
-      persistentMetrics.timeOnPageByPage[page].sum += seconds;
-      persistentMetrics.timeOnPageByPage[page].count++;
-    } else if (eventType === 'error') {
-      persistentMetrics.errors_total++;
-    } else if (eventType === 'engagement') {
-      persistentMetrics.engagement_total++;
-      if (sessionId) {
-        activeSessionsSet.add(sessionId);
-      }
+    // Track session
+    if (sessionId) {
+      activeSessionsSet.add(sessionId);
     }
 
-    // Store event in memory (not persisted)
+    // Update Firestore based on event type
+    if (eventType === 'pageview') {
+      await updateFirestoreMetrics({
+        pageviews_total: 1,
+        pageByPagePath: page,
+        countryCode: country
+      });
+      console.log(`[Analytics] pageview from ${country} on ${page}`);
+    } else if (eventType === 'click') {
+      await updateFirestoreMetrics({
+        clicks_total: 1,
+        element: element
+      });
+    } else if (eventType === 'scroll') {
+      const depth = data.depth || data.maxDepth || value || 0;
+      await updateFirestoreMetrics({
+        scroll_depth_sum: depth,
+        scroll_depth_count: 1,
+        pageForScroll: { path: page, depth }
+      });
+    } else if (eventType === 'time_on_page') {
+      const seconds = data.seconds || value || 0;
+      await updateFirestoreMetrics({
+        time_on_page_sum: seconds,
+        time_on_page_count: 1,
+        pageForTime: { path: page, seconds }
+      });
+    } else if (eventType === 'error') {
+      await updateFirestoreMetrics({ errors_total: 1 });
+    } else if (eventType === 'engagement') {
+      await updateFirestoreMetrics({ engagement_total: 1 });
+    }
+
+    // Store event in memory (for recent events display)
     recentEvents.push({
       timestamp: new Date().toISOString(),
       event_type: eventType,
@@ -212,10 +252,6 @@ export async function POST(request: NextRequest) {
       recentEvents.splice(0, recentEvents.length - 1000);
     }
 
-    // Save to file (persist across restarts)
-    persistentMetrics.active_sessions = Array.from(activeSessionsSet);
-    saveMetrics(persistentMetrics);
-
     console.log(`[Analytics] ${eventType} event from session ${sessionId?.substring(0, 15)}... on ${page}`);
     
     return NextResponse.json({ success: true, event: eventType });
@@ -226,63 +262,80 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET() {
-  // Reload from file to get latest data
-  persistentMetrics = loadMetrics();
-  
   // Clean up stale sessions before reporting
   cleanupStaleSessions();
   
+  // Read metrics from Firestore
+  const metrics = await getFirestoreMetrics();
+  
+  // Extract values with defaults
+  const pageviews_total = metrics.pageviews_total || 0;
+  const clicks_total = metrics.clicks_total || 0;
+  const errors_total = metrics.errors_total || 0;
+  const engagement_total = metrics.engagement_total || 0;
+  const scroll_depth_sum = metrics.scroll_depth_sum || 0;
+  const scroll_depth_count = metrics.scroll_depth_count || 0;
+  const time_on_page_sum = metrics.time_on_page_sum || 0;
+  const time_on_page_count = metrics.time_on_page_count || 0;
+  const pageViewsByPage = metrics.pageViewsByPage || {};
+  const pageViewsByCountry = metrics.pageViewsByCountry || {};
+  const clicksByElement = metrics.clicksByElement || {};
+  const timeOnPageByPage = metrics.timeOnPageByPage || {};
+  const scrollDepthByPage = metrics.scrollDepthByPage || {};
+  
   // Prometheus metrics format
-  const scrollDepthAvg = persistentMetrics.scroll_depth_count > 0 
-    ? persistentMetrics.scroll_depth_sum / persistentMetrics.scroll_depth_count 
-    : 0;
-  const timeOnPageAvg = persistentMetrics.time_on_page_count > 0 
-    ? persistentMetrics.time_on_page_sum / persistentMetrics.time_on_page_count 
-    : 0;
+  const scrollDepthAvg = scroll_depth_count > 0 ? scroll_depth_sum / scroll_depth_count : 0;
+  const timeOnPageAvg = time_on_page_count > 0 ? time_on_page_sum / time_on_page_count : 0;
   const activeSessions = activeSessionsSet.size;
 
   // Build page-level metrics
   let pageViewsMetrics = '';
-  for (const [page, count] of Object.entries(persistentMetrics.pageViewsByPage)) {
-    pageViewsMetrics += `liprobakin_pageviews_total{page="${page}"} ${count}\n`;
+  for (const [page, count] of Object.entries(pageViewsByPage)) {
+    const displayPage = page.replace(/_/g, '/').replace(/^_/, '/');
+    pageViewsMetrics += `liprobakin_pageviews_total{page="${displayPage}"} ${count}\n`;
   }
 
+  // Build country metrics - CRITICAL FOR GEO MAP
   let countryViewsMetrics = '';
-  for (const [country, count] of Object.entries(persistentMetrics.pageViewsByCountry)) {
-    countryViewsMetrics += `liprobakin_pageviews_country_total{country="${country}"} ${count}\n`;
+  for (const [country, count] of Object.entries(pageViewsByCountry)) {
+    if (country && country !== 'UNKNOWN') {
+      countryViewsMetrics += `liprobakin_pageviews_country_total{country="${country}"} ${count}\n`;
+    }
   }
 
   let clicksMetrics = '';
-  for (const [element, count] of Object.entries(persistentMetrics.clicksByElement)) {
+  for (const [element, count] of Object.entries(clicksByElement)) {
     clicksMetrics += `liprobakin_clicks_total{element="${element}"} ${count}\n`;
   }
 
   let timeOnPageMetrics = '';
-  for (const [page, data] of Object.entries(persistentMetrics.timeOnPageByPage)) {
+  for (const [page, data] of Object.entries(timeOnPageByPage as Record<string, { sum: number; count: number }>)) {
     const avg = data.count > 0 ? data.sum / data.count : 0;
-    timeOnPageMetrics += `liprobakin_time_on_page_seconds_avg{page="${page}"} ${avg.toFixed(2)}\n`;
+    const displayPage = page.replace(/_/g, '/').replace(/^_/, '/');
+    timeOnPageMetrics += `liprobakin_time_on_page_seconds_avg{page="${displayPage}"} ${avg.toFixed(2)}\n`;
   }
 
   let scrollDepthMetrics = '';
-  for (const [page, data] of Object.entries(persistentMetrics.scrollDepthByPage)) {
+  for (const [page, data] of Object.entries(scrollDepthByPage as Record<string, { sum: number; count: number }>)) {
     const avg = data.count > 0 ? data.sum / data.count : 0;
-    scrollDepthMetrics += `liprobakin_scroll_depth_avg{page="${page}"} ${avg.toFixed(2)}\n`;
+    const displayPage = page.replace(/_/g, '/').replace(/^_/, '/');
+    scrollDepthMetrics += `liprobakin_scroll_depth_avg{page="${displayPage}"} ${avg.toFixed(2)}\n`;
   }
 
   const prometheusMetrics = `# HELP liprobakin_total_pageviews Total number of pageviews (alias for dashboard compatibility)
 # TYPE liprobakin_total_pageviews counter
-liprobakin_total_pageviews ${persistentMetrics.pageviews_total}
+liprobakin_total_pageviews ${pageviews_total}
 
 # HELP liprobakin_pageviews_total Total number of pageviews by page
 # TYPE liprobakin_pageviews_total counter
-liprobakin_pageviews_total ${persistentMetrics.pageviews_total}
+liprobakin_pageviews_total ${pageviews_total}
 ${pageViewsMetrics}
 # HELP liprobakin_pageviews_country_total Total number of pageviews by country
 # TYPE liprobakin_pageviews_country_total counter
 ${countryViewsMetrics}
 # HELP liprobakin_clicks_total Total number of clicks by element
 # TYPE liprobakin_clicks_total counter
-liprobakin_clicks_total ${persistentMetrics.clicks_total}
+liprobakin_clicks_total ${clicks_total}
 ${clicksMetrics}
 # HELP liprobakin_scroll_depth_avg Average scroll depth percentage by page
 # TYPE liprobakin_scroll_depth_avg gauge
@@ -294,11 +347,11 @@ liprobakin_time_on_page_seconds_avg ${timeOnPageAvg.toFixed(2)}
 ${timeOnPageMetrics}
 # HELP liprobakin_errors_total Total number of errors
 # TYPE liprobakin_errors_total counter
-liprobakin_errors_total ${persistentMetrics.errors_total}
+liprobakin_errors_total ${errors_total}
 
 # HELP liprobakin_engagement_total Total engagement heartbeats
 # TYPE liprobakin_engagement_total counter
-liprobakin_engagement_total ${persistentMetrics.engagement_total}
+liprobakin_engagement_total ${engagement_total}
 
 # HELP liprobakin_active_sessions Active user sessions
 # TYPE liprobakin_active_sessions gauge

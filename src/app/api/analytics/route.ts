@@ -97,7 +97,9 @@ async function updateFirestoreMetrics(updates: {
   pageForScroll?: { path: string; depth: number };
 }) {
   try {
+    console.log('[Analytics] Attempting Firestore update:', JSON.stringify(updates));
     const db = getAdminFirestore();
+    console.log('[Analytics] Firestore instance obtained');
     const metricsRef = db.collection(ANALYTICS_COLLECTION).doc(METRICS_DOC_ID);
     
     const batch: Record<string, any> = {
@@ -157,8 +159,9 @@ async function updateFirestoreMetrics(updates: {
     }
     
     await metricsRef.set(batch, { merge: true });
+    console.log('[Analytics] Firestore update succeeded');
   } catch (error) {
-    console.error('Failed to update Firestore metrics:', error);
+    console.error('[Analytics] Failed to update Firestore metrics:', error);
     // Don't throw - we don't want to break analytics if Firestore fails
   }
 }
@@ -166,16 +169,20 @@ async function updateFirestoreMetrics(updates: {
 // Read metrics from Firestore
 async function getFirestoreMetrics() {
   try {
+    console.log('[Analytics] Reading Firestore metrics');
     const db = getAdminFirestore();
     const metricsRef = db.collection(ANALYTICS_COLLECTION).doc(METRICS_DOC_ID);
     const doc = await metricsRef.get();
     
     if (doc.exists) {
-      return doc.data() || {};
+      const data = doc.data() || {};
+      console.log('[Analytics] Read Firestore metrics:', JSON.stringify(data).substring(0, 500));
+      return data;
     }
+    console.log('[Analytics] Firestore doc does not exist yet');
     return {};
   } catch (error) {
-    console.error('Failed to read Firestore metrics:', error);
+    console.error('[Analytics] Failed to read Firestore metrics:', error);
     return {};
   }
 }

@@ -697,7 +697,7 @@
             },
             "location": {
               "gazetteer": "public/gazetteer/countries.json",
-              "lookup": "country",
+              "lookup": "id",
               "mode": "lookup"
             },
             "name": "Pageviews",
@@ -736,7 +736,7 @@
           "options": { 
             "excludeByName": { "Time": true, "__name__": true, "instance": true, "job": true }, 
             "indexByName": {},
-            "renameByName": { "country": "country", "Value": "Value" } 
+            "renameByName": { "country": "id", "Value": "Value" } 
           } 
         }
       ],

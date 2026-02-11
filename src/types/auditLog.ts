@@ -32,6 +32,7 @@ export type AuditAction =
   | "committee_deleted"
   | "admin_user_created"
   | "admin_roles_updated"
+  | "admin_permissions_updated"
   | "admin_user_deactivated"
   | "admin_user_reactivated"
   | "admin_user_deleted"

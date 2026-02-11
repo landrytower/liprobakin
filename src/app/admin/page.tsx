@@ -29,7 +29,7 @@ import {
 import type { DocumentData, DocumentSnapshot } from "firebase/firestore";
 import { deleteObject, getDownloadURL, ref as storageRef, uploadBytes } from "firebase/storage";
 import { onAuthStateChanged, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, type User } from "firebase/auth";
-import type { AdminUser, AdminRole } from "@/types/admin";
+import type { AdminUser, AdminRole, AdminPermissions } from "@/types/admin";
 import type { AuditLog } from "@/types/auditLog";
 import RichTextEditor from "@/components/RichTextEditor";
 import ArticleContent from "@/components/ArticleContent";

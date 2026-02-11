@@ -97,9 +97,7 @@ async function updateFirestoreMetrics(updates: {
   pageForScroll?: { path: string; depth: number };
 }) {
   try {
-    console.log('[Analytics] Attempting Firestore update:', JSON.stringify(updates));
     const db = getAdminFirestore();
-    console.log('[Analytics] Firestore instance obtained');
     const metricsRef = db.collection(ANALYTICS_COLLECTION).doc(METRICS_DOC_ID);
     
     const batch: Record<string, any> = {
@@ -159,7 +157,6 @@ async function updateFirestoreMetrics(updates: {
     }
     
     await metricsRef.set(batch, { merge: true });
-    console.log('[Analytics] Firestore update succeeded');
   } catch (error) {
     console.error('[Analytics] Failed to update Firestore metrics:', error);
     // Don't throw - we don't want to break analytics if Firestore fails
@@ -169,14 +166,12 @@ async function updateFirestoreMetrics(updates: {
 // Read metrics from Firestore
 async function getFirestoreMetrics() {
   try {
-    console.log('[Analytics] Reading Firestore metrics');
     const db = getAdminFirestore();
     const metricsRef = db.collection(ANALYTICS_COLLECTION).doc(METRICS_DOC_ID);
     const doc = await metricsRef.get();
     
     if (doc.exists) {
       const rawData = doc.data() || {};
-      console.log('[Analytics] Read Firestore metrics:', JSON.stringify(rawData).substring(0, 500));
       
       // Reconstruct nested objects from flat keys (e.g., "pageViewsByCountry.US" -> pageViewsByCountry: {US: ...})
       const data: Record<string, any> = {};
@@ -195,10 +190,8 @@ async function getFirestoreMetrics() {
           data[key] = value;
         }
       }
-      console.log('[Analytics] Reconstructed data keys:', Object.keys(data).join(', '));
       return data;
     }
-    console.log('[Analytics] Firestore doc does not exist yet');
     return {};
   } catch (error) {
     console.error('[Analytics] Failed to read Firestore metrics:', error);

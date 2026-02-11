@@ -646,7 +646,7 @@
         "basemap": { 
           "config": {},
           "name": "Layer 0",
-          "type": "dark" 
+          "type": "default" 
         },
         "controls": { 
           "mouseWheelZoom": true,

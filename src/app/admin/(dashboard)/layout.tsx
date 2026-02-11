@@ -42,7 +42,12 @@ const navItems: NavItem[] = [
   { key: "verifications", label: { en: "Verifications", fr: "Vérifications" }, href: "/admin/verifications", icon: "✓", requiredPermission: "canManageUsers" },
   { key: "games", label: { en: "Games", fr: "Matchs" }, href: "/admin/games", icon: "🏟️", requiredPermission: "canManageGames" },
   { key: "stats", label: { en: "Statistics", fr: "Statistiques" }, href: "/admin/stats", icon: "📈", requiredPermission: "canManageGames" },
-  { key: "league", label: { en: "League", fr: "Ligue" }, href: "/admin/league", icon: "⚙️", requiredPermission: "canManageLeague" },
+  // League sub-sections
+  { key: "referees", label: { en: "Referees", fr: "Arbitres" }, href: "/admin/league/referees", icon: "👨‍⚖️", requiredPermission: "canManageReferees" },
+  { key: "committee", label: { en: "Committee", fr: "Comité" }, href: "/admin/league/committee", icon: "👔", requiredPermission: "canManageCommittee" },
+  { key: "partners", label: { en: "Partners", fr: "Partenaires" }, href: "/admin/league/partners", icon: "🤝", requiredPermission: "canManagePartners" },
+  { key: "sales", label: { en: "Sales", fr: "Sales" }, href: "/admin/league/sales", icon: "💰", requiredPermission: "canManageSales" },
+  { key: "league", label: { en: "League Settings", fr: "Paramètres Ligue" }, href: "/admin/league", icon: "⚙️", requiredPermission: "canManageLeague" },
   { key: "admins", label: { en: "Administrators", fr: "Administrateurs" }, href: "/admin/admins", icon: "👤", requiredPermission: "canManageAdmins" },
 ];
 
@@ -157,8 +162,38 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
 
   const getPermissions = (user: AdminUser | null): Record<string, boolean> => {
     if (!user) return {};
+    
+    // If user has explicit permissions object, use it directly
+    if (user.permissions) {
+      const perms: Record<string, boolean> = {};
+      Object.entries(user.permissions).forEach(([key, value]) => {
+        if (value === true) {
+          perms[key] = true;
+        }
+      });
+      
+      // Master role always gets all permissions
+      if (user.roles?.includes("master")) {
+        perms.canManageNews = true;
+        perms.canManageTeams = true;
+        perms.canManageGames = true;
+        perms.canManageUsers = true;
+        perms.canManageAdmins = true;
+        perms.canManageLeague = true;
+        perms.canManageReferees = true;
+        perms.canManageCommittee = true;
+        perms.canManagePartners = true;
+        perms.canManageSales = true;
+        perms.canManagePlayers = true;
+        perms.canManageVenues = true;
+      }
+      
+      return perms;
+    }
+    
+    // Fallback: derive permissions from roles (legacy support)
     const perms: Record<string, boolean> = {};
-    user.roles.forEach((role) => {
+    user.roles?.forEach((role) => {
       if (role === "master" || role === "league_manager") {
         perms.canManageNews = true;
         perms.canManageTeams = true;
@@ -166,6 +201,10 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
         perms.canManageUsers = true;
         perms.canManageAdmins = role === "master";
         perms.canManageLeague = true;
+        perms.canManageReferees = true;
+        perms.canManageCommittee = true;
+        perms.canManagePartners = true;
+        perms.canManageSales = true;
       } else if (role === "news_editor") {
         perms.canManageNews = true;
       } else if (role === "team_manager") {
@@ -173,9 +212,12 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
       } else if (role === "game_scheduler") {
         perms.canManageGames = true;
       } else if (role === "referee_manager") {
-        perms.canManageUsers = true;
+        perms.canManageReferees = true;
       } else if (role === "venue_manager") {
-        perms.canManageLeague = true;
+        perms.canManageVenues = true;
+      } else if (role === "partner_manager") {
+        perms.canManagePartners = true;
+        perms.canManageCommittee = true;
       }
     });
     return perms;

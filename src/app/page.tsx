@@ -4557,7 +4557,7 @@ export default function Home() {
                   <Link
                     key={member.id}
                     href={`/staff/${member.id}`}
-                    className="group relative overflow-hidden rounded-lg border border-white/10 bg-slate-900/50 transition-all hover:border-orange-500/30 hover:shadow-lg hover:shadow-orange-500/10 flex-shrink-0 w-[180px] sm:w-[200px] md:w-[220px]"
+                    className="group relative overflow-hidden rounded-lg border border-white/10 bg-slate-900/50 transition-all hover:border-orange-500/30 hover:shadow-lg hover:shadow-orange-500/10 flex-shrink-0 w-[162px] sm:w-[180px] md:w-[198px]"
                   >
                     <div className="aspect-[4/5] relative">
                       {member.photo ? (

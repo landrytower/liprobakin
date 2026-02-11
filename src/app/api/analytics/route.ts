@@ -175,8 +175,27 @@ async function getFirestoreMetrics() {
     const doc = await metricsRef.get();
     
     if (doc.exists) {
-      const data = doc.data() || {};
-      console.log('[Analytics] Read Firestore metrics:', JSON.stringify(data).substring(0, 500));
+      const rawData = doc.data() || {};
+      console.log('[Analytics] Read Firestore metrics:', JSON.stringify(rawData).substring(0, 500));
+      
+      // Reconstruct nested objects from flat keys (e.g., "pageViewsByCountry.US" -> pageViewsByCountry: {US: ...})
+      const data: Record<string, any> = {};
+      for (const [key, value] of Object.entries(rawData)) {
+        if (key.includes('.')) {
+          const parts = key.split('.');
+          let current = data;
+          for (let i = 0; i < parts.length - 1; i++) {
+            if (!current[parts[i]]) {
+              current[parts[i]] = {};
+            }
+            current = current[parts[i]];
+          }
+          current[parts[parts.length - 1]] = value;
+        } else {
+          data[key] = value;
+        }
+      }
+      console.log('[Analytics] Reconstructed data keys:', Object.keys(data).join(', '));
       return data;
     }
     console.log('[Analytics] Firestore doc does not exist yet');

@@ -16,7 +16,7 @@ import {
   where,
   serverTimestamp 
 } from "firebase/firestore";
-import type { AdminUser, AdminRole } from "@/types/admin";
+import type { AdminUser, AdminRole, AdminPermissions } from "@/types/admin";
 import { mergePermissions } from "@/types/admin";
 import { logAuditAction } from "./auditLog";
 
@@ -195,6 +195,47 @@ export async function updateAdminRoles(
     return { 
       success: false, 
       error: error instanceof Error ? error.message : "Failed to update roles" 
+    };
+  }
+}
+
+/**
+ * Update admin permissions directly (bypassing roles)
+ */
+export async function updateAdminPermissions(
+  uid: string,
+  permissions: Partial<AdminPermissions>
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await updateDoc(doc(firebaseDB, "adminUsers", uid), {
+      permissions,
+    });
+    
+    // Get admin data for audit log
+    const adminDoc = await getDoc(doc(firebaseDB, "adminUsers", uid));
+    const adminData = adminDoc.data();
+    
+    // Log audit trail
+    const currentUser = firebaseAuth.currentUser;
+    const targetEmail = adminData?.email || "unknown";
+    
+    if (currentUser) {
+      await logAuditAction(
+        "admin_permissions_updated",
+        currentUser.uid,
+        currentUser.email || "unknown",
+        "admin",
+        uid,
+        targetEmail
+      );
+    }
+    
+    return { success: true };
+  } catch (error) {
+    console.error("Error updating admin permissions:", error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : "Failed to update permissions" 
     };
   }
 }

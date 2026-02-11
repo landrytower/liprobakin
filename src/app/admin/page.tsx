@@ -38,6 +38,7 @@ import { getCategoryById } from "@/data/newsCategories";
 import { 
   getAllAdminUsers, 
   updateAdminRoles, 
+  updateAdminPermissions,
   deactivateAdminUser, 
   reactivateAdminUser,
   deleteAdminUser,
@@ -660,6 +661,40 @@ function TeamTypeahead({ label, selectedTeamId, teams, onSelect, placeholder }: 
 export default function AdminPage() {
   const router = useRouter();
   const MASTER_ADMIN_EMAIL = "bobiyatch@gmail.com";
+  
+  // Hierarchical permission configuration with sub-permissions
+  type PermissionConfigItem = {
+    key: keyof AdminPermissions;
+    icon: string;
+    label: { en: string; fr: string };
+    gradient: string;
+    subPermissions?: {
+      key: keyof AdminPermissions;
+      icon: string;
+      label: { en: string; fr: string };
+    }[];
+  };
+
+  const PERMISSION_CONFIG: PermissionConfigItem[] = [
+    { key: "canManageNews", icon: "📰", label: { en: "Stories", fr: "Histoires" }, gradient: "from-blue-500 to-cyan-500" },
+    { key: "canManageTeams", icon: "🏀", label: { en: "Teams", fr: "Équipes" }, gradient: "from-rose-500 to-pink-500" },
+    { key: "canManageUsers", icon: "👥", label: { en: "Accounts & Verifications", fr: "Accounts & Vérifications" }, gradient: "from-purple-500 to-indigo-500" },
+    { key: "canManageGames", icon: "🗓️", label: { en: "Matches & Statistics", fr: "Matchs & Statistiques" }, gradient: "from-emerald-500 to-teal-500" },
+    { 
+      key: "canManageLeague", 
+      icon: "⚙️", 
+      label: { en: "League Settings", fr: "Paramètres League" }, 
+      gradient: "from-orange-500 to-amber-500",
+      subPermissions: [
+        { key: "canManageReferees", icon: "👨‍⚖️", label: { en: "Referees", fr: "Arbitres" } },
+        { key: "canManageCommittee", icon: "👔", label: { en: "Committee Members", fr: "Membre du Comité" } },
+        { key: "canManagePartners", icon: "🤝", label: { en: "Partners", fr: "Partenaires" } },
+        { key: "canManageSales", icon: "💰", label: { en: "Sales", fr: "Sales" } },
+      ]
+    },
+    { key: "canManageAdmins", icon: "👥", label: { en: "Administrators", fr: "Administrateurs" }, gradient: "from-amber-500 to-orange-500" },
+  ];
+  
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [authForm, setAuthForm] = useState({ email: "", password: "" });
@@ -759,6 +794,7 @@ export default function AdminPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordChangeStatus, setPasswordChangeStatus] = useState<StatusCallout | null>(null);
   const [editingAdminRoles, setEditingAdminRoles] = useState<AdminRole[]>([]);
+  const [editingAdminPermissions, setEditingAdminPermissions] = useState<Partial<AdminPermissions>>({});
   const [showStoryPreview, setShowStoryPreview] = useState(false);
   const [teamAssistantOpen, setTeamAssistantOpen] = useState(false);
   const [trafficModuleOpen, setTrafficModuleOpen] = useState(false);
@@ -9836,46 +9872,100 @@ export default function AdminPage() {
                             
                             {editingAdminId === admin.id ? (
                               <div className="mt-3 space-y-2 rounded-lg border border-white/10 bg-slate-900/40 p-3">
-                                <p className="text-xs font-semibold text-slate-300">Edit Roles:</p>
-                                <div className="space-y-1">
-                                  {[
-                                    { role: 'master' as AdminRole, label: '👑 Master' },
-                                    { role: 'league_manager' as AdminRole, label: '⚡ League Manager' },
-                                    { role: 'news_editor' as AdminRole, label: '📰 News Editor' },
-                                    { role: 'game_scheduler' as AdminRole, label: '📅 Game Scheduler' },
-                                    { role: 'team_manager' as AdminRole, label: '👥 Team Manager' },
-                                    { role: 'referee_manager' as AdminRole, label: '🔵 Referee Manager' },
-                                    { role: 'venue_manager' as AdminRole, label: '🏟️ Venue Manager' },
-                                    { role: 'partner_manager' as AdminRole, label: '🤝 Partner Manager' },
-                                  ].map(({ role, label }) => (
-                                    <label key={role} className="flex items-center gap-2 cursor-pointer">
-                                      <input
-                                        type="checkbox"
-                                        checked={editingAdminRoles.includes(role)}
-                                        onChange={(e) => {
-                                          if (e.target.checked) {
-                                            setEditingAdminRoles([...editingAdminRoles, role]);
-                                          } else {
-                                            setEditingAdminRoles(editingAdminRoles.filter(r => r !== role));
-                                          }
-                                        }}
-                                      />
-                                      <span className="text-xs text-white">{label}</span>
-                                    </label>
-                                  ))}
+                                <p className="text-xs font-semibold text-slate-300">Edit Permissions:</p>
+                                <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                                  {PERMISSION_CONFIG.map(({ key, icon, label, gradient, subPermissions }) => {
+                                    const selected = editingAdminPermissions[key] === true;
+                                    return (
+                                      <div key={key} className="space-y-1.5">
+                                        {/* Main Permission */}
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setEditingAdminPermissions({
+                                              ...editingAdminPermissions,
+                                              [key]: !selected
+                                            });
+                                          }}
+                                          className={`flex w-full items-center gap-2.5 rounded-lg border p-2 text-left transition-all ${
+                                            selected
+                                              ? "border-orange-500/50 bg-orange-500/10"
+                                              : "border-white/10 bg-slate-800/30 hover:bg-slate-800/50"
+                                          }`}
+                                        >
+                                          <div className={`flex h-4 w-4 items-center justify-center rounded border transition-all ${
+                                            selected ? `bg-gradient-to-br ${gradient} border-transparent` : "border-slate-600 bg-slate-800"
+                                          }`}>
+                                            {selected && (
+                                              <svg className="h-3 w-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                              </svg>
+                                            )}
+                                          </div>
+                                          <span className="text-xs font-medium text-white">{icon} {label.en}</span>
+                                        </button>
+
+                                        {/* Sub-Permissions */}
+                                        {selected && subPermissions && subPermissions.length > 0 && (
+                                          <div className="ml-6 space-y-1">
+                                            {subPermissions.map((subPerm) => {
+                                              const subSelected = editingAdminPermissions[subPerm.key] === true;
+                                              return (
+                                                <button
+                                                  key={subPerm.key}
+                                                  type="button"
+                                                  onClick={() => {
+                                                    setEditingAdminPermissions({
+                                                      ...editingAdminPermissions,
+                                                      [subPerm.key]: !subSelected
+                                                    });
+                                                  }}
+                                                  className={`flex w-full items-center gap-2 rounded-md border p-1.5 text-left transition-all ${
+                                                    subSelected
+                                                      ? "border-orange-400/40 bg-orange-500/5"
+                                                      : "border-white/5 bg-slate-800/20 hover:bg-slate-800/40"
+                                                  }`}
+                                                >
+                                                  <div className={`flex h-3.5 w-3.5 items-center justify-center rounded border transition-all ${
+                                                    subSelected ? "bg-orange-500 border-orange-500" : "border-slate-600 bg-slate-800"
+                                                  }`}>
+                                                    {subSelected && (
+                                                      <svg className="h-2.5 w-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                                      </svg>
+                                                    )}
+                                                  </div>
+                                                  <span className="text-[10px] font-medium text-slate-300">
+                                                    {subPerm.icon} {subPerm.label.en}
+                                                  </span>
+                                                </button>
+                                              );
+                                            })}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                                 <div className="flex gap-2 pt-2">
                                   <button
                                     onClick={async () => {
                                       setAdminSubmitting(true);
-                                      const result = await updateAdminRoles(admin.id, editingAdminRoles);
+                                      // Save permissions directly
+                                      const cleanPermissions: Partial<AdminPermissions> = {};
+                                      Object.keys(editingAdminPermissions).forEach((key) => {
+                                        if (editingAdminPermissions[key as keyof AdminPermissions] === true) {
+                                          cleanPermissions[key as keyof AdminPermissions] = true;
+                                        }
+                                      });
+                                      const result = await updateAdminPermissions(admin.id, cleanPermissions);
                                       if (result.success) {
-                                        setAdminStatus({ type: 'success', message: 'Roles updated successfully' });
+                                        setAdminStatus({ type: 'success', message: 'Permissions updated successfully' });
                                         const users = await getAllAdminUsers();
                                         setAdminUsers(users);
                                         setEditingAdminId(null);
                                       } else {
-                                        setAdminStatus({ type: 'error', message: result.error || 'Failed to update roles' });
+                                        setAdminStatus({ type: 'error', message: result.error || 'Failed to update permissions' });
                                       }
                                       setAdminSubmitting(false);
                                     }}
@@ -9953,10 +10043,11 @@ export default function AdminPage() {
                                   onClick={() => {
                                     setEditingAdminId(admin.id);
                                     setEditingAdminRoles(admin.roles);
+                                    setEditingAdminPermissions(admin.permissions || {});
                                   }}
                                   className="rounded-full border border-blue-500/40 px-3 py-1 text-xs uppercase tracking-wider text-blue-200 hover:bg-blue-500/10"
                                 >
-                                  Edit Roles
+                                  Edit Permissions
                                 </button>
                                 <button
                                   onClick={async () => {

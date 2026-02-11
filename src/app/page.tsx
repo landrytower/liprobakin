@@ -1814,6 +1814,25 @@ export default function Home() {
         const committeeRef = collection(firebaseDB, "committee");
         const committeeSnapshot = await getDocs(committeeRef);
         
+        // Define role priority order
+        const rolePriority: Record<string, number> = {
+          "president": 1,
+          "président": 1,
+          "1st vice": 2,
+          "1er vice": 2,
+          "first vice": 2,
+          "2nd vice": 3,
+          "2eme vice": 3,
+          "2ème vice": 3,
+          "second vice": 3,
+          "secretaire executif": 4,
+          "secrétaire exécutif": 4,
+          "executive secretary": 4,
+          "tresoriere": 5,
+          "trésorière": 5,
+          "treasurer": 5,
+        };
+        
         const members = committeeSnapshot.docs.map((doc) => {
           const data = doc.data();
           return {
@@ -1822,7 +1841,16 @@ export default function Home() {
             role: data.role || "",
             photo: data.photo || "",
           };
-        }).sort((a, b) => a.name.localeCompare(b.name));
+        }).sort((a, b) => {
+          const aPriority = rolePriority[a.role.toLowerCase()] || 999;
+          const bPriority = rolePriority[b.role.toLowerCase()] || 999;
+          
+          if (aPriority !== bPriority) {
+            return aPriority - bPriority;
+          }
+          
+          return a.name.localeCompare(b.name);
+        });
         
         setDynamicCommittee(members);
       } catch (error) {
@@ -4519,40 +4547,42 @@ export default function Home() {
             description={sectionCopy.committee.description}
           />
           {dynamicCommittee.length > 0 ? (
-            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2 md:gap-3">
-              {dynamicCommittee.map((member) => (
-                <Link
-                  key={member.id}
-                  href={`/staff/${member.id}`}
-                  className="group relative overflow-hidden rounded-lg border border-white/10 bg-slate-900/50 transition-all hover:border-orange-500/30 hover:shadow-lg hover:shadow-orange-500/10"
-                >
-                  <div className="aspect-[4/5] relative">
-                    {member.photo ? (
-                      <Image
-                        src={member.photo}
-                        alt={member.name}
-                        fill
-                        className="object-cover transition-transform duration-500 group-hover:scale-105"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-orange-900/20 via-slate-900 to-slate-900">
-                        <div className="flex h-12 w-12 md:h-14 md:w-14 items-center justify-center rounded-full bg-gradient-to-br from-orange-500 to-orange-600 text-xl md:text-2xl font-bold text-white shadow-lg">
-                          {member.name.charAt(0)}
+            <div className="overflow-x-auto overflow-y-hidden pb-4 -mx-4 px-4">
+              <div className="flex gap-3 md:gap-4">
+                {dynamicCommittee.map((member) => (
+                  <Link
+                    key={member.id}
+                    href={`/staff/${member.id}`}
+                    className="group relative overflow-hidden rounded-lg border border-white/10 bg-slate-900/50 transition-all hover:border-orange-500/30 hover:shadow-lg hover:shadow-orange-500/10 flex-shrink-0 w-[180px] sm:w-[200px] md:w-[220px]"
+                  >
+                    <div className="aspect-[4/5] relative">
+                      {member.photo ? (
+                        <Image
+                          src={member.photo}
+                          alt={member.name}
+                          fill
+                          className="object-cover transition-transform duration-500 group-hover:scale-105"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-orange-900/20 via-slate-900 to-slate-900">
+                          <div className="flex h-12 w-12 md:h-14 md:w-14 items-center justify-center rounded-full bg-gradient-to-br from-orange-500 to-orange-600 text-xl md:text-2xl font-bold text-white shadow-lg">
+                            {member.name.charAt(0)}
+                          </div>
                         </div>
+                      )}
+                      {/* Gradient overlay */}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
+                      {/* Info at bottom */}
+                      <div className="absolute bottom-0 left-0 right-0 p-2 md:p-3">
+                        <p className="font-semibold text-white text-xs md:text-sm truncate">{member.name}</p>
+                        <p className="text-[10px] md:text-xs text-orange-400 truncate">{member.role}</p>
                       </div>
-                    )}
-                    {/* Gradient overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
-                    {/* Info at bottom */}
-                    <div className="absolute bottom-0 left-0 right-0 p-2 md:p-3">
-                      <p className="font-semibold text-white text-xs md:text-sm truncate">{member.name}</p>
-                      <p className="text-[10px] md:text-xs text-orange-400 truncate">{member.role}</p>
+                      {/* Hover overlay */}
+                      <div className="absolute inset-0 bg-orange-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />
                     </div>
-                    {/* Hover overlay */}
-                    <div className="absolute inset-0 bg-orange-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </div>
-                </Link>
-              ))}
+                  </Link>
+                ))}
+              </div>
             </div>
           ) : (
             <div className="rounded-xl border border-dashed border-white/20 bg-slate-900/30 py-12 text-center">

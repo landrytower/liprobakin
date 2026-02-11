@@ -8,18 +8,27 @@ export type AdminRole =
   | "venue_manager"
   | "partner_manager";
 
+// Nested permission structure: main categories with sub-permissions
 export type AdminPermissions = {
   canManageNews: boolean;          // 📰 HISTOIRES
   canManageTeams: boolean;         // 🏀 ÉQUIPES
   canManageUsers: boolean;         // 👥 ACCOUNTS + ✓ VERIFICATIONS
   canManageGames: boolean;         // 🗓️ MATCHS + 📊 STATISTIQUES
-  canManageLeague: boolean;        // ⚙️ LIGUE  
+  canManageLeague: boolean;        // ⚙️ LIGUE (parent)
   canManageAdmins: boolean;        // 👥 ADMINISTRATEURS
   canManagePlayers: boolean;
-  canManageReferees: boolean;
+  canManageReferees: boolean;      // Sub-permission under League
   canManageVenues: boolean;
-  canManagePartners: boolean;
-  canManageCommittee: boolean;
+  canManagePartners: boolean;      // Sub-permission under League
+  canManageCommittee: boolean;     // Sub-permission under League (membre du comité)
+  canManageSales: boolean;         // Sub-permission under League
+};
+
+// Sub-permission keys for each main category
+export type PermissionSubCategories = {
+  canManageLeague: ('canManageReferees' | 'canManageCommittee' | 'canManagePartners' | 'canManageSales')[];
+  canManageGames: ('canManageMatches' | 'canManageStatistics')[];
+  canManageUsers: ('canManageAccounts' | 'canManageVerifications')[];
 };
 
 export type AdminUser = {
@@ -49,6 +58,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, AdminPermissions> = {
     canManageVenues: true,
     canManagePartners: true,
     canManageCommittee: true,
+    canManageSales: true,
     canManageAdmins: true,
   },
   league_manager: {
@@ -62,6 +72,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, AdminPermissions> = {
     canManageVenues: true,
     canManagePartners: true,
     canManageCommittee: true,
+    canManageSales: true,
     canManageAdmins: false,
   },
   news_editor: {
@@ -75,6 +86,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, AdminPermissions> = {
     canManageVenues: false,
     canManagePartners: false,
     canManageCommittee: false,
+    canManageSales: false,
     canManageAdmins: false,
   },
   game_scheduler: {
@@ -88,6 +100,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, AdminPermissions> = {
     canManageVenues: false,
     canManagePartners: false,
     canManageCommittee: false,
+    canManageSales: false,
     canManageAdmins: false,
   },
   team_manager: {
@@ -101,6 +114,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, AdminPermissions> = {
     canManageVenues: false,
     canManagePartners: false,
     canManageCommittee: false,
+    canManageSales: false,
     canManageAdmins: false,
   },
   referee_manager: {
@@ -114,6 +128,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, AdminPermissions> = {
     canManageVenues: false,
     canManagePartners: false,
     canManageCommittee: false,
+    canManageSales: false,
     canManageAdmins: false,
   },
   venue_manager: {
@@ -127,6 +142,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, AdminPermissions> = {
     canManageVenues: true,
     canManagePartners: false,
     canManageCommittee: false,
+    canManageSales: false,
     canManageAdmins: false,
   },
   partner_manager: {
@@ -140,6 +156,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, AdminPermissions> = {
     canManageVenues: false,
     canManagePartners: true,
     canManageCommittee: true,
+    canManageSales: false,
     canManageAdmins: false,
   },
 };
@@ -156,6 +173,7 @@ export function mergePermissions(roles: AdminRole[]): AdminPermissions {
     canManageVenues: false,
     canManagePartners: false,
     canManageCommittee: false,
+    canManageSales: false,
     canManageAdmins: false,
   };
 

@@ -186,12 +186,35 @@ const ROLE_CONFIG: { role: AdminRole; icon: string; color: string; gradient: str
 ];
 
 // Permission-based navigation sections
-const PERMISSION_CONFIG: { key: keyof AdminPermissions; icon: string; label: { en: string; fr: string }; gradient: string }[] = [
+type PermissionConfig = {
+  key: keyof AdminPermissions;
+  icon: string;
+  label: { en: string; fr: string };
+  gradient: string;
+  subPermissions?: {
+    key: keyof AdminPermissions;
+    icon: string;
+    label: { en: string; fr: string };
+  }[];
+};
+
+const PERMISSION_CONFIG: PermissionConfig[] = [
   { key: "canManageNews", icon: "📰", label: { en: "Stories", fr: "Histoires" }, gradient: "from-blue-500 to-cyan-500" },
   { key: "canManageTeams", icon: "🏀", label: { en: "Teams", fr: "Équipes" }, gradient: "from-rose-500 to-pink-500" },
   { key: "canManageUsers", icon: "👥", label: { en: "Accounts & Verifications", fr: "Accounts & Vérifications" }, gradient: "from-purple-500 to-indigo-500" },
   { key: "canManageGames", icon: "🗓️", label: { en: "Matches & Statistics", fr: "Matchs & Statistiques" }, gradient: "from-emerald-500 to-teal-500" },
-  { key: "canManageLeague", icon: "⚙️", label: { en: "League Settings", fr: "Paramètres League" }, gradient: "from-orange-500 to-amber-500" },
+  { 
+    key: "canManageLeague", 
+    icon: "⚙️", 
+    label: { en: "League Settings", fr: "Paramètres League" }, 
+    gradient: "from-orange-500 to-amber-500",
+    subPermissions: [
+      { key: "canManageReferees", icon: "👨‍⚖️", label: { en: "Referees", fr: "Arbitres" } },
+      { key: "canManageCommittee", icon: "👔", label: { en: "Committee Members", fr: "Membre du Comité" } },
+      { key: "canManagePartners", icon: "🤝", label: { en: "Partners", fr: "Partenaires" } },
+      { key: "canManageSales", icon: "💰", label: { en: "Sales", fr: "Sales" } },
+    ]
+  },
   { key: "canManageAdmins", icon: "👥", label: { en: "Administrators", fr: "Administrateurs" }, gradient: "from-amber-500 to-orange-500" },
 ];
 
@@ -778,37 +801,78 @@ export default function AdminsPage() {
               <p className="mt-1 text-sm text-slate-400">{editingAdmin.displayName || editingAdmin.email}</p>
             </div>
             <div className="p-6 space-y-2 max-h-[60vh] overflow-y-auto">
-              {PERMISSION_CONFIG.map(({ key, icon, label, gradient }) => {
+              {PERMISSION_CONFIG.map(({ key, icon, label, gradient, subPermissions }) => {
                 const selected = editPermissions[key as keyof AdminPermissions] === true;
                 return (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => {
-                      setEditPermissions({
-                        ...editPermissions,
-                        [key]: !selected
-                      });
-                    }}
-                    className={`flex w-full items-center gap-3 rounded-xl border p-3.5 text-left transition-all ${
-                      selected
-                        ? "border-orange-500/50 bg-orange-500/10"
-                        : "border-white/10 bg-slate-800/30 hover:bg-slate-800/50"
-                    }`}
-                  >
-                    <div className={`flex h-5 w-5 items-center justify-center rounded-md border transition-all ${
-                      selected ? `bg-gradient-to-br ${gradient} border-transparent` : "border-slate-600 bg-slate-800"
-                    }`}>
-                      {selected && (
-                        <svg className="h-3.5 w-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                        </svg>
-                      )}
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-white">{icon} {language === "fr" ? label.fr : label.en}</p>
-                    </div>
-                  </button>
+                  <div key={key} className="space-y-2">
+                    {/* Main Permission */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditPermissions({
+                          ...editPermissions,
+                          [key]: !selected
+                        });
+                      }}
+                      className={`flex w-full items-center gap-3 rounded-xl border p-3.5 text-left transition-all ${
+                        selected
+                          ? "border-orange-500/50 bg-orange-500/10"
+                          : "border-white/10 bg-slate-800/30 hover:bg-slate-800/50"
+                      }`}
+                    >
+                      <div className={`flex h-5 w-5 items-center justify-center rounded-md border transition-all ${
+                        selected ? `bg-gradient-to-br ${gradient} border-transparent` : "border-slate-600 bg-slate-800"
+                      }`}>
+                        {selected && (
+                          <svg className="h-3.5 w-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-white">{icon} {language === "fr" ? label.fr : label.en}</p>
+                      </div>
+                    </button>
+
+                    {/* Sub-Permissions (shown when parent is selected) */}
+                    {selected && subPermissions && subPermissions.length > 0 && (
+                      <div className="ml-8 space-y-1.5">
+                        {subPermissions.map((subPerm) => {
+                          const subSelected = editPermissions[subPerm.key as keyof AdminPermissions] === true;
+                          return (
+                            <button
+                              key={subPerm.key}
+                              type="button"
+                              onClick={() => {
+                                setEditPermissions({
+                                  ...editPermissions,
+                                  [subPerm.key]: !subSelected
+                                });
+                              }}
+                              className={`flex w-full items-center gap-2.5 rounded-lg border p-2.5 text-left transition-all ${
+                                subSelected
+                                  ? "border-orange-400/40 bg-orange-500/5"
+                                  : "border-white/5 bg-slate-800/20 hover:bg-slate-800/40"
+                              }`}
+                            >
+                              <div className={`flex h-4 w-4 items-center justify-center rounded border transition-all ${
+                                subSelected ? "bg-orange-500 border-orange-500" : "border-slate-600 bg-slate-800"
+                              }`}>
+                                {subSelected && (
+                                  <svg className="h-3 w-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                  </svg>
+                                )}
+                              </div>
+                              <p className="text-xs font-medium text-slate-300">
+                                {subPerm.icon} {language === "fr" ? subPerm.label.fr : subPerm.label.en}
+                              </p>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>

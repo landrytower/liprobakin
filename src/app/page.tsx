@@ -1814,23 +1814,27 @@ export default function Home() {
         const committeeRef = collection(firebaseDB, "committee");
         const committeeSnapshot = await getDocs(committeeRef);
         
-        // Define role priority order
-        const rolePriority: Record<string, number> = {
-          "president": 1,
-          "président": 1,
-          "1st vice": 2,
-          "1er vice": 2,
-          "first vice": 2,
-          "2nd vice": 3,
-          "2eme vice": 3,
-          "2ème vice": 3,
-          "second vice": 3,
-          "secretaire executif": 4,
-          "secrétaire exécutif": 4,
-          "executive secretary": 4,
-          "tresoriere": 5,
-          "trésorière": 5,
-          "treasurer": 5,
+        // Helper function to determine role priority
+        const getRolePriority = (role: string): number => {
+          const r = role.toLowerCase().trim();
+          
+          // President (priority 1)
+          if (r.includes("president") || r.includes("président")) return 1;
+          
+          // 1st Vice (priority 2)
+          if ((r.includes("1") || r.includes("first") || r.includes("1er") || r.includes("premier")) && r.includes("vice")) return 2;
+          
+          // 2nd Vice (priority 3)
+          if ((r.includes("2") || r.includes("second") || r.includes("2e") || r.includes("deuxième")) && r.includes("vice")) return 3;
+          
+          // Secretary (priority 4)
+          if (r.includes("secr") || r.includes("secretary")) return 4;
+          
+          // Treasurer (priority 5)
+          if (r.includes("tres") || r.includes("trés") || r.includes("treasurer")) return 5;
+          
+          // All other members (priority 999)
+          return 999;
         };
         
         const members = committeeSnapshot.docs.map((doc) => {
@@ -1842,8 +1846,8 @@ export default function Home() {
             photo: data.photo || "",
           };
         }).sort((a, b) => {
-          const aPriority = rolePriority[a.role.toLowerCase()] || 999;
-          const bPriority = rolePriority[b.role.toLowerCase()] || 999;
+          const aPriority = getRolePriority(a.role);
+          const bPriority = getRolePriority(b.role);
           
           if (aPriority !== bPriority) {
             return aPriority - bPriority;

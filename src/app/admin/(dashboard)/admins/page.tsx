@@ -106,6 +106,7 @@ const translations = {
     confirmRemove: "Are you sure you want to remove this admin? This action cannot be undone.",
     removeSuccess: "Admin removed successfully",
     removeFailed: "Failed to remove admin",
+    removing: "Deleting admin...",
     editRoles: "Edit Permissions",
     saveChanges: "Save Changes",
     saving: "Saving...",
@@ -184,6 +185,7 @@ const translations = {
     confirmRemove: "Êtes-vous sûr de vouloir supprimer cet admin ? Cette action est irréversible.",
     removeSuccess: "Admin supprimé avec succès",
     removeFailed: "Échec de la suppression",
+    removing: "Suppression de l'admin...",
     editRoles: "Modifier les Permissions",
     saveChanges: "Enregistrer",
     saving: "Enregistrement...",
@@ -353,10 +355,33 @@ export default function AdminsPage() {
 
   const handleRemoveAdmin = async (admin: AdminUserData) => {
     if (!confirm(t.confirmRemove)) return;
+    
+    const user = firebaseAuth.currentUser;
+    if (!user) {
+      setNotification({ type: "error", message: "Not authenticated" });
+      return;
+    }
+
     try {
-      await deleteDoc(doc(firebaseDB, "adminUsers", admin.id));
-      setNotification({ type: "success", message: t.removeSuccess });
-      fetchAdmins();
+      setNotification({ type: "info", message: t.removing });
+      
+      const res = await fetch("/api/admin/delete-admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          adminId: admin.id,
+          requestorUid: user.uid,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        setNotification({ type: "success", message: t.removeSuccess });
+        fetchAdmins();
+      } else {
+        setNotification({ type: "error", message: data.error || t.removeFailed });
+      }
     } catch (error) {
       console.error("Error removing admin:", error);
       setNotification({ type: "error", message: t.removeFailed });

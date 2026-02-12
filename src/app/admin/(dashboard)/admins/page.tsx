@@ -35,7 +35,7 @@ const translations = {
   en: {
     title: "Admin Management",
     subtitle: "Invite new admins, assign roles, and manage your team.",
-    inviteAdmin: "Invite New Admin",
+    inviteAdmin: "Add New Admin",
     adminsCount: "Total Admins",
     pendingCount: "Pending Setup",
     activeCount: "Active",
@@ -54,9 +54,17 @@ const translations = {
     next: "Continue",
     back: "Back",
     cancel: "Cancel",
-    sendInvite: "Send Invitation",
-    sending: "Sending...",
+    sendInvite: "Create Admin",
+    sending: "Creating...",
     selectRoles: "Select at least one role",
+    passwordLabel: "Password",
+    passwordPlaceholder: "Minimum 6 characters",
+    confirmPasswordLabel: "Confirm Password",
+    confirmPasswordPlaceholder: "Re-enter password",
+    passwordMismatch: "Passwords do not match",
+    passwordTooShort: "Password must be at least 6 characters",
+    passwordSet: "Password has been set",
+    adminCanChangePassword: "The admin can change their password after logging in.",
     master: "Master Admin",
     masterDesc: "Full control — manages everything including other admins",
     league_manager: "League Manager",
@@ -90,8 +98,8 @@ const translations = {
     joined: "Joined",
     lastActive: "Last active",
     never: "Never",
-    inviteSuccess: "Invitation sent!",
-    inviteSuccessDesc: "has been invited. They'll receive an email to set their password.",
+    inviteSuccess: "Admin created!",
+    inviteSuccessDesc: "account has been created. They can log in with the password you set.",
     inviteFailed: "Invitation failed",
     linkCopied: "Invite link copied to clipboard!",
     linkCopyFailed: "Could not copy link. Check console for the link.",
@@ -105,7 +113,7 @@ const translations = {
   fr: {
     title: "Gestion des Administrateurs",
     subtitle: "Invitez de nouveaux admins, attribuez des rôles et gérez votre équipe.",
-    inviteAdmin: "Inviter un Administrateur",
+    inviteAdmin: "Ajouter un Admin",
     adminsCount: "Total Admins",
     pendingCount: "En Attente",
     activeCount: "Actifs",
@@ -124,9 +132,17 @@ const translations = {
     next: "Continuer",
     back: "Retour",
     cancel: "Annuler",
-    sendInvite: "Envoyer l'Invitation",
-    sending: "Envoi...",
+    sendInvite: "Créer l'Admin",
+    sending: "Création...",
     selectRoles: "Sélectionnez au moins un rôle",
+    passwordLabel: "Mot de passe",
+    passwordPlaceholder: "Minimum 6 caractères",
+    confirmPasswordLabel: "Confirmer le mot de passe",
+    confirmPasswordPlaceholder: "Ressaisir le mot de passe",
+    passwordMismatch: "Les mots de passe ne correspondent pas",
+    passwordTooShort: "Le mot de passe doit contenir au moins 6 caractères",
+    passwordSet: "Mot de passe défini",
+    adminCanChangePassword: "L'admin pourra changer son mot de passe après connexion.",
     master: "Admin Principal",
     masterDesc: "Contrôle total — gère tout, y compris les autres admins",
     league_manager: "Directeur de Ligue",
@@ -160,8 +176,8 @@ const translations = {
     joined: "Inscrit",
     lastActive: "Dernière activité",
     never: "Jamais",
-    inviteSuccess: "Invitation envoyée !",
-    inviteSuccessDesc: "a été invité(e). Un email avec un lien a été envoyé.",
+    inviteSuccess: "Admin créé !",
+    inviteSuccessDesc: "compte a été créé. Il peut se connecter avec le mot de passe défini.",
     inviteFailed: "L'invitation a échoué",
     linkCopied: "Lien d'invitation copié !",
     linkCopyFailed: "Impossible de copier le lien. Vérifiez la console.",
@@ -233,6 +249,8 @@ export default function AdminsPage() {
   const [inviteStep, setInviteStep] = useState<InviteStep>("info");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteName, setInviteName] = useState("");
+  const [invitePassword, setInvitePassword] = useState("");
+  const [invitePasswordConfirm, setInvitePasswordConfirm] = useState("");
   const [inviteRoles, setInviteRoles] = useState<AdminRole[]>([]);
   const [inviteSubmitting, setInviteSubmitting] = useState(false);
 
@@ -286,6 +304,8 @@ export default function AdminsPage() {
     setInviteStep("info");
     setInviteEmail("");
     setInviteName("");
+    setInvitePassword("");
+    setInvitePasswordConfirm("");
     setInviteRoles([]);
   };
 
@@ -301,6 +321,7 @@ export default function AdminsPage() {
         body: JSON.stringify({
           email: inviteEmail,
           displayName: inviteName,
+          password: invitePassword,
           roles: inviteRoles,
           createdByUid: user.uid,
         }),
@@ -589,7 +610,7 @@ export default function AdminsPage() {
             <div className="border-b border-white/10 bg-slate-800/50 px-6 py-5">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-bold text-white">{t.inviteAdmin}</h2>
-                <button onClick={resetInviteFlow} className="rounded-xl p-2 text-slate-400 hover:bg-white/10 hover:text-white transition-colors">
+                <button onClick={resetInviteFlow} title="Close" className="rounded-xl p-2 text-slate-400 hover:bg-white/10 hover:text-white transition-colors">
                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
@@ -650,6 +671,36 @@ export default function AdminsPage() {
                       placeholder={t.namePlaceholder}
                       className="w-full rounded-xl border border-white/10 bg-slate-800/60 px-4 py-3 text-sm text-white placeholder:text-slate-500 focus:border-orange-500/50 focus:outline-none focus:ring-1 focus:ring-orange-500/30 transition-colors"
                     />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">{t.passwordLabel}</label>
+                    <input
+                      type="password"
+                      value={invitePassword}
+                      onChange={(e) => setInvitePassword(e.target.value)}
+                      placeholder={t.passwordPlaceholder}
+                      className="w-full rounded-xl border border-white/10 bg-slate-800/60 px-4 py-3 text-sm text-white placeholder:text-slate-500 focus:border-orange-500/50 focus:outline-none focus:ring-1 focus:ring-orange-500/30 transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">{t.confirmPasswordLabel}</label>
+                    <input
+                      type="password"
+                      value={invitePasswordConfirm}
+                      onChange={(e) => setInvitePasswordConfirm(e.target.value)}
+                      placeholder={t.confirmPasswordPlaceholder}
+                      className={`w-full rounded-xl border bg-slate-800/60 px-4 py-3 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-1 transition-colors ${
+                        invitePasswordConfirm && invitePassword !== invitePasswordConfirm
+                          ? "border-red-500/50 focus:border-red-500/50 focus:ring-red-500/30"
+                          : "border-white/10 focus:border-orange-500/50 focus:ring-orange-500/30"
+                      }`}
+                    />
+                    {invitePasswordConfirm && invitePassword !== invitePasswordConfirm && (
+                      <p className="text-xs text-red-400 mt-1">{t.passwordMismatch}</p>
+                    )}
+                    {invitePassword && invitePassword.length < 6 && (
+                      <p className="text-xs text-amber-400 mt-1">{t.passwordTooShort}</p>
+                    )}
                   </div>
                 </div>
               )}
@@ -727,11 +778,14 @@ export default function AdminsPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-start gap-3 rounded-2xl border border-sky-500/20 bg-sky-500/5 p-4">
-                    <svg className="h-5 w-5 text-sky-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  <div className="flex items-start gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+                    <svg className="h-5 w-5 text-emerald-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                     </svg>
-                    <p className="text-sm text-sky-200/80 leading-relaxed">{t.reviewEmailNote}</p>
+                    <div>
+                      <p className="text-sm font-medium text-emerald-300">{t.passwordSet}</p>
+                      <p className="text-xs text-emerald-200/60 mt-1">{t.adminCanChangePassword}</p>
+                    </div>
                   </div>
                 </div>
               )}
@@ -757,7 +811,7 @@ export default function AdminsPage() {
                     else setInviteStep("review");
                   }}
                   disabled={
-                    (inviteStep === "info" && (!inviteEmail.trim() || !inviteName.trim())) ||
+                    (inviteStep === "info" && (!inviteEmail.trim() || !inviteName.trim() || invitePassword.length < 6 || invitePassword !== invitePasswordConfirm)) ||
                     (inviteStep === "roles" && inviteRoles.length === 0)
                   }
                   className="rounded-xl bg-white/10 px-5 py-2.5 text-sm font-semibold text-white transition-all hover:bg-white/20 disabled:opacity-30 disabled:cursor-not-allowed"
@@ -778,7 +832,7 @@ export default function AdminsPage() {
                   ) : (
                     <>
                       <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
                       </svg>
                       {t.sendInvite}
                     </>

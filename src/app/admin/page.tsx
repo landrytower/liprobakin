@@ -1050,6 +1050,8 @@ export default function AdminPage() {
         // Record last login
         if (adminData) {
           await recordLastLogin(next.uid);
+          // Redirect to stories page after loading admin data
+          router.push("/admin/stories");
         }
       } else {
         console.log("🚪 User logged out");
@@ -1058,7 +1060,7 @@ export default function AdminPage() {
       setAuthLoading(false);
     });
     return () => unsubscribe();
-  }, []);
+  }, [router]);
 
   // Update current user's activity every 2 minutes
   useEffect(() => {
@@ -1644,6 +1646,9 @@ export default function AdminPage() {
       
       // Log the login action
       await logAuditAction("user_login", user.uid, user.email || authForm.email, "admin");
+      
+      // Redirect to the admin dashboard after successful login
+      router.push("/admin/stories");
     } catch (error: unknown) {
       console.error("Login error:", error);
       const firebaseError = error as { code?: string; message?: string };
@@ -5173,33 +5178,6 @@ export default function AdminPage() {
 
             {/* Main Content Area */}
             <div className="px-6 py-8">
-              {/* Database Reset Section - Only for master admins */}
-              {currentAdminUser?.roles.includes('master') && (
-              <section className="mb-8 rounded-2xl border border-rose-400/40 bg-rose-500/10 p-6">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <h3 className="text-sm font-semibold uppercase tracking-wider text-rose-200">⚠️ {t.databaseReset}</h3>
-                    <p className="mt-1 text-xs text-rose-300/80">
-                      {t.resetDescription}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleResetAllStats}
-                    disabled={resetSubmitting}
-                    className="w-full shrink-0 rounded-full border border-rose-400/60 bg-rose-500/20 px-4 py-3 text-xs font-semibold uppercase tracking-[0.4em] text-rose-100 transition hover:border-rose-400/80 hover:bg-rose-500/30 disabled:opacity-50 sm:w-auto sm:py-2"
-                  >
-                    {resetSubmitting ? t.resetting : t.resetAllStats}
-                  </button>
-                </div>
-                {resetStatus && (
-                  <div className={`mt-3 rounded-xl border p-3 text-xs ${statusClassMap[resetStatus.type]}`}>
-                    {resetStatus.message}
-                  </div>
-                )}
-              </section>
-              )}
-
               {/* Tab Content Sections */}
               <div className="space-y-4">
               {/* Stories Tab Content */}

@@ -4,7 +4,8 @@ import React, { useEffect, useState, useCallback } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useAdmin } from "../layout";
-import { firebaseDB, firebaseStorage } from "@/lib/firebase";
+import { firebaseDB, firebaseStorage, firebaseAuth } from "@/lib/firebase";
+import { signInWithEmailAndPassword } from "firebase/auth";
 import {
   collection,
   doc,
@@ -35,6 +36,7 @@ const t = {
     subtitle: "Manage referees, committee members, and venues",
     referees: "Referees",
     committee: "Committee",
+    partners: "Partners",
     venues: "Venues",
     add: "Add",
     edit: "Edit",
@@ -74,6 +76,7 @@ const t = {
     subtitle: "Gérer les arbitres, les membres du comité et les sites",
     referees: "Arbitres",
     committee: "Comité",
+    partners: "Partenaires",
     venues: "Sites",
     add: "Ajouter",
     edit: "Modifier",
@@ -141,13 +144,17 @@ export default function LeaguePage() {
 
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [resetPassword, setResetPassword] = useState("");
+  const [resetError, setResetError] = useState("");
+  const [resetSuccess, setResetSuccess] = useState("");
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const [refSnap, comSnap, venSnap] = await Promise.all([
         getDocs(collection(firebaseDB, "referees")),
-        getDocs(collection(firebaseDB, "committeeMembers")),
+        getDocs(collection(firebaseDB, "committee")),
         getDocs(collection(firebaseDB, "venues")),
       ]);
       setReferees(refSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Referee)));
@@ -226,9 +233,9 @@ export default function LeaguePage() {
         updatedAt: serverTimestamp() 
       };
       if (editingCommittee) { 
-        await updateDoc(doc(firebaseDB, "committeeMembers", editingCommittee.id), data); 
+        await updateDoc(doc(firebaseDB, "committee", editingCommittee.id), data); 
       } else { 
-        await addDoc(collection(firebaseDB, "committeeMembers"), { ...data, createdAt: serverTimestamp() }); 
+        await addDoc(collection(firebaseDB, "committee"), { ...data, createdAt: serverTimestamp() }); 
       }
       setShowCommitteeModal(false); fetchData();
     } catch (error) { console.error("Error saving committee member:", error); }
@@ -237,7 +244,7 @@ export default function LeaguePage() {
 
   const deleteCommittee = async (id: string) => {
     if (!confirm("Delete this committee member?")) return;
-    try { await deleteDoc(doc(firebaseDB, "committeeMembers", id)); fetchData(); } catch (error) { console.error(error); }
+    try { await deleteDoc(doc(firebaseDB, "committee", id)); fetchData(); } catch (error) { console.error(error); }
   };
 
   // Venue CRUD
@@ -271,26 +278,69 @@ export default function LeaguePage() {
     try { await deleteDoc(doc(firebaseDB, "venues", id)); fetchData(); } catch (error) { console.error(error); }
   };
 
-  // Database Reset
+  // Database Reset with password verification
+  const handleResetClick = () => {
+    setResetPassword("");
+    setResetError("");
+    setResetSuccess("");
+    setShowPasswordModal(true);
+  };
+
   const handleResetStats = async () => {
-    if (!confirm(copy.confirmReset)) return;
+    if (!currentAdminUser?.email || !resetPassword) {
+      setResetError(language === "fr" ? "Mot de passe requis" : "Password required");
+      return;
+    }
+
     setResetting(true);
+    setResetError("");
+
     try {
+      // Verify password
+      await signInWithEmailAndPassword(firebaseAuth, currentAdminUser.email, resetPassword);
+
       // Delete all games
       const gamesSnap = await getDocs(collection(firebaseDB, "games"));
       const batch1 = writeBatch(firebaseDB);
       gamesSnap.docs.forEach((d) => batch1.delete(d.ref));
-      await batch1.commit();
+      if (gamesSnap.docs.length > 0) await batch1.commit();
 
-      // Reset team stats
-      const teamsSnap = await getDocs(collection(firebaseDB, "teams"));
+      // Delete all standings
+      const standingsSnap = await getDocs(collection(firebaseDB, "standings"));
       const batch2 = writeBatch(firebaseDB);
-      teamsSnap.docs.forEach((d) => batch2.update(d.ref, { wins: 0, losses: 0, totalPoints: 0 }));
-      await batch2.commit();
+      standingsSnap.docs.forEach((d) => batch2.delete(d.ref));
+      if (standingsSnap.docs.length > 0) await batch2.commit();
 
-      alert(language === "fr" ? "Statistiques réinitialisées avec succès" : "Statistics reset successfully");
-    } catch (error) { console.error("Error resetting stats:", error); }
-    finally { setResetting(false); }
+      // Reset team stats and player stats
+      const teamsSnap = await getDocs(collection(firebaseDB, "teams"));
+      for (const teamDoc of teamsSnap.docs) {
+        await updateDoc(teamDoc.ref, { wins: 0, losses: 0, totalPoints: 0, updatedAt: serverTimestamp() });
+        // Reset player stats
+        const rosterSnap = await getDocs(collection(firebaseDB, `teams/${teamDoc.id}/roster`));
+        for (const playerDoc of rosterSnap.docs) {
+          await updateDoc(playerDoc.ref, {
+            stats: { pts: "0.0", reb: "0.0", ast: "0.0", stl: "0.0", blk: "0.0" },
+            gamesPlayed: 0,
+            updatedAt: serverTimestamp(),
+          });
+        }
+      }
+
+      setResetSuccess(language === "fr" 
+        ? `✓ Réinitialisation terminée! ${gamesSnap.docs.length} matchs supprimés, ${teamsSnap.docs.length} équipes réinitialisées.`
+        : `✓ Reset complete! Deleted ${gamesSnap.docs.length} games, reset ${teamsSnap.docs.length} teams.`);
+      setResetPassword("");
+      setTimeout(() => setShowPasswordModal(false), 3000);
+    } catch (error: any) {
+      console.error("Error resetting stats:", error);
+      if (error.code === "auth/wrong-password" || error.code === "auth/invalid-credential") {
+        setResetError(language === "fr" ? "Mot de passe incorrect" : "Incorrect password");
+      } else {
+        setResetError(language === "fr" ? "Erreur lors de la réinitialisation" : "Reset failed");
+      }
+    } finally {
+      setResetting(false);
+    }
   };
 
   const canManage = currentAdminUser?.permissions?.canManageReferees || currentAdminUser?.permissions?.canManageVenues || currentAdminUser?.permissions?.canManagePartners;
@@ -301,19 +351,143 @@ export default function LeaguePage() {
 
   return (
     <div className="space-y-6">
-      {/* Database Reset Warning */}
-      <div className="rounded-2xl border border-orange-500/30 bg-orange-500/10 p-4 flex items-center justify-between">
+      {/* Database Reset Warning - Only for master admins */}
+      {currentAdminUser?.roles?.includes('master') && (
+      <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h3 className="text-orange-400 font-bold flex items-center gap-2">⚠️ {copy.databaseReset}</h3>
+          <h3 className="text-rose-300 font-bold flex items-center gap-2">⚠️ {copy.databaseReset}</h3>
           <p className="text-sm text-slate-400 mt-1">{copy.resetDescription}</p>
         </div>
-        <button onClick={handleResetStats} disabled={resetting} className="px-4 py-2 border border-orange-500 text-orange-400 rounded-xl hover:bg-orange-500/20 transition disabled:opacity-50 text-sm font-semibold whitespace-nowrap">
-          {resetting ? "..." : copy.resetStats}
+        <button onClick={handleResetClick} className="px-4 py-2 border border-rose-500 text-rose-400 rounded-xl hover:bg-rose-500/20 transition text-sm font-semibold whitespace-nowrap">
+          {copy.resetStats}
         </button>
       </div>
+      )}
+
+      {/* Password Confirmation Modal */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="w-full max-w-md mx-4 rounded-2xl border border-rose-500/30 bg-slate-900 p-6 shadow-2xl">
+            <h3 className="text-xl font-bold text-rose-300 mb-2">⚠️ {language === "fr" ? "Confirmation requise" : "Confirmation Required"}</h3>
+            <p className="text-sm text-slate-400 mb-4">
+              {language === "fr" 
+                ? "Cette action supprimera tous les matchs, classements et réinitialisera toutes les statistiques à 0. Entrez votre mot de passe pour confirmer."
+                : "This will delete all games, standings and reset all stats to 0. Enter your password to confirm."}
+            </p>
+            
+            <input
+              type="password"
+              value={resetPassword}
+              onChange={(e) => setResetPassword(e.target.value)}
+              placeholder={language === "fr" ? "Votre mot de passe" : "Your password"}
+              className="w-full rounded-xl border border-white/20 bg-slate-800 px-4 py-3 text-white placeholder-slate-500 focus:border-rose-500 focus:outline-none mb-4"
+              onKeyDown={(e) => e.key === "Enter" && handleResetStats()}
+            />
+
+            {resetError && (
+              <div className="mb-4 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-300">
+                {resetError}
+              </div>
+            )}
+            
+            {resetSuccess && (
+              <div className="mb-4 rounded-xl border border-green-500/30 bg-green-500/10 p-3 text-sm text-green-300">
+                {resetSuccess}
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowPasswordModal(false)}
+                className="flex-1 rounded-xl border border-white/20 bg-slate-800 px-4 py-3 text-white hover:bg-slate-700 transition"
+              >
+                {copy.cancel}
+              </button>
+              <button
+                onClick={handleResetStats}
+                disabled={resetting || !resetPassword}
+                className="flex-1 rounded-xl border border-rose-500 bg-rose-500/20 px-4 py-3 text-rose-300 font-semibold hover:bg-rose-500/30 transition disabled:opacity-50"
+              >
+                {resetting ? "..." : language === "fr" ? "Confirmer la réinitialisation" : "Confirm Reset"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Header */}
       <div><h1 className="text-2xl font-bold text-white">{copy.title}</h1><p className="text-slate-400 text-sm mt-1">{copy.subtitle}</p></div>
+
+      {/* Quick Navigation Cards */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Link 
+          href="/admin/league/referees"
+          className="group relative overflow-hidden rounded-2xl border border-indigo-500/30 bg-gradient-to-br from-indigo-600/20 to-indigo-900/20 p-6 transition hover:border-indigo-500/50 hover:shadow-lg hover:shadow-indigo-500/20"
+        >
+          <div className="relative z-10">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-3xl">👨‍⚖️</span>
+              <svg className="w-5 h-5 text-indigo-400 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-bold text-white mb-1">{copy.referees}</h3>
+            <p className="text-sm text-indigo-300">{language === "fr" ? "Gérer les arbitres" : "Manage referees"}</p>
+          </div>
+          <div className="absolute inset-0 bg-gradient-to-t from-indigo-500/5 to-transparent opacity-0 group-hover:opacity-100 transition" />
+        </Link>
+
+        <Link 
+          href="/admin/league/committee"
+          className="group relative overflow-hidden rounded-2xl border border-violet-500/30 bg-gradient-to-br from-violet-600/20 to-violet-900/20 p-6 transition hover:border-violet-500/50 hover:shadow-lg hover:shadow-violet-500/20"
+        >
+          <div className="relative z-10">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-3xl">👔</span>
+              <svg className="w-5 h-5 text-violet-400 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-bold text-white mb-1">{copy.committee}</h3>
+            <p className="text-sm text-violet-300">{language === "fr" ? "Gérer le comité" : "Manage committee"}</p>
+          </div>
+          <div className="absolute inset-0 bg-gradient-to-t from-violet-500/5 to-transparent opacity-0 group-hover:opacity-100 transition" />
+        </Link>
+
+        <Link 
+          href="/admin/league/partners"
+          className="group relative overflow-hidden rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-emerald-600/20 to-emerald-900/20 p-6 transition hover:border-emerald-500/50 hover:shadow-lg hover:shadow-emerald-500/20"
+        >
+          <div className="relative z-10">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-3xl">🤝</span>
+              <svg className="w-5 h-5 text-emerald-400 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-bold text-white mb-1">{copy.partners || (language === "fr" ? "Partenaires" : "Partners")}</h3>
+            <p className="text-sm text-emerald-300">{language === "fr" ? "Gérer les partenaires" : "Manage partners"}</p>
+          </div>
+          <div className="absolute inset-0 bg-gradient-to-t from-emerald-500/5 to-transparent opacity-0 group-hover:opacity-100 transition" />
+        </Link>
+
+        <Link 
+          href="/admin/league/venues"
+          className="group relative overflow-hidden rounded-2xl border border-cyan-500/30 bg-gradient-to-br from-cyan-600/20 to-cyan-900/20 p-6 transition hover:border-cyan-500/50 hover:shadow-lg hover:shadow-cyan-500/20"
+        >
+          <div className="relative z-10">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-3xl">🏟️</span>
+              <svg className="w-5 h-5 text-cyan-300 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-bold text-white mb-1">{copy.venues}</h3>
+            <p className="text-sm text-cyan-200">{language === "fr" ? "Gerer les sites" : "Manage venues"}</p>
+          </div>
+          <div className="absolute inset-0 bg-gradient-to-t from-cyan-500/5 to-transparent opacity-0 group-hover:opacity-100 transition" />
+        </Link>
+      </div>
 
       {/* Tabs */}
       <div className="flex gap-2 p-1 bg-slate-800/50 rounded-xl border border-white/10 w-fit">

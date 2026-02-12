@@ -200,6 +200,25 @@ export default function EditTeamPage() {
       const teamDoc = await getDoc(doc(firebaseDB, "teams", teamId));
       if (teamDoc.exists()) {
         const teamData = { id: teamDoc.id, ...teamDoc.data() } as Team;
+        
+        // Calculate live W-L record from games
+        const gamesSnap = await getDocs(collection(firebaseDB, "games"));
+        let wins = 0;
+        let losses = 0;
+        
+        gamesSnap.docs.forEach((gameDoc) => {
+          const game = gameDoc.data();
+          if (game.winnerTeamId === teamId) {
+            wins++;
+          } else if (game.loserTeamId === teamId) {
+            losses++;
+          }
+        });
+        
+        // Update team data with live record
+        teamData.wins = wins;
+        teamData.losses = losses;
+        
         setTeam(teamData);
         
         // Check if there's a saved editing state for this team
@@ -749,8 +768,23 @@ export default function EditTeamPage() {
 
       <div className="mx-auto max-w-7xl p-3 sm:p-6">
         {/* Team Details Section */}
-        <div className="mb-4 sm:mb-6 rounded-xl border border-white/10 bg-slate-900/50 p-4 sm:p-6">
-          <div className="mb-4 flex items-center justify-between">
+        <div className="mb-4 sm:mb-6 rounded-xl border border-white/10 bg-slate-900/50 p-4 sm:p-6 relative overflow-hidden">
+          {/* Team Photo Background */}
+          {teamForm.teamPhoto && (
+            <div className="absolute inset-0 z-0">
+              <div 
+                className="absolute inset-0 bg-cover bg-center"
+                style={{ 
+                  backgroundImage: `url(${teamForm.teamPhoto})`,
+                  backgroundPosition: `center ${teamForm.teamPhotoPosition}%`,
+                  filter: 'brightness(0.6)',
+                  transform: 'scale(1.1)'
+                }}
+              />
+              <div className="absolute inset-0 bg-gradient-to-b from-slate-900/70 via-slate-900/60 to-slate-900/70" />
+            </div>
+          )}
+          <div className="mb-4 flex items-center justify-between relative z-10">
             <h2 className="text-lg sm:text-xl font-bold text-white">Team Details</h2>
             {!editingTeam && (
               <div className="flex gap-2">
@@ -787,7 +821,7 @@ export default function EditTeamPage() {
           </div>
 
           {editingTeam ? (
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-2 relative z-10">
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2">Team Name</label>
                 <input
@@ -1016,22 +1050,26 @@ export default function EditTeamPage() {
               </div>
             </div>
           ) : (
-            <div className="grid gap-4 md:grid-cols-3">
-              <div>
-                <div className="text-xs text-slate-400">Gender</div>
-                <div className="text-white">{team.gender}</div>
+            <div className="grid gap-4 md:grid-cols-3 relative z-10">
+              <div className="rounded-lg bg-white/5 backdrop-blur-sm border border-white/10 p-3">
+                <div className="text-xs text-slate-400 mb-1">Gender</div>
+                <div className="text-white font-semibold">{team.gender}</div>
               </div>
-              <div>
-                <div className="text-xs text-slate-400">Record</div>
-                <div className="text-white">{team.wins}W - {team.losses}L</div>
+              <div className="rounded-lg bg-gradient-to-br from-cyan-500/10 to-blue-500/10 backdrop-blur-sm border border-cyan-500/20 p-3">
+                <div className="text-xs text-cyan-400 mb-1">Record</div>
+                <div className="text-white font-bold text-lg">
+                  <span className="text-green-400">{team.wins}W</span>
+                  <span className="text-slate-400 mx-1">-</span>
+                  <span className="text-red-400">{team.losses}L</span>
+                </div>
               </div>
-              <div>
-                <div className="text-xs text-slate-400">Colors</div>
+              <div className="rounded-lg bg-white/5 backdrop-blur-sm border border-white/10 p-3">
+                <div className="text-xs text-slate-400 mb-1">Colors</div>
                 <div className="flex gap-2">
                   {team.colors.map((color, i) => (
                     <div
                       key={i}
-                      className="h-6 w-6 rounded border border-white/20"
+                      className="h-8 w-8 rounded-lg border-2 border-white/30 shadow-lg"
                       style={{ backgroundColor: color }}
                     />
                   ))}

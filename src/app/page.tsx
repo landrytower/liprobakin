@@ -3673,7 +3673,180 @@ export default function Home() {
         </section>
       )}
 
-      <main className="mx-auto max-w-6xl space-y-20 px-4 pb-20 pt-12 md:px-8">
+      {/* Grid Layout for Main Sections */}
+      <main className="mx-auto max-w-6xl px-4 pb-20 pt-12 md:px-8">
+        <div className="mb-12">
+          <h1 className="text-4xl md:text-5xl font-bold text-white mb-4 text-center">
+            {language === 'fr' ? 'Tableau de bord' : 'Dashboard'}
+          </h1>
+          <p className="text-lg text-slate-300 text-center max-w-2xl mx-auto">
+            {language === 'fr' ? 'Gérer les arbitres, les membres du comité et les sites' : 'Manage referees, committee members and sites'}
+          </p>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-20">
+          {/* Schedule Card */}
+          <a 
+            href="#schedule"
+            className="group relative overflow-hidden rounded-2xl border border-blue-500/30 bg-gradient-to-br from-blue-600/20 to-blue-900/20 p-6 transition hover:border-blue-500/50 hover:shadow-lg hover:shadow-blue-500/20"
+            onClick={(e) => {
+              e.preventDefault();
+              document.getElementById('schedule')?.scrollIntoView({ behavior: 'smooth' });
+            }}
+          >
+            <div className="relative z-10">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-3xl">📅</span>
+                <svg className="w-5 h-5 text-blue-400 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path>
+                </svg>
+              </div>
+              <h3 className="text-lg font-bold text-white mb-1">
+                {language === 'fr' ? 'Calendrier' : 'Schedule'}
+              </h3>
+              <p className="text-sm text-blue-300">
+                {language === 'fr' ? 'Voir les matchs à venir' : 'View upcoming games'}
+              </p>
+            </div>
+            <div className="absolute inset-0 bg-gradient-to-t from-blue-500/5 to-transparent opacity-0 group-hover:opacity-100 transition"></div>
+          </a>
+
+          {/* Players Card */}
+          <a 
+            href="#players"
+            className="group relative overflow-hidden rounded-2xl border border-green-500/30 bg-gradient-to-br from-green-600/20 to-green-900/20 p-6 transition hover:border-green-500/50 hover:shadow-lg hover:shadow-green-500/20"
+            onClick={(e) => {
+              e.preventDefault();
+              document.getElementById('players')?.scrollIntoView({ behavior: 'smooth' });
+            }}
+          >
+            <div className="relative z-10">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-3xl">🏀</span>
+                <svg className="w-5 h-5 text-green-400 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path>
+                </svg>
+              </div>
+              <h3 className="text-lg font-bold text-white mb-1">
+                {language === 'fr' ? 'Joueurs' : 'Players'}
+              </h3>
+              <p className="text-sm text-green-300">
+                {language === 'fr' ? 'Statistiques des joueurs' : 'Player statistics'}
+              </p>
+            </div>
+            <div className="absolute inset-0 bg-gradient-to-t from-green-500/5 to-transparent opacity-0 group-hover:opacity-100 transition"></div>
+          </a>
+
+          {/* Standings Card */}
+          <a 
+            href="#standings"
+            className="group relative overflow-hidden rounded-2xl border border-purple-500/30 bg-gradient-to-br from-purple-600/20 to-purple-900/20 p-6 transition hover:border-purple-500/50 hover:shadow-lg hover:shadow-purple-500/20"
+            onClick={(e) => {
+              e.preventDefault();
+              document.getElementById('standings')?.scrollIntoView({ behavior: 'smooth' });
+            }}
+          >
+            <div className="relative z-10">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-3xl">🏆</span>
+                <svg className="w-5 h-5 text-purple-400 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path>
+                </svg>
+              </div>
+              <h3 className="text-lg font-bold text-white mb-1">
+                {language === 'fr' ? 'Classements' : 'Standings'}
+              </h3>
+              <p className="text-sm text-purple-300">
+                {language === 'fr' ? 'Classement des équipes' : 'Team rankings'}
+              </p>
+            </div>
+            <div className="absolute inset-0 bg-gradient-to-t from-purple-500/5 to-transparent opacity-0 group-hover:opacity-100 transition"></div>
+          </a>
+
+          {/* Teams Card */}
+          <a 
+            href="#teams"
+            className="group relative overflow-hidden rounded-2xl border border-orange-500/30 bg-gradient-to-br from-orange-600/20 to-orange-900/20 p-6 transition hover:border-orange-500/50 hover:shadow-lg hover:shadow-orange-500/20"
+            onClick={(e) => {
+              e.preventDefault();
+              document.getElementById('teams')?.scrollIntoView({ behavior: 'smooth' });
+            }}
+          >
+            <div className="relative z-10">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-3xl">🏟️</span>
+                <svg className="w-5 h-5 text-orange-400 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path>
+                </svg>
+              </div>
+              <h3 className="text-lg font-bold text-white mb-1">
+                {language === 'fr' ? 'Équipes' : 'Teams'}
+              </h3>
+              <p className="text-sm text-orange-300">
+                {language === 'fr' ? 'Toutes les équipes' : 'All teams'}
+              </p>
+            </div>
+            <div className="absolute inset-0 bg-gradient-to-t from-orange-500/5 to-transparent opacity-0 group-hover:opacity-100 transition"></div>
+          </a>
+
+          {/* Stats Card */}
+          <a 
+            href="#stats"
+            className="group relative overflow-hidden rounded-2xl border border-red-500/30 bg-gradient-to-br from-red-600/20 to-red-900/20 p-6 transition hover:border-red-500/50 hover:shadow-lg hover:shadow-red-500/20"
+            onClick={(e) => {
+              e.preventDefault();
+              document.getElementById('stats')?.scrollIntoView({ behavior: 'smooth' });
+            }}
+          >
+            <div className="relative z-10">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-3xl">📊</span>
+                <svg className="w-5 h-5 text-red-400 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path>
+                </svg>
+              </div>
+              <h3 className="text-lg font-bold text-white mb-1">
+                {language === 'fr' ? 'Statistiques' : 'Statistics'}
+              </h3>
+              <p className="text-sm text-red-300">
+                {language === 'fr' ? 'Matchs en vedette' : 'Featured games'}
+              </p>
+            </div>
+            <div className="absolute inset-0 bg-gradient-to-t from-red-500/5 to-transparent opacity-0 group-hover:opacity-100 transition"></div>
+          </a>
+
+          {/* News Card */}
+          <a 
+            href="#news"
+            className="group relative overflow-hidden rounded-2xl border border-indigo-500/30 bg-gradient-to-br from-indigo-600/20 to-indigo-900/20 p-6 transition hover:border-indigo-500/50 hover:shadow-lg hover:shadow-indigo-500/20"
+            onClick={(e) => {
+              e.preventDefault();
+              const newsSection = document.querySelector('section');
+              if (newsSection) {
+                newsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }
+            }}
+          >
+            <div className="relative z-10">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-3xl">📰</span>
+                <svg className="w-5 h-5 text-indigo-400 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path>
+                </svg>
+              </div>
+              <h3 className="text-lg font-bold text-white mb-1">
+                {language === 'fr' ? 'Actualités' : 'News'}
+              </h3>
+              <p className="text-sm text-indigo-300">
+                {language === 'fr' ? 'Dernières nouvelles' : 'Latest news'}
+              </p>
+            </div>
+            <div className="absolute inset-0 bg-gradient-to-t from-indigo-500/5 to-transparent opacity-0 group-hover:opacity-100 transition"></div>
+          </a>
+        </div>
+
+        {/* Original sections below the grid */}
+        <div className="space-y-20">
         <section id="stats" className="space-y-8">
           <SectionHeader
             id="stats"
@@ -4594,6 +4767,7 @@ export default function Home() {
             </div>
           )}
         </section>
+        </div>
       </main>
 
       {/* Partners Strip - Before Footer */}

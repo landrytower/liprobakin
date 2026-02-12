@@ -42,11 +42,6 @@ const navItems: NavItem[] = [
   { key: "verifications", label: { en: "Verifications", fr: "Vérifications" }, href: "/admin/verifications", icon: "✓", requiredPermission: "canManageUsers" },
   { key: "games", label: { en: "Games", fr: "Matchs" }, href: "/admin/games", icon: "🏟️", requiredPermission: "canManageGames" },
   { key: "stats", label: { en: "Statistics", fr: "Statistiques" }, href: "/admin/stats", icon: "📈", requiredPermission: "canManageGames" },
-  // League sub-sections
-  { key: "referees", label: { en: "Referees", fr: "Arbitres" }, href: "/admin/league/referees", icon: "👨‍⚖️", requiredPermission: "canManageReferees" },
-  { key: "committee", label: { en: "Committee", fr: "Comité" }, href: "/admin/league/committee", icon: "👔", requiredPermission: "canManageCommittee" },
-  { key: "partners", label: { en: "Partners", fr: "Partenaires" }, href: "/admin/league/partners", icon: "🤝", requiredPermission: "canManagePartners" },
-  { key: "sales", label: { en: "Sales", fr: "Sales" }, href: "/admin/league/sales", icon: "💰", requiredPermission: "canManageSales" },
   { key: "league", label: { en: "League Settings", fr: "Paramètres Ligue" }, href: "/admin/league", icon: "⚙️", requiredPermission: "canManageLeague" },
   { key: "admins", label: { en: "Administrators", fr: "Administrateurs" }, href: "/admin/admins", icon: "👤", requiredPermission: "canManageAdmins" },
 ];
@@ -74,6 +69,14 @@ const translations = {
   },
 };
 
+type OnlineAdmin = {
+  id: string;
+  email: string;
+  name?: string;
+  lastActivity: Date | null;
+  connectedSince: Date | null;
+};
+
 export default function AdminDashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -81,11 +84,28 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
   const [currentAdminUser, setCurrentAdminUser] = useState<AdminUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [onlineAdminsCount, setOnlineAdminsCount] = useState(0);
+  const [onlineAdmins, setOnlineAdmins] = useState<OnlineAdmin[]>([]);
+  const [showOnlineAdmins, setShowOnlineAdmins] = useState(false);
   const [showPasswordChange, setShowPasswordChange] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
   const t = translations[language];
+
+  // Helper function to format duration
+  const formatDuration = (date: Date | null): string => {
+    if (!date) return language === "fr" ? "Juste connecté" : "Just connected";
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 1) return language === "fr" ? "À l'instant" : "Just now";
+    if (diffMins < 60) return language === "fr" ? `${diffMins} min` : `${diffMins} min`;
+    if (diffHours < 24) return language === "fr" ? `${diffHours}h ${diffMins % 60}m` : `${diffHours}h ${diffMins % 60}m`;
+    return language === "fr" ? `${diffDays}j ${diffHours % 24}h` : `${diffDays}d ${diffHours % 24}h`;
+  };
 
   // Check authentication
   useEffect(() => {
@@ -108,6 +128,7 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
         await setDoc(doc(firebaseDB, "adminUsers", user.uid), {
           isOnline: true,
           lastActivity: serverTimestamp(),
+          connectedSince: serverTimestamp(),
         }, { merge: true });
         
         await updateLastActivity(user.uid);
@@ -129,6 +150,17 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setOnlineAdminsCount(snapshot.size);
+      const admins: OnlineAdmin[] = snapshot.docs.map((doc) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          email: data.email || "Unknown",
+          name: data.name || data.email?.split("@")[0] || "Unknown",
+          lastActivity: data.lastActivity?.toDate() || null,
+          connectedSince: data.connectedSince?.toDate() || data.lastActivity?.toDate() || null,
+        };
+      });
+      setOnlineAdmins(admins);
     });
 
     return () => unsubscribe();
@@ -251,11 +283,69 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
               </div>
               <div className="flex items-center gap-3 flex-wrap">
                 {/* Online admins indicator */}
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800 border border-white/10">
-                  <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-                  <span className="text-sm text-slate-300">
-                    {onlineAdminsCount} {t.adminsOnline}
-                  </span>
+                <div className="relative">
+                  <button
+                    onClick={() => setShowOnlineAdmins(!showOnlineAdmins)}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800 border border-white/10 hover:bg-slate-700 transition-colors cursor-pointer"
+                  >
+                    <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                    <span className="text-sm text-slate-300">
+                      {onlineAdminsCount} {t.adminsOnline}
+                    </span>
+                    <svg className={`w-4 h-4 text-slate-400 transition-transform ${showOnlineAdmins ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+
+                  {/* Online Admins Dropdown */}
+                  {showOnlineAdmins && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setShowOnlineAdmins(false)} />
+                      <div className="absolute right-0 top-full mt-2 z-50 w-80 bg-slate-900 border border-white/10 rounded-xl shadow-xl overflow-hidden">
+                        <div className="px-4 py-3 border-b border-white/10 bg-slate-800/50">
+                          <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                            {language === "fr" ? "Administrateurs en ligne" : "Online Administrators"}
+                          </h3>
+                        </div>
+                        <div className="max-h-64 overflow-y-auto">
+                          {onlineAdmins.length === 0 ? (
+                            <div className="px-4 py-6 text-center text-slate-500 text-sm">
+                              {language === "fr" ? "Aucun admin en ligne" : "No admins online"}
+                            </div>
+                          ) : (
+                            <ul className="divide-y divide-white/5">
+                              {onlineAdmins.map((admin) => (
+                                <li key={admin.id} className="px-4 py-3 hover:bg-white/5 transition-colors">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center text-white font-semibold text-sm">
+                                        {(admin.name || admin.email)[0].toUpperCase()}
+                                      </div>
+                                      <div>
+                                        <p className="text-sm font-medium text-white">
+                                          {admin.name || admin.email.split("@")[0]}
+                                        </p>
+                                        <p className="text-xs text-slate-500">{admin.email}</p>
+                                      </div>
+                                    </div>
+                                    <div className="text-right">
+                                      <p className="text-xs text-green-400 font-medium">
+                                        {language === "fr" ? "Connecté" : "Connected"}
+                                      </p>
+                                      <p className="text-xs text-slate-500">
+                                        {formatDuration(admin.connectedSince)}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 {/* Language toggle */}

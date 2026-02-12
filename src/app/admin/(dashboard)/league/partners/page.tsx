@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { useAdmin } from "../../layout";
 import { firebaseDB, firebaseStorage } from "@/lib/firebase";
 import {
@@ -217,6 +218,17 @@ export default function PartnersPage() {
 
   return (
     <div className="space-y-6">
+      {/* Back Button */}
+      <Link 
+        href="/admin/league"
+        className="inline-flex items-center gap-2 px-3 py-2 text-sm text-slate-400 hover:text-white transition-colors group"
+      >
+        <svg className="w-4 h-4 group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+        </svg>
+        {language === 'fr' ? 'Retour à la gestion' : 'Back to management'}
+      </Link>
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

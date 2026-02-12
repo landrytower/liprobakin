@@ -30,58 +30,52 @@ type CommitteeMember = {
 
 const translations = {
   en: {
-    title: "Committee Management",
-    subtitle: "Manage committee members",
-    add: "Add Member",
+    title: "Committee Members",
+    subtitle: "Manage the league's executive committee",
+    add: "+ Add Member",
     edit: "Edit",
     delete: "Delete",
-    save: "Save",
+    save: "Save Member",
     cancel: "Cancel",
     firstName: "First Name",
     lastName: "Last Name",
-    role: "Role/Position",
-    phone: "Phone",
-    email: "Email",
-    photo: "Photo",
+    role: "Position / Title",
+    phone: "Phone Number",
+    email: "Email Address",
+    photo: "Profile Photo",
+    uploadPhoto: "Upload Photo",
+    changePhoto: "Change Photo",
     bio: "Biography",
     department: "Department",
-    noMembers: "No committee members added yet",
+    noMembers: "No committee members yet",
     addFirst: "Add your first committee member to get started",
     confirmDelete: "Are you sure you want to delete this member?",
-    roles: {
-      president: "President",
-      vicePresident: "Vice President",
-      secretary: "Secretary",
-      treasurer: "Treasurer",
-      member: "Member",
-    },
+    dragDrop: "Drag & drop or click to upload",
+    imageFormats: "JPG, PNG or WebP (max 5MB)",
   },
   fr: {
-    title: "Gestion du Comité",
-    subtitle: "Gérer les membres du comité",
-    add: "Ajouter un Membre",
+    title: "Membres du Comité",
+    subtitle: "Gérer le comité exécutif de la ligue",
+    add: "+ Ajouter un Membre",
     edit: "Modifier",
     delete: "Supprimer",
     save: "Enregistrer",
     cancel: "Annuler",
     firstName: "Prénom",
-    lastName: "Nom",
-    role: "Rôle/Position",
-    phone: "Téléphone",
-    email: "Email",
-    photo: "Photo",
+    lastName: "Nom de famille",
+    role: "Poste / Titre",
+    phone: "Numéro de téléphone",
+    email: "Adresse email",
+    photo: "Photo de profil",
+    uploadPhoto: "Télécharger une photo",
+    changePhoto: "Changer la photo",
     bio: "Biographie",
     department: "Département",
-    noMembers: "Aucun membre du comité ajouté",
-    addFirst: "Ajoutez votre premier membre du comité pour commencer",
-    confirmDelete: "Êtes-vous sûr de vouloir supprimer ce membre?",
-    roles: {
-      president: "Président",
-      vicePresident: "Vice-Président",
-      secretary: "Secrétaire",
-      treasurer: "Trésorier",
-      member: "Membre",
-    },
+    noMembers: "Aucun membre du comité",
+    addFirst: "Ajoutez votre premier membre pour commencer",
+    confirmDelete: "Voulez-vous vraiment supprimer ce membre?",
+    dragDrop: "Glisser-déposer ou cliquer pour télécharger",
+    imageFormats: "JPG, PNG ou WebP (max 5MB)",
   },
 };
 
@@ -103,6 +97,7 @@ export default function CommitteePage() {
     department: "",
   });
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string>("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -111,13 +106,42 @@ export default function CommitteePage() {
 
   const fetchMembers = async () => {
     try {
-      const snapshot = await getDocs(collection(firebaseDB, "committeeMembers"));
+      const snapshot = await getDocs(collection(firebaseDB, "committee"));
       const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as CommitteeMember));
+      // Sort by role priority
+      const rolePriority: Record<string, number> = {
+        'PRESIDENT': 1,
+        'PRÉSIDENT': 1,
+        '1ST VICE PRESIDENT': 2,
+        '1ER VICE PRÉSIDENT': 2,
+        '2ND VICE PRESIDENT': 3,
+        '2ÈME VICE PRÉSIDENT': 3,
+        'SECRÉTAIRE EXÉCUTIF': 4,
+        'EXECUTIVE SECRETARY': 4,
+        'TRÉSORIÈRE': 5,
+        'TREASURER': 5,
+        'TRÉSORIER': 5,
+      };
+      data.sort((a, b) => {
+        const aPriority = rolePriority[a.role?.toUpperCase()] || 99;
+        const bPriority = rolePriority[b.role?.toUpperCase()] || 99;
+        return aPriority - bPriority;
+      });
       setMembers(data);
     } catch (error) {
       console.error("Error fetching committee members:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => setImagePreview(reader.result as string);
+      reader.readAsDataURL(file);
     }
   };
 
@@ -147,9 +171,9 @@ export default function CommitteePage() {
       };
 
       if (editingMember) {
-        await updateDoc(doc(firebaseDB, "committeeMembers", editingMember.id), data);
+        await updateDoc(doc(firebaseDB, "committee", editingMember.id), data);
       } else {
-        await addDoc(collection(firebaseDB, "committeeMembers"), {
+        await addDoc(collection(firebaseDB, "committee"), {
           ...data,
           createdAt: serverTimestamp(),
         });
@@ -159,6 +183,7 @@ export default function CommitteePage() {
       setEditingMember(null);
       setForm({ firstName: "", lastName: "", role: "", phone: "", email: "", bio: "", department: "" });
       setImageFile(null);
+      setImagePreview("");
       fetchMembers();
     } catch (error) {
       console.error("Error saving committee member:", error);
@@ -170,7 +195,7 @@ export default function CommitteePage() {
   const handleDelete = async (id: string) => {
     if (!confirm(t.confirmDelete)) return;
     try {
-      await deleteDoc(doc(firebaseDB, "committeeMembers", id));
+      await deleteDoc(doc(firebaseDB, "committee", id));
       fetchMembers();
     } catch (error) {
       console.error("Error deleting member:", error);
@@ -188,6 +213,8 @@ export default function CommitteePage() {
       bio: member.bio || "",
       department: member.department || "",
     });
+    setImagePreview(member.photo || "");
+    setImageFile(null);
     setShowForm(true);
   };
 
@@ -211,9 +238,11 @@ export default function CommitteePage() {
           onClick={() => {
             setEditingMember(null);
             setForm({ firstName: "", lastName: "", role: "", phone: "", email: "", bio: "", department: "" });
+            setImagePreview("");
+            setImageFile(null);
             setShowForm(true);
           }}
-          className="px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-500 text-white font-semibold rounded-xl hover:shadow-lg transition-all"
+          className="px-5 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 text-white font-semibold rounded-xl hover:shadow-lg hover:shadow-orange-500/25 transition-all"
         >
           {t.add}
         </button>
@@ -221,55 +250,72 @@ export default function CommitteePage() {
 
       {/* Members Grid */}
       {members.length === 0 ? (
-        <div className="text-center py-16 bg-slate-800/30 rounded-2xl border border-white/10">
-          <p className="text-4xl mb-4">👔</p>
-          <p className="text-white font-semibold">{t.noMembers}</p>
+        <div className="text-center py-20 bg-slate-800/30 rounded-2xl border border-white/10">
+          <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-slate-700/50 flex items-center justify-center">
+            <span className="text-4xl">👔</span>
+          </div>
+          <p className="text-white font-semibold text-lg">{t.noMembers}</p>
           <p className="text-slate-400 text-sm mt-1">{t.addFirst}</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
           {members.map((member) => (
             <div
               key={member.id}
-              className="bg-slate-800/50 rounded-2xl border border-white/10 p-4 hover:border-orange-500/30 transition-all group"
+              className="group relative bg-gradient-to-br from-slate-800/80 to-slate-900/80 rounded-xl border border-white/10 overflow-hidden hover:border-orange-500/40 transition-all hover:shadow-lg hover:shadow-orange-500/10"
             >
-              <div className="flex items-center gap-3 mb-3">
+              {/* Photo Section */}
+              <div className="relative h-32 bg-gradient-to-br from-slate-700 to-slate-800 overflow-hidden">
                 {member.photo ? (
                   <Image
                     src={member.photo}
                     alt={`${member.firstName} ${member.lastName}`}
-                    width={48}
-                    height={48}
-                    className="rounded-full object-cover"
+                    fill
+                    className="object-cover object-top group-hover:scale-105 transition-transform duration-300"
                   />
                 ) : (
-                  <div className="w-12 h-12 rounded-full bg-slate-700 flex items-center justify-center text-xl">
-                    👔
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-16 h-16 rounded-full bg-slate-600/50 flex items-center justify-center text-2xl font-bold text-slate-400">
+                      {member.firstName.charAt(0)}{member.lastName.charAt(0)}
+                    </div>
                   </div>
                 )}
-                <div>
-                  <p className="font-semibold text-white">
-                    {member.firstName} {member.lastName}
-                  </p>
-                  <p className="text-xs text-orange-400">{member.role}</p>
-                </div>
+                {/* Gradient overlay */}
+                <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-slate-900 to-transparent" />
               </div>
-              {member.department && (
-                <p className="text-xs text-slate-400 mb-2">{member.department}</p>
-              )}
-              <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button
-                  onClick={() => openEdit(member)}
-                  className="flex-1 py-1.5 text-xs font-medium text-slate-300 bg-slate-700/50 rounded-lg hover:bg-slate-700"
-                >
-                  {t.edit}
-                </button>
-                <button
-                  onClick={() => handleDelete(member.id)}
-                  className="flex-1 py-1.5 text-xs font-medium text-red-400 bg-red-500/10 rounded-lg hover:bg-red-500/20"
-                >
-                  {t.delete}
-                </button>
+
+              {/* Info Section */}
+              <div className="p-3 -mt-6 relative">
+                <div className="mb-2">
+                  <h3 className="text-sm font-bold text-white truncate">
+                    {member.firstName} {member.lastName}
+                  </h3>
+                  <p className="text-xs font-medium text-orange-400 uppercase tracking-wide truncate">
+                    {member.role}
+                  </p>
+                </div>
+
+                {member.email && (
+                  <p className="text-[10px] text-slate-400 truncate">
+                    {member.email}
+                  </p>
+                )}
+
+                {/* Actions */}
+                <div className="flex gap-1.5 pt-2 mt-2 border-t border-white/5">
+                  <button
+                    onClick={() => openEdit(member)}
+                    className="flex-1 py-1.5 text-xs font-medium text-white bg-white/10 rounded-lg hover:bg-white/20 transition"
+                  >
+                    {t.edit}
+                  </button>
+                  <button
+                    onClick={() => handleDelete(member.id)}
+                    className="flex-1 py-1.5 text-xs font-medium text-red-400 bg-red-500/10 rounded-lg hover:bg-red-500/20 transition"
+                  >
+                    {t.delete}
+                  </button>
+                </div>
               </div>
             </div>
           ))}
@@ -281,107 +327,162 @@ export default function CommitteePage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <form
             onSubmit={handleSubmit}
-            className="w-full max-w-lg bg-slate-900 rounded-2xl border border-white/10 overflow-hidden max-h-[90vh] overflow-y-auto"
+            className="w-full max-w-2xl bg-slate-900 rounded-2xl border border-white/10 overflow-hidden max-h-[90vh] overflow-y-auto"
           >
-            <div className="p-6 border-b border-white/10">
-              <h3 className="text-lg font-bold text-white">
-                {editingMember ? t.edit : t.add}
+            {/* Header */}
+            <div className="p-6 border-b border-white/10 flex items-center justify-between">
+              <h3 className="text-xl font-bold text-white">
+                {editingMember ? `${t.edit} - ${editingMember.firstName} ${editingMember.lastName}` : t.add}
               </h3>
+              <button
+                type="button"
+                onClick={() => setShowForm(false)}
+                className="text-slate-400 hover:text-white transition"
+                title={t.cancel}
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
-            <div className="p-6 space-y-4">
+
+            <div className="p-6 space-y-6">
+              {/* Photo Upload - Prominent */}
+              <div className="flex flex-col items-center">
+                <label className="cursor-pointer group">
+                  <div className="relative w-32 h-32 rounded-full overflow-hidden bg-slate-800 border-2 border-dashed border-slate-600 group-hover:border-orange-500 transition">
+                    {imagePreview ? (
+                      <Image
+                        src={imagePreview}
+                        alt="Preview"
+                        fill
+                        className="object-cover"
+                      />
+                    ) : (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-500 group-hover:text-orange-400 transition">
+                        <svg className="w-8 h-8 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        <span className="text-xs">{t.uploadPhoto}</span>
+                      </div>
+                    )}
+                    {imagePreview && (
+                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                        <span className="text-white text-xs font-medium">{t.changePhoto}</span>
+                      </div>
+                    )}
+                  </div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageChange}
+                    className="hidden"
+                  />
+                </label>
+                <p className="text-xs text-slate-500 mt-2">{t.imageFormats}</p>
+              </div>
+
+              {/* Name Fields */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs text-slate-400 mb-1">{t.firstName}</label>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">{t.firstName} *</label>
                   <input
                     type="text"
                     value={form.firstName}
                     onChange={(e) => setForm({ ...form, firstName: e.target.value })}
                     required
-                    className="w-full px-3 py-2 bg-slate-800 border border-white/10 rounded-lg text-white text-sm"
+                    className="w-full px-4 py-3 bg-slate-800 border border-white/10 rounded-xl text-white focus:border-orange-500 focus:outline-none transition"
+                    placeholder="Arthur"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-400 mb-1">{t.lastName}</label>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">{t.lastName} *</label>
                   <input
                     type="text"
                     value={form.lastName}
                     onChange={(e) => setForm({ ...form, lastName: e.target.value })}
                     required
-                    className="w-full px-3 py-2 bg-slate-800 border border-white/10 rounded-lg text-white text-sm"
+                    className="w-full px-4 py-3 bg-slate-800 border border-white/10 rounded-xl text-white focus:border-orange-500 focus:outline-none transition"
+                    placeholder="Lwango"
                   />
                 </div>
               </div>
+
+              {/* Role */}
               <div>
-                <label className="block text-xs text-slate-400 mb-1">{t.role}</label>
+                <label className="block text-sm font-medium text-slate-300 mb-2">{t.role} *</label>
                 <input
                   type="text"
                   value={form.role}
                   onChange={(e) => setForm({ ...form, role: e.target.value })}
                   required
-                  placeholder="President, Vice President, Secretary..."
-                  className="w-full px-3 py-2 bg-slate-800 border border-white/10 rounded-lg text-white text-sm"
+                  placeholder="President, Vice President, Secrétaire Exécutif..."
+                  className="w-full px-4 py-3 bg-slate-800 border border-white/10 rounded-xl text-white focus:border-orange-500 focus:outline-none transition"
                 />
               </div>
+
+              {/* Contact Info */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs text-slate-400 mb-1">{t.phone}</label>
-                  <input
-                    type="tel"
-                    value={form.phone}
-                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-800 border border-white/10 rounded-lg text-white text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">{t.email}</label>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">{t.email}</label>
                   <input
                     type="email"
                     value={form.email}
                     onChange={(e) => setForm({ ...form, email: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-800 border border-white/10 rounded-lg text-white text-sm"
+                    className="w-full px-4 py-3 bg-slate-800 border border-white/10 rounded-xl text-white focus:border-orange-500 focus:outline-none transition"
+                    placeholder="email@example.com"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">{t.phone}</label>
+                  <input
+                    type="tel"
+                    value={form.phone}
+                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                    className="w-full px-4 py-3 bg-slate-800 border border-white/10 rounded-xl text-white focus:border-orange-500 focus:outline-none transition"
+                    placeholder="+243 XXX XXX XXX"
                   />
                 </div>
               </div>
+
+              {/* Department */}
               <div>
-                <label className="block text-xs text-slate-400 mb-1">{t.department}</label>
+                <label className="block text-sm font-medium text-slate-300 mb-2">{t.department}</label>
                 <input
                   type="text"
                   value={form.department}
                   onChange={(e) => setForm({ ...form, department: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-800 border border-white/10 rounded-lg text-white text-sm"
+                  className="w-full px-4 py-3 bg-slate-800 border border-white/10 rounded-xl text-white focus:border-orange-500 focus:outline-none transition"
+                  placeholder="Administration, Finance, Operations..."
                 />
               </div>
+
+              {/* Bio */}
               <div>
-                <label className="block text-xs text-slate-400 mb-1">{t.bio}</label>
+                <label className="block text-sm font-medium text-slate-300 mb-2">{t.bio}</label>
                 <textarea
                   value={form.bio}
                   onChange={(e) => setForm({ ...form, bio: e.target.value })}
-                  rows={3}
-                  className="w-full px-3 py-2 bg-slate-800 border border-white/10 rounded-lg text-white text-sm resize-none"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-slate-400 mb-1">{t.photo}</label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => setImageFile(e.target.files?.[0] || null)}
-                  className="w-full text-sm text-slate-400"
+                  rows={4}
+                  className="w-full px-4 py-3 bg-slate-800 border border-white/10 rounded-xl text-white focus:border-orange-500 focus:outline-none transition resize-none"
+                  placeholder={language === 'fr' ? "Expérience et background du membre..." : "Member's experience and background..."}
                 />
               </div>
             </div>
-            <div className="flex gap-3 p-6 border-t border-white/10 bg-slate-800/30">
+
+            {/* Actions */}
+            <div className="flex gap-4 p-6 border-t border-white/10 bg-slate-800/30">
               <button
                 type="button"
                 onClick={() => setShowForm(false)}
-                className="flex-1 py-2.5 text-sm font-medium text-slate-400 hover:bg-white/5 rounded-xl transition-colors"
+                className="flex-1 py-3 text-sm font-medium text-slate-400 hover:bg-white/5 rounded-xl transition-colors border border-white/10"
               >
                 {t.cancel}
               </button>
               <button
                 type="submit"
                 disabled={saving}
-                className="flex-1 py-2.5 text-sm font-bold text-white bg-gradient-to-r from-orange-500 to-amber-500 rounded-xl hover:shadow-lg disabled:opacity-50"
+                className="flex-1 py-3 text-sm font-bold text-white bg-gradient-to-r from-orange-500 to-amber-500 rounded-xl hover:shadow-lg hover:shadow-orange-500/25 disabled:opacity-50 transition-all"
               >
                 {saving ? "..." : t.save}
               </button>

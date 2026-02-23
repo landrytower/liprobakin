@@ -621,9 +621,11 @@ export default function StatsPage() {
           if (field === "minutes") {
             // Minutes is stored as string (MM:SS format)
             const rawMinutes = getStoredStatValue(statEntry, statAliasMap[field]);
-            updatedStat[field] = rawMinutes > 0 ? String(Math.floor(rawMinutes)) + ":00" : "";
+            updatedStat.minutes = rawMinutes > 0 ? String(Math.floor(rawMinutes)) + ":00" : "";
           } else {
-            (updatedStat as Record<string, number>)[field] = getStoredStatValue(statEntry, statAliasMap[field]);
+            // Use type assertion for numeric stat fields
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (updatedStat as any)[field] = getStoredStatValue(statEntry, statAliasMap[field]);
           }
         });
         targetStats[targetPlayerId] = normalizeDerivedStats(updatedStat);
@@ -754,9 +756,11 @@ export default function StatsPage() {
             if (field === "minutes") {
               // Minutes is stored as string (MM:SS format)
               const rawMinutes = Number(entry.stats[field] || 0);
-              updated[field] = rawMinutes > 0 ? String(Math.floor(rawMinutes)) + ":00" : "";
+              updated.minutes = rawMinutes > 0 ? String(Math.floor(rawMinutes)) + ":00" : "";
             } else {
-              (updated as Record<string, number>)[field] = Number(entry.stats[field] || 0);
+              // Use type assertion for numeric stat fields
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (updated as any)[field] = Number(entry.stats[field] || 0);
             }
           });
           target[matched.id] = normalizeDerivedStats(updated);

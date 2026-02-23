@@ -37,7 +37,7 @@ type PlayerStat = {
   name: string;
   jerseyNumber?: string;
   points: number;
-  minutes: number;
+  minutes: string;  // Format: "MM:SS"
   rebounds: number;
   offensiveRebounds: number;
   defensiveRebounds: number;
@@ -64,6 +64,7 @@ type StatColumn = {
   field: StatField;
   label: string;
   readOnly?: boolean;
+  isTimeField?: boolean;  // For MM:SS format fields like minutes
 };
 
 type ImportedPlayerStat = {
@@ -200,7 +201,7 @@ const createEmptyPlayerStat = (player: Player): PlayerStat => ({
   name: player.name || "Unknown Player",
   jerseyNumber: player.jerseyNumber,
   points: 0,
-  minutes: 0,
+  minutes: "",  // Format: "MM:SS"
   rebounds: 0,
   offensiveRebounds: 0,
   defensiveRebounds: 0,
@@ -312,8 +313,8 @@ export default function StatsPage() {
   // Column order matches FIBA stats sheet: Min | Tirs Tot. | 2 Points | 3 pts | LF | Rebonds | PD | BP | IN | Ctr | Fautes | +/- | PTS
   const statColumns = useMemo<StatColumn[]>(
     () => [
-      // Min
-      { field: "minutes" as const, label: copy.minutes },
+      // Min (MM:SS format)
+      { field: "minutes" as const, label: copy.minutes, isTimeField: true },
       // Tirs Tot. (Total Shots = 2PM+3PM / 2PA+3PA) - calculated readOnly
       { field: "fieldGoalsMade" as const, label: copy.fieldGoalsMade, readOnly: true },
       { field: "fieldGoalsAttempted" as const, label: copy.fieldGoalsAttempted, readOnly: true },
@@ -432,7 +433,11 @@ export default function StatsPage() {
     };
   }, []);
 
-  const statInputValue = useCallback((value: number | undefined): string => {
+  const statInputValue = useCallback((value: number | string | undefined, isTimeField?: boolean): string => {
+    if (isTimeField) {
+      // For time fields like minutes, return as-is or empty
+      return typeof value === 'string' ? value : '';
+    }
     const numeric = Number(value || 0);
     return numeric === 0 ? "" : String(numeric);
   }, []);
@@ -664,9 +669,9 @@ export default function StatsPage() {
     setWinnerId(teamId);
   };
 
-  const updatePlayerStat = (playerId: string, isHome: boolean, field: StatField, rawValue: string, playerName: string) => {
-    const parsedValue = rawValue === "" ? 0 : Number(rawValue);
-    const value = Number.isFinite(parsedValue) ? parsedValue : 0;
+  const updatePlayerStat = (playerId: string, isHome: boolean, field: StatField, rawValue: string, playerName: string, isTimeField?: boolean) => {
+    // For time fields (like minutes), keep as string; for others, parse as number
+    const value = isTimeField ? rawValue : (rawValue === "" ? 0 : (Number.isFinite(Number(rawValue)) ? Number(rawValue) : 0));
 
     const applyUpdate = (prev: Record<string, PlayerStat>) => {
       const current = prev[playerId] || createEmptyPlayerStat({ id: playerId, name: playerName });
@@ -1597,14 +1602,15 @@ export default function StatsPage() {
 
                                                 return (
                                               <input
-                                                type="number"
-                                                min={column.field === "plusMinus" ? undefined : "0"}
+                                                type={column.isTimeField ? "text" : "number"}
+                                                placeholder={column.isTimeField ? "00:00" : undefined}
+                                                min={column.field === "plusMinus" || column.isTimeField ? undefined : "0"}
                                                 max={maxValue !== undefined ? String(maxValue) : undefined}
                                                 title={`${player.name} ${column.field}`}
-                                                value={statInputValue(playerStat?.[column.field])}
-                                                onChange={(e) => updatePlayerStat(player.id, false, column.field, e.target.value, player.name || "Player")}
+                                                value={statInputValue(playerStat?.[column.field], column.isTimeField)}
+                                                onChange={(e) => updatePlayerStat(player.id, false, column.field, e.target.value, player.name || "Player", column.isTimeField)}
                                                 disabled={column.readOnly}
-                                                className={`w-12 px-2 py-1 border rounded text-center text-sm ${column.readOnly ? "bg-slate-900/70 text-slate-300 border-slate-600/40" : "bg-slate-700 text-white"} ${hasError ? "border-red-500 ring-1 ring-red-500/70" : "border-white/10"}`}
+                                                className={`${column.isTimeField ? 'w-14' : 'w-12'} px-2 py-1 border rounded text-center text-sm ${column.readOnly ? "bg-slate-900/70 text-slate-300 border-slate-600/40" : "bg-slate-700 text-white"} ${hasError ? "border-red-500 ring-1 ring-red-500/70" : "border-white/10"}`}
                                               />
                                                 );
                                               })()}
@@ -1658,14 +1664,15 @@ export default function StatsPage() {
 
                                                 return (
                                               <input
-                                                type="number"
-                                                min={column.field === "plusMinus" ? undefined : "0"}
+                                                type={column.isTimeField ? "text" : "number"}
+                                                placeholder={column.isTimeField ? "00:00" : undefined}
+                                                min={column.field === "plusMinus" || column.isTimeField ? undefined : "0"}
                                                 max={maxValue !== undefined ? String(maxValue) : undefined}
                                                 title={`${player.name} ${column.field}`}
-                                                value={statInputValue(playerStat?.[column.field])}
-                                                onChange={(e) => updatePlayerStat(player.id, true, column.field, e.target.value, player.name || "Player")}
+                                                value={statInputValue(playerStat?.[column.field], column.isTimeField)}
+                                                onChange={(e) => updatePlayerStat(player.id, true, column.field, e.target.value, player.name || "Player", column.isTimeField)}
                                                 disabled={column.readOnly}
-                                                className={`w-12 px-2 py-1 border rounded text-center text-sm ${column.readOnly ? "bg-slate-900/70 text-slate-300 border-slate-600/40" : "bg-slate-700 text-white"} ${hasError ? "border-red-500 ring-1 ring-red-500/70" : "border-white/10"}`}
+                                                className={`${column.isTimeField ? 'w-14' : 'w-12'} px-2 py-1 border rounded text-center text-sm ${column.readOnly ? "bg-slate-900/70 text-slate-300 border-slate-600/40" : "bg-slate-700 text-white"} ${hasError ? "border-red-500 ring-1 ring-red-500/70" : "border-white/10"}`}
                                               />
                                                 );
                                               })()}

@@ -618,7 +618,13 @@ export default function StatsPage() {
 
         const updatedStat = { ...targetStats[targetPlayerId] };
         PLAYER_STAT_FIELDS.forEach((field) => {
-          updatedStat[field] = getStoredStatValue(statEntry, statAliasMap[field]);
+          if (field === "minutes") {
+            // Minutes is stored as string (MM:SS format)
+            const rawMinutes = getStoredStatValue(statEntry, statAliasMap[field]);
+            updatedStat[field] = rawMinutes > 0 ? String(Math.floor(rawMinutes)) + ":00" : "";
+          } else {
+            (updatedStat as Record<string, number>)[field] = getStoredStatValue(statEntry, statAliasMap[field]);
+          }
         });
         targetStats[targetPlayerId] = normalizeDerivedStats(updatedStat);
       });
@@ -745,7 +751,13 @@ export default function StatsPage() {
 
           const updated = { ...target[matched.id] };
           PLAYER_STAT_FIELDS.forEach((field) => {
-            updated[field] = Number(entry.stats[field] || 0);
+            if (field === "minutes") {
+              // Minutes is stored as string (MM:SS format)
+              const rawMinutes = Number(entry.stats[field] || 0);
+              updated[field] = rawMinutes > 0 ? String(Math.floor(rawMinutes)) + ":00" : "";
+            } else {
+              (updated as Record<string, number>)[field] = Number(entry.stats[field] || 0);
+            }
           });
           target[matched.id] = normalizeDerivedStats(updated);
         });

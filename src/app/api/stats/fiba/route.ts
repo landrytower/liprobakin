@@ -17,6 +17,7 @@ type NormalizedPlayerStat = {
     assists: number;
     steals: number;
     blocks: number;
+    blockedAgainst: number;
     turnovers: number;
     fouls: number;
     foulsDrawn: number;
@@ -47,6 +48,7 @@ const NUMBER_ALIASES: Record<keyof NormalizedPlayerStat["stats"], string[]> = {
   assists: ["assists", "ast"],
   steals: ["steals", "stl"],
   blocks: ["blocks", "blk"],
+  blockedAgainst: ["blockedAgainst", "blocked_against", "contreSubi", "contre_subi", "cs"],
   turnovers: ["turnovers", "to", "tov"],
   fouls: ["fouls", "pf", "personalFouls"],
   foulsDrawn: ["foulsDrawn", "fd", "fouled"],
@@ -56,8 +58,8 @@ const NUMBER_ALIASES: Record<keyof NormalizedPlayerStat["stats"], string[]> = {
   twoPointsAttempted: ["twoPointsAttempted", "2pa", "two_pa"],
   threePointsMade: ["threePointsMade", "3pm", "three_pm"],
   threePointsAttempted: ["threePointsAttempted", "3pa", "three_pa"],
-  freeThrowsMade: ["freeThrowsMade", "ftm", "ft_m"],
-  freeThrowsAttempted: ["freeThrowsAttempted", "fta", "ft_a"],
+  freeThrowsMade: ["freeThrowsMade", "ftm", "ft_m", "lf_r", "lfr"],
+  freeThrowsAttempted: ["freeThrowsAttempted", "fta", "ft_a", "lf_t", "lft"],
   plusMinus: ["plusMinus", "plus_minus", "+/-", "pm"],
 };
 
@@ -229,6 +231,7 @@ function normalizePayload(payload: JsonRecord): NormalizedImport {
         assists: findNumberByAliases(statsSource, NUMBER_ALIASES.assists),
         steals: findNumberByAliases(statsSource, NUMBER_ALIASES.steals),
         blocks: findNumberByAliases(statsSource, NUMBER_ALIASES.blocks),
+        blockedAgainst: findNumberByAliases(statsSource, NUMBER_ALIASES.blockedAgainst),
         turnovers: findNumberByAliases(statsSource, NUMBER_ALIASES.turnovers),
         fouls: findNumberByAliases(statsSource, NUMBER_ALIASES.fouls),
         foulsDrawn: findNumberByAliases(statsSource, NUMBER_ALIASES.foulsDrawn),

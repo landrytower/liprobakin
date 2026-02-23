@@ -45,6 +45,7 @@ type PlayerStat = {
   assists: number;
   steals: number;
   blocks: number;
+  blockedAgainst: number;
   turnovers: number;
   fouls: number;
   foulsDrawn: number;
@@ -60,13 +61,6 @@ type PlayerStat = {
 };
 
 type StatField = Exclude<keyof PlayerStat, "playerId" | "name" | "jerseyNumber" | "dnp">;
-
-type StatColumn = {
-  field: StatField;
-  label: string;
-  readOnly?: boolean;
-  isTimeField?: boolean;  // For MM:SS format fields like minutes
-};
 
 type ImportedPlayerStat = {
   team: "home" | "away";
@@ -193,6 +187,7 @@ const PLAYER_STAT_FIELDS: StatField[] = [
   "turnovers",
   "steals",
   "blocks",
+  "blockedAgainst",
   "fouls",
   "foulsDrawn",
   "plusMinus",
@@ -212,6 +207,7 @@ const createEmptyPlayerStat = (player: Player): PlayerStat => ({
   assists: 0,
   steals: 0,
   blocks: 0,
+  blockedAgainst: 0,
   turnovers: 0,
   fouls: 0,
   foulsDrawn: 0,
@@ -314,45 +310,6 @@ function getStoredStatValue(entry: Record<string, unknown>, aliases: string[]): 
 export default function StatsPage() {
   const { language, currentAdminUser } = useAdmin();
   const copy = t[language];
-  // Column order matches FIBA stats sheet: Min | Tirs Tot. | 2 Points | 3 pts | LF | Rebonds | PD | BP | IN | Ctr | Fautes | +/- | PTS
-  const statColumns = useMemo<StatColumn[]>(
-    () => [
-      // Min (MM:SS format)
-      { field: "minutes" as const, label: copy.minutes, isTimeField: true },
-      // Tirs Tot. (Total Shots = 2PM+3PM / 2PA+3PA) - calculated readOnly
-      { field: "fieldGoalsMade" as const, label: copy.fieldGoalsMade, readOnly: true },
-      { field: "fieldGoalsAttempted" as const, label: copy.fieldGoalsAttempted, readOnly: true },
-      // 2 Points
-      { field: "twoPointsMade" as const, label: copy.twoPointsMade },
-      { field: "twoPointsAttempted" as const, label: copy.twoPointsAttempted },
-      // 3 pts
-      { field: "threePointsMade" as const, label: copy.threePointsMade },
-      { field: "threePointsAttempted" as const, label: copy.threePointsAttempted },
-      // LF (Free Throws / Lancers Francs)
-      { field: "freeThrowsMade" as const, label: copy.freeThrowsMade },
-      { field: "freeThrowsAttempted" as const, label: copy.freeThrowsAttempted },
-      // Rebonds (RO, RD, TOT)
-      { field: "offensiveRebounds" as const, label: copy.offensiveRebounds },
-      { field: "defensiveRebounds" as const, label: copy.defensiveRebounds },
-      { field: "rebounds" as const, label: copy.rebounds, readOnly: true },
-      // PD (Assists / Passes Décisives)
-      { field: "assists" as const, label: copy.assists },
-      // BP (Turnovers / Balles Perdues)
-      { field: "turnovers" as const, label: copy.turnovers },
-      // IN (Steals / Interceptions)
-      { field: "steals" as const, label: copy.steals },
-      // Ctr (Blocks / Contres)
-      { field: "blocks" as const, label: copy.blocks },
-      // Fautes (F, FP)
-      { field: "fouls" as const, label: copy.fouls },
-      { field: "foulsDrawn" as const, label: copy.foulsDrawn },
-      // +/-
-      { field: "plusMinus" as const, label: copy.plusMinus },
-      // PTS (calculated)
-      { field: "points" as const, label: copy.points, readOnly: true },
-    ],
-    [copy]
-  );
   const [games, setGames] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -412,12 +369,16 @@ export default function StatsPage() {
   }, []);
 
   const normalizeDerivedStats = useCallback((stat: PlayerStat): PlayerStat => {
-    const twoPointsMade = Math.max(0, Number(stat.twoPointsMade || 0));
-    const twoPointsAttempted = Math.max(0, Number(stat.twoPointsAttempted || 0));
+    const rawTwoPointsMade = Math.max(0, Number(stat.twoPointsMade || 0));
+    const rawTwoPointsAttempted = Math.max(0, Number(stat.twoPointsAttempted || 0));
     const threePointsMade = Math.max(0, Number(stat.threePointsMade || 0));
     const threePointsAttempted = Math.max(0, Number(stat.threePointsAttempted || 0));
     const freeThrowsMade = Math.max(0, Number(stat.freeThrowsMade || 0));
     const freeThrowsAttempted = Math.max(0, Number(stat.freeThrowsAttempted || 0));
+    const fieldGoalsMade = rawTwoPointsMade + threePointsMade;
+    const fieldGoalsAttempted = rawTwoPointsAttempted + threePointsAttempted;
+    const twoPointsMade = Math.max(0, fieldGoalsMade - threePointsMade);
+    const twoPointsAttempted = Math.max(0, fieldGoalsAttempted - threePointsAttempted);
     const offensiveRebounds = Math.max(0, Number(stat.offensiveRebounds || 0));
     const defensiveRebounds = Math.max(0, Number(stat.defensiveRebounds || 0));
 
@@ -429,8 +390,8 @@ export default function StatsPage() {
       threePointsAttempted,
       freeThrowsMade,
       freeThrowsAttempted,
-      fieldGoalsMade: twoPointsMade + threePointsMade,
-      fieldGoalsAttempted: twoPointsAttempted + threePointsAttempted,
+      fieldGoalsMade,
+      fieldGoalsAttempted,
       points: twoPointsMade * 2 + threePointsMade * 3 + freeThrowsMade,
       offensiveRebounds,
       defensiveRebounds,
@@ -442,6 +403,9 @@ export default function StatsPage() {
     if (isTimeField) {
       // For time fields like minutes, return as-is or empty
       return typeof value === 'string' ? value : '';
+    }
+    if (value === "") {
+      return "";
     }
     const numeric = Number(value ?? 0);
     // Show 0 as "0" if value was explicitly set, otherwise show empty for untouched fields
@@ -565,6 +529,7 @@ export default function StatsPage() {
         assists: ["assists", "ast"],
         steals: ["steals", "stl"],
         blocks: ["blocks", "blk"],
+        blockedAgainst: ["blockedAgainst", "blocked_against", "contreSubi", "contre_subi", "cs"],
         turnovers: ["turnovers", "to"],
         fouls: ["fouls", "pf"],
         foulsDrawn: ["foulsDrawn", "fd"],
@@ -688,18 +653,20 @@ export default function StatsPage() {
 
   const updatePlayerStat = (playerId: string, isHome: boolean, field: StatField, rawValue: string, playerName: string, isTimeField?: boolean) => {
     // For time fields (like minutes), keep as string; for others, parse as number
-    const value = isTimeField ? rawValue : (rawValue === "" ? 0 : (Number.isFinite(Number(rawValue)) ? Number(rawValue) : 0));
+    const value = isTimeField ? rawValue : (rawValue === "" ? "" : (Number.isFinite(Number(rawValue)) ? Number(rawValue) : 0));
 
     const applyUpdate = (prev: Record<string, PlayerStat>) => {
       const current = prev[playerId] || createEmptyPlayerStat({ id: playerId, name: playerName });
       let next = { ...current, [field]: value } as PlayerStat;
 
       const attemptsByMade: Partial<Record<StatField, StatField>> = {
+        fieldGoalsMade: "fieldGoalsAttempted",
         twoPointsMade: "twoPointsAttempted",
         threePointsMade: "threePointsAttempted",
         freeThrowsMade: "freeThrowsAttempted",
       };
       const madeByAttempts: Partial<Record<StatField, StatField>> = {
+        fieldGoalsAttempted: "fieldGoalsMade",
         twoPointsAttempted: "twoPointsMade",
         threePointsAttempted: "threePointsMade",
         freeThrowsAttempted: "freeThrowsMade",
@@ -708,19 +675,57 @@ export default function StatsPage() {
       const attemptField = attemptsByMade[field];
       if (attemptField) {
         const attempts = Number(next[attemptField] || 0);
-        if (Number(value) > attempts) {
+        if (attempts > 0 && Number(value) > attempts) {
           next[field] = 0 as never;
-          showValidationError(`${playerName}: ${field} cannot exceed ${attemptField}.`, getCellKey(isHome, playerId, field));
+          next[attemptField] = 0 as never;
+          const message = field === "twoPointsMade"
+            ? "twoPointsMade cannot exceed twoPointsAttempted."
+            : field === "threePointsMade"
+            ? "3PointsMade cannot exceed 3PointsAttempted."
+            : `${field} cannot exceed ${attemptField}.`;
+          showValidationError(`${playerName}: ${message}`, getCellKey(isHome, playerId, field));
         }
       }
 
       const madeField = madeByAttempts[field];
       if (madeField) {
+        const attempts = Number(next[field] || 0);
         const makes = Number(next[madeField] || 0);
-        if (makes > Number(next[field] || 0)) {
+        if (attempts > 0 && makes > attempts) {
           next[madeField] = 0 as never;
-          showValidationError(`${playerName}: ${madeField} cannot exceed ${field}.`, getCellKey(isHome, playerId, madeField));
+          next[field] = 0 as never;
+          const message = madeField === "twoPointsMade"
+            ? "twoPointsMade cannot exceed twoPointsAttempted."
+            : madeField === "threePointsMade"
+            ? "3PointsMade cannot exceed 3PointsAttempted."
+            : `${madeField} cannot exceed ${field}.`;
+          showValidationError(`${playerName}: ${message}`, getCellKey(isHome, playerId, madeField));
         }
+      }
+
+      const fgMade = Number(next.fieldGoalsMade || 0);
+      const fgAtt = Number(next.fieldGoalsAttempted || 0);
+      const threeMade = Number(next.threePointsMade || 0);
+      const threeAtt = Number(next.threePointsAttempted || 0);
+      if (threeMade > fgMade) {
+        next.threePointsMade = fgMade as never;
+        showValidationError(`${playerName}: 3PM cannot exceed Tirs Tot. R.`, getCellKey(isHome, playerId, "threePointsMade"));
+      }
+      if (threeAtt > fgAtt) {
+        next.threePointsAttempted = fgAtt as never;
+        showValidationError(`${playerName}: 3PA cannot exceed Tirs Tot. T.`, getCellKey(isHome, playerId, "threePointsAttempted"));
+      }
+
+      if (!isTimeField && rawValue === "") {
+        const normalized = normalizeDerivedStats({
+          ...next,
+          [field]: 0 as never,
+        } as PlayerStat);
+        (normalized as Record<string, unknown>)[field] = "";
+        return {
+          ...prev,
+          [playerId]: normalized,
+        };
       }
 
       next = normalizeDerivedStats(next);
@@ -736,8 +741,23 @@ export default function StatsPage() {
       setAwayStats(applyUpdate);
     }
     
-    // Mark field as touched
+    // Mark field as touched (allow clearing back to empty)
     const touchKey = `${isHome ? 'home' : 'away'}_${playerId}_${field}`;
+    if (!isTimeField && rawValue === "") {
+      setTouchedFields((prev) => {
+        const next = { ...prev };
+        delete next[touchKey];
+        return next;
+      });
+      const cellKey = getCellKey(isHome, playerId, field);
+      setCellErrors((prev) => {
+        if (!prev[cellKey]) return prev;
+        const next = { ...prev };
+        delete next[cellKey];
+        return next;
+      });
+      return;
+    }
     setTouchedFields(prev => ({ ...prev, [touchKey]: true }));
   };
 
@@ -889,6 +909,8 @@ export default function StatsPage() {
       stl: stat.steals,
       blocks: stat.blocks,
       blk: stat.blocks,
+      blockedAgainst: stat.blockedAgainst,
+      cs: stat.blockedAgainst,
       turnovers: stat.turnovers,
       to: stat.turnovers,
       fouls: stat.fouls,
@@ -940,6 +962,7 @@ export default function StatsPage() {
       assists: number;
       steals: number;
       blocks: number;
+      blockedAgainst: number;
       turnovers: number;
       fouls: number;
       foulsDrawn: number;
@@ -983,6 +1006,7 @@ export default function StatsPage() {
         assists: 0,
         steals: 0,
         blocks: 0,
+        blockedAgainst: 0,
         turnovers: 0,
         fouls: 0,
         foulsDrawn: 0,
@@ -1008,6 +1032,7 @@ export default function StatsPage() {
       const assists = Number(stat.ast ?? stat.assists ?? 0);
       const steals = Number(stat.stl ?? stat.steals ?? 0);
       const blocks = Number(stat.blk ?? stat.blocks ?? 0);
+      const blockedAgainst = Number(stat.cs ?? stat.blockedAgainst ?? 0);
       const turnovers = Number(stat.to ?? stat.turnovers ?? 0);
       const fouls = Number(stat.pf ?? stat.fouls ?? 0);
       const foulsDrawn = Number(stat.fd ?? stat.foulsDrawn ?? 0);
@@ -1037,6 +1062,7 @@ export default function StatsPage() {
         assists: current.assists + assists,
         steals: current.steals + steals,
         blocks: current.blocks + blocks,
+        blockedAgainst: current.blockedAgainst + blockedAgainst,
         turnovers: current.turnovers + turnovers,
         fouls: current.fouls + fouls,
         foulsDrawn: current.foulsDrawn + foulsDrawn,
@@ -1068,6 +1094,7 @@ export default function StatsPage() {
         ast: roundOneDecimal(safeRatio(totals?.assists || 0, gamesPlayed)).toFixed(1),
         stl: roundOneDecimal(safeRatio(totals?.steals || 0, gamesPlayed)).toFixed(1),
         blk: roundOneDecimal(safeRatio(totals?.blocks || 0, gamesPlayed)).toFixed(1),
+        cs: roundOneDecimal(safeRatio(totals?.blockedAgainst || 0, gamesPlayed)).toFixed(1),
         oreb: roundOneDecimal(safeRatio(totals?.offensiveRebounds || 0, gamesPlayed)).toFixed(1),
         dreb: roundOneDecimal(safeRatio(totals?.defensiveRebounds || 0, gamesPlayed)).toFixed(1),
         to: roundOneDecimal(safeRatio(totals?.turnovers || 0, gamesPlayed)).toFixed(1),
@@ -1098,6 +1125,7 @@ export default function StatsPage() {
           ast: averages.ast,
           stl: averages.stl,
           blk: averages.blk,
+          cs: averages.cs,
           min: averages.min,
           oreb: averages.oreb,
           dreb: averages.dreb,
@@ -1129,6 +1157,7 @@ export default function StatsPage() {
           ast: totals?.assists || 0,
           stl: totals?.steals || 0,
           blk: totals?.blocks || 0,
+          cs: totals?.blockedAgainst || 0,
           to: totals?.turnovers || 0,
           pf: totals?.fouls || 0,
           fd: totals?.foulsDrawn || 0,
@@ -1616,22 +1645,69 @@ export default function StatsPage() {
                                   <h4 className="font-semibold text-white">{expandedGame.awayTeamName}</h4>
                                   <span className="text-xs text-slate-400">({awayPlayers.length} players)</span>
                                 </div>
-                                <div className="bg-slate-800/50 rounded-xl overflow-x-auto">
+                                <div className="bg-slate-800/50 rounded-xl overflow-x-auto stats-compact">
                                   <table className="w-full text-sm">
                                     <thead>
                                       <tr className="text-slate-400 border-b border-white/10">
-                                        <th className="text-left p-3">#</th>
-                                        <th className="text-left p-3">Player</th>
-                                        <th className="text-center p-2 w-12">{copy.dnp}</th>
-                                        {statColumns.map((column) => (
-                                          <th key={column.field} className="text-center p-2 w-14">{column.label}</th>
-                                        ))}
+                                        <th rowSpan={2} className="text-left p-3">#</th>
+                                        <th rowSpan={2} className="text-left p-3">Player</th>
+                                        <th rowSpan={2} className="text-center p-2 w-12">{copy.dnp}</th>
+                                        <th rowSpan={2} className="text-center p-2 w-14">MIN</th>
+                                        <th colSpan={2} className="text-center p-2">Tirs Tot.</th>
+                                        <th colSpan={2} className="text-center p-2">2 pts</th>
+                                        <th colSpan={2} className="text-center p-2">3 pts</th>
+                                        <th colSpan={2} className="text-center p-2">LF</th>
+                                        <th colSpan={3} className="text-center p-2">Rebonds</th>
+                                        <th rowSpan={2} className="text-center p-2">PD</th>
+                                        <th rowSpan={2} className="text-center p-2">BP</th>
+                                        <th rowSpan={2} className="text-center p-2">IN</th>
+                                        <th colSpan={2} className="text-center p-2">Contres</th>
+                                        <th colSpan={2} className="text-center p-2">Fautes</th>
+                                        <th rowSpan={2} className="text-center p-2">+/-</th>
+                                        <th rowSpan={2} className="text-center p-2">Ev</th>
+                                        <th rowSpan={2} className="text-center p-2">PTS</th>
+                                      </tr>
+                                      <tr className="text-slate-400 border-b border-white/10">
+                                        <th className="text-center p-2">R/T</th>
+                                        <th className="text-center p-2">%</th>
+                                        <th className="text-center p-2">R/T</th>
+                                        <th className="text-center p-2">%</th>
+                                        <th className="text-center p-2">R/T</th>
+                                        <th className="text-center p-2">%</th>
+                                        <th className="text-center p-2">R/T</th>
+                                        <th className="text-center p-2">%</th>
+                                        <th className="text-center p-2">RO</th>
+                                        <th className="text-center p-2">RD</th>
+                                        <th className="text-center p-2">TOT</th>
+                                        <th className="text-center p-2">Ctr</th>
+                                        <th className="text-center p-2">CS</th>
+                                        <th className="text-center p-2">F</th>
+                                        <th className="text-center p-2">FP</th>
                                       </tr>
                                     </thead>
                                     <tbody>
                                       {awayPlayers.map((player) => {
                                         const playerStat = awayStats[player.id];
+                                        const stat = playerStat || createEmptyPlayerStat(player);
                                         const isDNP = playerStat?.dnp || false;
+                                        const fgMade = Number(stat.fieldGoalsMade ?? 0);
+                                        const fgAtt = Number(stat.fieldGoalsAttempted ?? 0);
+                                        const twoMade = Number(stat.twoPointsMade ?? 0);
+                                        const twoAtt = Number(stat.twoPointsAttempted ?? 0);
+                                        const threeMade = Number(stat.threePointsMade ?? 0);
+                                        const threeAtt = Number(stat.threePointsAttempted ?? 0);
+                                        const ftMade = Number(stat.freeThrowsMade ?? 0);
+                                        const ftAtt = Number(stat.freeThrowsAttempted ?? 0);
+                                        const fgPct = Math.round(safePercent(fgMade, fgAtt));
+                                        const twoPct = Math.round(safePercent(twoMade, twoAtt));
+                                        const threePct = Math.round(safePercent(threeMade, threeAtt));
+                                        const ftPct = Math.round(safePercent(ftMade, ftAtt));
+                                        const evaluation = stat.points + stat.rebounds + stat.assists + stat.steals + stat.blocks -
+                                          Math.max(stat.fieldGoalsAttempted - stat.fieldGoalsMade, 0) -
+                                          Math.max(stat.freeThrowsAttempted - stat.freeThrowsMade, 0) -
+                                          stat.turnovers;
+                                        const getTouched = (field: StatField) => Boolean(touchedFields[`away_${player.id}_${field}`]);
+                                        const getError = (field: StatField) => Boolean(cellErrors[getCellKey(false, player.id, field)]);
                                         return (
                                         <tr key={player.id} className={`border-b border-white/5 hover:bg-white/5 ${isDNP ? 'opacity-50' : ''}`}>
                                           <td className="p-3 text-slate-400 font-mono">{player.jerseyNumber || "-"}</td>
@@ -1646,37 +1722,208 @@ export default function StatsPage() {
                                               {isDNP ? '✓' : '—'}
                                             </button>
                                           </td>
-                                          {statColumns.map((column) => (
-                                            <td key={column.field} className="p-1">
-                                              {(() => {
-                                                const cellKey = getCellKey(false, player.id, column.field);
-                                                const touchKey = `away_${player.id}_${column.field}`;
-                                                const hasError = Boolean(cellErrors[cellKey]);
-                                                const hasTouched = Boolean(touchedFields[touchKey]);
-                                                const maxValue = column.field === "twoPointsMade"
-                                                  ? Number(playerStat?.twoPointsAttempted || 0)
-                                                  : column.field === "threePointsMade"
-                                                  ? Number(playerStat?.threePointsAttempted || 0)
-                                                  : column.field === "freeThrowsMade"
-                                                  ? Number(playerStat?.freeThrowsAttempted || 0)
-                                                  : undefined;
-
-                                                return (
+                                          <td className="p-1">
+                                            <input
+                                              type="text"
+                                              placeholder="00:00"
+                                              title={`${player.name} minutes`}
+                                              value={statInputValue(stat.minutes, true, getTouched("minutes"))}
+                                              onChange={(e) => updatePlayerStat(player.id, false, "minutes", e.target.value, player.name || "Player", true)}
+                                              disabled={isDNP}
+                                              className={`w-14 px-2 py-1 border rounded text-center text-sm ${isDNP ? "bg-slate-900/70 text-slate-300 border-slate-600/40" : "bg-slate-700 text-white"} ${getError("minutes") ? "border-red-500 ring-1 ring-red-500/70" : "border-white/10"}`}
+                                            />
+                                          </td>
+                                          <td className="p-1 text-center text-xs text-slate-300">
+                                            {fgMade}/{fgAtt}
+                                          </td>
+                                          <td className="p-1 text-center text-xs text-slate-300">{fgPct}%</td>
+                                          <td className="p-1">
+                                            <div className="flex items-center justify-center gap-1">
                                               <input
-                                                type={column.isTimeField ? "text" : "number"}
-                                                placeholder={column.isTimeField ? "00:00" : "0"}
-                                                min={column.field === "plusMinus" || column.isTimeField ? undefined : "0"}
-                                                max={maxValue !== undefined ? String(maxValue) : undefined}
-                                                title={`${player.name} ${column.field}`}
-                                                value={statInputValue(playerStat?.[column.field], column.isTimeField, hasTouched)}
-                                                onChange={(e) => updatePlayerStat(player.id, false, column.field, e.target.value, player.name || "Player", column.isTimeField)}
-                                                disabled={column.readOnly || isDNP}
-                                                className={`${column.isTimeField ? 'w-14' : 'w-12'} px-2 py-1 border rounded text-center text-sm ${column.readOnly || isDNP ? "bg-slate-900/70 text-slate-300 border-slate-600/40" : "bg-slate-700 text-white"} ${hasError ? "border-red-500 ring-1 ring-red-500/70" : "border-white/10"}`}
+                                                type="number"
+                                                min="0"
+                                                max={stat.twoPointsAttempted || undefined}
+                                                title={`${player.name} twoPointsMade`}
+                                                value={statInputValue(stat.twoPointsMade, false, getTouched("twoPointsMade"))}
+                                                onChange={(e) => updatePlayerStat(player.id, false, "twoPointsMade", e.target.value, player.name || "Player")}
+                                                disabled={isDNP}
+                                                className={`w-10 px-2 py-1 border rounded text-center text-sm ${isDNP ? "bg-slate-900/70 text-slate-300 border-slate-600/40" : "bg-slate-700 text-white"} ${getError("twoPointsMade") ? "border-red-500 ring-1 ring-red-500/70" : "border-white/10"}`}
                                               />
-                                                );
-                                              })()}
-                                            </td>
-                                          ))}
+                                              <span className="text-xs text-slate-500">/</span>
+                                              <input
+                                                type="number"
+                                                min="0"
+                                                title={`${player.name} twoPointsAttempted`}
+                                                value={statInputValue(stat.twoPointsAttempted, false, getTouched("twoPointsAttempted"))}
+                                                onChange={(e) => updatePlayerStat(player.id, false, "twoPointsAttempted", e.target.value, player.name || "Player")}
+                                                disabled={isDNP}
+                                                className={`w-10 px-2 py-1 border rounded text-center text-sm ${isDNP ? "bg-slate-900/70 text-slate-300 border-slate-600/40" : "bg-slate-700 text-white"} ${getError("twoPointsAttempted") ? "border-red-500 ring-1 ring-red-500/70" : "border-white/10"}`}
+                                              />
+                                            </div>
+                                          </td>
+                                          <td className="p-1 text-center text-xs text-slate-300">{twoPct}%</td>
+                                          <td className="p-1">
+                                            <div className="flex items-center justify-center gap-1">
+                                              <input
+                                                type="number"
+                                                min="0"
+                                                max={stat.threePointsAttempted || undefined}
+                                                title={`${player.name} threePointsMade`}
+                                                value={statInputValue(stat.threePointsMade, false, getTouched("threePointsMade"))}
+                                                onChange={(e) => updatePlayerStat(player.id, false, "threePointsMade", e.target.value, player.name || "Player")}
+                                                disabled={isDNP}
+                                                className={`w-10 px-2 py-1 border rounded text-center text-sm ${isDNP ? "bg-slate-900/70 text-slate-300 border-slate-600/40" : "bg-slate-700 text-white"} ${getError("threePointsMade") ? "border-red-500 ring-1 ring-red-500/70" : "border-white/10"}`}
+                                              />
+                                              <span className="text-xs text-slate-500">/</span>
+                                              <input
+                                                type="number"
+                                                min="0"
+                                                title={`${player.name} threePointsAttempted`}
+                                                value={statInputValue(stat.threePointsAttempted, false, getTouched("threePointsAttempted"))}
+                                                onChange={(e) => updatePlayerStat(player.id, false, "threePointsAttempted", e.target.value, player.name || "Player")}
+                                                disabled={isDNP}
+                                                className={`w-10 px-2 py-1 border rounded text-center text-sm ${isDNP ? "bg-slate-900/70 text-slate-300 border-slate-600/40" : "bg-slate-700 text-white"} ${getError("threePointsAttempted") ? "border-red-500 ring-1 ring-red-500/70" : "border-white/10"}`}
+                                              />
+                                            </div>
+                                          </td>
+                                          <td className="p-1 text-center text-xs text-slate-300">{threePct}%</td>
+                                          <td className="p-1">
+                                            <div className="flex items-center justify-center gap-1">
+                                              <input
+                                                type="number"
+                                                min="0"
+                                                max={stat.freeThrowsAttempted || undefined}
+                                                title={`${player.name} freeThrowsMade`}
+                                                value={statInputValue(stat.freeThrowsMade, false, getTouched("freeThrowsMade"))}
+                                                onChange={(e) => updatePlayerStat(player.id, false, "freeThrowsMade", e.target.value, player.name || "Player")}
+                                                disabled={isDNP}
+                                                className={`w-10 px-2 py-1 border rounded text-center text-sm ${isDNP ? "bg-slate-900/70 text-slate-300 border-slate-600/40" : "bg-slate-700 text-white"} ${getError("freeThrowsMade") ? "border-red-500 ring-1 ring-red-500/70" : "border-white/10"}`}
+                                              />
+                                              <span className="text-xs text-slate-500">/</span>
+                                              <input
+                                                type="number"
+                                                min="0"
+                                                title={`${player.name} freeThrowsAttempted`}
+                                                value={statInputValue(stat.freeThrowsAttempted, false, getTouched("freeThrowsAttempted"))}
+                                                onChange={(e) => updatePlayerStat(player.id, false, "freeThrowsAttempted", e.target.value, player.name || "Player")}
+                                                disabled={isDNP}
+                                                className={`w-10 px-2 py-1 border rounded text-center text-sm ${isDNP ? "bg-slate-900/70 text-slate-300 border-slate-600/40" : "bg-slate-700 text-white"} ${getError("freeThrowsAttempted") ? "border-red-500 ring-1 ring-red-500/70" : "border-white/10"}`}
+                                              />
+                                            </div>
+                                          </td>
+                                          <td className="p-1 text-center text-xs text-slate-300">{ftPct}%</td>
+                                          <td className="p-1">
+                                            <input
+                                              type="number"
+                                              min="0"
+                                              title={`${player.name} offensiveRebounds`}
+                                              value={statInputValue(stat.offensiveRebounds, false, getTouched("offensiveRebounds"))}
+                                              onChange={(e) => updatePlayerStat(player.id, false, "offensiveRebounds", e.target.value, player.name || "Player")}
+                                              disabled={isDNP}
+                                              className={`w-10 px-2 py-1 border rounded text-center text-sm ${isDNP ? "bg-slate-900/70 text-slate-300 border-slate-600/40" : "bg-slate-700 text-white"} ${getError("offensiveRebounds") ? "border-red-500 ring-1 ring-red-500/70" : "border-white/10"}`}
+                                            />
+                                          </td>
+                                          <td className="p-1">
+                                            <input
+                                              type="number"
+                                              min="0"
+                                              title={`${player.name} defensiveRebounds`}
+                                              value={statInputValue(stat.defensiveRebounds, false, getTouched("defensiveRebounds"))}
+                                              onChange={(e) => updatePlayerStat(player.id, false, "defensiveRebounds", e.target.value, player.name || "Player")}
+                                              disabled={isDNP}
+                                              className={`w-10 px-2 py-1 border rounded text-center text-sm ${isDNP ? "bg-slate-900/70 text-slate-300 border-slate-600/40" : "bg-slate-700 text-white"} ${getError("defensiveRebounds") ? "border-red-500 ring-1 ring-red-500/70" : "border-white/10"}`}
+                                            />
+                                          </td>
+                                          <td className="p-1 text-center text-xs text-slate-300">{stat.rebounds}</td>
+                                          <td className="p-1">
+                                            <input
+                                              type="number"
+                                              min="0"
+                                              title={`${player.name} assists`}
+                                              value={statInputValue(stat.assists, false, getTouched("assists"))}
+                                              onChange={(e) => updatePlayerStat(player.id, false, "assists", e.target.value, player.name || "Player")}
+                                              disabled={isDNP}
+                                              className={`w-10 px-2 py-1 border rounded text-center text-sm ${isDNP ? "bg-slate-900/70 text-slate-300 border-slate-600/40" : "bg-slate-700 text-white"} ${getError("assists") ? "border-red-500 ring-1 ring-red-500/70" : "border-white/10"}`}
+                                            />
+                                          </td>
+                                          <td className="p-1">
+                                            <input
+                                              type="number"
+                                              min="0"
+                                              title={`${player.name} turnovers`}
+                                              value={statInputValue(stat.turnovers, false, getTouched("turnovers"))}
+                                              onChange={(e) => updatePlayerStat(player.id, false, "turnovers", e.target.value, player.name || "Player")}
+                                              disabled={isDNP}
+                                              className={`w-10 px-2 py-1 border rounded text-center text-sm ${isDNP ? "bg-slate-900/70 text-slate-300 border-slate-600/40" : "bg-slate-700 text-white"} ${getError("turnovers") ? "border-red-500 ring-1 ring-red-500/70" : "border-white/10"}`}
+                                            />
+                                          </td>
+                                          <td className="p-1">
+                                            <input
+                                              type="number"
+                                              min="0"
+                                              title={`${player.name} steals`}
+                                              value={statInputValue(stat.steals, false, getTouched("steals"))}
+                                              onChange={(e) => updatePlayerStat(player.id, false, "steals", e.target.value, player.name || "Player")}
+                                              disabled={isDNP}
+                                              className={`w-10 px-2 py-1 border rounded text-center text-sm ${isDNP ? "bg-slate-900/70 text-slate-300 border-slate-600/40" : "bg-slate-700 text-white"} ${getError("steals") ? "border-red-500 ring-1 ring-red-500/70" : "border-white/10"}`}
+                                            />
+                                          </td>
+                                          <td className="p-1">
+                                            <input
+                                              type="number"
+                                              min="0"
+                                              title={`${player.name} blocks`}
+                                              value={statInputValue(stat.blocks, false, getTouched("blocks"))}
+                                              onChange={(e) => updatePlayerStat(player.id, false, "blocks", e.target.value, player.name || "Player")}
+                                              disabled={isDNP}
+                                              className={`w-10 px-2 py-1 border rounded text-center text-sm ${isDNP ? "bg-slate-900/70 text-slate-300 border-slate-600/40" : "bg-slate-700 text-white"} ${getError("blocks") ? "border-red-500 ring-1 ring-red-500/70" : "border-white/10"}`}
+                                            />
+                                          </td>
+                                          <td className="p-1">
+                                            <input
+                                              type="number"
+                                              min="0"
+                                              title={`${player.name} blockedAgainst`}
+                                              value={statInputValue(stat.blockedAgainst, false, getTouched("blockedAgainst"))}
+                                              onChange={(e) => updatePlayerStat(player.id, false, "blockedAgainst", e.target.value, player.name || "Player")}
+                                              disabled={isDNP}
+                                              className={`w-10 px-2 py-1 border rounded text-center text-sm ${isDNP ? "bg-slate-900/70 text-slate-300 border-slate-600/40" : "bg-slate-700 text-white"} ${getError("blockedAgainst") ? "border-red-500 ring-1 ring-red-500/70" : "border-white/10"}`}
+                                            />
+                                          </td>
+                                          <td className="p-1">
+                                            <input
+                                              type="number"
+                                              min="0"
+                                              title={`${player.name} fouls`}
+                                              value={statInputValue(stat.fouls, false, getTouched("fouls"))}
+                                              onChange={(e) => updatePlayerStat(player.id, false, "fouls", e.target.value, player.name || "Player")}
+                                              disabled={isDNP}
+                                              className={`w-10 px-2 py-1 border rounded text-center text-sm ${isDNP ? "bg-slate-900/70 text-slate-300 border-slate-600/40" : "bg-slate-700 text-white"} ${getError("fouls") ? "border-red-500 ring-1 ring-red-500/70" : "border-white/10"}`}
+                                            />
+                                          </td>
+                                          <td className="p-1">
+                                            <input
+                                              type="number"
+                                              min="0"
+                                              title={`${player.name} foulsDrawn`}
+                                              value={statInputValue(stat.foulsDrawn, false, getTouched("foulsDrawn"))}
+                                              onChange={(e) => updatePlayerStat(player.id, false, "foulsDrawn", e.target.value, player.name || "Player")}
+                                              disabled={isDNP}
+                                              className={`w-10 px-2 py-1 border rounded text-center text-sm ${isDNP ? "bg-slate-900/70 text-slate-300 border-slate-600/40" : "bg-slate-700 text-white"} ${getError("foulsDrawn") ? "border-red-500 ring-1 ring-red-500/70" : "border-white/10"}`}
+                                            />
+                                          </td>
+                                          <td className="p-1">
+                                            <input
+                                              type="number"
+                                              title={`${player.name} plusMinus`}
+                                              value={statInputValue(stat.plusMinus, false, getTouched("plusMinus"))}
+                                              onChange={(e) => updatePlayerStat(player.id, false, "plusMinus", e.target.value, player.name || "Player")}
+                                              disabled={isDNP}
+                                              className={`w-12 px-2 py-1 border rounded text-center text-sm ${isDNP ? "bg-slate-900/70 text-slate-300 border-slate-600/40" : "bg-slate-700 text-white"} ${getError("plusMinus") ? "border-red-500 ring-1 ring-red-500/70" : "border-white/10"}`}
+                                            />
+                                          </td>
+                                          <td className="p-1 text-center text-xs text-slate-300">{evaluation}</td>
+                                          <td className="p-1 text-center text-xs font-semibold text-white">{stat.points}</td>
                                         </tr>
                                         );
                                       })}
@@ -1694,22 +1941,69 @@ export default function StatsPage() {
                                   <h4 className="font-semibold text-white">{expandedGame.homeTeamName}</h4>
                                   <span className="text-xs text-slate-400">({homePlayers.length} players)</span>
                                 </div>
-                                <div className="bg-slate-800/50 rounded-xl overflow-x-auto">
+                                <div className="bg-slate-800/50 rounded-xl overflow-x-auto stats-compact">
                                   <table className="w-full text-sm">
                                     <thead>
                                       <tr className="text-slate-400 border-b border-white/10">
-                                        <th className="text-left p-3">#</th>
-                                        <th className="text-left p-3">Player</th>
-                                        <th className="text-center p-2 w-12">{copy.dnp}</th>
-                                        {statColumns.map((column) => (
-                                          <th key={column.field} className="text-center p-2 w-14">{column.label}</th>
-                                        ))}
+                                        <th rowSpan={2} className="text-left p-3">#</th>
+                                        <th rowSpan={2} className="text-left p-3">Player</th>
+                                        <th rowSpan={2} className="text-center p-2 w-12">{copy.dnp}</th>
+                                        <th rowSpan={2} className="text-center p-2 w-14">MIN</th>
+                                        <th colSpan={2} className="text-center p-2">Tirs Tot.</th>
+                                        <th colSpan={2} className="text-center p-2">2 pts</th>
+                                        <th colSpan={2} className="text-center p-2">3 pts</th>
+                                        <th colSpan={2} className="text-center p-2">LF</th>
+                                        <th colSpan={3} className="text-center p-2">Rebonds</th>
+                                        <th rowSpan={2} className="text-center p-2">PD</th>
+                                        <th rowSpan={2} className="text-center p-2">BP</th>
+                                        <th rowSpan={2} className="text-center p-2">IN</th>
+                                        <th colSpan={2} className="text-center p-2">Contres</th>
+                                        <th colSpan={2} className="text-center p-2">Fautes</th>
+                                        <th rowSpan={2} className="text-center p-2">+/-</th>
+                                        <th rowSpan={2} className="text-center p-2">Ev</th>
+                                        <th rowSpan={2} className="text-center p-2">PTS</th>
+                                      </tr>
+                                      <tr className="text-slate-400 border-b border-white/10">
+                                        <th className="text-center p-2">R/T</th>
+                                        <th className="text-center p-2">%</th>
+                                        <th className="text-center p-2">R/T</th>
+                                        <th className="text-center p-2">%</th>
+                                        <th className="text-center p-2">R/T</th>
+                                        <th className="text-center p-2">%</th>
+                                        <th className="text-center p-2">R/T</th>
+                                        <th className="text-center p-2">%</th>
+                                        <th className="text-center p-2">RO</th>
+                                        <th className="text-center p-2">RD</th>
+                                        <th className="text-center p-2">TOT</th>
+                                        <th className="text-center p-2">Ctr</th>
+                                        <th className="text-center p-2">CS</th>
+                                        <th className="text-center p-2">F</th>
+                                        <th className="text-center p-2">FP</th>
                                       </tr>
                                     </thead>
                                     <tbody>
                                       {homePlayers.map((player) => {
                                         const playerStat = homeStats[player.id];
+                                        const stat = playerStat || createEmptyPlayerStat(player);
                                         const isDNP = playerStat?.dnp || false;
+                                        const fgMade = Number(stat.fieldGoalsMade ?? 0);
+                                        const fgAtt = Number(stat.fieldGoalsAttempted ?? 0);
+                                        const twoMade = Number(stat.twoPointsMade ?? 0);
+                                        const twoAtt = Number(stat.twoPointsAttempted ?? 0);
+                                        const threeMade = Number(stat.threePointsMade ?? 0);
+                                        const threeAtt = Number(stat.threePointsAttempted ?? 0);
+                                        const ftMade = Number(stat.freeThrowsMade ?? 0);
+                                        const ftAtt = Number(stat.freeThrowsAttempted ?? 0);
+                                        const fgPct = Math.round(safePercent(fgMade, fgAtt));
+                                        const twoPct = Math.round(safePercent(twoMade, twoAtt));
+                                        const threePct = Math.round(safePercent(threeMade, threeAtt));
+                                        const ftPct = Math.round(safePercent(ftMade, ftAtt));
+                                        const evaluation = stat.points + stat.rebounds + stat.assists + stat.steals + stat.blocks -
+                                          Math.max(stat.fieldGoalsAttempted - stat.fieldGoalsMade, 0) -
+                                          Math.max(stat.freeThrowsAttempted - stat.freeThrowsMade, 0) -
+                                          stat.turnovers;
+                                        const getTouched = (field: StatField) => Boolean(touchedFields[`home_${player.id}_${field}`]);
+                                        const getError = (field: StatField) => Boolean(cellErrors[getCellKey(true, player.id, field)]);
                                         return (
                                         <tr key={player.id} className={`border-b border-white/5 hover:bg-white/5 ${isDNP ? 'opacity-50' : ''}`}>
                                           <td className="p-3 text-slate-400 font-mono">{player.jerseyNumber || "-"}</td>
@@ -1724,37 +2018,208 @@ export default function StatsPage() {
                                               {isDNP ? '✓' : '—'}
                                             </button>
                                           </td>
-                                          {statColumns.map((column) => (
-                                            <td key={column.field} className="p-1">
-                                              {(() => {
-                                                const cellKey = getCellKey(true, player.id, column.field);
-                                                const touchKey = `home_${player.id}_${column.field}`;
-                                                const hasError = Boolean(cellErrors[cellKey]);
-                                                const hasTouched = Boolean(touchedFields[touchKey]);
-                                                const maxValue = column.field === "twoPointsMade"
-                                                  ? Number(playerStat?.twoPointsAttempted || 0)
-                                                  : column.field === "threePointsMade"
-                                                  ? Number(playerStat?.threePointsAttempted || 0)
-                                                  : column.field === "freeThrowsMade"
-                                                  ? Number(playerStat?.freeThrowsAttempted || 0)
-                                                  : undefined;
-
-                                                return (
+                                          <td className="p-1">
+                                            <input
+                                              type="text"
+                                              placeholder="00:00"
+                                              title={`${player.name} minutes`}
+                                              value={statInputValue(stat.minutes, true, getTouched("minutes"))}
+                                              onChange={(e) => updatePlayerStat(player.id, true, "minutes", e.target.value, player.name || "Player", true)}
+                                              disabled={isDNP}
+                                              className={`w-14 px-2 py-1 border rounded text-center text-sm ${isDNP ? "bg-slate-900/70 text-slate-300 border-slate-600/40" : "bg-slate-700 text-white"} ${getError("minutes") ? "border-red-500 ring-1 ring-red-500/70" : "border-white/10"}`}
+                                            />
+                                          </td>
+                                          <td className="p-1 text-center text-xs text-slate-300">
+                                            {fgMade}/{fgAtt}
+                                          </td>
+                                          <td className="p-1 text-center text-xs text-slate-300">{fgPct}%</td>
+                                          <td className="p-1">
+                                            <div className="flex items-center justify-center gap-1">
                                               <input
-                                                type={column.isTimeField ? "text" : "number"}
-                                                placeholder={column.isTimeField ? "00:00" : "0"}
-                                                min={column.field === "plusMinus" || column.isTimeField ? undefined : "0"}
-                                                max={maxValue !== undefined ? String(maxValue) : undefined}
-                                                title={`${player.name} ${column.field}`}
-                                                value={statInputValue(playerStat?.[column.field], column.isTimeField, hasTouched)}
-                                                onChange={(e) => updatePlayerStat(player.id, true, column.field, e.target.value, player.name || "Player", column.isTimeField)}
-                                                disabled={column.readOnly || isDNP}
-                                                className={`${column.isTimeField ? 'w-14' : 'w-12'} px-2 py-1 border rounded text-center text-sm ${column.readOnly || isDNP ? "bg-slate-900/70 text-slate-300 border-slate-600/40" : "bg-slate-700 text-white"} ${hasError ? "border-red-500 ring-1 ring-red-500/70" : "border-white/10"}`}
+                                                type="number"
+                                                min="0"
+                                                max={stat.twoPointsAttempted || undefined}
+                                                title={`${player.name} twoPointsMade`}
+                                                value={statInputValue(stat.twoPointsMade, false, getTouched("twoPointsMade"))}
+                                                onChange={(e) => updatePlayerStat(player.id, true, "twoPointsMade", e.target.value, player.name || "Player")}
+                                                disabled={isDNP}
+                                                className={`w-10 px-2 py-1 border rounded text-center text-sm ${isDNP ? "bg-slate-900/70 text-slate-300 border-slate-600/40" : "bg-slate-700 text-white"} ${getError("twoPointsMade") ? "border-red-500 ring-1 ring-red-500/70" : "border-white/10"}`}
                                               />
-                                                );
-                                              })()}
-                                            </td>
-                                          ))}
+                                              <span className="text-xs text-slate-500">/</span>
+                                              <input
+                                                type="number"
+                                                min="0"
+                                                title={`${player.name} twoPointsAttempted`}
+                                                value={statInputValue(stat.twoPointsAttempted, false, getTouched("twoPointsAttempted"))}
+                                                onChange={(e) => updatePlayerStat(player.id, true, "twoPointsAttempted", e.target.value, player.name || "Player")}
+                                                disabled={isDNP}
+                                                className={`w-10 px-2 py-1 border rounded text-center text-sm ${isDNP ? "bg-slate-900/70 text-slate-300 border-slate-600/40" : "bg-slate-700 text-white"} ${getError("twoPointsAttempted") ? "border-red-500 ring-1 ring-red-500/70" : "border-white/10"}`}
+                                              />
+                                            </div>
+                                          </td>
+                                          <td className="p-1 text-center text-xs text-slate-300">{twoPct}%</td>
+                                          <td className="p-1">
+                                            <div className="flex items-center justify-center gap-1">
+                                              <input
+                                                type="number"
+                                                min="0"
+                                                max={stat.threePointsAttempted || undefined}
+                                                title={`${player.name} threePointsMade`}
+                                                value={statInputValue(stat.threePointsMade, false, getTouched("threePointsMade"))}
+                                                onChange={(e) => updatePlayerStat(player.id, true, "threePointsMade", e.target.value, player.name || "Player")}
+                                                disabled={isDNP}
+                                                className={`w-10 px-2 py-1 border rounded text-center text-sm ${isDNP ? "bg-slate-900/70 text-slate-300 border-slate-600/40" : "bg-slate-700 text-white"} ${getError("threePointsMade") ? "border-red-500 ring-1 ring-red-500/70" : "border-white/10"}`}
+                                              />
+                                              <span className="text-xs text-slate-500">/</span>
+                                              <input
+                                                type="number"
+                                                min="0"
+                                                title={`${player.name} threePointsAttempted`}
+                                                value={statInputValue(stat.threePointsAttempted, false, getTouched("threePointsAttempted"))}
+                                                onChange={(e) => updatePlayerStat(player.id, true, "threePointsAttempted", e.target.value, player.name || "Player")}
+                                                disabled={isDNP}
+                                                className={`w-10 px-2 py-1 border rounded text-center text-sm ${isDNP ? "bg-slate-900/70 text-slate-300 border-slate-600/40" : "bg-slate-700 text-white"} ${getError("threePointsAttempted") ? "border-red-500 ring-1 ring-red-500/70" : "border-white/10"}`}
+                                              />
+                                            </div>
+                                          </td>
+                                          <td className="p-1 text-center text-xs text-slate-300">{threePct}%</td>
+                                          <td className="p-1">
+                                            <div className="flex items-center justify-center gap-1">
+                                              <input
+                                                type="number"
+                                                min="0"
+                                                max={stat.freeThrowsAttempted || undefined}
+                                                title={`${player.name} freeThrowsMade`}
+                                                value={statInputValue(stat.freeThrowsMade, false, getTouched("freeThrowsMade"))}
+                                                onChange={(e) => updatePlayerStat(player.id, true, "freeThrowsMade", e.target.value, player.name || "Player")}
+                                                disabled={isDNP}
+                                                className={`w-10 px-2 py-1 border rounded text-center text-sm ${isDNP ? "bg-slate-900/70 text-slate-300 border-slate-600/40" : "bg-slate-700 text-white"} ${getError("freeThrowsMade") ? "border-red-500 ring-1 ring-red-500/70" : "border-white/10"}`}
+                                              />
+                                              <span className="text-xs text-slate-500">/</span>
+                                              <input
+                                                type="number"
+                                                min="0"
+                                                title={`${player.name} freeThrowsAttempted`}
+                                                value={statInputValue(stat.freeThrowsAttempted, false, getTouched("freeThrowsAttempted"))}
+                                                onChange={(e) => updatePlayerStat(player.id, true, "freeThrowsAttempted", e.target.value, player.name || "Player")}
+                                                disabled={isDNP}
+                                                className={`w-10 px-2 py-1 border rounded text-center text-sm ${isDNP ? "bg-slate-900/70 text-slate-300 border-slate-600/40" : "bg-slate-700 text-white"} ${getError("freeThrowsAttempted") ? "border-red-500 ring-1 ring-red-500/70" : "border-white/10"}`}
+                                              />
+                                            </div>
+                                          </td>
+                                          <td className="p-1 text-center text-xs text-slate-300">{ftPct}%</td>
+                                          <td className="p-1">
+                                            <input
+                                              type="number"
+                                              min="0"
+                                              title={`${player.name} offensiveRebounds`}
+                                              value={statInputValue(stat.offensiveRebounds, false, getTouched("offensiveRebounds"))}
+                                              onChange={(e) => updatePlayerStat(player.id, true, "offensiveRebounds", e.target.value, player.name || "Player")}
+                                              disabled={isDNP}
+                                              className={`w-10 px-2 py-1 border rounded text-center text-sm ${isDNP ? "bg-slate-900/70 text-slate-300 border-slate-600/40" : "bg-slate-700 text-white"} ${getError("offensiveRebounds") ? "border-red-500 ring-1 ring-red-500/70" : "border-white/10"}`}
+                                            />
+                                          </td>
+                                          <td className="p-1">
+                                            <input
+                                              type="number"
+                                              min="0"
+                                              title={`${player.name} defensiveRebounds`}
+                                              value={statInputValue(stat.defensiveRebounds, false, getTouched("defensiveRebounds"))}
+                                              onChange={(e) => updatePlayerStat(player.id, true, "defensiveRebounds", e.target.value, player.name || "Player")}
+                                              disabled={isDNP}
+                                              className={`w-10 px-2 py-1 border rounded text-center text-sm ${isDNP ? "bg-slate-900/70 text-slate-300 border-slate-600/40" : "bg-slate-700 text-white"} ${getError("defensiveRebounds") ? "border-red-500 ring-1 ring-red-500/70" : "border-white/10"}`}
+                                            />
+                                          </td>
+                                          <td className="p-1 text-center text-xs text-slate-300">{stat.rebounds}</td>
+                                          <td className="p-1">
+                                            <input
+                                              type="number"
+                                              min="0"
+                                              title={`${player.name} assists`}
+                                              value={statInputValue(stat.assists, false, getTouched("assists"))}
+                                              onChange={(e) => updatePlayerStat(player.id, true, "assists", e.target.value, player.name || "Player")}
+                                              disabled={isDNP}
+                                              className={`w-10 px-2 py-1 border rounded text-center text-sm ${isDNP ? "bg-slate-900/70 text-slate-300 border-slate-600/40" : "bg-slate-700 text-white"} ${getError("assists") ? "border-red-500 ring-1 ring-red-500/70" : "border-white/10"}`}
+                                            />
+                                          </td>
+                                          <td className="p-1">
+                                            <input
+                                              type="number"
+                                              min="0"
+                                              title={`${player.name} turnovers`}
+                                              value={statInputValue(stat.turnovers, false, getTouched("turnovers"))}
+                                              onChange={(e) => updatePlayerStat(player.id, true, "turnovers", e.target.value, player.name || "Player")}
+                                              disabled={isDNP}
+                                              className={`w-10 px-2 py-1 border rounded text-center text-sm ${isDNP ? "bg-slate-900/70 text-slate-300 border-slate-600/40" : "bg-slate-700 text-white"} ${getError("turnovers") ? "border-red-500 ring-1 ring-red-500/70" : "border-white/10"}`}
+                                            />
+                                          </td>
+                                          <td className="p-1">
+                                            <input
+                                              type="number"
+                                              min="0"
+                                              title={`${player.name} steals`}
+                                              value={statInputValue(stat.steals, false, getTouched("steals"))}
+                                              onChange={(e) => updatePlayerStat(player.id, true, "steals", e.target.value, player.name || "Player")}
+                                              disabled={isDNP}
+                                              className={`w-10 px-2 py-1 border rounded text-center text-sm ${isDNP ? "bg-slate-900/70 text-slate-300 border-slate-600/40" : "bg-slate-700 text-white"} ${getError("steals") ? "border-red-500 ring-1 ring-red-500/70" : "border-white/10"}`}
+                                            />
+                                          </td>
+                                          <td className="p-1">
+                                            <input
+                                              type="number"
+                                              min="0"
+                                              title={`${player.name} blocks`}
+                                              value={statInputValue(stat.blocks, false, getTouched("blocks"))}
+                                              onChange={(e) => updatePlayerStat(player.id, true, "blocks", e.target.value, player.name || "Player")}
+                                              disabled={isDNP}
+                                              className={`w-10 px-2 py-1 border rounded text-center text-sm ${isDNP ? "bg-slate-900/70 text-slate-300 border-slate-600/40" : "bg-slate-700 text-white"} ${getError("blocks") ? "border-red-500 ring-1 ring-red-500/70" : "border-white/10"}`}
+                                            />
+                                          </td>
+                                          <td className="p-1">
+                                            <input
+                                              type="number"
+                                              min="0"
+                                              title={`${player.name} blockedAgainst`}
+                                              value={statInputValue(stat.blockedAgainst, false, getTouched("blockedAgainst"))}
+                                              onChange={(e) => updatePlayerStat(player.id, true, "blockedAgainst", e.target.value, player.name || "Player")}
+                                              disabled={isDNP}
+                                              className={`w-10 px-2 py-1 border rounded text-center text-sm ${isDNP ? "bg-slate-900/70 text-slate-300 border-slate-600/40" : "bg-slate-700 text-white"} ${getError("blockedAgainst") ? "border-red-500 ring-1 ring-red-500/70" : "border-white/10"}`}
+                                            />
+                                          </td>
+                                          <td className="p-1">
+                                            <input
+                                              type="number"
+                                              min="0"
+                                              title={`${player.name} fouls`}
+                                              value={statInputValue(stat.fouls, false, getTouched("fouls"))}
+                                              onChange={(e) => updatePlayerStat(player.id, true, "fouls", e.target.value, player.name || "Player")}
+                                              disabled={isDNP}
+                                              className={`w-10 px-2 py-1 border rounded text-center text-sm ${isDNP ? "bg-slate-900/70 text-slate-300 border-slate-600/40" : "bg-slate-700 text-white"} ${getError("fouls") ? "border-red-500 ring-1 ring-red-500/70" : "border-white/10"}`}
+                                            />
+                                          </td>
+                                          <td className="p-1">
+                                            <input
+                                              type="number"
+                                              min="0"
+                                              title={`${player.name} foulsDrawn`}
+                                              value={statInputValue(stat.foulsDrawn, false, getTouched("foulsDrawn"))}
+                                              onChange={(e) => updatePlayerStat(player.id, true, "foulsDrawn", e.target.value, player.name || "Player")}
+                                              disabled={isDNP}
+                                              className={`w-10 px-2 py-1 border rounded text-center text-sm ${isDNP ? "bg-slate-900/70 text-slate-300 border-slate-600/40" : "bg-slate-700 text-white"} ${getError("foulsDrawn") ? "border-red-500 ring-1 ring-red-500/70" : "border-white/10"}`}
+                                            />
+                                          </td>
+                                          <td className="p-1">
+                                            <input
+                                              type="number"
+                                              title={`${player.name} plusMinus`}
+                                              value={statInputValue(stat.plusMinus, false, getTouched("plusMinus"))}
+                                              onChange={(e) => updatePlayerStat(player.id, true, "plusMinus", e.target.value, player.name || "Player")}
+                                              disabled={isDNP}
+                                              className={`w-12 px-2 py-1 border rounded text-center text-sm ${isDNP ? "bg-slate-900/70 text-slate-300 border-slate-600/40" : "bg-slate-700 text-white"} ${getError("plusMinus") ? "border-red-500 ring-1 ring-red-500/70" : "border-white/10"}`}
+                                            />
+                                          </td>
+                                          <td className="p-1 text-center text-xs text-slate-300">{evaluation}</td>
+                                          <td className="p-1 text-center text-xs font-semibold text-white">{stat.points}</td>
                                         </tr>
                                         );
                                       })}

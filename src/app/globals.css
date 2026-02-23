@@ -197,6 +197,20 @@ body {
   transition: transform 0.3s ease-in-out;
 }
 
+.stats-compact input {
+  width: 5ch;
+  min-width: 5ch;
+  height: 2.25rem;
+  font-size: 0.875rem;
+  padding-left: 0.35rem;
+  padding-right: 0.35rem;
+}
+
+.stats-compact input[type="text"] {
+  width: 7.5ch;
+  min-width: 7.5ch;
+}
+
 .animated-send-btn:hover .svg-wrapper {
   animation: fly-1 0.6s ease-in-out infinite alternate;
 }

@@ -860,8 +860,8 @@ export default function AdminPage() {
   const [gameStatsForm, setGameStatsForm] = useState<GameStatsFormState | null>(null);
   const [winnerRoster, setWinnerRoster] = useState<AdminRosterPlayer[]>([]);
   const [loserRoster, setLoserRoster] = useState<AdminRosterPlayer[]>([]);
-  const [playerStatsMap, setPlayerStatsMap] = useState<Record<string, { two_pm: string; two_pa: string; three_pm: string; three_pa: string; ft_m: string; ft_a: string; ast: string; oreb: string; dreb: string; reb: string; stl: string; blk: string; min: string; pf: string; to: string; fls: string }>>({});
-  const [loserStatsMap, setLoserStatsMap] = useState<Record<string, { two_pm: string; two_pa: string; three_pm: string; three_pa: string; ft_m: string; ft_a: string; ast: string; oreb: string; dreb: string; reb: string; stl: string; blk: string; min: string; pf: string; to: string; fls: string }>>({});
+  const [playerStatsMap, setPlayerStatsMap] = useState<Record<string, { two_pm: string; two_pa: string; three_pm: string; three_pa: string; ft_m: string; ft_a: string; ast: string; oreb: string; dreb: string; reb: string; stl: string; blk: string; cs: string; min: string; pf: string; fp: string; to: string }>>({});
+  const [loserStatsMap, setLoserStatsMap] = useState<Record<string, { two_pm: string; two_pa: string; three_pm: string; three_pa: string; ft_m: string; ft_a: string; ast: string; oreb: string; dreb: string; reb: string; stl: string; blk: string; cs: string; min: string; pf: string; fp: string; to: string }>>({});
   const [statsSubmitting, setStatsSubmitting] = useState(false);
   const [statsStatus, setStatsStatus] = useState<StatusCallout | null>(null);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
@@ -4261,7 +4261,7 @@ export default function AdminPage() {
         
         // Initialize player stats map if exists
         if (game.playerStats) {
-          const statsMap: Record<string, { two_pm: string; two_pa: string; three_pm: string; three_pa: string; ft_m: string; ft_a: string; ast: string; oreb: string; dreb: string; reb: string; stl: string; blk: string; min: string; pf: string; to: string; fls: string }> = {};
+          const statsMap: Record<string, { two_pm: string; two_pa: string; three_pm: string; three_pa: string; ft_m: string; ft_a: string; ast: string; oreb: string; dreb: string; reb: string; stl: string; blk: string; min: string; pf: string; to: string; cs: string; fp: string }> = {};
           game.playerStats.forEach((stat) => {
             statsMap[stat.playerId] = {
               two_pm: typeof stat.two_pm === "number" ? stat.two_pm.toString() : "",
@@ -4279,7 +4279,8 @@ export default function AdminPage() {
               min: typeof stat.min === "number" ? stat.min.toString() : "",
               pf: typeof stat.pf === "number" ? stat.pf.toString() : "",
               to: typeof stat.to === "number" ? stat.to.toString() : "",
-              fls: "",
+              cs: typeof (stat as { cs?: number }).cs === "number" ? (stat as { cs?: number }).cs!.toString() : "",
+              fp: typeof (stat as { fp?: number }).fp === "number" ? (stat as { fp?: number }).fp!.toString() : "",
             };
           });
           setPlayerStatsMap(statsMap);
@@ -4412,16 +4413,18 @@ export default function AdminPage() {
           reb,
           stl: parseInt(stats.stl) || 0,
           blk: parseInt(stats.blk) || 0,
+          cs: parseInt(stats.cs) || 0,
           min: parseInt(stats.min) || 0,
           pf: parseInt(stats.pf) || 0,
+          fp: parseInt(stats.fp) || 0,
           to: parseInt(stats.to) || 0,
         };
       }).filter(stat => {
         // Only include players who have ANY stat entered (not all zeros)
-        return stat.pts > 0 || stat.ast > 0 || stat.reb > 0 || stat.stl > 0 || stat.blk > 0 || 
+         return stat.pts > 0 || stat.ast > 0 || stat.reb > 0 || stat.stl > 0 || stat.blk > 0 || stat.cs > 0 || 
                stat.two_pm > 0 || stat.two_pa > 0 || stat.three_pm > 0 || stat.three_pa > 0 || 
                stat.ft_m > 0 || stat.ft_a > 0 || stat.oreb > 0 || stat.dreb > 0 || 
-               stat.min > 0 || stat.pf > 0 || stat.to > 0;
+           stat.min > 0 || stat.pf > 0 || stat.fp > 0 || stat.to > 0;
       });
 
       // Add loser team stats
@@ -4464,16 +4467,18 @@ export default function AdminPage() {
           reb,
           stl: parseInt(stats.stl) || 0,
           blk: parseInt(stats.blk) || 0,
+          cs: parseInt(stats.cs) || 0,
           min: parseInt(stats.min) || 0,
           pf: parseInt(stats.pf) || 0,
+          fp: parseInt(stats.fp) || 0,
           to: parseInt(stats.to) || 0,
         };
       }).filter(stat => {
         // Only include players who have ANY stat entered (not all zeros)
-        return stat.pts > 0 || stat.ast > 0 || stat.reb > 0 || stat.stl > 0 || stat.blk > 0 || 
+         return stat.pts > 0 || stat.ast > 0 || stat.reb > 0 || stat.stl > 0 || stat.blk > 0 || stat.cs > 0 || 
                stat.two_pm > 0 || stat.two_pa > 0 || stat.three_pm > 0 || stat.three_pa > 0 || 
                stat.ft_m > 0 || stat.ft_a > 0 || stat.oreb > 0 || stat.dreb > 0 || 
-               stat.min > 0 || stat.pf > 0 || stat.to > 0;
+           stat.min > 0 || stat.pf > 0 || stat.fp > 0 || stat.to > 0;
       });
 
       const allPlayerStats = [...playerStats, ...loserPlayerStats];
@@ -4514,8 +4519,10 @@ export default function AdminPage() {
           reb: number;
           stl: number;
           blk: number;
+          cs: number;
           min: number;
           pf: number;
+          fp: number;
           to: number;
         }>();
 
@@ -4542,8 +4549,10 @@ export default function AdminPage() {
               reb: 0,
               stl: 0,
               blk: 0,
+              cs: 0,
               min: 0,
               pf: 0,
+              fp: 0,
               to: 0,
             };
 
@@ -4561,8 +4570,10 @@ export default function AdminPage() {
             current.reb += Number(entry.reb || 0);
             current.stl += Number(entry.stl || 0);
             current.blk += Number(entry.blk || 0);
+            current.cs += Number(entry.cs || 0);
             current.min += Number(entry.min || 0);
             current.pf += Number(entry.pf || 0);
+            current.fp += Number(entry.fp || 0);
             current.to += Number(entry.to || 0);
 
             totalsByPlayer.set(entry.playerId, current);
@@ -4590,8 +4601,10 @@ export default function AdminPage() {
               reb: avg(totals?.reb || 0),
               stl: avg(totals?.stl || 0),
               blk: avg(totals?.blk || 0),
+              cs: avg(totals?.cs || 0),
               min: avg(totals?.min || 0),
               pf: avg(totals?.pf || 0),
+              fp: avg(totals?.fp || 0),
               to: avg(totals?.to || 0),
             },
             gamesPlayed: games,
@@ -8569,45 +8582,71 @@ export default function AdminPage() {
                             <div className="overflow-x-auto">
                               <table className="w-full">
                                 <thead>
-                                  {/* Category Headers */}
+                                  {/* Category Headers - French Format */}
                                   <tr className="border-b border-emerald-500/10">
                                     <th className="sticky left-0 z-30 bg-slate-900 px-4 py-1"></th>
-                                    <th colSpan={6} className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-blue-500/5 border-x border-blue-500/20">
-                                      Shooting
-                                    </th>
                                     <th colSpan={1} className="px-2 py-1"></th>
-                                    <th colSpan={5} className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-purple-500/5 border-x border-purple-500/20">
-                                      Defense & Stats
+                                    <th colSpan={2} className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-blue-500/5 border-x border-blue-500/20">
+                                      Tirs Tot.
+                                    </th>
+                                    <th colSpan={2} className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-indigo-500/5 border-x border-indigo-500/20">
+                                      3 pts
+                                    </th>
+                                    <th colSpan={2} className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-yellow-500/5 border-x border-yellow-500/20">
+                                      LF
+                                    </th>
+                                    <th colSpan={3} className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-purple-500/5 border-x border-purple-500/20">
+                                      Rebonds
+                                    </th>
+                                    <th colSpan={3} className="px-2 py-1"></th>
+                                    <th colSpan={2} className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-cyan-500/5 border-x border-cyan-500/20">
+                                      Contres
                                     </th>
                                     <th colSpan={2} className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-red-500/5 border-x border-red-500/20">
-                                      Fouls
+                                      Fautes
                                     </th>
+                                    <th colSpan={2} className="px-2 py-1"></th>
+                                    <th colSpan={1} className="px-2 py-1"></th>
                                   </tr>
                                   {/* Stat Headers */}
                                   <tr className="sticky top-0 z-20 border-b-2 border-emerald-500/20 bg-gradient-to-b from-slate-900 to-slate-900/95 backdrop-blur-sm">
                                     <th className="sticky left-0 z-30 bg-gradient-to-b from-slate-900 to-slate-900/95 px-4 py-2 text-left text-[10px] font-bold text-emerald-300 uppercase tracking-wider min-w-[180px]">Player</th>
-                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">2PM</th>
-                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">2PA</th>
-                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">3PM</th>
-                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">3PA</th>
-                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">FTM</th>
-                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">FTA</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">MIN</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">R/T</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">%</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">R/T</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">%</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">R/T</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">%</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">RO</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">RD</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">TOT</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">PD</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">BP</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">IN</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">Ctr</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">CS</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">F</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">FP</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">+/-</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">Ev</th>
                                     <th className="px-2 py-2 text-center bg-emerald-500/10">
                                       <span className="text-xs font-black text-emerald-400 uppercase">PTS</span>
                                     </th>
-                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">AST</th>
-                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">OR</th>
-                                    <th className="px-2 py-3 text-center text-[11px] font-bold text-slate-400 uppercase">DR</th>
-                                    <th className="px-2 py-3 text-center text-[11px] font-bold text-slate-400 uppercase">STL</th>
-                                    <th className="px-2 py-3 text-center text-[11px] font-bold text-slate-400 uppercase">BLK</th>
-                                    <th className="px-2 py-3 text-center text-[11px] font-bold text-slate-400 uppercase">TO</th>
-                                    <th className="px-2 py-3 text-center text-[11px] font-bold text-slate-400 uppercase">PF</th>
                                   </tr>
                                 </thead>
                                 <tbody>
                                   {winnerRoster.map((player, idx) => {
-                                    const stats = playerStatsMap[player.id] || { two_pm: "", two_pa: "", three_pm: "", three_pa: "", ft_m: "", ft_a: "", ast: "", oreb: "", dreb: "", reb: "", stl: "", blk: "", fls: "", min: "", pf: "", to: "" };
+                                    const stats = playerStatsMap[player.id] || { two_pm: "", two_pa: "", three_pm: "", three_pa: "", ft_m: "", ft_a: "", ast: "", oreb: "", dreb: "", reb: "", stl: "", blk: "", cs: "", min: "", pf: "", fp: "", to: "" };
                                     const totalPoints = (parseInt(stats.two_pm) || 0) * 2 + (parseInt(stats.three_pm) || 0) * 3 + (parseInt(stats.ft_m) || 0);
+                                    const twoPct = (parseInt(stats.two_pa) || 0) > 0 ? Math.round(((parseInt(stats.two_pm) || 0) / (parseInt(stats.two_pa) || 1)) * 100) : 0;
+                                    const threePct = (parseInt(stats.three_pa) || 0) > 0 ? Math.round(((parseInt(stats.three_pm) || 0) / (parseInt(stats.three_pa) || 1)) * 100) : 0;
+                                    const ftPct = (parseInt(stats.ft_a) || 0) > 0 ? Math.round(((parseInt(stats.ft_m) || 0) / (parseInt(stats.ft_a) || 1)) * 100) : 0;
+                                    const totalReb = (parseInt(stats.oreb) || 0) + (parseInt(stats.dreb) || 0);
+                                    // Evaluation formula: PTS + REB + AST + STL + BLK - TO - (FGA - FGM) - (FTA - FTM)
+                                    const fga = (parseInt(stats.two_pa) || 0) + (parseInt(stats.three_pa) || 0);
+                                    const fgm = (parseInt(stats.two_pm) || 0) + (parseInt(stats.three_pm) || 0);
+                                    const evaluation = totalPoints + totalReb + (parseInt(stats.ast) || 0) + (parseInt(stats.stl) || 0) + (parseInt(stats.blk) || 0) - (parseInt(stats.to) || 0) - (fga - fgm) - ((parseInt(stats.ft_a) || 0) - (parseInt(stats.ft_m) || 0));
                                     return (
                                       <tr key={player.id} className={`group border-b border-emerald-500/10 hover:bg-emerald-500/5 ${idx % 2 === 0 ? 'bg-slate-900/40' : 'bg-slate-900/20'}`}>
                                         <td className="sticky left-0 z-10 bg-slate-900/95 px-4 py-1.5 backdrop-blur-sm min-w-[180px] border-r border-emerald-500/10 group-hover:bg-emerald-500/5">
@@ -8621,112 +8660,150 @@ export default function AdminPage() {
                                             </div>
                                           </div>
                                         </td>
+                                        {/* Min */}
                                         <td className="px-2 py-1.5">
-                                          <input type="number" value={stats.two_pm} onChange={(e) => {
-                                            const made = parseInt(e.target.value) || 0;
-                                            const attempts = parseInt(stats.two_pa) || 0;
-                                            if (attempts > 0 && made > attempts) {
-                                              setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, two_pm: attempts.toString() }});
-                                            } else {
-                                              setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, two_pm: e.target.value }});
-                                            }
-                                          }} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30" placeholder="0" />
+                                          <input type="number" value={stats.min} onChange={(e) => setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, min: e.target.value }})} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30" placeholder="0" />
                                         </td>
+                                        {/* Tirs Tot R/T */}
                                         <td className="px-2 py-1.5">
-                                          <input type="number" value={stats.two_pa} onChange={(e) => {
-                                            const attempts = parseInt(e.target.value) || 0;
-                                            const made = parseInt(stats.two_pm) || 0;
-                                            if (made > attempts && attempts > 0) {
-                                              setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, two_pa: e.target.value, two_pm: attempts.toString() }});
-                                            } else {
-                                              setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, two_pa: e.target.value }});
-                                            }
-                                          }} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30" placeholder="0" />
-                                        </td>
-                                        <td className="px-2 py-1.5">
-                                          <input type="number" value={stats.three_pm} onChange={(e) => {
-                                            const made = parseInt(e.target.value) || 0;
-                                            const attempts = parseInt(stats.three_pa) || 0;
-                                            if (attempts > 0 && made > attempts) {
-                                              setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, three_pm: attempts.toString() }});
-                                            } else {
-                                              setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, three_pm: e.target.value }});
-                                            }
-                                          }} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30" placeholder="0" />
-                                        </td>
-                                        <td className="px-2 py-1.5">
-                                          <input type="number" value={stats.three_pa} onChange={(e) => {
-                                            const attempts = parseInt(e.target.value) || 0;
-                                            const made = parseInt(stats.three_pm) || 0;
-                                            if (made > attempts && attempts > 0) {
-                                              setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, three_pa: e.target.value, three_pm: attempts.toString() }});
-                                            } else {
-                                              setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, three_pa: e.target.value }});
-                                            }
-                                          }} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30" placeholder="0" />
-                                        </td>
-                                        <td className="px-2 py-1.5">
-                                          <input type="number" value={stats.ft_m} onChange={(e) => {
-                                            const made = parseInt(e.target.value) || 0;
-                                            const attempts = parseInt(stats.ft_a) || 0;
-                                            if (attempts > 0 && made > attempts) {
-                                              setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, ft_m: attempts.toString() }});
-                                            } else {
-                                              setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, ft_m: e.target.value }});
-                                            }
-                                          }} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30" placeholder="0" />
-                                        </td>
-                                        <td className="px-2 py-1.5">
-                                          <input type="number" value={stats.ft_a} onChange={(e) => {
-                                            const attempts = parseInt(e.target.value) || 0;
-                                            const made = parseInt(stats.ft_m) || 0;
-                                            if (made > attempts && attempts > 0) {
-                                              setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, ft_a: e.target.value, ft_m: attempts.toString() }});
-                                            } else {
-                                              setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, ft_a: e.target.value }});
-                                            }
-                                          }} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30" placeholder="0" />
-                                        </td>
-                                        <td className="px-2 py-1.5 bg-emerald-500/10">
-                                          <div className="flex items-center justify-center">
-                                            <span className="text-base font-black text-emerald-300 tabular-nums">{totalPoints}</span>
+                                          <div className="flex items-center justify-center gap-1">
+                                            <input type="number" value={stats.two_pm} onChange={(e) => {
+                                              const made = parseInt(e.target.value) || 0;
+                                              const attempts = parseInt(stats.two_pa) || 0;
+                                              if (attempts > 0 && made > attempts) {
+                                                setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, two_pm: attempts.toString() }});
+                                              } else {
+                                                setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, two_pm: e.target.value }});
+                                              }
+                                            }} min="0" className="w-9 rounded border border-slate-600/50 bg-slate-800/80 px-1 py-1 text-center text-xs font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30" placeholder="0" />
+                                            <span className="text-xs font-semibold text-slate-500">/</span>
+                                            <input type="number" value={stats.two_pa} onChange={(e) => {
+                                              const attempts = parseInt(e.target.value) || 0;
+                                              const made = parseInt(stats.two_pm) || 0;
+                                              if (made > attempts && attempts > 0) {
+                                                setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, two_pa: e.target.value, two_pm: attempts.toString() }});
+                                              } else {
+                                                setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, two_pa: e.target.value }});
+                                              }
+                                            }} min="0" className="w-9 rounded border border-slate-600/50 bg-slate-800/80 px-1 py-1 text-center text-xs font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30" placeholder="0" />
                                           </div>
                                         </td>
+                                        {/* Tirs Tot % */}
+                                        <td className="px-1 py-1.5 text-center text-xs font-semibold text-slate-400 tabular-nums">{twoPct}%</td>
+                                        {/* 3pts R/T */}
                                         <td className="px-2 py-1.5">
-                                          <input type="number" value={stats.ast} onChange={(e) => setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, ast: e.target.value }})} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30" placeholder="0" />
+                                          <div className="flex items-center justify-center gap-1">
+                                            <input type="number" value={stats.three_pm} onChange={(e) => {
+                                              const made = parseInt(e.target.value) || 0;
+                                              const attempts = parseInt(stats.three_pa) || 0;
+                                              if (attempts > 0 && made > attempts) {
+                                                setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, three_pm: attempts.toString() }});
+                                              } else {
+                                                setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, three_pm: e.target.value }});
+                                              }
+                                            }} min="0" className="w-9 rounded border border-slate-600/50 bg-slate-800/80 px-1 py-1 text-center text-xs font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30" placeholder="0" />
+                                            <span className="text-xs font-semibold text-slate-500">/</span>
+                                            <input type="number" value={stats.three_pa} onChange={(e) => {
+                                              const attempts = parseInt(e.target.value) || 0;
+                                              const made = parseInt(stats.three_pm) || 0;
+                                              if (made > attempts && attempts > 0) {
+                                                setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, three_pa: e.target.value, three_pm: attempts.toString() }});
+                                              } else {
+                                                setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, three_pa: e.target.value }});
+                                              }
+                                            }} min="0" className="w-9 rounded border border-slate-600/50 bg-slate-800/80 px-1 py-1 text-center text-xs font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30" placeholder="0" />
+                                          </div>
                                         </td>
+                                        {/* 3pts % */}
+                                        <td className="px-1 py-1.5 text-center text-xs font-semibold text-slate-400 tabular-nums">{threePct}%</td>
+                                        {/* LF R/T */}
+                                        <td className="px-2 py-1.5">
+                                          <div className="flex items-center justify-center gap-1">
+                                            <input type="number" value={stats.ft_m} onChange={(e) => {
+                                              const made = parseInt(e.target.value) || 0;
+                                              const attempts = parseInt(stats.ft_a) || 0;
+                                              if (attempts > 0 && made > attempts) {
+                                                setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, ft_m: attempts.toString() }});
+                                              } else {
+                                                setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, ft_m: e.target.value }});
+                                              }
+                                            }} min="0" className="w-9 rounded border border-slate-600/50 bg-slate-800/80 px-1 py-1 text-center text-xs font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30" placeholder="0" />
+                                            <span className="text-xs font-semibold text-slate-500">/</span>
+                                            <input type="number" value={stats.ft_a} onChange={(e) => {
+                                              const attempts = parseInt(e.target.value) || 0;
+                                              const made = parseInt(stats.ft_m) || 0;
+                                              if (made > attempts && attempts > 0) {
+                                                setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, ft_a: e.target.value, ft_m: attempts.toString() }});
+                                              } else {
+                                                setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, ft_a: e.target.value }});
+                                              }
+                                            }} min="0" className="w-9 rounded border border-slate-600/50 bg-slate-800/80 px-1 py-1 text-center text-xs font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30" placeholder="0" />
+                                          </div>
+                                        </td>
+                                        {/* LF % */}
+                                        <td className="px-1 py-1.5 text-center text-xs font-semibold text-slate-400 tabular-nums">{ftPct}%</td>
+                                        {/* RO */}
                                         <td className="px-2 py-1.5">
                                           <input type="number" value={stats.oreb} onChange={(e) => {
                                             const oreb = parseInt(e.target.value) || 0;
                                             const dreb = parseInt(stats.dreb) || 0;
                                             const reb = (oreb + dreb).toString();
                                             setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, oreb: e.target.value, reb }});
-                                          }} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30" placeholder="0" />
+                                          }} min="0" className="w-10 rounded border border-slate-600/50 bg-slate-800/80 px-1 py-1 text-center text-xs font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30" placeholder="0" />
                                         </td>
+                                        {/* RD */}
                                         <td className="px-2 py-1.5">
                                           <input type="number" value={stats.dreb} onChange={(e) => {
                                             const dreb = parseInt(e.target.value) || 0;
                                             const oreb = parseInt(stats.oreb) || 0;
                                             const reb = (oreb + dreb).toString();
                                             setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, dreb: e.target.value, reb }});
-                                          }} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30" placeholder="0" />
+                                          }} min="0" className="w-10 rounded border border-slate-600/50 bg-slate-800/80 px-1 py-1 text-center text-xs font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30" placeholder="0" />
                                         </td>
+                                        {/* TOT */}
+                                        <td className="px-1 py-1.5 text-center text-xs font-bold text-slate-300 tabular-nums">{totalReb}</td>
+                                        {/* PD (assists) */}
                                         <td className="px-2 py-1.5">
-                                          <input type="number" value={stats.stl} onChange={(e) => setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, stl: e.target.value }})} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30" placeholder="0" />
+                                          <input type="number" value={stats.ast} onChange={(e) => setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, ast: e.target.value }})} min="0" className="w-10 rounded border border-slate-600/50 bg-slate-800/80 px-1 py-1 text-center text-xs font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30" placeholder="0" />
                                         </td>
+                                        {/* BP (turnovers) */}
                                         <td className="px-2 py-1.5">
-                                          <input type="number" value={stats.blk} onChange={(e) => setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, blk: e.target.value }})} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30" placeholder="0" />
+                                          <input type="number" value={stats.to} onChange={(e) => setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, to: e.target.value }})} min="0" className="w-10 rounded border border-slate-600/50 bg-slate-800/80 px-1 py-1 text-center text-xs font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30" placeholder="0" />
                                         </td>
+                                        {/* IN (steals) */}
                                         <td className="px-2 py-1.5">
-                                          <input type="number" value={stats.to} onChange={(e) => setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, to: e.target.value }})} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30" placeholder="0" />
+                                          <input type="number" value={stats.stl} onChange={(e) => setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, stl: e.target.value }})} min="0" className="w-10 rounded border border-slate-600/50 bg-slate-800/80 px-1 py-1 text-center text-xs font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30" placeholder="0" />
                                         </td>
+                                        {/* Ctr (blocks) */}
                                         <td className="px-2 py-1.5">
-                                          <input type="number" value={stats.fls} onChange={(e) => {
+                                          <input type="number" value={stats.blk} onChange={(e) => setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, blk: e.target.value }})} min="0" className="w-10 rounded border border-slate-600/50 bg-slate-800/80 px-1 py-1 text-center text-xs font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30" placeholder="0" />
+                                        </td>
+                                        {/* CS (contre subit / blocked against) */}
+                                        <td className="px-2 py-1.5">
+                                          <input type="number" value={stats.cs} onChange={(e) => setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, cs: e.target.value }})} min="0" className="w-10 rounded border border-slate-600/50 bg-slate-800/80 px-1 py-1 text-center text-xs font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30" placeholder="0" />
+                                        </td>
+                                        {/* F (fouls) */}
+                                        <td className="px-2 py-1.5">
+                                          <input type="number" value={stats.pf} onChange={(e) => {
                                             const value = parseInt(e.target.value) || 0;
                                             if (value <= 6) {
-                                              setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, fls: e.target.value }});
+                                              setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, pf: e.target.value }});
                                             }
-                                          }} min="0" max="6" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30" placeholder="0" />
+                                          }} min="0" max="6" className="w-10 rounded border border-slate-600/50 bg-slate-800/80 px-1 py-1 text-center text-xs font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30" placeholder="0" />
+                                        </td>
+                                        {/* FP (fouls provoked / drawn) */}
+                                        <td className="px-2 py-1.5">
+                                          <input type="number" value={stats.fp} onChange={(e) => setPlayerStatsMap({ ...playerStatsMap, [player.id]: { ...stats, fp: e.target.value }})} min="0" className="w-10 rounded border border-slate-600/50 bg-slate-800/80 px-1 py-1 text-center text-xs font-semibold text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30" placeholder="0" />
+                                        </td>
+                                        {/* +/- (calculated: team score when on court vs opponent, simplified to 0 for now) */}
+                                        <td className="px-1 py-1.5 text-center text-xs font-semibold text-slate-400 tabular-nums">-</td>
+                                        {/* Ev (evaluation) */}
+                                        <td className="px-1 py-1.5 text-center text-xs font-bold text-slate-300 tabular-nums">{evaluation}</td>
+                                        {/* PTS */}
+                                        <td className="px-2 py-1.5 bg-emerald-500/10">
+                                          <div className="flex items-center justify-center">
+                                            <span className="text-base font-black text-emerald-300 tabular-nums">{totalPoints}</span>
+                                          </div>
                                         </td>
                                       </tr>
                                     );
@@ -8763,45 +8840,71 @@ export default function AdminPage() {
                             <div className="overflow-x-auto">
                               <table className="w-full">
                                 <thead>
-                                  {/* Category Headers */}
+                                  {/* Category Headers - French Format */}
                                   <tr className="border-b border-slate-500/10">
                                     <th className="sticky left-0 z-30 bg-slate-900 px-4 py-1"></th>
-                                    <th colSpan={6} className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-blue-500/5 border-x border-blue-500/20">
-                                      Shooting
-                                    </th>
                                     <th colSpan={1} className="px-2 py-1"></th>
-                                    <th colSpan={5} className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-purple-500/5 border-x border-purple-500/20">
-                                      Defense & Stats
+                                    <th colSpan={2} className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-blue-500/5 border-x border-blue-500/20">
+                                      Tirs Tot.
+                                    </th>
+                                    <th colSpan={2} className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-indigo-500/5 border-x border-indigo-500/20">
+                                      3 pts
+                                    </th>
+                                    <th colSpan={2} className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-yellow-500/5 border-x border-yellow-500/20">
+                                      LF
+                                    </th>
+                                    <th colSpan={3} className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-purple-500/5 border-x border-purple-500/20">
+                                      Rebonds
+                                    </th>
+                                    <th colSpan={3} className="px-2 py-1"></th>
+                                    <th colSpan={2} className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-cyan-500/5 border-x border-cyan-500/20">
+                                      Contres
                                     </th>
                                     <th colSpan={2} className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-red-500/5 border-x border-red-500/20">
-                                      Fouls
+                                      Fautes
                                     </th>
+                                    <th colSpan={2} className="px-2 py-1"></th>
+                                    <th colSpan={1} className="px-2 py-1"></th>
                                   </tr>
                                   {/* Stat Headers */}
                                   <tr className="sticky top-0 z-20 border-b-2 border-slate-500/20 bg-gradient-to-b from-slate-900 to-slate-900/95 backdrop-blur-sm">
                                     <th className="sticky left-0 z-30 bg-gradient-to-b from-slate-900 to-slate-900/95 px-4 py-2 text-left text-[10px] font-bold text-slate-300 uppercase tracking-wider min-w-[180px]">Player</th>
-                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">2PM</th>
-                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">2PA</th>
-                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">3PM</th>
-                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">3PA</th>
-                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">FTM</th>
-                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">FTA</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">MIN</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">R/T</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">%</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">R/T</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">%</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">R/T</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">%</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">RO</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">RD</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">TOT</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">PD</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">BP</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">IN</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">Ctr</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">CS</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">F</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">FP</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">+/-</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">Ev</th>
                                     <th className="px-2 py-2 text-center bg-slate-500/10">
                                       <span className="text-xs font-black text-slate-300 uppercase">PTS</span>
                                     </th>
-                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">AST</th>
-                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">OR</th>
-                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">DR</th>
-                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">STL</th>
-                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">BLK</th>
-                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">TO</th>
-                                    <th className="px-2 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">PF</th>
                                   </tr>
                                 </thead>
                                 <tbody>
                                   {loserRoster.map((player, idx) => {
-                                    const stats = loserStatsMap[player.id] || { two_pm: "", two_pa: "", three_pm: "", three_pa: "", ft_m: "", ft_a: "", ast: "", oreb: "", dreb: "", reb: "", stl: "", blk: "", fls: "", min: "", pf: "", to: "" };
+                                    const stats = loserStatsMap[player.id] || { two_pm: "", two_pa: "", three_pm: "", three_pa: "", ft_m: "", ft_a: "", ast: "", oreb: "", dreb: "", reb: "", stl: "", blk: "", cs: "", min: "", pf: "", fp: "", to: "" };
                                     const totalPoints = (parseInt(stats.two_pm) || 0) * 2 + (parseInt(stats.three_pm) || 0) * 3 + (parseInt(stats.ft_m) || 0);
+                                    const twoPct = (parseInt(stats.two_pa) || 0) > 0 ? Math.round(((parseInt(stats.two_pm) || 0) / (parseInt(stats.two_pa) || 1)) * 100) : 0;
+                                    const threePct = (parseInt(stats.three_pa) || 0) > 0 ? Math.round(((parseInt(stats.three_pm) || 0) / (parseInt(stats.three_pa) || 1)) * 100) : 0;
+                                    const ftPct = (parseInt(stats.ft_a) || 0) > 0 ? Math.round(((parseInt(stats.ft_m) || 0) / (parseInt(stats.ft_a) || 1)) * 100) : 0;
+                                    const totalReb = (parseInt(stats.oreb) || 0) + (parseInt(stats.dreb) || 0);
+                                    // Evaluation formula: PTS + REB + AST + STL + BLK - TO - (FGA - FGM) - (FTA - FTM)
+                                    const fga = (parseInt(stats.two_pa) || 0) + (parseInt(stats.three_pa) || 0);
+                                    const fgm = (parseInt(stats.two_pm) || 0) + (parseInt(stats.three_pm) || 0);
+                                    const evaluation = totalPoints + totalReb + (parseInt(stats.ast) || 0) + (parseInt(stats.stl) || 0) + (parseInt(stats.blk) || 0) - (parseInt(stats.to) || 0) - (fga - fgm) - ((parseInt(stats.ft_a) || 0) - (parseInt(stats.ft_m) || 0));
                                     return (
                                       <tr key={player.id} className={`group border-b border-slate-500/10 hover:bg-slate-500/5 ${idx % 2 === 0 ? 'bg-slate-900/40' : 'bg-slate-900/20'}`}>
                                         <td className="sticky left-0 z-10 bg-slate-900/95 px-4 py-1.5 backdrop-blur-sm min-w-[180px] border-r border-slate-500/10 group-hover:bg-slate-500/5">
@@ -8815,112 +8918,150 @@ export default function AdminPage() {
                                             </div>
                                           </div>
                                         </td>
+                                        {/* Min */}
                                         <td className="px-2 py-1.5">
-                                          <input type="number" value={stats.two_pm} onChange={(e) => {
-                                            const made = parseInt(e.target.value) || 0;
-                                            const attempts = parseInt(stats.two_pa) || 0;
-                                            if (attempts > 0 && made > attempts) {
-                                              setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, two_pm: attempts.toString() }});
-                                            } else {
-                                              setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, two_pm: e.target.value }});
-                                            }
-                                          }} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30" placeholder="0" />
+                                          <input type="number" value={stats.min} onChange={(e) => setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, min: e.target.value }})} min="0" className="w-10 rounded border border-slate-600/50 bg-slate-800/80 px-1 py-1 text-center text-xs font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30" placeholder="0" />
                                         </td>
+                                        {/* Tirs Tot R/T */}
                                         <td className="px-2 py-1.5">
-                                          <input type="number" value={stats.two_pa} onChange={(e) => {
-                                            const attempts = parseInt(e.target.value) || 0;
-                                            const made = parseInt(stats.two_pm) || 0;
-                                            if (made > attempts && attempts > 0) {
-                                              setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, two_pa: e.target.value, two_pm: attempts.toString() }});
-                                            } else {
-                                              setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, two_pa: e.target.value }});
-                                            }
-                                          }} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30" placeholder="0" />
-                                        </td>
-                                        <td className="px-2 py-1.5">
-                                          <input type="number" value={stats.three_pm} onChange={(e) => {
-                                            const made = parseInt(e.target.value) || 0;
-                                            const attempts = parseInt(stats.three_pa) || 0;
-                                            if (attempts > 0 && made > attempts) {
-                                              setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, three_pm: attempts.toString() }});
-                                            } else {
-                                              setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, three_pm: e.target.value }});
-                                            }
-                                          }} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30" placeholder="0" />
-                                        </td>
-                                        <td className="px-2 py-1.5">
-                                          <input type="number" value={stats.three_pa} onChange={(e) => {
-                                            const attempts = parseInt(e.target.value) || 0;
-                                            const made = parseInt(stats.three_pm) || 0;
-                                            if (made > attempts && attempts > 0) {
-                                              setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, three_pa: e.target.value, three_pm: attempts.toString() }});
-                                            } else {
-                                              setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, three_pa: e.target.value }});
-                                            }
-                                          }} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30" placeholder="0" />
-                                        </td>
-                                        <td className="px-2 py-1.5">
-                                          <input type="number" value={stats.ft_m} onChange={(e) => {
-                                            const made = parseInt(e.target.value) || 0;
-                                            const attempts = parseInt(stats.ft_a) || 0;
-                                            if (attempts > 0 && made > attempts) {
-                                              setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, ft_m: attempts.toString() }});
-                                            } else {
-                                              setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, ft_m: e.target.value }});
-                                            }
-                                          }} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30" placeholder="0" />
-                                        </td>
-                                        <td className="px-2 py-1.5">
-                                          <input type="number" value={stats.ft_a} onChange={(e) => {
-                                            const attempts = parseInt(e.target.value) || 0;
-                                            const made = parseInt(stats.ft_m) || 0;
-                                            if (made > attempts && attempts > 0) {
-                                              setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, ft_a: e.target.value, ft_m: attempts.toString() }});
-                                            } else {
-                                              setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, ft_a: e.target.value }});
-                                            }
-                                          }} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30" placeholder="0" />
-                                        </td>
-                                        <td className="px-2 py-1.5 bg-slate-500/10">
-                                          <div className="flex items-center justify-center">
-                                            <span className="text-base font-black text-slate-300 tabular-nums">{totalPoints}</span>
+                                          <div className="flex items-center justify-center gap-1">
+                                            <input type="number" value={stats.two_pm} onChange={(e) => {
+                                              const made = parseInt(e.target.value) || 0;
+                                              const attempts = parseInt(stats.two_pa) || 0;
+                                              if (attempts > 0 && made > attempts) {
+                                                setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, two_pm: attempts.toString() }});
+                                              } else {
+                                                setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, two_pm: e.target.value }});
+                                              }
+                                            }} min="0" className="w-9 rounded border border-slate-600/50 bg-slate-800/80 px-1 py-1 text-center text-xs font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30" placeholder="0" />
+                                            <span className="text-xs font-semibold text-slate-500">/</span>
+                                            <input type="number" value={stats.two_pa} onChange={(e) => {
+                                              const attempts = parseInt(e.target.value) || 0;
+                                              const made = parseInt(stats.two_pm) || 0;
+                                              if (made > attempts && attempts > 0) {
+                                                setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, two_pa: e.target.value, two_pm: attempts.toString() }});
+                                              } else {
+                                                setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, two_pa: e.target.value }});
+                                              }
+                                            }} min="0" className="w-9 rounded border border-slate-600/50 bg-slate-800/80 px-1 py-1 text-center text-xs font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30" placeholder="0" />
                                           </div>
                                         </td>
+                                        {/* Tirs Tot % */}
+                                        <td className="px-1 py-1.5 text-center text-xs font-semibold text-slate-400 tabular-nums">{twoPct}%</td>
+                                        {/* 3pts R/T */}
                                         <td className="px-2 py-1.5">
-                                          <input type="number" value={stats.ast} onChange={(e) => setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, ast: e.target.value }})} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30" placeholder="0" />
+                                          <div className="flex items-center justify-center gap-1">
+                                            <input type="number" value={stats.three_pm} onChange={(e) => {
+                                              const made = parseInt(e.target.value) || 0;
+                                              const attempts = parseInt(stats.three_pa) || 0;
+                                              if (attempts > 0 && made > attempts) {
+                                                setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, three_pm: attempts.toString() }});
+                                              } else {
+                                                setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, three_pm: e.target.value }});
+                                              }
+                                            }} min="0" className="w-9 rounded border border-slate-600/50 bg-slate-800/80 px-1 py-1 text-center text-xs font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30" placeholder="0" />
+                                            <span className="text-xs font-semibold text-slate-500">/</span>
+                                            <input type="number" value={stats.three_pa} onChange={(e) => {
+                                              const attempts = parseInt(e.target.value) || 0;
+                                              const made = parseInt(stats.three_pm) || 0;
+                                              if (made > attempts && attempts > 0) {
+                                                setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, three_pa: e.target.value, three_pm: attempts.toString() }});
+                                              } else {
+                                                setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, three_pa: e.target.value }});
+                                              }
+                                            }} min="0" className="w-9 rounded border border-slate-600/50 bg-slate-800/80 px-1 py-1 text-center text-xs font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30" placeholder="0" />
+                                          </div>
                                         </td>
+                                        {/* 3pts % */}
+                                        <td className="px-1 py-1.5 text-center text-xs font-semibold text-slate-400 tabular-nums">{threePct}%</td>
+                                        {/* LF R/T */}
+                                        <td className="px-2 py-1.5">
+                                          <div className="flex items-center justify-center gap-1">
+                                            <input type="number" value={stats.ft_m} onChange={(e) => {
+                                              const made = parseInt(e.target.value) || 0;
+                                              const attempts = parseInt(stats.ft_a) || 0;
+                                              if (attempts > 0 && made > attempts) {
+                                                setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, ft_m: attempts.toString() }});
+                                              } else {
+                                                setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, ft_m: e.target.value }});
+                                              }
+                                            }} min="0" className="w-9 rounded border border-slate-600/50 bg-slate-800/80 px-1 py-1 text-center text-xs font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30" placeholder="0" />
+                                            <span className="text-xs font-semibold text-slate-500">/</span>
+                                            <input type="number" value={stats.ft_a} onChange={(e) => {
+                                              const attempts = parseInt(e.target.value) || 0;
+                                              const made = parseInt(stats.ft_m) || 0;
+                                              if (made > attempts && attempts > 0) {
+                                                setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, ft_a: e.target.value, ft_m: attempts.toString() }});
+                                              } else {
+                                                setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, ft_a: e.target.value }});
+                                              }
+                                            }} min="0" className="w-9 rounded border border-slate-600/50 bg-slate-800/80 px-1 py-1 text-center text-xs font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30" placeholder="0" />
+                                          </div>
+                                        </td>
+                                        {/* LF % */}
+                                        <td className="px-1 py-1.5 text-center text-xs font-semibold text-slate-400 tabular-nums">{ftPct}%</td>
+                                        {/* RO */}
                                         <td className="px-2 py-1.5">
                                           <input type="number" value={stats.oreb} onChange={(e) => {
                                             const oreb = parseInt(e.target.value) || 0;
                                             const dreb = parseInt(stats.dreb) || 0;
                                             const reb = (oreb + dreb).toString();
                                             setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, oreb: e.target.value, reb }});
-                                          }} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30" placeholder="0" />
+                                          }} min="0" className="w-10 rounded border border-slate-600/50 bg-slate-800/80 px-1 py-1 text-center text-xs font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30" placeholder="0" />
                                         </td>
+                                        {/* RD */}
                                         <td className="px-2 py-1.5">
                                           <input type="number" value={stats.dreb} onChange={(e) => {
                                             const dreb = parseInt(e.target.value) || 0;
                                             const oreb = parseInt(stats.oreb) || 0;
                                             const reb = (oreb + dreb).toString();
                                             setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, dreb: e.target.value, reb }});
-                                          }} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30" placeholder="0" />
+                                          }} min="0" className="w-10 rounded border border-slate-600/50 bg-slate-800/80 px-1 py-1 text-center text-xs font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30" placeholder="0" />
                                         </td>
+                                        {/* TOT */}
+                                        <td className="px-1 py-1.5 text-center text-xs font-bold text-slate-300 tabular-nums">{totalReb}</td>
+                                        {/* PD (assists) */}
                                         <td className="px-2 py-1.5">
-                                          <input type="number" value={stats.stl} onChange={(e) => setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, stl: e.target.value }})} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30" placeholder="0" />
+                                          <input type="number" value={stats.ast} onChange={(e) => setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, ast: e.target.value }})} min="0" className="w-10 rounded border border-slate-600/50 bg-slate-800/80 px-1 py-1 text-center text-xs font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30" placeholder="0" />
                                         </td>
+                                        {/* BP (turnovers) */}
                                         <td className="px-2 py-1.5">
-                                          <input type="number" value={stats.blk} onChange={(e) => setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, blk: e.target.value }})} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30" placeholder="0" />
+                                          <input type="number" value={stats.to} onChange={(e) => setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, to: e.target.value }})} min="0" className="w-10 rounded border border-slate-600/50 bg-slate-800/80 px-1 py-1 text-center text-xs font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30" placeholder="0" />
                                         </td>
+                                        {/* IN (steals) */}
                                         <td className="px-2 py-1.5">
-                                          <input type="number" value={stats.to} onChange={(e) => setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, to: e.target.value }})} min="0" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30" placeholder="0" />
+                                          <input type="number" value={stats.stl} onChange={(e) => setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, stl: e.target.value }})} min="0" className="w-10 rounded border border-slate-600/50 bg-slate-800/80 px-1 py-1 text-center text-xs font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30" placeholder="0" />
                                         </td>
+                                        {/* Ctr (blocks) */}
                                         <td className="px-2 py-1.5">
-                                          <input type="number" value={stats.fls} onChange={(e) => {
+                                          <input type="number" value={stats.blk} onChange={(e) => setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, blk: e.target.value }})} min="0" className="w-10 rounded border border-slate-600/50 bg-slate-800/80 px-1 py-1 text-center text-xs font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30" placeholder="0" />
+                                        </td>
+                                        {/* CS (contre subit / blocked against) */}
+                                        <td className="px-2 py-1.5">
+                                          <input type="number" value={stats.cs} onChange={(e) => setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, cs: e.target.value }})} min="0" className="w-10 rounded border border-slate-600/50 bg-slate-800/80 px-1 py-1 text-center text-xs font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30" placeholder="0" />
+                                        </td>
+                                        {/* F (fouls) */}
+                                        <td className="px-2 py-1.5">
+                                          <input type="number" value={stats.pf} onChange={(e) => {
                                             const value = parseInt(e.target.value) || 0;
                                             if (value <= 6) {
-                                              setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, fls: e.target.value }});
+                                              setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, pf: e.target.value }});
                                             }
-                                          }} min="0" max="6" className="w-12 rounded border border-slate-600/50 bg-slate-800/80 px-1.5 py-1 text-center text-xs font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30" placeholder="0" />
+                                          }} min="0" max="6" className="w-10 rounded border border-slate-600/50 bg-slate-800/80 px-1 py-1 text-center text-xs font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30" placeholder="0" />
+                                        </td>
+                                        {/* FP (fouls provoked / drawn) */}
+                                        <td className="px-2 py-1.5">
+                                          <input type="number" value={stats.fp} onChange={(e) => setLoserStatsMap({ ...loserStatsMap, [player.id]: { ...stats, fp: e.target.value }})} min="0" className="w-10 rounded border border-slate-600/50 bg-slate-800/80 px-1 py-1 text-center text-xs font-semibold text-white focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30" placeholder="0" />
+                                        </td>
+                                        {/* +/- (calculated: team score when on court vs opponent, simplified to 0 for now) */}
+                                        <td className="px-1 py-1.5 text-center text-xs font-semibold text-slate-400 tabular-nums">-</td>
+                                        {/* Ev (evaluation) */}
+                                        <td className="px-1 py-1.5 text-center text-xs font-bold text-slate-300 tabular-nums">{evaluation}</td>
+                                        {/* PTS */}
+                                        <td className="px-2 py-1.5 bg-slate-500/10">
+                                          <div className="flex items-center justify-center">
+                                            <span className="text-base font-black text-slate-300 tabular-nums">{totalPoints}</span>
+                                          </div>
                                         </td>
                                       </tr>
                                     );

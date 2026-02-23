@@ -26,7 +26,9 @@ export default function VerificationNotification() {
       const alreadyShown = localStorage.getItem(notificationKey);
       
       if (daysSinceReview <= 7 && !alreadyShown) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setShowNotification(true);
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setHasShownNotification(true);
         localStorage.setItem(notificationKey, "true");
       }

@@ -140,7 +140,7 @@ function trackUnhandledRejection(event: PromiseRejectionEvent): void {
 
 export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const pageStartTime = useRef<number>(Date.now());
+  const pageStartTime = useRef<number>(0);  // Lazy initialize to avoid impure function call
   const scrollTracker = useRef<ReturnType<typeof createScrollTracker> | null>(null);
   const engagementInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 

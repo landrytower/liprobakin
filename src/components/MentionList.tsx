@@ -2,7 +2,7 @@
 
 import { ReactRenderer } from '@tiptap/react';
 import tippy, { Instance as TippyInstance } from 'tippy.js';
-import { useEffect, useImperativeHandle, forwardRef, useState, useRef } from 'react';
+import { useEffect, useImperativeHandle, forwardRef, useState } from 'react';
 
 interface Player {
   id: string;
@@ -51,6 +51,7 @@ const MentionList = forwardRef((props: MentionListProps, ref) => {
     selectItem(selectedIndex);
   };
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setSelectedIndex(0), [props.items]);
 
   useImperativeHandle(ref, () => ({
@@ -109,10 +110,12 @@ MentionList.displayName = 'MentionList';
 export function createMentionSuggestion() {
   return {
     render: () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let component: ReactRenderer<any>;
       let popup: TippyInstance[];
 
       return {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         onStart: (props: any) => {
           component = new ReactRenderer(MentionList, {
             props,
@@ -135,6 +138,7 @@ export function createMentionSuggestion() {
           });
         },
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         onUpdate(props: any) {
           component.updateProps(props);
 
@@ -147,6 +151,7 @@ export function createMentionSuggestion() {
           });
         },
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         onKeyDown(props: any) {
           if (props.event.key === 'Escape') {
             popup[0].hide();

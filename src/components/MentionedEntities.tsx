@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
-import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 import { firebaseDB } from '@/lib/firebase';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -82,69 +82,96 @@ export default function MentionedEntities({ htmlContent, language = 'fr' }: Ment
         return;
       }
 
+      setLoading(true);
+
       try {
         const fetchedEntities: MentionedEntity[] = [];
 
-        for (const mention of rawMentions) {
-          if (mention.type === 'team') {
-            // Fetch team data
-            const teamDoc = await getDoc(doc(firebaseDB, 'teams', mention.id));
-            if (teamDoc.exists()) {
-              const teamData = teamDoc.data();
-              fetchedEntities.push({
-                id: mention.id,
-                label: mention.label,
-                name: teamData.name,
-                logo: teamData.logo,
-                city: teamData.city,
-                type: 'team',
-              });
-            } else {
-              // Team not found, still show mention
-              fetchedEntities.push({
-                id: mention.id,
-                label: mention.label,
-                type: 'team',
+        const teamsSnapshot = await getDocs(collection(firebaseDB, 'teams'));
+        const teamById = new Map(
+          teamsSnapshot.docs.map((teamDoc) => [teamDoc.id, teamDoc.data() as Record<string, unknown>])
+        );
+
+        const rosterSnapshots = await Promise.all(
+          teamsSnapshot.docs.map((teamDoc) =>
+            getDocs(collection(firebaseDB, `teams/${teamDoc.id}/roster`)).then((snapshot) => ({
+              teamId: teamDoc.id,
+              teamData: teamDoc.data() as Record<string, unknown>,
+              snapshot,
+            }))
+          )
+        );
+
+        const playerById = new Map<
+          string,
+          {
+            playerData: Record<string, unknown>;
+            teamName: string;
+          }
+        >();
+
+        rosterSnapshots.forEach(({ snapshot, teamData }) => {
+          const city = typeof teamData.city === 'string' ? teamData.city : '';
+          const name = typeof teamData.name === 'string' ? teamData.name : '';
+          const teamName = city ? `${city} ${name}`.trim() : name;
+
+          snapshot.docs.forEach((playerDoc) => {
+            if (!playerById.has(playerDoc.id)) {
+              playerById.set(playerDoc.id, {
+                playerData: playerDoc.data() as Record<string, unknown>,
+                teamName,
               });
             }
-          } else {
-            // Fetch player data - need to search across teams
-            let found = false;
-            const teamsSnapshot = await getDocs(collection(firebaseDB, 'teams'));
-            
-            for (const teamDoc of teamsSnapshot.docs) {
-              const playerDoc = await getDoc(doc(firebaseDB, `teams/${teamDoc.id}/roster/${mention.id}`));
-              
-              if (playerDoc.exists()) {
-                const playerData = playerDoc.data();
-                const teamData = teamDoc.data();
-                
-                fetchedEntities.push({
-                  id: mention.id,
-                  label: mention.label,
-                  firstName: playerData.firstName,
-                  lastName: playerData.lastName,
-                  teamName: teamData.city ? `${teamData.city} ${teamData.name}` : teamData.name,
-                  number: playerData.number,
-                  headshot: playerData.headshot,
-                  position: playerData.position,
-                  type: 'player',
-                });
-                found = true;
-                break;
-              }
+          });
+        });
+
+        rawMentions.forEach((mention) => {
+          if (mention.type === 'team') {
+            const teamData = teamById.get(mention.id);
+            if (teamData) {
+              fetchedEntities.push({
+                id: mention.id,
+                label: mention.label,
+                name: typeof teamData.name === 'string' ? teamData.name : undefined,
+                logo: typeof teamData.logo === 'string' ? teamData.logo : undefined,
+                city: typeof teamData.city === 'string' ? teamData.city : undefined,
+                type: 'team',
+              });
+              return;
             }
 
-            if (!found) {
-              // Player not found, still show mention label
-              fetchedEntities.push({
-                id: mention.id,
-                label: mention.label,
-                type: 'player',
-              });
-            }
+            fetchedEntities.push({
+              id: mention.id,
+              label: mention.label,
+              type: 'team',
+            });
+            return;
           }
-        }
+
+          const playerMatch = playerById.get(mention.id);
+          if (playerMatch) {
+            fetchedEntities.push({
+              id: mention.id,
+              label: mention.label,
+              firstName: typeof playerMatch.playerData.firstName === 'string' ? playerMatch.playerData.firstName : undefined,
+              lastName: typeof playerMatch.playerData.lastName === 'string' ? playerMatch.playerData.lastName : undefined,
+              teamName: playerMatch.teamName,
+              number: (typeof playerMatch.playerData.number === 'string' || typeof playerMatch.playerData.number === 'number')
+                ? playerMatch.playerData.number
+                : undefined,
+              headshot: typeof playerMatch.playerData.headshot === 'string' ? playerMatch.playerData.headshot : undefined,
+              position: typeof playerMatch.playerData.position === 'string' ? playerMatch.playerData.position : undefined,
+              type: 'player',
+            });
+            return;
+          }
+
+          fetchedEntities.push({
+            id: mention.id,
+            label: mention.label,
+            type: 'player',
+          });
+        });
 
         setEntities(fetchedEntities);
       } catch (error) {

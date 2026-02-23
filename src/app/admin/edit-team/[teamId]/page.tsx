@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { collection, doc, getDoc, getDocs, updateDoc, addDoc, deleteDoc, query, orderBy } from "firebase/firestore";
 import { firebaseDB, firebaseAuth, firebaseStorage } from "@/lib/firebase";
+import { logAuditAction } from "@/lib/auditLog";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { getAdminUser } from "@/lib/adminAuth";
@@ -129,7 +130,7 @@ export default function EditTeamPage() {
     position: "",
     height: "",
     dateOfBirth: "",
-    nationality: "DRC",
+    nationality: "",
     nationality2: "",
     playerLicense: "",
     headshot: "",
@@ -416,7 +417,18 @@ export default function EditTeamPage() {
 
   const handleAddPlayer = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!team) return;
+    if (!team || !user) return;
+
+    const jerseyValue = newPlayerForm.number.trim();
+    if (!/^(?:00|0|[1-9]\d?)$/.test(jerseyValue)) {
+      alert("Jersey number must be 00, 0, or 1-99.");
+      return;
+    }
+
+    if (!newPlayerForm.nationality || !countries.some((country) => country.code === newPlayerForm.nationality)) {
+      alert("Please select a nationality from the list.");
+      return;
+    }
 
     try {
       setSaving(true);
@@ -428,8 +440,8 @@ export default function EditTeamPage() {
         headshotUrl = await getDownloadURL(storageRef);
       }
 
-      await addDoc(collection(firebaseDB, "teams", team.id, "roster"), {
-        number: parseInt(newPlayerForm.number),
+      const newPlayerRef = await addDoc(collection(firebaseDB, "teams", team.id, "roster"), {
+        number: parseInt(jerseyValue, 10),
         firstName: newPlayerForm.firstName,
         lastName: newPlayerForm.lastName,
         position: newPlayerForm.position,
@@ -447,6 +459,15 @@ export default function EditTeamPage() {
           blk: 0,
           gp: 0,
         },
+      });
+
+      // Audit log for player creation
+      await logAuditAction("player_added", user.uid, user.email || "unknown", "player", newPlayerRef.id, `${newPlayerForm.firstName} ${newPlayerForm.lastName}`, {
+        teamName: team.name,
+        teamId: team.id,
+        jerseyNumber: newPlayerForm.number,
+        position: newPlayerForm.position,
+        nationality: newPlayerForm.nationality
       });
 
       setNewPlayerForm({
@@ -473,19 +494,52 @@ export default function EditTeamPage() {
   };
 
   const handleDeletePlayer = async (playerId: string) => {
-    if (!team || !confirm("Are you sure you want to delete this player?")) return;
+    if (!team || !user) {
+      alert("Please wait for the page to fully load before deleting players.");
+      return;
+    }
+    
+    const playerToDelete = players.find(p => p.id === playerId);
+    const playerName = playerToDelete ? `${playerToDelete.firstName} ${playerToDelete.lastName}` : "this player";
+    
+    if (!window.confirm(`Are you sure you want to PERMANENTLY delete ${playerName}? This cannot be undone.`)) {
+      return;
+    }
+    
+    // Show saving state
+    setSaving(true);
     
     try {
+      const playerDocPath = `teams/${team.id}/roster/${playerId}`;
+      console.log(`🗑️ Attempting to delete player at: ${playerDocPath}`);
+      
       await deleteDoc(doc(firebaseDB, "teams", team.id, "roster", playerId));
+      console.log(`✅ Successfully deleted player ${playerId} from Firestore`);
+      
+      // Audit log for player deletion
+      await logAuditAction("player_deleted", user.uid, user.email || "unknown", "player", playerId, playerName, {
+        teamName: team.name,
+        teamId: team.id,
+        jerseyNumber: playerToDelete?.number,
+        position: playerToDelete?.position
+      });
+      
+      // Reload data to confirm deletion
       await loadData();
+      
+      alert(`${playerName} has been deleted successfully.`);
     } catch (error) {
-      console.error("Error deleting player:", error);
-      alert("Error deleting player");
+      console.error("❌ Error deleting player:", error);
+      alert(`Failed to delete player: ${error instanceof Error ? error.message : "Unknown error"}. Please check your permissions and try again.`);
+      // Reload to ensure UI matches database state
+      await loadData();
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleSavePlayer = async (player: Player, headshotFile?: File | null) => {
-    if (!team) return;
+    if (!team || !user) return;
     try {
       setSaving(true);
       
@@ -501,6 +555,14 @@ export default function EditTeamPage() {
       await updateDoc(doc(firebaseDB, "teams", team.id, "roster", player.id), {
         ...player,
         headshot: headshotUrl,
+      });
+      
+      // Audit log for player update
+      await logAuditAction("player_updated", user.uid, user.email || "unknown", "player", player.id, `${player.firstName} ${player.lastName}`, {
+        teamName: team.name,
+        teamId: team.id,
+        jerseyNumber: player.number,
+        position: player.position
       });
       
       await loadData();
@@ -1144,7 +1206,7 @@ export default function EditTeamPage() {
                       position: "",
                       height: "",
                       dateOfBirth: "",
-                      nationality: "DRC",
+                      nationality: "",
                       nationality2: "",
                       playerLicense: "",
                       headshot: "",
@@ -1185,10 +1247,25 @@ export default function EditTeamPage() {
                 <div>
                   <label className="block text-xs text-slate-300 mb-1">Jersey # *</label>
                   <input
-                    type="number"
+                    type="text"
                     value={newPlayerForm.number}
-                    onChange={(e) => setNewPlayerForm({ ...newPlayerForm, number: e.target.value })}
+                    onChange={(e) => {
+                      const nextValue = e.target.value;
+                      if (nextValue === "") {
+                        setNewPlayerForm({ ...newPlayerForm, number: "" });
+                        return;
+                      }
+                      if (!/^\d{0,2}$/.test(nextValue)) {
+                        return;
+                      }
+                      if (nextValue !== "00" && Number(nextValue) > 99) {
+                        return;
+                      }
+                      setNewPlayerForm({ ...newPlayerForm, number: nextValue });
+                    }}
                     className="w-full rounded border border-white/20 bg-white/5 px-3 py-2 text-white text-sm"
+                    inputMode="numeric"
+                    maxLength={2}
                     required
                   />
                 </div>
@@ -1479,7 +1556,7 @@ export default function EditTeamPage() {
                       position: "",
                       height: "",
                       dateOfBirth: "",
-                      nationality: "DRC",
+                      nationality: "",
                       nationality2: "",
                       playerLicense: "",
                       headshot: "",

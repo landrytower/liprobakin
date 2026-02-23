@@ -1,0 +1,510 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(255, 96, 96, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "gridPos": { "h": 2, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "options": {
+        "code": { "language": "plaintext", "showLineNumbers": false, "showMiniMap": false },
+        "content": "# 🚨 Liprobakin - Error Logs Dashboard\n\nComprehensive error monitoring and analysis for the Liprobakin platform. Track errors by type, severity, source, and trends.",
+        "mode": "markdown"
+      },
+      "pluginVersion": "10.0.0",
+      "title": "",
+      "transparent": true,
+      "type": "text"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": { 
+            "mode": "absolute", 
+            "steps": [ 
+              { "color": "green", "value": null }, 
+              { "color": "yellow", "value": 10 },
+              { "color": "orange", "value": 50 },
+              { "color": "red", "value": 100 } 
+            ] 
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 2 },
+      "id": 1,
+      "options": { 
+        "colorMode": "background", 
+        "graphMode": "area", 
+        "justifyMode": "center", 
+        "orientation": "auto", 
+        "reduceOptions": { "calcs": ["sum"], "fields": "", "values": false }, 
+        "textMode": "auto" 
+      },
+      "targets": [
+        { 
+          "datasource": { "type": "loki", "uid": "loki" }, 
+          "expr": "count_over_time({job=\"liprobakin\"} |= \"error\" [$__range])",
+          "legendFormat": "Total Errors", 
+          "refId": "A" 
+        }
+      ],
+      "title": "🔴 Total Errors",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": { 
+            "mode": "absolute", 
+            "steps": [ 
+              { "color": "green", "value": null }, 
+              { "color": "red", "value": 1 } 
+            ] 
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 2 },
+      "id": 2,
+      "options": { 
+        "colorMode": "background", 
+        "graphMode": "area", 
+        "justifyMode": "center", 
+        "orientation": "auto", 
+        "reduceOptions": { "calcs": ["sum"], "fields": "", "values": false }, 
+        "textMode": "auto" 
+      },
+      "targets": [
+        { 
+          "datasource": { "type": "loki", "uid": "loki" }, 
+          "expr": "count_over_time({job=\"liprobakin\"} |= \"critical\" [$__range])",
+          "legendFormat": "Critical", 
+          "refId": "A" 
+        }
+      ],
+      "title": "⚠️ Critical Errors",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": { 
+            "mode": "absolute", 
+            "steps": [ 
+              { "color": "green", "value": null }, 
+              { "color": "orange", "value": 5 } 
+            ] 
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 2 },
+      "id": 3,
+      "options": { 
+        "colorMode": "background", 
+        "graphMode": "area", 
+        "justifyMode": "center", 
+        "orientation": "auto", 
+        "reduceOptions": { "calcs": ["sum"], "fields": "", "values": false }, 
+        "textMode": "auto" 
+      },
+      "targets": [
+        { 
+          "datasource": { "type": "loki", "uid": "loki" }, 
+          "expr": "count_over_time({job=\"liprobakin\"} |~ \"(server|api)\" |= \"error\" [$__range])",
+          "legendFormat": "Server/API", 
+          "refId": "A" 
+        }
+      ],
+      "title": "🖥️ Server/API Errors",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": { 
+            "mode": "absolute", 
+            "steps": [ 
+              { "color": "green", "value": null }, 
+              { "color": "yellow", "value": 5 } 
+            ] 
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 2 },
+      "id": 4,
+      "options": { 
+        "colorMode": "background", 
+        "graphMode": "area", 
+        "justifyMode": "center", 
+        "orientation": "auto", 
+        "reduceOptions": { "calcs": ["sum"], "fields": "", "values": false }, 
+        "textMode": "auto" 
+      },
+      "targets": [
+        { 
+          "datasource": { "type": "loki", "uid": "loki" }, 
+          "expr": "count_over_time({job=\"liprobakin\"} |= \"client\" |= \"error\" [$__range])",
+          "legendFormat": "Client", 
+          "refId": "A" 
+        }
+      ],
+      "title": "💻 Client Errors",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 25,
+            "gradientMode": "opacity",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "off" }
+          },
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 80 } ] },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "id": 5,
+      "options": { "legend": { "calcs": ["sum", "mean"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        { 
+          "datasource": { "type": "loki", "uid": "loki" }, 
+          "expr": "sum(count_over_time({job=\"liprobakin\"} |= \"error\" [1m]))",
+          "legendFormat": "All Errors", 
+          "refId": "A" 
+        },
+        { 
+          "datasource": { "type": "loki", "uid": "loki" }, 
+          "expr": "sum(count_over_time({job=\"liprobakin\"} |= \"critical\" [1m]))",
+          "legendFormat": "Critical", 
+          "refId": "B" 
+        },
+        { 
+          "datasource": { "type": "loki", "uid": "loki" }, 
+          "expr": "sum(count_over_time({job=\"liprobakin\"} |= \"high\" |= \"error\" [1m]))",
+          "legendFormat": "High", 
+          "refId": "C" 
+        }
+      ],
+      "title": "📈 Error Trend Over Time",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "hideFrom": { "legend": false, "tooltip": false, "viz": false } },
+          "mappings": [],
+          "unit": "short"
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "client" }, "properties": [{ "id": "color", "value": { "fixedColor": "blue", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "server" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "api" }, "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "database" }, "properties": [{ "id": "color", "value": { "fixedColor": "purple", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "auth" }, "properties": [{ "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "network" }, "properties": [{ "id": "color", "value": { "fixedColor": "cyan", "mode": "fixed" } }] }
+        ]
+      },
+      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 6 },
+      "id": 6,
+      "options": { 
+        "displayLabels": ["name", "percent"],
+        "legend": { "displayMode": "table", "placement": "right", "showLegend": true, "values": ["value", "percent"] },
+        "pieType": "donut",
+        "reduceOptions": { "calcs": ["sum"], "fields": "", "values": false },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        { "datasource": { "type": "loki", "uid": "loki" }, "expr": "count_over_time({job=\"liprobakin\"} |= \"client\" |= \"error\" [$__range])", "legendFormat": "client", "refId": "A" },
+        { "datasource": { "type": "loki", "uid": "loki" }, "expr": "count_over_time({job=\"liprobakin\"} |= \"server\" |= \"error\" [$__range])", "legendFormat": "server", "refId": "B" },
+        { "datasource": { "type": "loki", "uid": "loki" }, "expr": "count_over_time({job=\"liprobakin\"} |= \"api\" |= \"error\" [$__range])", "legendFormat": "api", "refId": "C" },
+        { "datasource": { "type": "loki", "uid": "loki" }, "expr": "count_over_time({job=\"liprobakin\"} |= \"database\" |= \"error\" [$__range])", "legendFormat": "database", "refId": "D" },
+        { "datasource": { "type": "loki", "uid": "loki" }, "expr": "count_over_time({job=\"liprobakin\"} |= \"auth\" |= \"error\" [$__range])", "legendFormat": "auth", "refId": "E" },
+        { "datasource": { "type": "loki", "uid": "loki" }, "expr": "count_over_time({job=\"liprobakin\"} |= \"network\" |= \"error\" [$__range])", "legendFormat": "network", "refId": "F" }
+      ],
+      "title": "🎯 Errors by Type",
+      "type": "piechart"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "lineWidth": 1,
+            "scaleDistribution": { "type": "linear" },
+            "thresholdsStyle": { "mode": "off" }
+          },
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null } ] },
+          "unit": "short"
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "critical" }, "properties": [{ "id": "color", "value": { "fixedColor": "dark-red", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "high" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "medium" }, "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "low" }, "properties": [{ "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }] }
+        ]
+      },
+      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 6 },
+      "id": 7,
+      "options": {
+        "barRadius": 0.1,
+        "barWidth": 0.8,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "orientation": "horizontal",
+        "showValue": "always",
+        "stacking": "none",
+        "tooltip": { "mode": "single", "sort": "none" },
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
+      },
+      "targets": [
+        { "datasource": { "type": "loki", "uid": "loki" }, "expr": "count_over_time({job=\"liprobakin\"} |= \"critical\" [$__range])", "legendFormat": "critical", "refId": "A" },
+        { "datasource": { "type": "loki", "uid": "loki" }, "expr": "count_over_time({job=\"liprobakin\"} |= \"high\" |= \"severity\" [$__range])", "legendFormat": "high", "refId": "B" },
+        { "datasource": { "type": "loki", "uid": "loki" }, "expr": "count_over_time({job=\"liprobakin\"} |= \"medium\" |= \"severity\" [$__range])", "legendFormat": "medium", "refId": "C" },
+        { "datasource": { "type": "loki", "uid": "loki" }, "expr": "count_over_time({job=\"liprobakin\"} |= \"low\" |= \"severity\" [$__range])", "legendFormat": "low", "refId": "D" }
+      ],
+      "title": "📊 Errors by Severity",
+      "type": "barchart"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "Errors/Hour",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "bars",
+            "fillOpacity": 50,
+            "gradientMode": "hue",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "line+area" }
+          },
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 20 }, { "color": "red", "value": 50 } ] },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 14 },
+      "id": 8,
+      "options": { "legend": { "calcs": ["max", "mean"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "single", "sort": "none" } },
+      "targets": [
+        { 
+          "datasource": { "type": "loki", "uid": "loki" }, 
+          "expr": "sum(count_over_time({job=\"liprobakin\"} |= \"error\" [1h]))",
+          "legendFormat": "Errors per Hour", 
+          "refId": "A" 
+        }
+      ],
+      "title": "⏰ Error Rate (Hourly)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "custom": {
+            "align": "auto",
+            "cellOptions": { "type": "auto" },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null } ] }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Count" }, "properties": [{ "id": "custom.width", "value": 80 }, { "id": "custom.cellOptions", "value": { "mode": "gradient", "type": "gauge" } }] },
+          { "matcher": { "id": "byName", "options": "Source" }, "properties": [{ "id": "custom.width", "value": 200 }] }
+        ]
+      },
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 14 },
+      "id": 9,
+      "options": {
+        "cellHeight": "sm",
+        "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false },
+        "showHeader": true,
+        "sortBy": [{ "desc": true, "displayName": "Count" }]
+      },
+      "targets": [
+        { 
+          "datasource": { "type": "loki", "uid": "loki" }, 
+          "expr": "topk(10, count_over_time({job=\"liprobakin\"} |= \"error\" | json | __error__=\"\" [$__range]) by (source))",
+          "legendFormat": "{{source}}", 
+          "refId": "A" 
+        }
+      ],
+      "title": "📍 Top Error Sources",
+      "type": "table",
+      "transformations": [
+        { "id": "reduce", "options": { "reducers": ["sum"] } },
+        { "id": "sortBy", "options": { "fields": {}, "sort": [{ "desc": true, "field": "Total" }] } }
+      ]
+    },
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 20 },
+      "id": 10,
+      "options": {
+        "dedupStrategy": "exact",
+        "enableLogDetails": true,
+        "prettifyLogMessage": true,
+        "showCommonLabels": false,
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        { 
+          "datasource": { "type": "loki", "uid": "loki" }, 
+          "expr": "{job=\"liprobakin\"} |= \"error\"",
+          "refId": "A" 
+        }
+      ],
+      "title": "📋 Recent Error Logs",
+      "type": "logs"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "custom": {
+            "align": "auto",
+            "cellOptions": { "type": "auto" },
+            "filterable": true,
+            "inspect": true
+          },
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null } ] }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Time" }, "properties": [{ "id": "custom.width", "value": 180 }] },
+          { "matcher": { "id": "byName", "options": "severity" }, "properties": [
+            { "id": "custom.width", "value": 100 },
+            { "id": "mappings", "value": [
+              { "options": { "critical": { "color": "dark-red", "index": 0, "text": "🔴 CRITICAL" } }, "type": "value" },
+              { "options": { "high": { "color": "red", "index": 1, "text": "🟠 HIGH" } }, "type": "value" },
+              { "options": { "medium": { "color": "orange", "index": 2, "text": "🟡 MEDIUM" } }, "type": "value" },
+              { "options": { "low": { "color": "green", "index": 3, "text": "🟢 LOW" } }, "type": "value" }
+            ]}
+          ]},
+          { "matcher": { "id": "byName", "options": "type" }, "properties": [{ "id": "custom.width", "value": 100 }] },
+          { "matcher": { "id": "byName", "options": "message" }, "properties": [{ "id": "custom.width", "value": 400 }] }
+        ]
+      },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 30 },
+      "id": 11,
+      "options": {
+        "cellHeight": "sm",
+        "footer": { "countRows": true, "fields": "", "reducer": ["count"], "show": true },
+        "showHeader": true,
+        "sortBy": [{ "desc": true, "displayName": "Time" }]
+      },
+      "targets": [
+        { 
+          "datasource": { "type": "loki", "uid": "loki" }, 
+          "expr": "{job=\"liprobakin\"} |= \"error\" | json",
+          "refId": "A" 
+        }
+      ],
+      "title": "📑 Error Details Table",
+      "type": "table",
+      "transformations": [
+        { "id": "extractFields", "options": { "format": "json", "source": "Line" } },
+        { "id": "organize", "options": { "excludeByName": { "Line": true, "id": true, "labels": true, "tsNs": true }, "indexByName": {}, "renameByName": {} } }
+      ]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["liprobakin", "errors", "monitoring", "logs"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
+  "timepicker": {
+    "refresh_intervals": ["5s", "10s", "30s", "1m", "5m", "15m", "30m", "1h"],
+    "time_options": ["5m", "15m", "1h", "6h", "12h", "24h", "2d", "7d"]
+  },
+  "timezone": "browser",
+  "title": "Liprobakin Error Logs",
+  "uid": "liprobakin-error-logs",
+  "version": 1,
+  "weekStart": ""
+}

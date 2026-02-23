@@ -50,7 +50,7 @@ async function setupAdmin() {
       }
     }
     
-    // Create/update adminUsers document
+    // Create/update adminUsers document with ALL master permissions
     await db.collection('adminUsers').doc(userRecord.uid).set({
       uid: userRecord.uid,
       email: userRecord.email,
@@ -59,9 +59,22 @@ async function setupAdmin() {
       permissions: {
         canManageNews: true,
         canManageGames: true,
+        canManageMatches: true,
+        canManageStatistics: true,
         canManageTeams: true,
+        canManageUsers: true,
+        canManageAccounts: true,
+        canManageVerifications: true,
+        canManageLeague: true,
         canManagePlayers: true,
+        canManageReferees: true,
+        canManageVenues: true,
+        canManagePartners: true,
+        canManageCommittee: true,
+        canManageCommission: true,
+        canManageSales: true,
         canManageAdmins: true,
+        canViewTraffic: true,
         canViewAuditLogs: true,
         canManageSettings: true
       },

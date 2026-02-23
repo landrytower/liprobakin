@@ -4,8 +4,9 @@ import React, { useEffect, useState, useCallback } from "react";
 import Image from "next/image";
 import { useAdmin } from "../layout";
 import { firebaseDB, firebaseAuth } from "@/lib/firebase";
-import { collection, getDocs, doc, updateDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
+import { collection, getDocs, doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import type { AdminRole, AdminPermissions } from "@/types/admin";
+import { logAuditAction } from "@/lib/auditLog";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -13,7 +14,7 @@ type AdminUserData = {
   id: string;
   email: string;
   displayName?: string;
-  photoURL?: string;
+  photo?: string;
   roles?: AdminRole[];
   createdAt?: { seconds: number };
   isPendingSetup?: boolean;
@@ -22,7 +23,8 @@ type AdminUserData = {
   lastLogin?: { seconds: number } | null;
   permissions?: {
     canManageNews?: boolean; canManageTeams?: boolean; canManageGames?: boolean;
-    canManageReferees?: boolean; canManageVenues?: boolean; canManagePartners?: boolean;
+    canManageReferees?: boolean; canManageVenues?: boolean; canManagePartners?: boolean; canManageEubakin?: boolean;
+    canManageGameMedia?: boolean;
     canManageAdmins?: boolean;
   };
 };
@@ -69,6 +71,10 @@ const translations = {
     masterDesc: "Full control — manages everything including other admins",
     league_manager: "League Manager",
     league_managerDesc: "Manages all league content except admin accounts",
+    media_manager: "Media Manager",
+    media_managerDesc: "Manage game photos and highlight videos",
+    eubakin_manager: "EUBAKIN Manager",
+    eubakin_managerDesc: "Manages EUBAKIN teams, schedule, and scores",
     news_editor: "News Editor",
     news_editorDesc: "Create and manage news articles and stories",
     game_scheduler: "Game Scheduler",
@@ -110,6 +116,7 @@ const translations = {
     editRoles: "Edit Permissions",
     saveChanges: "Save Changes",
     saving: "Saving...",
+    noRolesAssigned: "No roles assigned yet",
   },
   fr: {
     title: "Gestion des Administrateurs",
@@ -148,6 +155,10 @@ const translations = {
     masterDesc: "Contrôle total — gère tout, y compris les autres admins",
     league_manager: "Directeur de Ligue",
     league_managerDesc: "Gère tout le contenu de la ligue sauf les comptes admin",
+    media_manager: "Gestionnaire Média",
+    media_managerDesc: "Gère les photos de match et les vidéos des highlights",
+    eubakin_manager: "Gestionnaire EUBAKIN",
+    eubakin_managerDesc: "Gère les équipes, le calendrier et les scores EUBAKIN",
     news_editor: "Rédacteur",
     news_editorDesc: "Créer et gérer les articles et les histoires",
     game_scheduler: "Planificateur",
@@ -189,12 +200,15 @@ const translations = {
     editRoles: "Modifier les Permissions",
     saveChanges: "Enregistrer",
     saving: "Enregistrement...",
+    noRolesAssigned: "Aucun rôle attribué pour le moment",
   },
 };
 
 const ROLE_CONFIG: { role: AdminRole; icon: string; color: string; gradient: string }[] = [
   { role: "master", icon: "👑", color: "amber", gradient: "from-amber-500 to-orange-500" },
   { role: "league_manager", icon: "⚡", color: "violet", gradient: "from-violet-500 to-purple-500" },
+  { role: "media_manager", icon: "🎬", color: "fuchsia", gradient: "from-fuchsia-500 to-pink-500" },
+  { role: "eubakin_manager", icon: "🏀", color: "amber", gradient: "from-amber-500 to-yellow-500" },
   { role: "news_editor", icon: "📰", color: "blue", gradient: "from-blue-500 to-cyan-500" },
   { role: "game_scheduler", icon: "📅", color: "emerald", gradient: "from-emerald-500 to-teal-500" },
   { role: "team_manager", icon: "👥", color: "rose", gradient: "from-rose-500 to-pink-500" },
@@ -219,8 +233,26 @@ type PermissionConfig = {
 const PERMISSION_CONFIG: PermissionConfig[] = [
   { key: "canManageNews", icon: "📰", label: { en: "Stories", fr: "Histoires" }, gradient: "from-blue-500 to-cyan-500" },
   { key: "canManageTeams", icon: "🏀", label: { en: "Teams", fr: "Équipes" }, gradient: "from-rose-500 to-pink-500" },
-  { key: "canManageUsers", icon: "👥", label: { en: "Accounts & Verifications", fr: "Accounts & Vérifications" }, gradient: "from-purple-500 to-indigo-500" },
-  { key: "canManageGames", icon: "🗓️", label: { en: "Matches & Statistics", fr: "Matchs & Statistiques" }, gradient: "from-emerald-500 to-teal-500" },
+  { 
+    key: "canManageUsers", 
+    icon: "👥", 
+    label: { en: "Users", fr: "Utilisateurs" }, 
+    gradient: "from-purple-500 to-indigo-500",
+    subPermissions: [
+      { key: "canManageAccounts", icon: "👥", label: { en: "Accounts", fr: "Comptes" } },
+      { key: "canManageVerifications", icon: "✓", label: { en: "Verifications", fr: "Vérifications" } },
+    ]
+  },
+  { 
+    key: "canManageGames", 
+    icon: "🗓️", 
+    label: { en: "Games", fr: "Jeux" }, 
+    gradient: "from-emerald-500 to-teal-500",
+    subPermissions: [
+      { key: "canManageMatches", icon: "🏟️", label: { en: "Matches", fr: "Matchs" } },
+      { key: "canManageStatistics", icon: "📊", label: { en: "Statistics", fr: "Statistiques" } },
+    ]
+  },
   { 
     key: "canManageLeague", 
     icon: "⚙️", 
@@ -228,12 +260,17 @@ const PERMISSION_CONFIG: PermissionConfig[] = [
     gradient: "from-orange-500 to-amber-500",
     subPermissions: [
       { key: "canManageReferees", icon: "👨‍⚖️", label: { en: "Referees", fr: "Arbitres" } },
+      { key: "canManageEubakin", icon: "🏀", label: { en: "EUBAKIN", fr: "EUBAKIN" } },
       { key: "canManageCommittee", icon: "👔", label: { en: "Committee Members", fr: "Membre du Comité" } },
+      { key: "canManageCommission", icon: "📋", label: { en: "Commission", fr: "Commission" } },
+      { key: "canManageGameMedia", icon: "🎬", label: { en: "Game Media", fr: "Médias des matchs" } },
       { key: "canManagePartners", icon: "🤝", label: { en: "Partners", fr: "Partenaires" } },
+      { key: "canManageVenues", icon: "🏟️", label: { en: "Venues", fr: "Sites" } },
       { key: "canManageSales", icon: "💰", label: { en: "Sales", fr: "Sales" } },
     ]
   },
   { key: "canManageAdmins", icon: "👥", label: { en: "Administrators", fr: "Administrateurs" }, gradient: "from-amber-500 to-orange-500" },
+  { key: "canViewTraffic", icon: "📊", label: { en: "Traffic Analytics", fr: "Analytique du trafic" }, gradient: "from-violet-500 to-purple-500" },
 ];
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -339,6 +376,18 @@ export default function AdminsPage() {
         if (data.resetLink) {
           sessionStorage.setItem(`invite_link_${data.userId}`, data.resetLink);
         }
+        await logAuditAction(
+          "admin_created", 
+          currentAdminUser?.id || "unknown", 
+          currentAdminUser?.email || "unknown", 
+          "admin", 
+          data.userId || inviteEmail, 
+          inviteName, 
+          {
+            email: inviteEmail,
+            roles: inviteRoles.join(", "),
+          }
+        );
         resetInviteFlow();
         fetchAdmins();
       } else {
@@ -378,6 +427,18 @@ export default function AdminsPage() {
 
       if (data.success) {
         setNotification({ type: "success", message: t.removeSuccess });
+        await logAuditAction(
+          "admin_deleted", 
+          currentAdminUser?.id || "unknown", 
+          currentAdminUser?.email || "unknown", 
+          "admin", 
+          admin.id, 
+          admin.displayName || admin.email, 
+          {
+            email: admin.email,
+            roles: admin.roles?.join(", "),
+          }
+        );
         fetchAdmins();
       } else {
         setNotification({ type: "error", message: data.error || t.removeFailed });
@@ -413,14 +474,65 @@ export default function AdminsPage() {
         }
       });
 
+      // Determine current roles based on permissions for display
+      const updatedRoles: AdminRole[] = [];
+      if (cleanPermissions.canManageNews) updatedRoles.push('news_editor');
+      if (cleanPermissions.canManageTeams) updatedRoles.push('team_manager'); 
+      if (cleanPermissions.canManageGames) updatedRoles.push('game_scheduler');
+      if (cleanPermissions.canManageAdmins) updatedRoles.push('master');
+      if (cleanPermissions.canManageReferees) updatedRoles.push('referee_manager');
+      if (cleanPermissions.canManageVenues) updatedRoles.push('venue_manager');
+      if (cleanPermissions.canManagePartners) updatedRoles.push('partner_manager');
+      if (cleanPermissions.canManageEubakin) updatedRoles.push('eubakin_manager');
+      if (cleanPermissions.canManageGameMedia) updatedRoles.push('media_manager');
+
+      const adminDisplayName = editingAdmin.displayName || editingAdmin.email;
+
       await updateDoc(doc(firebaseDB, "adminUsers", editingAdmin.id), {
         permissions: cleanPermissions,
+        roles: updatedRoles, // Update roles as well
         updatedAt: serverTimestamp(),
       });
+
+      await logAuditAction(
+        "admin_roles_updated", 
+        currentAdminUser?.id || "unknown", 
+        currentAdminUser?.email || "unknown", 
+        "admin", 
+        editingAdmin.id, 
+        adminDisplayName, 
+        {
+          email: editingAdmin.email,
+          newRoles: updatedRoles.join(", "),
+        }
+      );
+
+      const roleLabels = updatedRoles.map(role => getRoleLabel(role));
+
+      // Show success notification with updated roles
+      setNotification({
+        type: "success",
+        message: language === "fr" 
+          ? `✅ Rôles mis à jour pour ${adminDisplayName}\n\n🔑 Nouveaux rôles: ${roleLabels.join(', ')}\n📧 Statut: Actif - peut accéder immédiatement`
+          : `✅ Roles updated for ${adminDisplayName}\n\n🔑 New roles: ${roleLabels.join(', ')}\n📧 Status: Active - can access immediately`
+      });
+
+      // Browser notification (if permission granted)
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification('🔄 Admin Roles Updated!', {
+          body: `${adminDisplayName}'s roles updated: ${roleLabels.join(', ')}`,
+          icon: '/logos/liprobakin.png',
+        });
+      }
+
       setEditingAdmin(null);
-      fetchAdmins();
+      fetchAdmins(); // This will refresh the display with new roles
     } catch (error) {
       console.error("Error saving permissions:", error);
+      setNotification({
+        type: "error",
+        message: language === "fr" ? "Erreur lors de la mise à jour des rôles" : "Failed to update roles"
+      });
     } finally {
       setEditSaving(false);
     }
@@ -549,8 +661,8 @@ export default function AdminsPage() {
                 <div className="flex items-start gap-4 sm:items-center">
                   {/* Avatar */}
                   <div className={`relative h-12 w-12 flex-shrink-0 rounded-2xl bg-gradient-to-br ${roleConfig.gradient} flex items-center justify-center shadow-lg sm:h-14 sm:w-14`}>
-                    {admin.photoURL ? (
-                      <Image src={admin.photoURL} alt="" width={56} height={56} className="rounded-2xl object-cover w-full h-full" unoptimized />
+                    {admin.photo ? (
+                      <Image src={admin.photo} alt="" width={56} height={56} className="rounded-2xl object-cover w-full h-full" unoptimized />
                     ) : (
                       <span className="text-xl font-bold text-white sm:text-2xl">
                         {(admin.displayName?.[0] || admin.email[0]).toUpperCase()}
@@ -575,11 +687,17 @@ export default function AdminsPage() {
                     </div>
                     <p className="mt-0.5 text-sm text-slate-400 truncate">{admin.email}</p>
                     <div className="mt-2 flex flex-wrap gap-1.5">
-                      {admin.roles?.map((role) => (
-                        <span key={role} className={`inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-[10px] font-bold shadow-sm ${getRoleBadgeClasses(role)}`}>
-                          {getRoleConfig(role).icon} {getRoleLabel(role)}
+                      {admin.roles && admin.roles.length > 0 ? (
+                        admin.roles.map((role) => (
+                          <span key={role} className={`inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-[10px] font-bold shadow-sm ${getRoleBadgeClasses(role)}`}>
+                            {getRoleConfig(role).icon} {getRoleLabel(role)}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-xs text-slate-500 italic">
+                          {t.noRolesAssigned}
                         </span>
-                      ))}
+                      )}
                     </div>
                   </div>
 

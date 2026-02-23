@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fix Admin Permissions - LIPROBAKIN</title>
+  <style>
+    body { font-family: system-ui; background: #1a1a2e; color: #fff; min-height: 100vh; display: flex; align-items: center; justify-content: center; margin: 0; }
+    .container { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 40px; max-width: 500px; }
+    h1 { color: #60a5fa; margin-bottom: 20px; }
+    button { background: #60a5fa; color: #000; border: none; padding: 14px 32px; font-size: 16px; font-weight: 600; border-radius: 8px; cursor: pointer; width: 100%; margin-top: 20px; }
+    button:hover { background: #3b82f6; }
+    button:disabled { background: #4b5563; cursor: not-allowed; }
+    #status { padding: 16px; border-radius: 8px; margin-top: 20px; display: none; }
+    .success { background: rgba(34,197,94,0.2); border: 1px solid #22c55e; display: block !important; }
+    .error { background: rgba(239,68,68,0.2); border: 1px solid #ef4444; display: block !important; }
+    .info { background: rgba(59,130,246,0.2); border: 1px solid #3b82f6; display: block !important; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔧 Fix Admin Permissions</h1>
+    <p style="color: #9ca3af; margin-bottom: 20px;">This will add the missing canManageCommittee permission to your admin account.</p>
+    <p style="color: #fbbf24;">You must be signed in to the admin dashboard first.</p>
+    <button id="fixBtn" onclick="fixPermissions()">Fix My Permissions</button>
+    <div id="status"></div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+    import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+    import { getFirestore, doc, updateDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyApCmWDWPfmBwVAOvNAu3_CSVCqGycN5OE",
+      authDomain: "ppop-35930.firebaseapp.com",
+      projectId: "ppop-35930",
+      storageBucket: "ppop-35930.firebasestorage.app",
+      messagingSenderId: "478592036466",
+      appId: "1:478592036466:web:f149e594436026717adceb"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    window.fixPermissions = async function() {
+      const btn = document.getElementById('fixBtn');
+      const statusDiv = document.getElementById('status');
+      
+      btn.disabled = true;
+      btn.textContent = 'Fixing...';
+      statusDiv.className = 'info';
+      statusDiv.textContent = '⏳ Checking authentication...';
+
+      const user = auth.currentUser;
+      
+      if (!user) {
+        statusDiv.className = 'error';
+        statusDiv.innerHTML = '❌ Not signed in. Please sign in to the admin dashboard first, then come back here.';
+        btn.disabled = false;
+        btn.textContent = 'Fix My Permissions';
+        return;
+      }
+
+      try {
+        statusDiv.textContent = '⏳ Updating permissions for ' + user.email + '...';
+        
+        // Update the adminUsers document with ALL master permissions
+        await updateDoc(doc(db, 'adminUsers', user.uid), {
+          'permissions.canManageNews': true,
+          'permissions.canManageGames': true,
+          'permissions.canManageMatches': true,
+          'permissions.canManageStatistics': true,
+          'permissions.canManageTeams': true,
+          'permissions.canManageUsers': true,
+          'permissions.canManageAccounts': true,
+          'permissions.canManageVerifications': true,
+          'permissions.canManageLeague': true,
+          'permissions.canManagePlayers': true,
+          'permissions.canManageReferees': true,
+          'permissions.canManageVenues': true,
+          'permissions.canManagePartners': true,
+          'permissions.canManageCommittee': true,
+          'permissions.canManageCommission': true,
+          'permissions.canManageSales': true,
+          'permissions.canManageAdmins': true,
+          'permissions.canViewTraffic': true,
+          'permissions.canViewAuditLogs': true,
+          'permissions.canManageSettings': true
+        });
+
+        statusDiv.className = 'success';
+        statusDiv.innerHTML = '✅ Permissions updated! Now refresh your admin dashboard to see the Committee and Commission sections.';
+        btn.textContent = 'Done ✓';
+        btn.style.background = '#22c55e';
+
+      } catch (error) {
+        console.error('Error:', error);
+        statusDiv.className = 'error';
+        statusDiv.innerHTML = '❌ Error: ' + error.message;
+        btn.disabled = false;
+        btn.textContent = 'Try Again';
+      }
+    };
+
+    // Check auth state on load
+    onAuthStateChanged(auth, (user) => {
+      const statusDiv = document.getElementById('status');
+      if (user) {
+        statusDiv.className = 'info';
+        statusDiv.innerHTML = '✓ Signed in as: ' + user.email + '<br>Click the button to fix permissions.';
+      } else {
+        statusDiv.className = 'error';
+        statusDiv.innerHTML = '⚠️ Not signed in. Go to <a href="/admin" style="color: #60a5fa;">/admin</a> and sign in first, then return here.';
+      }
+    });
+  </script>
+</body>
+</html>

@@ -6,6 +6,7 @@ import { collection, query, where, getDocs, doc, updateDoc, serverTimestamp, add
 import { firebaseDB } from "@/lib/firebase";
 import type { VerificationRequest } from "@/types/user";
 import { useAdmin } from "../layout";
+import { logAuditAction } from "@/lib/auditLog";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TRANSLATIONS
@@ -326,6 +327,23 @@ export default function VerificationsPage() {
           });
         }
       }
+
+      // Log the verification review
+      await logAuditAction(
+        status === "approved" ? "verification_approved" : "verification_rejected",
+        currentAdminUser.id,
+        currentAdminUser.email || "unknown",
+        "verification",
+        requestId,
+        `${selectedRequest.userFirstName} ${selectedRequest.userLastName}`.trim() || selectedRequest.userEmail || 'User',
+        {
+          requestType: selectedRequest.requestType,
+          teamName: selectedRequest.teamName,
+          role: selectedRequest.role,
+          addedToRoster: status === "approved" && addToRoster,
+          notes: reviewNotes || undefined,
+        }
+      );
 
       await fetchVerificationRequests();
       setSelectedRequest(null);

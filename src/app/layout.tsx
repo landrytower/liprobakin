@@ -6,6 +6,8 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import VerificationNotification from "@/components/VerificationNotification";
 import { AnalyticsProvider } from "@/components/AnalyticsProvider";
+import LiprobakinAI from "@/components/LiprobakinAI";
+import { Analytics } from "@vercel/analytics/react";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -180,6 +182,8 @@ export default function RootLayout({
             <AnalyticsProvider>
               <VerificationNotification />
               {children}
+              <LiprobakinAI />
+              <Analytics />
             </AnalyticsProvider>
           </AuthProvider>
         </LanguageProvider>

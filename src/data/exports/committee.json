@@ -1,1 +1,82 @@
-[]
+[
+  {
+    "id": "committee-001",
+    "firstName": "Arthur",
+    "lastName": "Lwango",
+    "role": "President",
+    "email": "",
+    "phone": "",
+    "bio": "",
+    "department": ""
+  },
+  {
+    "id": "committee-002",
+    "firstName": "Freddy",
+    "lastName": "Mali",
+    "role": "1er Vice Président",
+    "email": "",
+    "phone": "",
+    "bio": "",
+    "department": ""
+  },
+  {
+    "id": "committee-003",
+    "firstName": "Yannick",
+    "lastName": "Isasi",
+    "role": "2ème Vice Président",
+    "email": "",
+    "phone": "",
+    "bio": "",
+    "department": ""
+  },
+  {
+    "id": "committee-004",
+    "firstName": "Médard",
+    "lastName": "Menga",
+    "role": "Secrétaire Exécutif",
+    "email": "",
+    "phone": "",
+    "bio": "",
+    "department": ""
+  },
+  {
+    "id": "committee-005",
+    "firstName": "Hortense",
+    "lastName": "Madila",
+    "role": "Trésorière",
+    "email": "",
+    "phone": "",
+    "bio": "",
+    "department": ""
+  },
+  {
+    "id": "committee-006",
+    "firstName": "Charles",
+    "lastName": "Apala",
+    "role": "Membre",
+    "email": "",
+    "phone": "",
+    "bio": "",
+    "department": ""
+  },
+  {
+    "id": "committee-007",
+    "firstName": "Papi",
+    "lastName": "Senga",
+    "role": "Membre",
+    "email": "",
+    "phone": "",
+    "bio": "",
+    "department": ""
+  },
+  {
+    "id": "committee-008",
+    "firstName": "Patrick",
+    "lastName": "Buzangu",
+    "role": "Membre",
+    "email": "",
+    "phone": "",
+    "bio": "",
+    "department": ""
+  }
+]

@@ -13,6 +13,7 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
+import { logAuditAction } from "@/lib/auditLog";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -212,6 +213,20 @@ export default function AccountsPage() {
         firstName: editForm.firstName.trim(), lastName: editForm.lastName.trim(),
         showOnRoster: editForm.showOnRoster, role: editForm.role, headshot: headshotUrl || null, updatedAt: serverTimestamp(),
       });
+      await logAuditAction(
+        "account_updated", 
+        currentAdminUser?.id || "unknown", 
+        currentAdminUser?.email || "unknown", 
+        "user", 
+        editingUser.id, 
+        `${editForm.firstName} ${editForm.lastName}`, 
+        {
+          email: editingUser.email,
+          role: editForm.role,
+          showOnRoster: editForm.showOnRoster,
+          photoUpdated: !!photoFile,
+        }
+      );
       setEditingUser(null); fetchUsers();
     } catch (error) { console.error("Error saving user:", error); }
     finally { setSaving(false); }
@@ -230,9 +245,20 @@ export default function AccountsPage() {
   };
 
   const handleDeleteUser = async (userId: string) => {
+    const user = users.find(u => u.id === userId);
     if (!confirm("Are you sure you want to delete this account?")) return;
     setDeletingUser(userId);
-    try { await deleteDoc(doc(firebaseDB, "users", userId)); fetchUsers(); }
+    try { 
+      await deleteDoc(doc(firebaseDB, "users", userId));
+      if (currentAdminUser && user) {
+        await logAuditAction("account_deleted", currentAdminUser.id, currentAdminUser.email || "unknown", "user", userId, `${user.firstName} ${user.lastName}`, {
+          email: user.email,
+          role: user.role,
+          teamName: user.teamName,
+        });
+      }
+      fetchUsers(); 
+    }
     catch (error) { console.error("Error deleting user:", error); }
     finally { setDeletingUser(null); }
   };

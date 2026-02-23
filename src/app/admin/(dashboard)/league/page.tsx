@@ -13,10 +13,13 @@ import {
   addDoc,
   updateDoc,
   deleteDoc,
+  onSnapshot,
+  setDoc,
   serverTimestamp,
   writeBatch,
 } from "firebase/firestore";
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
+import { logAuditAction } from "@/lib/auditLog";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -24,6 +27,7 @@ import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage
 
 type Referee = { id: string; firstName: string; lastName: string; phone: string; headshot?: string };
 type CommitteeMember = { id: string; firstName: string; lastName: string; role: string; email?: string; phone?: string; photo?: string; bio?: string; experience?: string; education?: string; department?: string; twitter?: string; linkedin?: string; facebook?: string; instagram?: string };
+type CommissionMember = { id: string; firstName: string; lastName: string; role: string; email?: string; phone?: string; photo?: string; bio?: string; department?: string };
 type Venue = { id: string; name: string; address: string; city: string; capacity?: number; photo?: string };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -33,9 +37,10 @@ type Venue = { id: string; name: string; address: string; city: string; capacity
 const t = {
   en: {
     title: "League Management",
-    subtitle: "Manage referees, committee members, and venues",
+    subtitle: "Manage referees, committee members, commission, and venues",
     referees: "Referees",
     committee: "Committee",
+    commission: "Commission",
     partners: "Partners",
     venues: "Venues",
     add: "Add",
@@ -55,6 +60,7 @@ const t = {
     photo: "Photo",
     noReferees: "No referees added",
     noCommittee: "No committee members",
+    noCommission: "No commission members",
     noVenues: "No venues added",
     bio: "Biography",
     experience: "Experience",
@@ -73,8 +79,9 @@ const t = {
   },
   fr: {
     title: "Gestion de la Ligue",
-    subtitle: "Gérer les arbitres, les membres du comité et les sites",
+    subtitle: "Gérer les arbitres, les membres du comité, la commission et les sites",
     referees: "Arbitres",
+    commission: "Commission",
     committee: "Comité",
     partners: "Partenaires",
     venues: "Sites",
@@ -95,6 +102,7 @@ const t = {
     photo: "Photo",
     noReferees: "Aucun arbitre ajouté",
     noCommittee: "Aucun membre du comité",
+    noCommission: "Aucun membre de la commission",
     noVenues: "Aucun site ajouté",
     bio: "Biographie",
     experience: "Expérience",
@@ -113,13 +121,16 @@ const t = {
   },
 };
 
+const AI_SETTINGS_DOC = "global";
+
 export default function LeaguePage() {
   const { language, currentAdminUser } = useAdmin();
   const copy = t[language];
 
-  const [activeTab, setActiveTab] = useState<"referees" | "committee" | "venues">("referees");
+  const [activeTab, setActiveTab] = useState<"referees" | "committee" | "commission" | "venues">("referees");
   const [referees, setReferees] = useState<Referee[]>([]);
   const [committee, setCommittee] = useState<CommitteeMember[]>([]);
+  const [commission, setCommission] = useState<CommissionMember[]>([]);
   const [venues, setVenues] = useState<Venue[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -148,17 +159,49 @@ export default function LeaguePage() {
   const [resetPassword, setResetPassword] = useState("");
   const [resetError, setResetError] = useState("");
   const [resetSuccess, setResetSuccess] = useState("");
+  const [aiEnabled, setAiEnabled] = useState(true);
+
+  useEffect(() => {
+    const settingsRef = doc(firebaseDB, "siteSettings", AI_SETTINGS_DOC);
+    const unsubscribe = onSnapshot(settingsRef, (snapshot) => {
+      const data = snapshot.data();
+      setAiEnabled(data?.aiEnabled !== false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const toggleAiVisibility = async () => {
+    const nextValue = !aiEnabled;
+    setAiEnabled(nextValue);
+    try {
+      await setDoc(
+        doc(firebaseDB, "siteSettings", AI_SETTINGS_DOC),
+        {
+          aiEnabled: nextValue,
+          updatedAt: serverTimestamp(),
+          updatedBy: currentAdminUser?.email || "unknown",
+        },
+        { merge: true }
+      );
+    } catch (error) {
+      console.error("Failed to update global AI visibility:", error);
+      setAiEnabled(!nextValue);
+    }
+  };
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [refSnap, comSnap, venSnap] = await Promise.all([
+      const [refSnap, comSnap, commissionSnap, venSnap] = await Promise.all([
         getDocs(collection(firebaseDB, "referees")),
         getDocs(collection(firebaseDB, "committee")),
+        getDocs(collection(firebaseDB, "commission")),
         getDocs(collection(firebaseDB, "venues")),
       ]);
       setReferees(refSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Referee)));
       setCommittee(comSnap.docs.map((d) => ({ id: d.id, ...d.data() } as CommitteeMember)));
+      setCommission(commissionSnap.docs.map((d) => ({ id: d.id, ...d.data() } as CommissionMember)));
       setVenues(venSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Venue)));
     } catch (error) { console.error("Error fetching league data:", error); }
     finally { setLoading(false); }
@@ -185,16 +228,55 @@ export default function LeaguePage() {
         photoUrl = await getDownloadURL(storageReference);
       }
       const data = { firstName: refereeForm.firstName.trim(), lastName: refereeForm.lastName.trim(), phone: refereeForm.phone, headshot: photoUrl || null, updatedAt: serverTimestamp() };
-      if (editingReferee) { await updateDoc(doc(firebaseDB, "referees", editingReferee.id), data); }
-      else { await addDoc(collection(firebaseDB, "referees"), { ...data, createdAt: serverTimestamp() }); }
+      if (editingReferee) { 
+        await updateDoc(doc(firebaseDB, "referees", editingReferee.id), data);
+        await logAuditAction(
+          "referee_updated", 
+          currentAdminUser?.id || "unknown", 
+          currentAdminUser?.email || "unknown", 
+          "referee", 
+          editingReferee.id, 
+          `${refereeForm.firstName.trim()} ${refereeForm.lastName.trim()}`, 
+          {
+            phone: refereeForm.phone,
+          }
+        );
+      }
+      else { 
+        const newRef = await addDoc(collection(firebaseDB, "referees"), { ...data, createdAt: serverTimestamp() });
+        await logAuditAction(
+          "referee_added", 
+          currentAdminUser?.id || "unknown", 
+          currentAdminUser?.email || "unknown", 
+          "referee", 
+          newRef.id, 
+          `${refereeForm.firstName.trim()} ${refereeForm.lastName.trim()}`, 
+          {
+            phone: refereeForm.phone,
+          }
+        );
+      }
       setShowRefereeModal(false); fetchData();
     } catch (error) { console.error("Error saving referee:", error); }
     finally { setSaving(false); }
   };
 
   const deleteReferee = async (id: string) => {
+    const referee = referees.find(r => r.id === id);
     if (!confirm("Delete this referee?")) return;
-    try { await deleteDoc(doc(firebaseDB, "referees", id)); fetchData(); } catch (error) { console.error(error); }
+    try { 
+      await deleteDoc(doc(firebaseDB, "referees", id));
+      await logAuditAction(
+        "referee_deleted", 
+        currentAdminUser?.id || "unknown", 
+        currentAdminUser?.email || "unknown", 
+        "referee", 
+        id, 
+        referee ? `${referee.firstName} ${referee.lastName}` : "Unknown", 
+        {}
+      );
+      fetchData(); 
+    } catch (error) { console.error(error); }
   };
 
   // Committee CRUD
@@ -233,9 +315,33 @@ export default function LeaguePage() {
         updatedAt: serverTimestamp() 
       };
       if (editingCommittee) { 
-        await updateDoc(doc(firebaseDB, "committee", editingCommittee.id), data); 
+        await updateDoc(doc(firebaseDB, "committee", editingCommittee.id), data);
+        await logAuditAction(
+          "committee_updated", 
+          currentAdminUser?.id || "unknown", 
+          currentAdminUser?.email || "unknown", 
+          "committee", 
+          editingCommittee.id, 
+          `${committeeForm.firstName.trim()} ${committeeForm.lastName.trim()}`, 
+          {
+            role: committeeForm.role,
+            department: committeeForm.department,
+          }
+        );
       } else { 
-        await addDoc(collection(firebaseDB, "committee"), { ...data, createdAt: serverTimestamp() }); 
+        const newRef = await addDoc(collection(firebaseDB, "committee"), { ...data, createdAt: serverTimestamp() });
+        await logAuditAction(
+          "committee_added", 
+          currentAdminUser?.id || "unknown", 
+          currentAdminUser?.email || "unknown", 
+          "committee", 
+          newRef.id, 
+          `${committeeForm.firstName.trim()} ${committeeForm.lastName.trim()}`, 
+          {
+            role: committeeForm.role,
+            department: committeeForm.department,
+          }
+        );
       }
       setShowCommitteeModal(false); fetchData();
     } catch (error) { console.error("Error saving committee member:", error); }
@@ -243,8 +349,23 @@ export default function LeaguePage() {
   };
 
   const deleteCommittee = async (id: string) => {
+    const member = committee.find(c => c.id === id);
     if (!confirm("Delete this committee member?")) return;
-    try { await deleteDoc(doc(firebaseDB, "committee", id)); fetchData(); } catch (error) { console.error(error); }
+    try { 
+      await deleteDoc(doc(firebaseDB, "committee", id));
+      await logAuditAction(
+        "committee_deleted", 
+        currentAdminUser?.id || "unknown", 
+        currentAdminUser?.email || "unknown", 
+        "committee", 
+        id, 
+        member ? `${member.firstName} ${member.lastName}` : "Unknown", 
+        {
+          role: member?.role,
+        }
+      );
+      fetchData(); 
+    } catch (error) { console.error(error); }
   };
 
   // Venue CRUD
@@ -266,16 +387,59 @@ export default function LeaguePage() {
         photoUrl = await getDownloadURL(storageReference);
       }
       const data = { name: venueForm.name.trim(), address: venueForm.address.trim(), city: venueForm.city.trim(), capacity: venueForm.capacity ? parseInt(venueForm.capacity) : null, photo: photoUrl || null, updatedAt: serverTimestamp() };
-      if (editingVenue) { await updateDoc(doc(firebaseDB, "venues", editingVenue.id), data); }
-      else { await addDoc(collection(firebaseDB, "venues"), { ...data, createdAt: serverTimestamp() }); }
+      if (editingVenue) { 
+        await updateDoc(doc(firebaseDB, "venues", editingVenue.id), data);
+        await logAuditAction(
+          "venue_updated", 
+          currentAdminUser?.id || "unknown", 
+          currentAdminUser?.email || "unknown", 
+          "venue", 
+          editingVenue.id, 
+          venueForm.name.trim(), 
+          {
+            city: venueForm.city,
+            capacity: venueForm.capacity,
+          }
+        );
+      }
+      else { 
+        const newRef = await addDoc(collection(firebaseDB, "venues"), { ...data, createdAt: serverTimestamp() });
+        await logAuditAction(
+          "venue_added", 
+          currentAdminUser?.id || "unknown", 
+          currentAdminUser?.email || "unknown", 
+          "venue", 
+          newRef.id, 
+          venueForm.name.trim(), 
+          {
+            city: venueForm.city,
+            capacity: venueForm.capacity,
+          }
+        );
+      }
       setShowVenueModal(false); fetchData();
     } catch (error) { console.error("Error saving venue:", error); }
     finally { setSaving(false); }
   };
 
   const deleteVenue = async (id: string) => {
+    const venue = venues.find(v => v.id === id);
     if (!confirm("Delete this venue?")) return;
-    try { await deleteDoc(doc(firebaseDB, "venues", id)); fetchData(); } catch (error) { console.error(error); }
+    try { 
+      await deleteDoc(doc(firebaseDB, "venues", id));
+      await logAuditAction(
+        "venue_deleted", 
+        currentAdminUser?.id || "unknown", 
+        currentAdminUser?.email || "unknown", 
+        "venue", 
+        id, 
+        venue?.name || "Unknown", 
+        {
+          city: venue?.city,
+        }
+      );
+      fetchData(); 
+    } catch (error) { console.error(error); }
   };
 
   // Database Reset with password verification
@@ -329,6 +493,13 @@ export default function LeaguePage() {
       setResetSuccess(language === "fr" 
         ? `✓ Réinitialisation terminée! ${gamesSnap.docs.length} matchs supprimés, ${teamsSnap.docs.length} équipes réinitialisées.`
         : `✓ Reset complete! Deleted ${gamesSnap.docs.length} games, reset ${teamsSnap.docs.length} teams.`);
+      
+      await logAuditAction("database_reset", currentAdminUser.id, currentAdminUser.email || "unknown", "system", "all", "Full Database Reset", {
+        gamesDeleted: gamesSnap.docs.length,
+        standingsDeleted: standingsSnap.docs.length,
+        teamsReset: teamsSnap.docs.length,
+      });
+      
       setResetPassword("");
       setTimeout(() => setShowPasswordModal(false), 3000);
     } catch (error: any) {
@@ -418,8 +589,9 @@ export default function LeaguePage() {
       {/* Header */}
       <div><h1 className="text-2xl font-bold text-white">{copy.title}</h1><p className="text-slate-400 text-sm mt-1">{copy.subtitle}</p></div>
 
-      {/* Quick Navigation Cards */}
+      {/* Quick Navigation Cards - Only show cards the admin has permission for */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {currentAdminUser?.permissions?.canManageReferees && (
         <Link 
           href="/admin/league/referees"
           className="group relative overflow-hidden rounded-2xl border border-indigo-500/30 bg-gradient-to-br from-indigo-600/20 to-indigo-900/20 p-6 transition hover:border-indigo-500/50 hover:shadow-lg hover:shadow-indigo-500/20"
@@ -436,7 +608,9 @@ export default function LeaguePage() {
           </div>
           <div className="absolute inset-0 bg-gradient-to-t from-indigo-500/5 to-transparent opacity-0 group-hover:opacity-100 transition" />
         </Link>
+        )}
 
+        {currentAdminUser?.permissions?.canManageCommittee && (
         <Link 
           href="/admin/league/committee"
           className="group relative overflow-hidden rounded-2xl border border-violet-500/30 bg-gradient-to-br from-violet-600/20 to-violet-900/20 p-6 transition hover:border-violet-500/50 hover:shadow-lg hover:shadow-violet-500/20"
@@ -453,7 +627,28 @@ export default function LeaguePage() {
           </div>
           <div className="absolute inset-0 bg-gradient-to-t from-violet-500/5 to-transparent opacity-0 group-hover:opacity-100 transition" />
         </Link>
+        )}
 
+        {currentAdminUser?.permissions?.canManageCommission && (
+        <Link 
+          href="/admin/league/commission"
+          className="group relative overflow-hidden rounded-2xl border border-teal-500/30 bg-gradient-to-br from-teal-600/20 to-teal-900/20 p-6 transition hover:border-teal-500/50 hover:shadow-lg hover:shadow-teal-500/20"
+        >
+          <div className="relative z-10">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-3xl">📋</span>
+              <svg className="w-5 h-5 text-teal-400 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-bold text-white mb-1">{copy.commission}</h3>
+            <p className="text-sm text-teal-300">{language === "fr" ? "Gérer la commission" : "Manage commission"}</p>
+          </div>
+          <div className="absolute inset-0 bg-gradient-to-t from-teal-500/5 to-transparent opacity-0 group-hover:opacity-100 transition" />
+        </Link>
+        )}
+
+        {currentAdminUser?.permissions?.canManagePartners && (
         <Link 
           href="/admin/league/partners"
           className="group relative overflow-hidden rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-emerald-600/20 to-emerald-900/20 p-6 transition hover:border-emerald-500/50 hover:shadow-lg hover:shadow-emerald-500/20"
@@ -470,7 +665,9 @@ export default function LeaguePage() {
           </div>
           <div className="absolute inset-0 bg-gradient-to-t from-emerald-500/5 to-transparent opacity-0 group-hover:opacity-100 transition" />
         </Link>
+        )}
 
+        {currentAdminUser?.permissions?.canManageVenues && (
         <Link 
           href="/admin/league/venues"
           className="group relative overflow-hidden rounded-2xl border border-cyan-500/30 bg-gradient-to-br from-cyan-600/20 to-cyan-900/20 p-6 transition hover:border-cyan-500/50 hover:shadow-lg hover:shadow-cyan-500/20"
@@ -487,21 +684,104 @@ export default function LeaguePage() {
           </div>
           <div className="absolute inset-0 bg-gradient-to-t from-cyan-500/5 to-transparent opacity-0 group-hover:opacity-100 transition" />
         </Link>
+        )}
+
+        {currentAdminUser?.permissions?.canManageEubakin && (
+        <Link
+          href="/admin/league/eubakin"
+          className="group relative overflow-hidden rounded-2xl border border-amber-500/30 bg-gradient-to-br from-amber-600/20 to-amber-900/20 p-6 transition hover:border-amber-500/50 hover:shadow-lg hover:shadow-amber-500/20"
+        >
+          <div className="relative z-10">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-3xl">🏀</span>
+              <svg className="w-5 h-5 text-amber-300 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-bold text-white mb-1">Eubakin</h3>
+            <p className="text-sm text-amber-200">{language === "fr" ? "Gérer les équipes" : "Manage teams"}</p>
+          </div>
+          <div className="absolute inset-0 bg-gradient-to-t from-amber-500/5 to-transparent opacity-0 group-hover:opacity-100 transition" />
+        </Link>
+        )}
+
+        {(currentAdminUser?.permissions?.canManageGameMedia ||
+          currentAdminUser?.permissions?.canManageLeague ||
+          currentAdminUser?.roles?.includes("master") ||
+          currentAdminUser?.roles?.includes("league_manager")) && (
+        <Link
+          href="/admin/league/game-media"
+          className="group relative overflow-hidden rounded-2xl border border-fuchsia-500/30 bg-gradient-to-br from-fuchsia-600/20 to-pink-900/20 p-6 transition hover:border-fuchsia-500/50 hover:shadow-lg hover:shadow-fuchsia-500/20"
+        >
+          <div className="relative z-10">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-3xl">🎬</span>
+              <svg className="w-5 h-5 text-fuchsia-300 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-bold text-white mb-1">{language === "fr" ? "Médias Match" : "Game Media"}</h3>
+            <p className="text-sm text-fuchsia-200">{language === "fr" ? "Gérer photos et highlights" : "Manage photos and highlights"}</p>
+          </div>
+          <div className="absolute inset-0 bg-gradient-to-t from-fuchsia-500/5 to-transparent opacity-0 group-hover:opacity-100 transition" />
+        </Link>
+        )}
+
+        <button
+          type="button"
+          onClick={toggleAiVisibility}
+          className="group relative overflow-hidden rounded-2xl border border-indigo-500/30 bg-gradient-to-br from-indigo-600/20 to-indigo-900/20 p-6 text-left transition hover:border-indigo-500/50 hover:shadow-lg hover:shadow-indigo-500/20"
+          aria-pressed={aiEnabled}
+        >
+          <div className="relative z-10">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-3xl">🤖</span>
+              <span className="text-xs font-semibold uppercase tracking-wide text-indigo-300">
+                {aiEnabled ? (language === "fr" ? "Actif" : "On") : (language === "fr" ? "Masque" : "Off")}
+              </span>
+            </div>
+            <h3 className="text-lg font-bold text-white mb-1">Ai</h3>
+            <p className="text-sm text-indigo-300">
+              {aiEnabled
+                ? (language === "fr" ? "Visible sur le site" : "Visible on site")
+                : (language === "fr" ? "Masquee sur le site" : "Hidden on site")}
+            </p>
+          </div>
+          <div className="absolute inset-0 bg-gradient-to-t from-indigo-500/5 to-transparent opacity-0 group-hover:opacity-100 transition" />
+        </button>
       </div>
 
-      {/* Tabs */}
+      {/* Tabs - Only show tabs the admin has permission for */}
       <div className="flex gap-2 p-1 bg-slate-800/50 rounded-xl border border-white/10 w-fit">
-        {(["referees", "committee", "venues"] as const).map((tab) => (
-          <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${activeTab === tab ? "bg-orange-500 text-white" : "text-slate-400 hover:text-white"}`}>
-            {tab === "referees" ? copy.referees : tab === "committee" ? copy.committee : copy.venues}
-            <span className="ml-2 text-xs opacity-70">({tab === "referees" ? referees.length : tab === "committee" ? committee.length : venues.length})</span>
+        {currentAdminUser?.permissions?.canManageReferees && (
+          <button onClick={() => setActiveTab("referees")} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${activeTab === "referees" ? "bg-orange-500 text-white" : "text-slate-400 hover:text-white"}`}>
+            {copy.referees}
+            <span className="ml-2 text-xs opacity-70">({referees.length})</span>
           </button>
-        ))}
+        )}
+        {currentAdminUser?.permissions?.canManageCommittee && (
+          <button onClick={() => setActiveTab("committee")} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${activeTab === "committee" ? "bg-orange-500 text-white" : "text-slate-400 hover:text-white"}`}>
+            {copy.committee}
+            <span className="ml-2 text-xs opacity-70">({committee.length})</span>
+          </button>
+        )}
+        {currentAdminUser?.permissions?.canManageCommission && (
+          <button onClick={() => setActiveTab("commission")} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${activeTab === "commission" ? "bg-orange-500 text-white" : "text-slate-400 hover:text-white"}`}>
+            {copy.commission}
+            <span className="ml-2 text-xs opacity-70">({commission.length})</span>
+          </button>
+        )}
+        {currentAdminUser?.permissions?.canManageVenues && (
+          <button onClick={() => setActiveTab("venues")} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${activeTab === "venues" ? "bg-orange-500 text-white" : "text-slate-400 hover:text-white"}`}>
+            {copy.venues}
+            <span className="ml-2 text-xs opacity-70">({venues.length})</span>
+          </button>
+        )}
       </div>
 
       {/* Referees Tab */}
       {activeTab === "referees" && (
-        <div className="space-y-4">
+        <div key="referees" className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
           {canManage && (<button onClick={() => openRefereeModal()} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-500 transition">+ {copy.add} {copy.referees}</button>)}
           {referees.length === 0 ? (<div className="text-center py-12 text-slate-400">{copy.noReferees}</div>) : (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -529,7 +809,7 @@ export default function LeaguePage() {
 
       {/* Committee Tab */}
       {activeTab === "committee" && (
-        <div className="space-y-4">
+        <div key="committee" className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
           {canManage && (<button onClick={() => openCommitteeModal()} className="px-4 py-2 bg-violet-600 text-white rounded-xl text-sm font-semibold hover:bg-violet-500 transition">+ {copy.add} {copy.committee}</button>)}
           {committee.length === 0 ? (<div className="text-center py-12 text-slate-400">{copy.noCommittee}</div>) : (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -562,9 +842,35 @@ export default function LeaguePage() {
         </div>
       )}
 
+      {/* Commission Tab */}
+      {activeTab === "commission" && (
+        <div key="commission" className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+          <Link href="/admin/league/commission" className="inline-block px-4 py-2 bg-teal-600 text-white rounded-xl text-sm font-semibold hover:bg-teal-500 transition">+ {copy.add} {copy.commission}</Link>
+          {commission.length === 0 ? (<div className="text-center py-12 text-slate-400">{copy.noCommission}</div>) : (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {commission.map((mem) => (
+                <div key={mem.id} className="rounded-xl border border-white/10 bg-gradient-to-br from-teal-600/10 to-cyan-600/10 p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-14 h-14 rounded-full bg-teal-600/20 flex items-center justify-center overflow-hidden flex-shrink-0">
+                      {mem.photo ? (<Image src={mem.photo} alt={mem.lastName} width={56} height={56} className="object-cover w-full h-full" unoptimized />) : (<span className="text-teal-400 font-bold text-lg">{mem.firstName[0]}{mem.lastName[0]}</span>)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-white truncate">{mem.firstName} {mem.lastName}</p>
+                      <p className="text-xs text-teal-400">{mem.role}</p>
+                      {mem.department && <p className="text-xs text-slate-500">{mem.department}</p>}
+                      {mem.email && <p className="text-xs text-slate-500 truncate mt-1">{mem.email}</p>}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Venues Tab */}
       {activeTab === "venues" && (
-        <div className="space-y-4">
+        <div key="venues" className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
           {canManage && (<button onClick={() => openVenueModal()} className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-500 transition">+ {copy.add} {copy.venues}</button>)}
           {venues.length === 0 ? (<div className="text-center py-12 text-slate-400">{copy.noVenues}</div>) : (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

@@ -28,7 +28,7 @@ import {
 
 import type { DocumentData, DocumentSnapshot } from "firebase/firestore";
 import { deleteObject, getDownloadURL, ref as storageRef, uploadBytes } from "firebase/storage";
-import { onAuthStateChanged, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, type User } from "firebase/auth";
+import { EmailAuthProvider, onAuthStateChanged, reauthenticateWithCredential, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, type User } from "firebase/auth";
 import type { AdminUser, AdminRole, AdminPermissions } from "@/types/admin";
 import type { AuditLog } from "@/types/auditLog";
 import RichTextEditor from "@/components/RichTextEditor";
@@ -49,6 +49,7 @@ import {
 } from "@/lib/adminAuth";
 import { logAuditAction, formatAuditLogDisplay, logSessionStart, logSessionEnd, logSessionActivity } from "@/lib/auditLog";
 import { autoTranslateNewsArticle } from "@/lib/translate";
+import { recalculateLeagueStatsFromGames } from "@/lib/league-stats";
 
 type AdminNewsArticle = {
   id: string;
@@ -57,8 +58,10 @@ type AdminNewsArticle = {
   category: string;
   headline: string;
   imageUrl?: string;
+  videoUrl?: string;
   createdAt: Date | null;
   author?: string;
+  isPaused?: boolean;
 };
 
 type GameEntry = {
@@ -90,6 +93,7 @@ type NewsFormState = {
   category: string;
   headline: string;
   imageUrl?: string;
+  videoUrl?: string;
   imagePosition?: number;
   author?: string;
 };
@@ -384,6 +388,7 @@ const initialFormState: NewsFormState = {
   category: "",
   headline: "",
   imageUrl: "",
+  videoUrl: "",
   imagePosition: 50,
   author: "",
 };
@@ -406,7 +411,7 @@ const initialRosterFormState: RosterFormState = {
   height: "",
   dateOfBirth: "",
   position: "",
-  nationality: "DRC",
+  nationality: "",
   nationality2: "",
   nationality2Enabled: false,
   headshot: "",
@@ -438,10 +443,18 @@ const initialGameFormState: GameFormState = {
 const sanitizeFilename = (filename: string) => filename.toLowerCase().replace(/[^a-z0-9.]+/g, "-");
 
 const buildImagePath = (filename: string) => `news-images/${Date.now()}-${sanitizeFilename(filename)}`;
+const buildVideoPath = (filename: string) => `news-videos/${Date.now()}-${sanitizeFilename(filename)}`;
 const buildTeamLogoPath = (filename: string) => `team-logos/${Date.now()}-${sanitizeFilename(filename)}`;
 const buildTeamPhotoPath = (filename: string) => `team-photos/${Date.now()}-${sanitizeFilename(filename)}`;
 const buildPlayerHeadshotPath = (filename: string) => `player-headshots/${Date.now()}-${sanitizeFilename(filename)}`;
 const buildCoachHeadshotPath = (filename: string) => `coach-headshots/${Date.now()}-${sanitizeFilename(filename)}`;
+
+const isTrustedNewsMediaUrl = (url?: string | null) => {
+  if (!url) return false;
+  const normalized = url.trim();
+  if (!normalized) return false;
+  return normalized.includes("firebasestorage.googleapis.com") || normalized.includes("storage.googleapis.com");
+};
 
 const getDateField = (value: unknown): Date | null => {
   if (value && typeof value === "object" && "toDate" in value && typeof (value as { toDate: () => Date }).toDate === "function") {
@@ -459,8 +472,10 @@ const mapSnapshotToArticle = (snapshot: DocumentSnapshot<DocumentData>): AdminNe
     category: data?.category ?? "News",
     headline: data?.headline ?? "",
     imageUrl: data?.imageUrl ?? "",
+    videoUrl: data?.videoUrl ?? "",
     createdAt: getDateField(data?.createdAt),
     author: data?.author ?? "LIPROBAKIN Staff",
+    isPaused: data?.isPaused ?? false,
   };
 };
 
@@ -688,6 +703,7 @@ export default function AdminPage() {
       subPermissions: [
         { key: "canManageReferees", icon: "👨‍⚖️", label: { en: "Referees", fr: "Arbitres" } },
         { key: "canManageCommittee", icon: "👔", label: { en: "Committee Members", fr: "Membre du Comité" } },
+        { key: "canManageCommission", icon: "📋", label: { en: "Commission", fr: "Commission" } },
         { key: "canManagePartners", icon: "🤝", label: { en: "Partners", fr: "Partenaires" } },
         { key: "canManageSales", icon: "💰", label: { en: "Sales", fr: "Sales" } },
       ]
@@ -723,6 +739,7 @@ export default function AdminPage() {
   const [news, setNews] = useState<AdminNewsArticle[]>([]);
   const [form, setForm] = useState<NewsFormState>(initialFormState);
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
+  const [selectedVideoFile, setSelectedVideoFile] = useState<File | null>(null);
   const [showStoryImagePositionModal, setShowStoryImagePositionModal] = useState(false);
   const [storyImagePositionY, setStoryImagePositionY] = useState(50);
   const [imagePreview, setImagePreview] = useState<string>("");
@@ -917,6 +934,15 @@ export default function AdminPage() {
     setTeamCurrentPage(1);
   }, [teamGenderFilter, teamSearchQuery]);
 
+  // Request notification permission for admin alerts
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().then((permission) => {
+        console.log('Notification permission:', permission);
+      });
+    }
+  }, []);
+
   // Directory teams with template/firestore source distinction
   const directoryTeams = useMemo(() => {
     const firestoreTeams: DirectoryTeam[] = teams.map((team) => ({ ...team, source: "firestore" }));
@@ -967,6 +993,8 @@ export default function AdminPage() {
     createFirstStory: language === 'fr' ? 'Créez votre première histoire ci-dessus.' : 'Create your first story above.',
     noImage: language === 'fr' ? 'Pas d\'image' : 'No image',
     edit: language === 'fr' ? 'Modifier' : 'Edit',
+    pause: language === 'fr' ? 'Pause' : 'Pause',
+    unpause: language === 'fr' ? 'Reprendre' : 'Unpause',
     delete: language === 'fr' ? 'Supprimer' : 'Delete',
     previewStory: language === 'fr' ? 'Aperçu de l\'histoire' : 'Preview Story',
     previewDescription: language === 'fr' ? 'Voici comment votre histoire apparaîtra sur la page principale' : 'This is how your story will appear on the main page',
@@ -1644,8 +1672,10 @@ export default function AdminPage() {
       const sessionId = await logSessionStart(user.uid, user.email || authForm.email);
       console.log("Session started:", sessionId);
       
-      // Log the login action
-      await logAuditAction("user_login", user.uid, user.email || authForm.email, "admin");
+      // Log the login action with admin email as target name
+      await logAuditAction("user_login", user.uid, user.email || authForm.email, "admin", user.uid, user.email || authForm.email, {
+        displayName: adminData?.displayName || authForm.email
+      });
       
       // Redirect to the admin dashboard after successful login
       router.push("/admin/stories");
@@ -1677,8 +1707,10 @@ export default function AdminPage() {
         // Log session end
         await logSessionEnd(user.uid, user.email || '', sessionId);
         
-        // Log the logout action
-        await logAuditAction("user_logout", user.uid, user.email || '', "admin");
+        // Log the logout action with admin email as target name
+        await logAuditAction("user_logout", user.uid, user.email || '', "admin", user.uid, user.email || '', {
+          sessionId
+        });
       }
       
       await signOut(firebaseAuth);
@@ -1689,9 +1721,64 @@ export default function AdminPage() {
     }
   };
 
+  const runSecureDeleteConfirmation = async (
+    setScopedStatus: (status: StatusCallout) => void,
+    itemLabel: string,
+    warningDetails?: string,
+    actionLabel = "delete",
+  ): Promise<boolean> => {
+    if (!user) {
+      setScopedStatus({ type: "error", message: "Sign in to continue." });
+      return false;
+    }
+
+    if (!user.email) {
+      setScopedStatus({ type: "error", message: "Admin email is required to verify this action." });
+      return false;
+    }
+
+    const introConfirmation = window.confirm(
+      `You are about to permanently ${actionLabel} ${itemLabel}.\n\n${warningDetails ?? "This action cannot be undone."}\n\nYou will need to verify your password on the next step (works on phone and desktop).`
+    );
+
+    if (!introConfirmation) {
+      return false;
+    }
+
+    const password = window.prompt(
+      "Security check: enter your admin password to continue."
+    );
+
+    if (!password) {
+      setScopedStatus({ type: "info", message: "Deletion cancelled. Password verification was not completed." });
+      return false;
+    }
+
+    try {
+      const credential = EmailAuthProvider.credential(user.email, password);
+      await reauthenticateWithCredential(user, credential);
+    } catch (error) {
+      console.error(error);
+      setScopedStatus({ type: "error", message: "Password verification failed. Deletion was cancelled." });
+      return false;
+    }
+
+    const finalConfirmation = window.confirm(
+      `Final confirmation: ${actionLabel} ${itemLabel} now?\n\nThis cannot be undone.`
+    );
+
+    if (!finalConfirmation) {
+      setScopedStatus({ type: "info", message: "Deletion cancelled at final confirmation." });
+      return false;
+    }
+
+    return true;
+  };
+
   const resetForm = () => {
     setForm(initialFormState);
     setSelectedImageFile(null);
+    setSelectedVideoFile(null);
     updateNewsPreview("");
   };
 
@@ -1704,11 +1791,13 @@ export default function AdminPage() {
       category: article.category,
       headline: article.headline,
       imageUrl: article.imageUrl ?? "",
+      videoUrl: (article as any).videoUrl ?? "",
       imagePosition: imagePos,
       author: article.author ?? "",
     });
     setStoryImagePositionY(imagePos);
     setSelectedImageFile(null);
+    setSelectedVideoFile(null);
     updateNewsPreview(article.imageUrl ?? "");
     setStatus({ type: "info", message: "Loaded the story for editing." });
   };
@@ -1718,7 +1807,13 @@ export default function AdminPage() {
       setStatus({ type: "error", message: "Sign in to delete a story." });
       return;
     }
-    if (!window.confirm("Are you sure you want to delete this news item?")) {
+    const confirmed = await runSecureDeleteConfirmation(
+      setStatus,
+      `the story \"${article.title}\"`,
+      "This removes the news article from Firestore and attempts to delete its media from storage.",
+    );
+
+    if (!confirmed) {
       return;
     }
     setStatus({ type: "info", message: "Removing the story from Firestore..." });
@@ -1744,6 +1839,30 @@ export default function AdminPage() {
     }
   };
 
+  const handlePause = async (article: AdminNewsArticle) => {
+    if (!user) {
+      setStatus({ type: "error", message: "Sign in to modify stories." });
+      return;
+    }
+    
+    const newPausedStatus = !article.isPaused;
+    const action = newPausedStatus ? "pausing" : "unpausing";
+    const actionPast = newPausedStatus ? "paused" : "unpaused";
+    
+    setStatus({ type: "info", message: `${action.charAt(0).toUpperCase() + action.slice(1)} story...` });
+    
+    try {
+      await updateDoc(doc(firebaseDB, "news", article.id), {
+        isPaused: newPausedStatus
+      });
+      
+      setStatus({ type: "success", message: `Story ${actionPast} successfully.` });
+    } catch (error) {
+      console.error(error);
+      setStatus({ type: "error", message: `Could not ${action.slice(0, -3)} story.` });
+    }
+  };
+
   const handleImageChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] ?? null;
     setSelectedImageFile(file);
@@ -1755,6 +1874,11 @@ export default function AdminPage() {
     } else {
       updateNewsPreview(form.imageUrl ?? "");
     }
+  };
+
+  const handleVideoChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    setSelectedVideoFile(file);
   };
 
   const handleSubmitNews = async (event: FormEvent<HTMLFormElement>) => {
@@ -1773,12 +1897,30 @@ export default function AdminPage() {
     setStatus({ type: "info", message: form.id ? "Updating story..." : "Publishing and translating story..." });
 
     try {
-      let finalImage = form.imageUrl ?? "";
+      let finalImage = isTrustedNewsMediaUrl(form.imageUrl) ? (form.imageUrl ?? "") : "";
       if (selectedImageFile) {
         const path = buildImagePath(selectedImageFile.name);
         const storageRefInstance = storageRef(firebaseStorage, path);
         const uploadSnapshot = await uploadBytes(storageRefInstance, selectedImageFile);
         finalImage = await getDownloadURL(uploadSnapshot.ref);
+      }
+
+      let finalVideo = isTrustedNewsMediaUrl(form.videoUrl) ? (form.videoUrl ?? "") : "";
+      if (selectedVideoFile) {
+        const path = buildVideoPath(selectedVideoFile.name);
+        const storageRefInstance = storageRef(firebaseStorage, path);
+        const uploadSnapshot = await uploadBytes(storageRefInstance, selectedVideoFile);
+        finalVideo = await getDownloadURL(uploadSnapshot.ref);
+      }
+
+      if (!finalImage && !finalVideo) {
+        setStatus({
+          type: "error",
+          message: language === "fr"
+            ? "Ajoutez une image de couverture ou une vidéo de couverture avant de publier."
+            : "Please upload a cover picture or cover video before publishing.",
+        });
+        return;
       }
 
       // Auto-translate the article content
@@ -1806,8 +1948,10 @@ export default function AdminPage() {
         ...translatedContent,
         category: form.category.trim() || "News",
         imageUrl: finalImage,
+        videoUrl: finalVideo,
         imagePosition: form.imagePosition ?? 50,
         author: form.author?.trim() || user?.email || "LIPROBAKIN Staff",
+        authorPhoto: currentAdminUser?.photo || "",
       };
       
       console.log('📦 Final payload:', payload);
@@ -1818,7 +1962,12 @@ export default function AdminPage() {
           updatedAt: serverTimestamp(),
         });
         if (user) {
-          await logAuditAction("news_updated", user.uid, user.email || "unknown", "news", form.id, payload.title);
+          await logAuditAction("news_updated", user.uid, user.email || "unknown", "news", form.id, payload.title, {
+            newsTitle: payload.title,
+            category: payload.category,
+            author: payload.author,
+            hasImage: !!payload.imageUrl
+          });
         }
         setStatus({ type: "success", message: "Story updated and translated successfully." });
       } else {
@@ -1828,7 +1977,12 @@ export default function AdminPage() {
           updatedAt: serverTimestamp(),
         });
         if (user) {
-          await logAuditAction("news_created", user.uid, user.email || "unknown", "news", newNewsRef.id, payload.title);
+          await logAuditAction("news_created", user.uid, user.email || "unknown", "news", newNewsRef.id, payload.title, {
+            newsTitle: payload.title,
+            category: payload.category,
+            author: payload.author,
+            hasImage: !!payload.imageUrl
+          });
         }
         setStatus({ type: "success", message: "Story published and translated successfully." });
       }
@@ -2009,15 +2163,11 @@ export default function AdminPage() {
       return;
     }
 
-    const confirmed = window.confirm(
-      "⚠️ WARNING: This will permanently delete ALL games and reset ALL team stats to 0-0.\n\n" +
-      "This includes:\n" +
-      "• All game records\n" +
-      "• All team wins/losses\n" +
-      "• All team total points\n" +
-      "• All player stats and averages\n\n" +
-      "This action CANNOT be undone!\n\n" +
-      "Are you absolutely sure you want to continue?"
+    const confirmed = await runSecureDeleteConfirmation(
+      setResetStatus,
+      "all league stats data",
+      "This will delete ALL games and standings, and reset ALL teams and players to 0.0 stats. This action cannot be reversed.",
+      "reset",
     );
 
     if (!confirmed) {
@@ -2153,8 +2303,11 @@ export default function AdminPage() {
     }
 
     const team = teams.find(t => t.id === statsSelectedTeamId);
-    const confirmed = window.confirm(
-      `⚠️ This will reset ALL player stats for ${team?.name || 'this team'} to 0.\n\nAre you sure?`
+    const confirmed = await runSecureDeleteConfirmation(
+      setStatsMgmtStatus,
+      `stats for ${team?.name || 'this team'}`,
+      'This will reset team wins/losses/points and reset every player on that roster to 0.0 stats.',
+      'reset',
     );
 
     if (!confirmed) return;
@@ -2208,8 +2361,11 @@ export default function AdminPage() {
     }
 
     const player = statsTeamRoster.find(p => p.id === statsSelectedPlayerId);
-    const confirmed = window.confirm(
-      `⚠️ This will reset stats for ${player?.firstName} ${player?.lastName} to 0.\n\nAre you sure?`
+    const confirmed = await runSecureDeleteConfirmation(
+      setStatsMgmtStatus,
+      `stats for ${player?.firstName ?? ''} ${player?.lastName ?? ''}`.trim(),
+      'This will set this player to 0.0 for all tracked stat fields and games played.',
+      'reset',
     );
 
     if (!confirmed) return;
@@ -2460,7 +2616,13 @@ export default function AdminPage() {
       setTeamStatus({ type: "error", message: "Sign in to delete teams." });
       return;
     }
-    if (!window.confirm(`Delete ${team.name}? This removes the roster too.`)) {
+    const confirmed = await runSecureDeleteConfirmation(
+      setTeamStatus,
+      `team \"${team.name}\"`,
+      "This removes the team, all roster players under it, and associated team/player images from storage.",
+    );
+
+    if (!confirmed) {
       return;
     }
 
@@ -2539,9 +2701,9 @@ export default function AdminPage() {
       height: player.height,
       dateOfBirth: player.dateOfBirth ?? "",
       position: player.position ?? "",
-        nationality: player.nationality ?? "DRC",
-        nationality2: player.nationality2 ?? "",
-        nationality2Enabled: !!player.nationality2,
+      nationality: player.nationality ?? "",
+      nationality2: player.nationality2 ?? "",
+      nationality2Enabled: !!player.nationality2,
       headshot: player.headshot ?? "",
       pts: player.stats.pts,
       reb: player.stats.reb,
@@ -2599,6 +2761,7 @@ export default function AdminPage() {
     const height = rosterForm.height.trim();
     const dateOfBirth = rosterForm.dateOfBirth.trim();
     const position = rosterForm.position.trim();
+    const nationality = rosterForm.nationality.trim();
     const pts = rosterForm.pts.trim();
     const reb = rosterForm.reb.trim();
     const stl = rosterForm.stl.trim();
@@ -2617,12 +2780,24 @@ export default function AdminPage() {
       setRosterStatus({ type: "error", message: "Player license is required for new players." });
       return;
     }
+    if (!/^(?:00|0|[1-9]\d?)$/.test(rosterForm.number)) {
+      setRosterStatus({ type: "error", message: "Jersey number must be 00, 0, or 1-99." });
+      return;
+    }
     if (!Number.isFinite(jerseyNumber)) {
       setRosterStatus({ type: "error", message: "Enter a valid jersey number." });
       return;
     }
     if (!position) {
       setRosterStatus({ type: "error", message: "Position is required." });
+      return;
+    }
+    if (!nationality) {
+      setRosterStatus({ type: "error", message: "Nationality is required." });
+      return;
+    }
+    if (!countries.some((country) => country.name === nationality)) {
+      setRosterStatus({ type: "error", message: "Please select a nationality from the list." });
       return;
     }
 
@@ -2637,7 +2812,7 @@ export default function AdminPage() {
       height,
       dateOfBirth,
       position,
-      nationality: rosterForm.nationality || "DRC",
+      nationality,
       headshot,
       stats: {
         pts,
@@ -2701,7 +2876,13 @@ export default function AdminPage() {
       setRosterStatus({ type: "error", message: "Select a team first." });
       return;
     }
-    if (!window.confirm(`Remove ${player.firstName} ${player.lastName} from the roster?`)) {
+    const confirmed = await runSecureDeleteConfirmation(
+      setRosterStatus,
+      `${player.firstName} ${player.lastName} from the roster`,
+      "This permanently removes the player record and attempts to delete the player headshot from storage.",
+    );
+
+    if (!confirmed) {
       return;
     }
 
@@ -2871,7 +3052,11 @@ export default function AdminPage() {
       if (refereeForm.id) {
         // Update existing referee - don't modify createdAt
         await updateDoc(doc(firebaseDB, "referees", refereeForm.id), baseRefereeData);
-        await logAuditAction("referee_updated", user.uid, user.email || "unknown", "referee", refereeForm.id, `${firstName} ${lastName}`);
+        await logAuditAction("referee_updated", user.uid, user.email || "unknown", "referee", refereeForm.id, `${firstName} ${lastName}`, {
+          displayName: `${firstName} ${lastName}`,
+          phone: refereeForm.phone.trim() || null,
+          hasPhoto: !!headshotUrl
+        });
         setLeagueGestionStatus({ type: "success", message: `Referee ${firstName} ${lastName} updated successfully.` });
       } else {
         // Add new referee - include createdAt
@@ -2879,7 +3064,11 @@ export default function AdminPage() {
           ...baseRefereeData,
           createdAt: serverTimestamp(),
         });
-        await logAuditAction("referee_added", user.uid, user.email || "unknown", "referee", newRefereeRef.id, `${firstName} ${lastName}`);
+        await logAuditAction("referee_added", user.uid, user.email || "unknown", "referee", newRefereeRef.id, `${firstName} ${lastName}`, {
+          displayName: `${firstName} ${lastName}`,
+          phone: refereeForm.phone.trim() || null,
+          hasPhoto: !!headshotUrl
+        });
         setLeagueGestionStatus({ type: "success", message: `Referee ${firstName} ${lastName} added successfully.` });
       }
 
@@ -2913,14 +3102,23 @@ export default function AdminPage() {
       setLeagueGestionStatus({ type: "error", message: "Sign in to delete referees." });
       return;
     }
-    if (!window.confirm(`Delete referee ${referee.firstName} ${referee.lastName}?`)) {
+    const confirmed = await runSecureDeleteConfirmation(
+      setLeagueGestionStatus,
+      `referee ${referee.firstName} ${referee.lastName}`,
+      "This permanently removes the referee profile.",
+    );
+
+    if (!confirmed) {
       return;
     }
 
     setLeagueGestionStatus({ type: "info", message: "Deleting referee..." });
     try {
       await deleteDoc(doc(firebaseDB, "referees", referee.id));
-      await logAuditAction("referee_deleted", user.uid, user.email || "unknown", "referee", referee.id, `${referee.firstName} ${referee.lastName}`);
+      await logAuditAction("referee_deleted", user.uid, user.email || "unknown", "referee", referee.id, `${referee.firstName} ${referee.lastName}`, {
+        displayName: `${referee.firstName} ${referee.lastName}`,
+        phone: referee.phone || null
+      });
       setLeagueGestionStatus({ type: "success", message: `Referee ${referee.firstName} ${referee.lastName} deleted successfully.` });
     } catch (error) {
       console.error("Error deleting referee:", error);
@@ -3017,7 +3215,13 @@ export default function AdminPage() {
       setLeagueGestionStatus({ type: "error", message: "Sign in to delete committee members." });
       return;
     }
-    if (!window.confirm(`Delete committee member ${member.firstName} ${member.lastName}?`)) {
+    const confirmed = await runSecureDeleteConfirmation(
+      setLeagueGestionStatus,
+      `committee member ${member.firstName} ${member.lastName}`,
+      "This permanently removes the committee profile and attempts to delete the profile photo from storage.",
+    );
+
+    if (!confirmed) {
       return;
     }
 
@@ -3825,7 +4029,13 @@ export default function AdminPage() {
       return;
     }
     if (!selectedTeamId) return;
-    if (!window.confirm(`Remove ${member.firstName} ${member.lastName}?`)) return;
+    const confirmed = await runSecureDeleteConfirmation(
+      setRosterStatus,
+      `staff member ${member.firstName} ${member.lastName}`,
+      "This permanently removes the staff profile and attempts to delete the headshot from storage.",
+    );
+
+    if (!confirmed) return;
 
     setRosterStatus({ type: "info", message: "Deleting..." });
 
@@ -3928,14 +4138,31 @@ export default function AdminPage() {
 
       if (gameForm.id) {
         await updateDoc(doc(firebaseDB, "games", gameForm.id), payload);
-        await logAuditAction("game_updated", user.uid, user.email || "unknown", "game", gameForm.id, `${awayTeam.name} @ ${homeTeam.name}`);
+        await logAuditAction("game_updated", user.uid, user.email || "unknown", "game", gameForm.id, `${awayTeam.name} @ ${homeTeam.name}`, {
+          homeTeam: homeTeam.name,
+          awayTeam: awayTeam.name,
+          gameDate: gameForm.date,
+          venue: gameForm.venue,
+          week: gameForm.week,
+          gender: gameForm.gender,
+          referees: [gameForm.refereeHomeTeam1, gameForm.refereeHomeTeam2, gameForm.refereeAwayTeam].filter(Boolean).join(', ') || 'None assigned'
+        });
         setGameStatus({ type: "success", message: "Game updated." });
       } else {
         const newGameRef = await addDoc(collection(firebaseDB, "games"), {
           ...payload,
           createdAt: serverTimestamp(),
         });
-        await logAuditAction("game_created", user.uid, user.email || "unknown", "game", newGameRef.id, `${awayTeam.name} @ ${homeTeam.name}`);
+        await logAuditAction("game_created", user.uid, user.email || "unknown", "game", newGameRef.id, `${awayTeam.name} @ ${homeTeam.name}`, {
+          homeTeam: homeTeam.name,
+          awayTeam: awayTeam.name,
+          gameDate: gameForm.date,
+          time: gameForm.time,
+          venue: gameForm.venue,
+          week: gameForm.week,
+          gender: gameForm.gender,
+          referees: [gameForm.refereeHomeTeam1, gameForm.refereeHomeTeam2, gameForm.refereeAwayTeam].filter(Boolean).join(', ') || 'None assigned'
+        });
         setGameStatus({ type: "success", message: "Game scheduled." });
       }
       resetGameForm();
@@ -3952,15 +4179,42 @@ export default function AdminPage() {
       setGameStatus({ type: "error", message: "Sign in to delete games." });
       return;
     }
-    if (!window.confirm(`Delete ${game.awayTeamName} @ ${game.homeTeamName}?`)) {
+    const completedGameWarning =
+      "This game has recorded stats. Deleting it removes only this game's contribution and recalculates player/team averages from remaining games.";
+
+    const confirmed = await runSecureDeleteConfirmation(
+      setGameStatus,
+      `game ${game.awayTeamName} @ ${game.homeTeamName} (${game.date}${game.time ? ` ${game.time}` : ""})`,
+      `This action is irreversible.${typeof game.winnerScore === "number" ? `\n\n${completedGameWarning}` : ""}`,
+    );
+
+    if (!confirmed) {
       return;
     }
 
     setGameStatus({ type: "info", message: "Deleting game..." });
 
     try {
+      const playerGameStatsSnapshot = await getDocs(
+        query(collection(firebaseDB, "playerGameStats"), where("gameId", "==", game.id))
+      );
+
+      if (!playerGameStatsSnapshot.empty) {
+        const deleteBatch = writeBatch(firebaseDB);
+        playerGameStatsSnapshot.docs.forEach((statDoc) => {
+          deleteBatch.delete(statDoc.ref);
+        });
+        await deleteBatch.commit();
+      }
+
       await deleteDoc(doc(firebaseDB, "games", game.id));
-      await logAuditAction("game_deleted", user.uid, user.email || "unknown", "game", game.id, `${game.awayTeamName} @ ${game.homeTeamName}`);
+      await recalculateLeagueStatsFromGames();
+      await logAuditAction("game_deleted", user.uid, user.email || "unknown", "game", game.id, `${game.awayTeamName} @ ${game.homeTeamName}`, {
+        homeTeam: game.homeTeamName,
+        awayTeam: game.awayTeamName,
+        gameDate: game.date,
+        venue: game.venue
+      });
       setGameStatus({ type: "success", message: "Game removed." });
       if (gameForm.id === game.id) {
         resetGameForm();
@@ -4234,138 +4488,124 @@ export default function AdminPage() {
         loserScore: parseInt(gameStatsForm.loserScore),
         playerStats: allPlayerStats,
         completed: true,
+        completedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
 
-      // Update individual player stats in roster (for both winner and loser teams)
-      const batch = writeBatch(firebaseDB);
-      for (const stat of allPlayerStats) {
-        const isWinner = stat.teamId === gameStatsForm.winnerTeamId;
-        const roster = isWinner ? winnerRoster : loserRoster;
-        const player = roster.find(p => p.id === stat.playerId);
-        if (!player) continue;
+      // Recalculate roster averages from all completed games (prevents double-count on edits)
+      const recalculateTeamRosterAverages = async (teamId: string) => {
+        const [rosterSnapshot, gamesSnapshot] = await Promise.all([
+          getDocs(collection(firebaseDB, `teams/${teamId}/roster`)),
+          getDocs(query(collection(firebaseDB, "games"), orderBy("date", "asc"))),
+        ]);
 
-        // Get current player stats from roster
-        const currentPts = parseFloat(player.stats.pts) || 0;
-        const currentReb = parseFloat(player.stats.reb) || 0;
-        const currentStl = parseFloat(player.stats.stl) || 0;
+        const totalsByPlayer = new Map<string, {
+          games: number;
+          pts: number;
+          two_pm: number;
+          two_pa: number;
+          three_pm: number;
+          three_pa: number;
+          ft_m: number;
+          ft_a: number;
+          ast: number;
+          oreb: number;
+          dreb: number;
+          reb: number;
+          stl: number;
+          blk: number;
+          min: number;
+          pf: number;
+          to: number;
+        }>();
 
-        // Get player's game history to calculate new averages
-        const playerGamesQuery = query(
-          collection(firebaseDB, "games"),
-          orderBy("date", "asc")
-        );
-        const gamesSnapshot = await getDocs(playerGamesQuery);
-        
-        let totalGames = 0;
-        let totalPts = 0;
-        let total2PM = 0;
-        let total2PA = 0;
-        let total3PM = 0;
-        let total3PA = 0;
-        let totalFTM = 0;
-        let totalFTA = 0;
-        let totalAst = 0;
-        let totalOreb = 0;
-        let totalDreb = 0;
-        let totalReb = 0;
-        let totalStl = 0;
-        let totalBlk = 0;
-        let totalMin = 0;
-        let totalPf = 0;
-        let totalTo = 0;
-
-        // Accumulate stats from all completed games for this player
-        gamesSnapshot.docs.forEach(gameDoc => {
+        gamesSnapshot.docs.forEach((gameDoc) => {
           const gameData = gameDoc.data();
-          if (gameData.completed && gameData.playerStats) {
-            const playerGameStats = gameData.playerStats.find((ps: any) => ps.playerId === stat.playerId);
-            if (playerGameStats) {
-              totalGames++;
-              totalPts += playerGameStats.pts || 0;
-              total2PM += playerGameStats.two_pm || 0;
-              total2PA += playerGameStats.two_pa || 0;
-              total3PM += playerGameStats.three_pm || 0;
-              total3PA += playerGameStats.three_pa || 0;
-              totalFTM += playerGameStats.ft_m || 0;
-              totalFTA += playerGameStats.ft_a || 0;
-              totalAst += playerGameStats.ast || 0;
-              totalOreb += playerGameStats.oreb || 0;
-              totalDreb += playerGameStats.dreb || 0;
-              totalReb += playerGameStats.reb || 0;
-              totalStl += playerGameStats.stl || 0;
-              totalBlk += playerGameStats.blk || 0;
-              totalMin += playerGameStats.min || 0;
-              totalPf += playerGameStats.pf || 0;
-              totalTo += playerGameStats.to || 0;
-            }
-          }
+          const playerStats = Array.isArray(gameData.playerStats) ? gameData.playerStats : [];
+          if (gameData.completed !== true) return;
+
+          playerStats.forEach((entry: any) => {
+            if (entry.teamId !== teamId || !entry.playerId) return;
+
+            const current = totalsByPlayer.get(entry.playerId) || {
+              games: 0,
+              pts: 0,
+              two_pm: 0,
+              two_pa: 0,
+              three_pm: 0,
+              three_pa: 0,
+              ft_m: 0,
+              ft_a: 0,
+              ast: 0,
+              oreb: 0,
+              dreb: 0,
+              reb: 0,
+              stl: 0,
+              blk: 0,
+              min: 0,
+              pf: 0,
+              to: 0,
+            };
+
+            current.games += 1;
+            current.pts += Number(entry.pts || 0);
+            current.two_pm += Number(entry.two_pm || 0);
+            current.two_pa += Number(entry.two_pa || 0);
+            current.three_pm += Number(entry.three_pm || 0);
+            current.three_pa += Number(entry.three_pa || 0);
+            current.ft_m += Number(entry.ft_m || 0);
+            current.ft_a += Number(entry.ft_a || 0);
+            current.ast += Number(entry.ast || 0);
+            current.oreb += Number(entry.oreb || 0);
+            current.dreb += Number(entry.dreb || 0);
+            current.reb += Number(entry.reb || 0);
+            current.stl += Number(entry.stl || 0);
+            current.blk += Number(entry.blk || 0);
+            current.min += Number(entry.min || 0);
+            current.pf += Number(entry.pf || 0);
+            current.to += Number(entry.to || 0);
+
+            totalsByPlayer.set(entry.playerId, current);
+          });
         });
 
-        // Add current game stats
-        totalGames++;
-        totalPts += stat.pts;
-        total2PM += stat.two_pm;
-        total2PA += stat.two_pa;
-        total3PM += stat.three_pm;
-        total3PA += stat.three_pa;
-        totalFTM += stat.ft_m;
-        totalFTA += stat.ft_a;
-        totalAst += stat.ast;
-        totalOreb += stat.oreb;
-        totalDreb += stat.dreb;
-        totalReb += stat.reb;
-        totalStl += stat.stl;
-        totalBlk += stat.blk;
-        totalMin += stat.min;
-        totalPf += stat.pf;
-        totalTo += stat.to;
+        const batch = writeBatch(firebaseDB);
+        rosterSnapshot.docs.forEach((playerDoc) => {
+          const totals = totalsByPlayer.get(playerDoc.id);
+          const games = totals?.games || 0;
+          const avg = (value: number) => (games > 0 ? (value / games).toFixed(1) : "0.0");
 
-        // Calculate new averages
-        const newAvgPts = (totalPts / totalGames).toFixed(1);
-        const newAvg2PM = (total2PM / totalGames).toFixed(1);
-        const newAvg2PA = (total2PA / totalGames).toFixed(1);
-        const newAvg3PM = (total3PM / totalGames).toFixed(1);
-        const newAvg3PA = (total3PA / totalGames).toFixed(1);
-        const newAvgFTM = (totalFTM / totalGames).toFixed(1);
-        const newAvgFTA = (totalFTA / totalGames).toFixed(1);
-        const newAvgAst = (totalAst / totalGames).toFixed(1);
-        const newAvgOreb = (totalOreb / totalGames).toFixed(1);
-        const newAvgDreb = (totalDreb / totalGames).toFixed(1);
-        const newAvgReb = (totalReb / totalGames).toFixed(1);
-        const newAvgStl = (totalStl / totalGames).toFixed(1);
-        const newAvgBlk = (totalBlk / totalGames).toFixed(1);
-        const newAvgMin = (totalMin / totalGames).toFixed(1);
-        const newAvgPf = (totalPf / totalGames).toFixed(1);
-        const newAvgTo = (totalTo / totalGames).toFixed(1);
-
-        // Update player roster document
-        const playerRef = doc(firebaseDB, "teams", stat.teamId, "roster", stat.playerId);
-        batch.update(playerRef, {
-          stats: {
-            pts: newAvgPts,
-            two_pm: newAvg2PM,
-            two_pa: newAvg2PA,
-            three_pm: newAvg3PM,
-            three_pa: newAvg3PA,
-            ft_m: newAvgFTM,
-            ft_a: newAvgFTA,
-            ast: newAvgAst,
-            oreb: newAvgOreb,
-            dreb: newAvgDreb,
-            reb: newAvgReb,
-            stl: newAvgStl,
-            blk: newAvgBlk,
-            min: newAvgMin,
-            pf: newAvgPf,
-            to: newAvgTo,
-          },
-          gamesPlayed: totalGames,
-          updatedAt: serverTimestamp(),
+          batch.update(playerDoc.ref, {
+            stats: {
+              pts: avg(totals?.pts || 0),
+              two_pm: avg(totals?.two_pm || 0),
+              two_pa: avg(totals?.two_pa || 0),
+              three_pm: avg(totals?.three_pm || 0),
+              three_pa: avg(totals?.three_pa || 0),
+              ft_m: avg(totals?.ft_m || 0),
+              ft_a: avg(totals?.ft_a || 0),
+              ast: avg(totals?.ast || 0),
+              oreb: avg(totals?.oreb || 0),
+              dreb: avg(totals?.dreb || 0),
+              reb: avg(totals?.reb || 0),
+              stl: avg(totals?.stl || 0),
+              blk: avg(totals?.blk || 0),
+              min: avg(totals?.min || 0),
+              pf: avg(totals?.pf || 0),
+              to: avg(totals?.to || 0),
+            },
+            gamesPlayed: games,
+            updatedAt: serverTimestamp(),
+          });
         });
-      }
 
-      await batch.commit();
+        await batch.commit();
+      };
+
+      await Promise.all([
+        recalculateTeamRosterAverages(gameStatsForm.winnerTeamId),
+        recalculateTeamRosterAverages(loserTeamId),
+      ]);
 
       // Update team win/loss records
       const winnerTeamRef = doc(firebaseDB, "teams", gameStatsForm.winnerTeamId);
@@ -4468,7 +4708,14 @@ export default function AdminPage() {
         });
       }
 
-      await logAuditAction("game_stats_updated", user.uid, user.email || "unknown", "game", selectedCompletedGame.id, `${winnerTeamName} vs ${loserTeamName}`);
+      await logAuditAction("game_stats_updated", user.uid, user.email || "unknown", "game", selectedCompletedGame.id, `${winnerTeamName} vs ${loserTeamName}`, {
+        winner: winnerTeamName,
+        loser: loserTeamName,
+        score: `${gameStatsForm.winnerScore} - ${gameStatsForm.loserScore}`,
+        homeScore: selectedCompletedGame.homeTeamId === gameStatsForm.winnerTeamId ? gameStatsForm.winnerScore : gameStatsForm.loserScore,
+        awayScore: selectedCompletedGame.awayTeamId === gameStatsForm.winnerTeamId ? gameStatsForm.winnerScore : gameStatsForm.loserScore,
+        gameDate: selectedCompletedGame.date
+      });
       setStatsStatus({ type: "success", message: "Game stats saved, player averages and team records updated!" });
       setSelectedCompletedGame(null);
       setGameStatsForm(null);
@@ -4551,110 +4798,98 @@ export default function AdminPage() {
               </div>
             </div>
           ) : !user ? (
-            <div className="w-full max-w-lg space-y-8">
-              {/* Header */}
-              <div className="text-center space-y-4">
-                <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-orange-500/20 to-blue-600/20 border border-white/20 backdrop-blur-xl">
-                  <svg className="w-10 h-10 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-[0.4em] text-blue-400 font-medium">Admin Console</p>
-                  <h1 className="text-4xl font-bold text-white mt-2 bg-gradient-to-r from-white via-blue-100 to-orange-200 bg-clip-text text-transparent">
-                    League Dashboard
-                  </h1>
-                  <p className="text-slate-300/80 mt-3 text-sm leading-relaxed">
-                    Secure access to content management, team administration, and league operations.
-                  </p>
-                </div>
-              </div>
+            <div className="w-full max-w-xl">
+              <div className="relative overflow-hidden rounded-[2rem] border border-white/20 bg-white/[0.06] p-8 shadow-[0_30px_90px_rgba(2,6,23,0.55)] backdrop-blur-2xl sm:p-10">
+                <div className="pointer-events-none absolute -left-16 -top-16 h-48 w-48 rounded-full bg-blue-500/20 blur-3xl" />
+                <div className="pointer-events-none absolute -bottom-24 -right-16 h-64 w-64 rounded-full bg-cyan-400/10 blur-3xl" />
 
-              {/* Login Form */}
-              <div className="rounded-3xl border border-white/20 bg-white/5 backdrop-blur-xl p-8 shadow-2xl">
-                <form onSubmit={handleLogin} className="space-y-6">
-                  <div className="space-y-1 mb-6">
-                    <h2 className="text-lg font-semibold text-white">Sign In</h2>
-                    <p className="text-xs text-slate-400">Enter your credentials to access the admin panel</p>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <label className="block text-sm font-medium text-slate-300">
-                        Email Address
-                      </label>
-                      <input
-                        type="email"
-                        value={authForm.email}
-                        onChange={(event) => setAuthForm((prev) => ({ ...prev, email: event.target.value }))}
-                        className="w-full rounded-2xl border border-white/20 bg-white/10 backdrop-blur-xl px-4 py-3 text-white placeholder:text-slate-400 focus:border-orange-400/50 focus:bg-white/20 focus:outline-none transition-all"
-                        placeholder="admin@league.com"
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="block text-sm font-medium text-slate-300">
-                        Password
-                      </label>
-                      <input
-                        type="password"
-                        value={authForm.password}
-                        onChange={(event) => setAuthForm((prev) => ({ ...prev, password: event.target.value }))}
-                        className="w-full rounded-2xl border border-white/20 bg-white/10 backdrop-blur-xl px-4 py-3 text-white placeholder:text-slate-400 focus:border-orange-400/50 focus:bg-white/20 focus:outline-none transition-all"
-                        placeholder="••••••••"
-                        required
-                      />
-                    </div>
-                    {authError && (
-                      <div className="rounded-xl border border-red-500/30 bg-red-500/10 backdrop-blur-xl p-3">
-                        <p className="text-sm text-red-300">{authError}</p>
-                      </div>
-                    )}
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={authSubmitting}
-                    className="w-full rounded-2xl bg-gradient-to-r from-orange-500 to-blue-600 px-6 py-3 font-semibold text-white shadow-lg hover:shadow-xl hover:from-orange-600 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-orange-400/50 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-[1.02] active:scale-[0.98]"
-                  >
-                    {authSubmitting ? (
-                      <div className="flex items-center justify-center gap-2">
-                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"></div>
-                        <span>Signing In...</span>
-                      </div>
-                    ) : (
-                      "Access Dashboard"
-                    )}
-                  </button>
-                </form>
-
-                {/* Reset Password Link */}
-                <div className="mt-6 pt-6 border-t border-white/10">
+                <div className="relative z-10 space-y-8">
                   <div className="text-center">
+                    <div className="mx-auto mb-5 flex h-24 w-24 items-center justify-center rounded-3xl border border-white/25 bg-white/10 shadow-[0_0_50px_rgba(59,130,246,0.25)]">
+                      <Image
+                        src="/logos/liprobakin_logo_2.png"
+                        alt="Liprobakin Logo"
+                        width={70}
+                        height={70}
+                        className="h-16 w-16 object-contain"
+                        priority
+                      />
+                    </div>
+                    <p className="text-xs uppercase tracking-[0.45em] text-blue-300/90 font-semibold">Admin Console</p>
+                    <h1 className="mt-3 text-4xl font-bold text-white sm:text-[2.75rem]">League Dashboard</h1>
+                    <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-slate-300/85">
+                      Secure access to content management, team administration, and league operations.
+                    </p>
+                  </div>
+
+                  <form onSubmit={handleLogin} className="space-y-5">
+                    <div className="space-y-1">
+                      <h2 className="text-xl font-semibold text-white">{t.signIn}</h2>
+                      <p className="text-xs text-slate-400">Enter your credentials to access the admin panel</p>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <label className="block text-sm font-medium text-slate-200">{t.emailAddress}</label>
+                        <input
+                          type="email"
+                          value={authForm.email}
+                          onChange={(event) => setAuthForm((prev) => ({ ...prev, email: event.target.value }))}
+                          className="w-full rounded-2xl border border-white/20 bg-slate-950/35 px-4 py-3 text-white placeholder:text-slate-500 outline-none transition-all focus:border-blue-400/60 focus:bg-slate-900/60 focus:ring-2 focus:ring-blue-400/20"
+                          placeholder="admin@league.com"
+                          required
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="block text-sm font-medium text-slate-200">{t.password}</label>
+                        <input
+                          type="password"
+                          value={authForm.password}
+                          onChange={(event) => setAuthForm((prev) => ({ ...prev, password: event.target.value }))}
+                          className="w-full rounded-2xl border border-white/20 bg-slate-950/35 px-4 py-3 text-white placeholder:text-slate-500 outline-none transition-all focus:border-blue-400/60 focus:bg-slate-900/60 focus:ring-2 focus:ring-blue-400/20"
+                          placeholder="••••••••"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    {authError && (
+                      <div className="rounded-xl border border-red-400/30 bg-red-500/10 p-3">
+                        <p className="text-sm text-red-200">{authError}</p>
+                      </div>
+                    )}
+
+                    <button
+                      type="submit"
+                      disabled={authSubmitting}
+                      className="w-full rounded-2xl border border-blue-300/40 bg-gradient-to-r from-blue-600/90 to-indigo-500/90 px-6 py-3 font-semibold text-white shadow-[0_10px_35px_rgba(37,99,235,0.35)] transition-all hover:from-blue-500 hover:to-indigo-400 hover:shadow-[0_14px_40px_rgba(59,130,246,0.4)] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {authSubmitting ? (
+                        <div className="flex items-center justify-center gap-2">
+                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                          <span>Signing In...</span>
+                        </div>
+                      ) : (
+                        "Access Dashboard"
+                      )}
+                    </button>
+                  </form>
+
+                  <div className="border-t border-white/10 pt-5 text-center">
                     <button
                       type="button"
                       onClick={handleResetPassword}
-                      className="text-sm text-blue-400 hover:text-blue-300 transition-colors font-medium"
+                      className="text-sm font-medium text-blue-300 transition-colors hover:text-blue-200"
                     >
                       Forgot your password?
                     </button>
                   </div>
-                </div>
-              </div>
 
-              {/* Help Section */}
-              <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl p-6">
-                <div className="flex items-start gap-3">
-                  <div className="flex-shrink-0">
-                    <svg className="w-5 h-5 text-blue-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium text-white">Need Access?</p>
-                    <p className="text-xs text-slate-400 leading-relaxed">
-                      Contact your system administrator or master admin to set up your account. 
-                      Make sure you're using the correct email address associated with your admin privileges.
+                  <div className="rounded-2xl border border-white/15 bg-white/[0.04] p-4">
+                    <p className="text-xs uppercase tracking-[0.28em] text-slate-400">Need Access</p>
+                    <p className="mt-2 text-xs leading-relaxed text-slate-300/85">
+                      Contact your master admin to activate your account and assign proper permissions.
                     </p>
                   </div>
                 </div>
@@ -4926,9 +5161,9 @@ export default function AdminPage() {
                                         ? 'bg-emerald-500/20 text-emerald-300'
                                         : 'bg-red-500/20 text-red-300'
                                     }`}
-                                    title={`${admin.displayName || admin.email} - ${admin.status}`}
+                                    title={`${admin.displayName || admin.email || "Admin"} - ${admin.status}`}
                                   >
-                                    {(admin.displayName || admin.email).charAt(0).toUpperCase()}
+                                    {(admin.displayName || admin.email || "A").charAt(0).toUpperCase()}
                                   </div>
                                 ))}
                                 {allVisibleAdmins.length > 3 && (
@@ -4974,11 +5209,11 @@ export default function AdminPage() {
                                       <div className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${
                                         isOnline ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/20 text-red-300'
                                       }`}>
-                                        {(admin.displayName || admin.email).charAt(0).toUpperCase()}
+                                        {(admin.displayName || admin.email || "A").charAt(0).toUpperCase()}
                                       </div>
                                       <div className="flex-1 min-w-0">
                                         <div className="text-xs font-medium text-white truncate">
-                                          {admin.displayName || admin.email}
+                                          {admin.displayName || admin.email || "Unknown"}
                                         </div>
                                         <div className={`text-[10px] ${
                                           isOnline ? 'text-emerald-400' : 'text-red-400'
@@ -5248,9 +5483,14 @@ export default function AdminPage() {
                   />
                 </label>
                 <div className="space-y-3">
+                  <p className="text-xs text-slate-400">
+                    {language === 'fr' ? 'Média de l\'actualité : ajoutez une image de couverture ou une vidéo (obligatoire).' : 'News media: upload a cover picture or a video (required).'}
+                  </p>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="space-y-1">
-                      <label htmlFor="coverPhoto" className="text-xs text-slate-300">{t.coverPhoto}</label>
+                      <label htmlFor="coverPhoto" className="text-xs text-slate-300">
+                        {language === 'fr' ? 'Image de couverture' : 'Cover picture'}
+                      </label>
                       <input
                         id="coverPhoto"
                         type="file"
@@ -5271,6 +5511,25 @@ export default function AdminPage() {
                           style={{ objectPosition: `center ${form.imagePosition ?? 50}%` }}
                         />
                       </div>
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    <label htmlFor="coverVideo" className="text-xs text-slate-300">
+                      {language === 'fr' ? 'Vidéo de couverture' : 'Cover video'}
+                    </label>
+                    <input
+                      id="coverVideo"
+                      type="file"
+                      accept="video/*"
+                      onChange={handleVideoChange}
+                      className="w-full rounded-lg border border-white/10 bg-slate-800/50 px-3 py-2 text-xs text-slate-400 file:mr-2 file:rounded file:border-0 file:bg-orange-500 file:px-2 file:py-1 file:text-xs file:text-white hover:file:bg-orange-600"
+                    />
+                    {(selectedVideoFile || form.videoUrl) && (
+                      <p className="text-xs text-slate-400">
+                        {selectedVideoFile
+                          ? `${language === 'fr' ? 'Fichier sélectionné' : 'Selected file'}: ${selectedVideoFile.name}`
+                          : (language === 'fr' ? 'Vidéo déjà enregistrée pour cet article' : 'Video already saved for this story')}
+                      </p>
                     )}
                   </div>
                   {/* Adjust Position Button */}
@@ -5350,7 +5609,14 @@ export default function AdminPage() {
                                 </span>
                               </div>
                             )}
-                            <h3 className="text-sm font-semibold text-white truncate">{article.title}</h3>
+                            <h3 className="text-sm font-semibold text-white truncate flex items-center gap-2">
+                              {article.title}
+                              {article.isPaused && (
+                                <span className="inline-flex items-center rounded-full bg-yellow-500/20 px-2 py-0.5 text-[10px] font-medium text-yellow-300 border border-yellow-500/30">
+                                  ⏸️ Paused
+                                </span>
+                              )}
+                            </h3>
                             <p className="text-xs text-slate-400 line-clamp-1">{article.headline}</p>
                           </div>
                           <span className="text-[10px] text-slate-500 flex-shrink-0">
@@ -5365,6 +5631,17 @@ export default function AdminPage() {
                           className="rounded border border-white/20 px-3 py-1 text-xs text-slate-300 hover:bg-white/5"
                         >
                           {t.edit}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handlePause(article)}
+                          className={`rounded border px-3 py-1 text-xs ${
+                            article.isPaused 
+                              ? 'border-green-500/30 text-green-300 hover:bg-green-500/10'
+                              : 'border-yellow-500/30 text-yellow-300 hover:bg-yellow-500/10'
+                          }`}
+                        >
+                          {article.isPaused ? t.unpause : t.pause}
                         </button>
                         <button
                           type="button"
@@ -5692,6 +5969,19 @@ export default function AdminPage() {
                                   : "border-white/20 bg-slate-900/60"
                               } ${isFirestore ? "cursor-pointer hover:border-cyan-400/60 hover:shadow-lg hover:shadow-cyan-500/20 hover:scale-105" : ""}`}
                             >
+                              {isFirestore && (
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    void handleDeleteTeam(team);
+                                  }}
+                                  className="absolute right-2 top-2 z-20 rounded-full border border-rose-400/50 bg-black/70 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-rose-200 transition hover:border-rose-300 hover:bg-rose-500/20"
+                                  aria-label={`Delete ${team.name}`}
+                                >
+                                  {t.delete}
+                                </button>
+                              )}
                               {team.logo ? (
                                 <>
                                   <div 
@@ -5809,8 +6099,22 @@ export default function AdminPage() {
                             <input
                               className="w-full min-w-0 rounded-xl sm:rounded-2xl border border-white/10 bg-slate-900/60 px-2 py-2 text-xs sm:text-sm text-white focus:border-white"
                               value={rosterForm.number}
-                              onChange={(event) => setRosterForm((prev) => ({ ...prev, number: event.target.value }))}
+                              onChange={(event) => {
+                                const nextValue = event.target.value;
+                                if (nextValue === "") {
+                                  setRosterForm((prev) => ({ ...prev, number: "" }));
+                                  return;
+                                }
+                                if (!/^\d{0,2}$/.test(nextValue)) {
+                                  return;
+                                }
+                                if (nextValue !== "00" && Number(nextValue) > 99) {
+                                  return;
+                                }
+                                setRosterForm((prev) => ({ ...prev, number: nextValue }));
+                              }}
                               inputMode="numeric"
+                              maxLength={2}
                               required
                             />
                           </label>
@@ -5867,6 +6171,7 @@ export default function AdminPage() {
                                 value={rosterForm.nationality}
                                 onChange={(event) => setRosterForm((prev) => ({ ...prev, nationality: event.target.value }))}
                                 className="w-full min-w-0 rounded-xl sm:rounded-2xl border border-white/10 bg-slate-900/60 px-2 py-2 text-xs sm:text-sm text-white focus:border-white"
+                                required
                               />
                               <datalist id="country-options">
                                 {countries.map((c) => (
@@ -7694,10 +7999,17 @@ export default function AdminPage() {
                   <div className="grid gap-3">
                     {completedGames.length > 0 ? (
                       completedGames.map((game) => (
-                        <button
+                        <div
                           key={game.id}
-                          type="button"
                           onClick={() => handleSelectCompletedGame(game)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              handleSelectCompletedGame(game);
+                            }
+                          }}
+                          role="button"
+                          tabIndex={0}
                           className={`group relative overflow-hidden rounded-2xl border transition-all text-left ${
                             game.completed 
                               ? "border-emerald-500/30 bg-emerald-500/5 hover:bg-emerald-500/10 hover:border-emerald-500/50" 
@@ -7778,7 +8090,22 @@ export default function AdminPage() {
                               </div>
                             </div>
                           )}
-                        </button>
+
+                          <div className="absolute top-3 right-3 z-10">
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                handleDeleteGame(game);
+                              }}
+                              className="rounded-lg border border-rose-500/40 bg-rose-500/10 px-2 py-1 text-xs font-semibold text-rose-300 hover:bg-rose-500/20"
+                              title="Delete game"
+                            >
+                              🗑 Delete
+                            </button>
+                          </div>
+                        </div>
                       ))
                     ) : (
                       <div className="rounded-2xl border-2 border-dashed border-slate-700 bg-slate-900/40 p-16 text-center">
@@ -7988,17 +8315,26 @@ export default function AdminPage() {
                                         </div>
 
                                         {/* Action Button */}
-                                        <button
-                                          type="button"
-                                          onClick={() => handleSelectCompletedGame(game)}
-                                          className={`w-full rounded-lg px-4 py-3 text-sm font-semibold uppercase tracking-wider transition-all ${
-                                            game.completed
-                                              ? "bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 border border-emerald-500/30"
-                                              : "bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border border-amber-500/30"
-                                          }`}
-                                        >
-                                          {game.completed ? '✏️ Edit Stats' : '📝 Collect Stats'}
-                                        </button>
+                                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                          <button
+                                            type="button"
+                                            onClick={() => handleSelectCompletedGame(game)}
+                                            className={`w-full rounded-lg px-4 py-3 text-sm font-semibold uppercase tracking-wider transition-all ${
+                                              game.completed
+                                                ? "bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 border border-emerald-500/30"
+                                                : "bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border border-amber-500/30"
+                                            }`}
+                                          >
+                                            {game.completed ? '✏️ Edit Stats' : '📝 Collect Stats'}
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleDeleteGame(game)}
+                                            className="w-full rounded-lg border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm font-semibold uppercase tracking-wider text-rose-300 transition-all hover:bg-rose-500/20"
+                                          >
+                                            🗑 Delete Game
+                                          </button>
+                                        </div>
                                       </div>
                                     </div>
                                   ))
@@ -9684,9 +10020,18 @@ export default function AdminPage() {
                           setAdminStatus({ 
                             type: 'success', 
                             message: language === 'fr'
-                              ? `✅ Compte admin créé pour ${newAdminEmail}. L'admin peut maintenant se connecter avec ses identifiants.`
-                              : `✅ Admin account created for ${newAdminEmail}. They can now log in with the credentials provided.`
+                              ? `✅ Compte admin créé avec succès pour ${newAdminEmail}!\n\n📧 Email: ${newAdminEmail}\n👤 Nom: ${newAdminName}\n🔑 Statut: Actif (peut se connecter immédiatement)\n🎯 Rôles: ${newAdminRoles.join(', ')}`
+                              : `✅ Admin account successfully created for ${newAdminEmail}!\n\n📧 Email: ${newAdminEmail}\n👤 Name: ${newAdminName}\n🔑 Status: Active (can log in immediately)\n🎯 Roles: ${newAdminRoles.join(', ')}`
                           });
+                          
+                          // Browser notification (if permission granted)
+                          if ('Notification' in window && Notification.permission === 'granted') {
+                            new Notification('✅ Admin Created Successfully!', {
+                              body: `${newAdminName} (${newAdminEmail}) has been added as an admin with active status.`,
+                              icon: '/logos/liprobakin.png',
+                            });
+                          }
+                          
                           setNewAdminEmail("");
                           setNewAdminName("");
                           setNewAdminPassword("");
@@ -9938,7 +10283,32 @@ export default function AdminPage() {
                                       });
                                       const result = await updateAdminPermissions(admin.id, cleanPermissions);
                                       if (result.success) {
-                                        setAdminStatus({ type: 'success', message: 'Permissions updated successfully' });
+                                        // Determine updated roles for display
+                                        const updatedRoles = [];
+                                        if (cleanPermissions.canManageNews) updatedRoles.push('News Manager');
+                                        if (cleanPermissions.canManageTeams) updatedRoles.push('Team Manager'); 
+                                        if (cleanPermissions.canManageGames) updatedRoles.push('Game Manager');
+                                        if (cleanPermissions.canManageAdmins) updatedRoles.push('Master Admin');
+                                        if (cleanPermissions.canManageReferees) updatedRoles.push('Referee Manager');
+                                        if (cleanPermissions.canManageVenues) updatedRoles.push('Venue Manager');
+                                        if (cleanPermissions.canManagePartners) updatedRoles.push('Partner Manager');
+
+                                        const adminDisplayName = admin.displayName || admin.email;
+                                        setAdminStatus({ 
+                                          type: 'success', 
+                                          message: language === 'fr'
+                                            ? `✅ Permissions mises à jour pour ${adminDisplayName}!\n\n🔑 Rôles actifs: ${updatedRoles.join(', ')}\n📧 ${admin.email}\n⚡ Changements appliqués immédiatement`
+                                            : `✅ Permissions updated for ${adminDisplayName}!\n\n🔑 Active roles: ${updatedRoles.join(', ')}\n📧 ${admin.email}\n⚡ Changes applied immediately`
+                                        });
+                                        
+                                        // Browser notification (if permission granted)
+                                        if ('Notification' in window && Notification.permission === 'granted') {
+                                          new Notification('🔄 Admin Permissions Updated!', {
+                                            body: `${adminDisplayName}'s roles: ${updatedRoles.join(', ')}`,
+                                            icon: '/logos/liprobakin.png',
+                                          });
+                                        }
+
                                         const users = await getAllAdminUsers();
                                         setAdminUsers(users);
                                         setEditingAdminId(null);

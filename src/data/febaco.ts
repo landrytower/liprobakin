@@ -411,9 +411,9 @@ const normalizeTeamKey = (city?: string, name?: string) =>
   [city, name].filter(Boolean).join(" ").trim().toLowerCase();
 
 const teamLogoOverrides: Record<string, string> = {
-  "espoir fukash": "/logos/Males/Espoir_Fukash.png",
+  "espoir fukash": "/logos/Males/Espoir Fukash.png",
   "city kauka": "/logos/Males/city kauka.jpg",
-  "binza city": "/logos/Males/binza city.jpg",
+  "binza city": "/logos/Males/binza_city.jpg",
   "ballers": "/logos/Males/Ballers.jpg",
   "nmg": "/logos/Males/nmg.jpg",
   "ngaba basket center": "/logos/Males/ngaba_basket_center.jpg",

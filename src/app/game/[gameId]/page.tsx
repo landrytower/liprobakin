@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { doc, getDoc } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs } from "firebase/firestore";
 import { firebaseDB } from "@/lib/firebase";
 import { useLanguage } from "@/contexts/LanguageContext";
 
@@ -32,6 +32,11 @@ type PlayerStat = {
   min: number;
   pf: number;
   to: number;
+  fd?: number;
+  fgm?: number;
+  fga?: number;
+  plus_minus?: number;
+  plusMinus?: number;
 };
 
 type GameData = {
@@ -51,6 +56,16 @@ type GameData = {
   completed?: boolean;
   gender?: string;
   playerStats?: PlayerStat[];
+  highlightsVideoUrl?: string;
+  highlightsUrl?: string;
+  highlightVideoUrl?: string;
+  highlightUrl?: string;
+  videoUrl?: string;
+  youtubeUrl?: string;
+  streamUrl?: string;
+  photoUrls?: string[];
+  gamePhotos?: string[];
+  photos?: string[];
 };
 
 const translations = {
@@ -59,10 +74,12 @@ const translations = {
     gameNotFound: "Game not found",
     backToHome: "← Back to Home",
     final: "FINAL",
+    scheduled: "Scheduled",
     away: "Away",
     home: "Home",
     overview: "Overview",
     boxScore: "Box Score",
+    highlights: "Highlight",
     pictures: "Pictures",
     gameLeaders: "Game Leaders",
     points: "Points",
@@ -78,16 +95,30 @@ const translations = {
     fg: "FG",
     threeP: "3PT",
     ft: "FT",
+    unknownPlayer: "Unknown Player",
+    highlightsVideo: "Game Highlights Video",
+    noHighlights: "No highlight video uploaded for this game yet.",
+    photosTitle: "Game Pictures",
+    photosDesc: "Game pictures will be displayed here.",
+    photosAdmin: "Administrators can upload pictures via the admin panel.",
+    noPhotosUploaded: "No pictures uploaded for this game yet.",
+    tapToExpand: "Tap to enlarge",
+    close: "Close",
+    previous: "Previous",
+    next: "Next",
+    language: "Language",
   },
   fr: {
     loading: "Chargement...",
     gameNotFound: "Match introuvable",
     backToHome: "← Retour à l'accueil",
     final: "FINAL",
+    scheduled: "Programmé",
     away: "Visiteur",
     home: "Domicile",
     overview: "Aperçu",
     boxScore: "Feuille de Match",
+    highlights: "Highlight",
     pictures: "Photos",
     gameLeaders: "Meilleurs Joueurs",
     points: "Points",
@@ -103,17 +134,75 @@ const translations = {
     fg: "TIR",
     threeP: "3PT",
     ft: "LF",
+    unknownPlayer: "Joueur inconnu",
+    highlightsVideo: "Vidéo des temps forts du match",
+    noHighlights: "Aucune vidéo des temps forts n'a encore été publiée pour ce match.",
+    photosTitle: "Photos du Match",
+    photosDesc: "Les photos de ce match seront affichées ici.",
+    photosAdmin: "Les administrateurs peuvent télécharger des photos via le panneau d'administration.",
+    noPhotosUploaded: "Aucune photo n'a encore été ajoutée pour ce match.",
+    tapToExpand: "Touchez pour agrandir",
+    close: "Fermer",
+    previous: "Précédent",
+    next: "Suivant",
+    language: "Langue",
   },
 };
+
+type TranslationCopy = typeof translations["fr"];
+
+function normalizePlayerName(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function toEmbedVideoUrl(rawUrl: string): { type: "iframe" | "video"; url: string } {
+  const url = rawUrl.trim();
+  const lower = url.toLowerCase();
+
+  if (lower.includes("youtube.com/watch") || lower.includes("youtu.be/") || lower.includes("youtube.com/shorts/")) {
+    try {
+      const parsed = new URL(url);
+      let videoId = "";
+      if (parsed.hostname.includes("youtu.be")) {
+        videoId = parsed.pathname.replace("/", "").split("/")[0] || "";
+      } else if (parsed.pathname.includes("/shorts/")) {
+        videoId = parsed.pathname.split("/shorts/")[1]?.split("/")[0] || "";
+      } else {
+        videoId = parsed.searchParams.get("v") || "";
+      }
+      if (videoId) {
+        return { type: "iframe", url: `https://www.youtube.com/embed/${videoId}` };
+      }
+    } catch {
+      return { type: "iframe", url };
+    }
+  }
+
+  if (lower.includes("vimeo.com/")) {
+    const match = url.match(/vimeo\.com\/(\d+)/);
+    if (match?.[1]) {
+      return { type: "iframe", url: `https://player.vimeo.com/video/${match[1]}` };
+    }
+    return { type: "iframe", url };
+  }
+
+  return { type: "video", url };
+}
 
 export default function GamePage() {
   const params = useParams();
   const gameId = params.gameId as string;
-  const { language } = useLanguage();
-  const t = translations[language];
+  const { language, setLanguage } = useLanguage();
+  const t: TranslationCopy = translations[language as "fr" | "en"] ?? translations.fr;
   const [game, setGame] = useState<GameData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"overview" | "boxscore" | "pictures">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "boxscore" | "highlights" | "pictures">("overview");
+  const [playerHeadshots, setPlayerHeadshots] = useState<Record<string, string>>({});
+  const [activePhotoIndex, setActivePhotoIndex] = useState<number | null>(null);
 
   useEffect(() => {
     const fetchGame = async () => {
@@ -130,6 +219,81 @@ export default function GamePage() {
     };
     fetchGame();
   }, [gameId]);
+
+  useEffect(() => {
+    const fetchRosterHeadshots = async () => {
+      if (!game?.homeTeamId && !game?.awayTeamId) return;
+
+      try {
+        const teamIds = [game?.homeTeamId, game?.awayTeamId].filter(Boolean) as string[];
+        const snapshots = await Promise.all(
+          teamIds.map((teamId) => getDocs(collection(firebaseDB, `teams/${teamId}/roster`)))
+        );
+
+        const map: Record<string, string> = {};
+        snapshots.forEach((snapshot) => {
+          snapshot.docs.forEach((playerDoc) => {
+            const data = playerDoc.data() as { headshot?: string; firstName?: string; lastName?: string; number?: number | string };
+            const headshot = data.headshot || "";
+            if (!headshot) return;
+
+            map[playerDoc.id] = headshot;
+            const fullName = `${data.firstName || ""} ${data.lastName || ""}`.trim();
+            if (fullName) {
+              map[`name:${normalizePlayerName(fullName)}`] = headshot;
+            }
+            if (data.number !== undefined && data.number !== null) {
+              map[`number:${String(data.number)}`] = headshot;
+            }
+          });
+        });
+
+        setPlayerHeadshots(map);
+      } catch (error) {
+        console.error("Error fetching roster headshots:", error);
+      }
+    };
+
+    fetchRosterHeadshots();
+  }, [game?.homeTeamId, game?.awayTeamId]);
+
+  const gamePhotos = [game?.photoUrls, game?.gamePhotos, game?.photos].find((field) => Array.isArray(field)) || [];
+
+  useEffect(() => {
+    if (activePhotoIndex === null || gamePhotos.length === 0) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setActivePhotoIndex(null);
+      }
+      if (event.key === "ArrowLeft") {
+        setActivePhotoIndex((prev) => {
+          if (prev === null) return prev;
+          return (prev - 1 + gamePhotos.length) % gamePhotos.length;
+        });
+      }
+      if (event.key === "ArrowRight") {
+        setActivePhotoIndex((prev) => {
+          if (prev === null) return prev;
+          return (prev + 1) % gamePhotos.length;
+        });
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [activePhotoIndex, gamePhotos.length]);
+
+  useEffect(() => {
+    if (activePhotoIndex === null) return;
+    if (gamePhotos.length === 0) {
+      setActivePhotoIndex(null);
+      return;
+    }
+    if (activePhotoIndex >= gamePhotos.length) {
+      setActivePhotoIndex(0);
+    }
+  }, [activePhotoIndex, gamePhotos.length]);
 
   if (loading) {
     return (
@@ -184,6 +348,34 @@ export default function GamePage() {
   const homeTotals = calculateTeamTotals(homeStats);
   const awayTotals = calculateTeamTotals(awayStats);
 
+  const boxScoreColumns: Array<{
+    key: string;
+    label: string;
+    value: (player: PlayerStat) => string | number;
+    className?: string;
+  }> = [
+    { key: "pts", label: "PTS", value: (player) => player.pts, className: "font-bold text-sm sm:text-base" },
+    { key: "min", label: "MIN", value: (player) => player.min || 0 },
+    { key: "reb", label: "REB", value: (player) => player.reb },
+    { key: "oreb", label: "RO", value: (player) => player.oreb || 0 },
+    { key: "dreb", label: "RD", value: (player) => player.dreb || 0 },
+    { key: "ast", label: "AST", value: (player) => player.ast },
+    { key: "stl", label: "INT", value: (player) => player.stl },
+    { key: "blk", label: "CTR", value: (player) => player.blk },
+    { key: "to", label: "BP", value: (player) => player.to },
+    { key: "pf", label: "FT", value: (player) => player.pf },
+    { key: "fd", label: "FD", value: (player) => player.fd || 0 },
+    { key: "fgm", label: "TMR", value: (player) => (player.fgm ?? (player.two_pm + player.three_pm)) },
+    { key: "fga", label: "TTR", value: (player) => (player.fga ?? (player.two_pa + player.three_pa)) },
+    { key: "two_pm", label: "2PM", value: (player) => player.two_pm },
+    { key: "two_pa", label: "2PA", value: (player) => player.two_pa },
+    { key: "three_pm", label: "3PM", value: (player) => player.three_pm },
+    { key: "three_pa", label: "3PA", value: (player) => player.three_pa },
+    { key: "ft_m", label: "LFM", value: (player) => player.ft_m },
+    { key: "ft_a", label: "LFA", value: (player) => player.ft_a },
+    { key: "plus_minus", label: "+/-", value: (player) => (player.plus_minus ?? player.plusMinus ?? 0) },
+  ];
+
   // Format date in the appropriate language
   const formattedDate = game.date 
     ? new Date(game.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { 
@@ -194,8 +386,57 @@ export default function GamePage() {
       })
     : '';
 
+  const getPlayerDisplayName = (player: PlayerStat) => {
+    const fullName = `${player.firstName || ""} ${player.lastName || ""}`.trim();
+    if (fullName) return fullName;
+    if (player.playerName && player.playerName.trim()) return player.playerName.trim();
+    if (player.lastName && player.lastName.trim()) return player.lastName.trim();
+    if (player.firstName && player.firstName.trim()) return player.firstName.trim();
+    return t.unknownPlayer;
+  };
+
+  const getPlayerLastName = (player: PlayerStat) => {
+    if (player.lastName && player.lastName.trim()) return player.lastName.trim();
+    const full = getPlayerDisplayName(player);
+    const parts = full.split(" ").filter(Boolean);
+    return parts.length > 1 ? parts[parts.length - 1] : full;
+  };
+
+  const getPlayerHeadshot = (player: PlayerStat) => {
+    if (player.headshot) return player.headshot;
+    if (player.playerId && playerHeadshots[player.playerId]) return playerHeadshots[player.playerId];
+    const normalizedName = normalizePlayerName(getPlayerDisplayName(player));
+    if (normalizedName && playerHeadshots[`name:${normalizedName}`]) return playerHeadshots[`name:${normalizedName}`];
+    if (player.number !== undefined && player.number !== null && playerHeadshots[`number:${String(player.number)}`]) {
+      return playerHeadshots[`number:${String(player.number)}`];
+    }
+    return "";
+  };
+
+  const highlightsVideoSource =
+    game.highlightsVideoUrl ||
+    game.highlightsUrl ||
+    game.highlightVideoUrl ||
+    game.highlightUrl ||
+    game.videoUrl ||
+    game.youtubeUrl ||
+    game.streamUrl ||
+    "";
+
+  const highlightEmbed = highlightsVideoSource ? toEmbedVideoUrl(highlightsVideoSource) : null;
+
+  const closePhotoViewer = () => setActivePhotoIndex(null);
+  const showPreviousPhoto = () => {
+    if (!gamePhotos.length || activePhotoIndex === null) return;
+    setActivePhotoIndex((activePhotoIndex - 1 + gamePhotos.length) % gamePhotos.length);
+  };
+  const showNextPhoto = () => {
+    if (!gamePhotos.length || activePhotoIndex === null) return;
+    setActivePhotoIndex((activePhotoIndex + 1) % gamePhotos.length);
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#050816] via-[#050816] to-[#020407] text-white">
+    <div className="min-h-screen bg-gradient-to-b from-[#050816] via-[#050816] to-[#020407] text-white overflow-x-hidden">
       {/* Header */}
       <header className="sticky top-0 z-50 border-b border-white/10 bg-black/50 backdrop-blur-xl">
         <div className="mx-auto max-w-7xl px-3 py-3 sm:px-4 sm:py-4">
@@ -204,12 +445,34 @@ export default function GamePage() {
               <Image src="/logos/liprobakin.png" alt="Liprobakin" width={32} height={32} className="h-7 w-7 sm:h-8 sm:w-8 rounded-full" />
               <span className="hidden sm:inline text-lg sm:text-xl font-bold tracking-wider">LIPROBAKIN</span>
             </Link>
-            <Link href="/" className="flex items-center gap-1.5 sm:gap-2 rounded-lg border border-white/10 bg-slate-900/60 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-slate-400 hover:text-white hover:border-white/30 transition-colors">
-              <svg className="h-3.5 w-3.5 sm:h-4 sm:w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-              </svg>
-              <span className="hidden xs:inline">{t.backToHome.replace('← ', '')}</span>
-            </Link>
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="flex items-center gap-1 rounded-lg border border-white/10 bg-slate-900/60 p-1" aria-label={t.language}>
+                <button
+                  type="button"
+                  onClick={() => setLanguage("fr")}
+                  className={`rounded px-2 py-1 text-xs font-semibold transition ${
+                    language === "fr" ? "bg-white text-slate-900" : "text-slate-300 hover:text-white"
+                  }`}
+                >
+                  FR
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLanguage("en")}
+                  className={`rounded px-2 py-1 text-xs font-semibold transition ${
+                    language === "en" ? "bg-white text-slate-900" : "text-slate-300 hover:text-white"
+                  }`}
+                >
+                  EN
+                </button>
+              </div>
+              <Link href="/" className="flex items-center gap-1.5 sm:gap-2 rounded-lg border border-white/10 bg-slate-900/60 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-slate-400 hover:text-white hover:border-white/30 transition-colors">
+                <svg className="h-3.5 w-3.5 sm:h-4 sm:w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                <span className="hidden xs:inline">{t.backToHome.replace('← ', '')}</span>
+              </Link>
+            </div>
           </div>
         </div>
       </header>
@@ -222,7 +485,7 @@ export default function GamePage() {
               <span className={`rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider ${
                 game.completed ? "bg-red-500/20 text-red-400 border border-red-500/30" : "bg-blue-500/20 text-blue-400 border border-blue-500/30"
               }`}>
-                {game.completed ? t.final : "Scheduled"}
+                {game.completed ? t.final : t.scheduled}
               </span>
               {game.date && (
                 <span className="text-sm text-slate-400">
@@ -298,7 +561,8 @@ export default function GamePage() {
         {/* Tabs */}
         {game.completed && game.playerStats && game.playerStats.length > 0 && (
           <>
-            <div className="mb-6 flex gap-4 border-b border-white/10">
+            <div className="mb-6 overflow-x-auto">
+              <div className="flex min-w-max gap-4 border-b border-white/10">
               <button
                 onClick={() => setActiveTab("overview")}
                 className={`pb-3 px-1 text-sm font-semibold uppercase tracking-wider transition border-b-2 ${
@@ -320,6 +584,16 @@ export default function GamePage() {
                 {t.boxScore}
               </button>
               <button
+                onClick={() => setActiveTab("highlights")}
+                className={`pb-3 px-1 text-sm font-semibold uppercase tracking-wider transition border-b-2 ${
+                  activeTab === "highlights" 
+                    ? "border-orange-500 text-white" 
+                    : "border-transparent text-slate-400 hover:text-white"
+                }`}
+              >
+                {t.highlights}
+              </button>
+              <button
                 onClick={() => setActiveTab("pictures")}
                 className={`pb-3 px-1 text-sm font-semibold uppercase tracking-wider transition border-b-2 ${
                   activeTab === "pictures" 
@@ -329,6 +603,7 @@ export default function GamePage() {
               >
                 {t.pictures}
               </button>
+              </div>
             </div>
 
             {/* Overview Tab */}
@@ -346,13 +621,13 @@ export default function GamePage() {
                           <div className="text-xl sm:text-2xl font-black text-white/90">{pointsLeader.pts}</div>
                         </div>
                         <div className="flex items-center gap-2 sm:gap-3">
-                          {pointsLeader.headshot && (
+                          {getPlayerHeadshot(pointsLeader) && (
                             <div className="w-10 h-10 sm:w-12 sm:h-12 flex-shrink-0">
-                              <Image src={pointsLeader.headshot} alt={pointsLeader.playerName} width={48} height={48} className="rounded-full object-cover w-full h-full" />
+                              <Image src={getPlayerHeadshot(pointsLeader)} alt={pointsLeader.playerName} width={48} height={48} className="rounded-full object-cover w-full h-full" />
                             </div>
                           )}
                           <div className="flex-1 min-w-0">
-                            <p className="font-semibold truncate text-sm sm:text-base">{pointsLeader.lastName}</p>
+                            <p className="font-semibold truncate text-sm sm:text-base">{getPlayerDisplayName(pointsLeader)}</p>
                           </div>
                         </div>
                       </div>
@@ -364,13 +639,13 @@ export default function GamePage() {
                           <div className="text-xl sm:text-2xl font-black text-white/90">{reboundsLeader.reb}</div>
                         </div>
                         <div className="flex items-center gap-2 sm:gap-3">
-                          {reboundsLeader.headshot && (
+                          {getPlayerHeadshot(reboundsLeader) && (
                             <div className="w-10 h-10 sm:w-12 sm:h-12 flex-shrink-0">
-                              <Image src={reboundsLeader.headshot} alt={reboundsLeader.playerName} width={48} height={48} className="rounded-full object-cover w-full h-full" />
+                              <Image src={getPlayerHeadshot(reboundsLeader)} alt={reboundsLeader.playerName} width={48} height={48} className="rounded-full object-cover w-full h-full" />
                             </div>
                           )}
                           <div className="flex-1 min-w-0">
-                            <p className="font-semibold truncate text-sm sm:text-base">{reboundsLeader.lastName}</p>
+                            <p className="font-semibold truncate text-sm sm:text-base">{getPlayerDisplayName(reboundsLeader)}</p>
                           </div>
                         </div>
                       </div>
@@ -382,13 +657,13 @@ export default function GamePage() {
                           <div className="text-xl sm:text-2xl font-black text-white/90">{assistsLeader.ast}</div>
                         </div>
                         <div className="flex items-center gap-2 sm:gap-3">
-                          {assistsLeader.headshot && (
+                          {getPlayerHeadshot(assistsLeader) && (
                             <div className="w-10 h-10 sm:w-12 sm:h-12 flex-shrink-0">
-                              <Image src={assistsLeader.headshot} alt={assistsLeader.playerName} width={48} height={48} className="rounded-full object-cover w-full h-full" />
+                              <Image src={getPlayerHeadshot(assistsLeader)} alt={assistsLeader.playerName} width={48} height={48} className="rounded-full object-cover w-full h-full" />
                             </div>
                           )}
                           <div className="flex-1 min-w-0">
-                            <p className="font-semibold truncate text-sm sm:text-base">{assistsLeader.lastName}</p>
+                            <p className="font-semibold truncate text-sm sm:text-base">{getPlayerDisplayName(assistsLeader)}</p>
                           </div>
                         </div>
                       </div>
@@ -466,41 +741,40 @@ export default function GamePage() {
                     <span className="truncate">{game.awayTeamName}</span>
                   </h3>
                   <div className="overflow-x-auto rounded-xl border border-white/10 -mx-4 sm:mx-0">
-                    <table className="w-full min-w-[600px]">
+                    <table className="w-full min-w-[1600px]">
                       <thead className="border-b border-white/10 bg-white/5">
                         <tr className="text-xs uppercase text-slate-400">
-                          <th className="p-2 sm:p-3 text-left font-semibold sticky left-0 bg-white/5">{t.player}</th>
-                          <th className="p-2 sm:p-3 text-center font-semibold">{t.pts}</th>
-                          <th className="p-2 sm:p-3 text-center font-semibold">{t.reb}</th>
-                          <th className="p-2 sm:p-3 text-center font-semibold">{t.ast}</th>
-                          <th className="p-2 sm:p-3 text-center font-semibold">{t.fg}</th>
-                          <th className="p-2 sm:p-3 text-center font-semibold">{t.threeP}</th>
-                          <th className="p-2 sm:p-3 text-center font-semibold">{t.ft}</th>
+                          <th className="px-1.5 py-2 sm:p-3 text-center font-semibold sticky left-0 z-40 bg-slate-800 w-[30px] sm:w-[56px]">#</th>
+                          <th className="px-1.5 py-2 sm:p-3 text-left font-semibold sticky left-[30px] sm:left-[56px] z-30 bg-slate-800 w-[1%] whitespace-nowrap">{t.player}</th>
+                          {boxScoreColumns.map((column) => (
+                            <th key={column.key} className="p-2 sm:p-3 text-center font-semibold">{column.label}</th>
+                          ))}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/5">
                         {awayStats.map((player) => (
                           <tr key={player.playerId} className="hover:bg-white/5">
-                            <td className="p-2 sm:p-3 sticky left-0 bg-slate-900 w-1 whitespace-nowrap z-10">
-                              <div className="flex items-center gap-2">
+                            <td className="px-1.5 py-2 sm:p-3 text-center sticky left-0 bg-slate-900 z-20 text-slate-300 tabular-nums w-[30px] sm:w-[56px]">
+                              {player.number || 0}
+                            </td>
+                            <td className="px-1.5 py-2 sm:p-3 sticky left-[30px] sm:left-[56px] bg-slate-900 whitespace-nowrap z-10 w-[1%]">
+                              <div className="flex items-center gap-1 sm:gap-2">
                                 {player.headshot && (
-                                  <div className="w-7 h-7 sm:w-8 sm:h-8 flex-shrink-0">
+                                  <div className="hidden sm:block w-7 h-7 sm:w-8 sm:h-8 flex-shrink-0">
                                     <Image src={player.headshot} alt="" width={32} height={32} className="rounded-full object-cover w-full h-full" />
                                   </div>
                                 )}
                                 <div className="min-w-0">
-                                  <p className="font-medium text-xs sm:text-sm">
-                                    <span className="text-slate-400">#{player.number}</span> {player.lastName}
-                                  </p>
+                                  <p className="font-medium text-[11px] sm:text-sm sm:hidden">{getPlayerLastName(player)}</p>
+                                  <p className="font-medium text-xs sm:text-sm hidden sm:block">{getPlayerDisplayName(player)}</p>
                                 </div>
                               </div>
                             </td>
-                            <td className="p-2 sm:p-3 text-center font-bold text-sm sm:text-base">{player.pts}</td>
-                            <td className="p-2 sm:p-3 text-center text-sm">{player.reb}</td>
-                            <td className="p-2 sm:p-3 text-center text-sm">{player.ast}</td>
-                            <td className="p-2 sm:p-3 text-center text-xs sm:text-sm">{player.two_pm + player.three_pm}-{player.two_pa + player.three_pa}</td>
-                            <td className="p-2 sm:p-3 text-center text-xs sm:text-sm">{player.three_pm}-{player.three_pa}</td>
-                            <td className="p-2 sm:p-3 text-center text-xs sm:text-sm">{player.ft_m}-{player.ft_a}</td>
+                            {boxScoreColumns.map((column) => (
+                              <td key={column.key} className={`p-2 sm:p-3 text-center text-xs sm:text-sm tabular-nums ${column.className || ""}`}>
+                                {column.value(player)}
+                              </td>
+                            ))}
                           </tr>
                         ))}
                       </tbody>
@@ -515,41 +789,40 @@ export default function GamePage() {
                     <span className="truncate">{game.homeTeamName}</span>
                   </h3>
                   <div className="overflow-x-auto rounded-xl border border-white/10 -mx-4 sm:mx-0">
-                    <table className="w-full min-w-[600px]">
+                    <table className="w-full min-w-[1600px]">
                       <thead className="border-b border-white/10 bg-white/5">
                         <tr className="text-xs uppercase text-slate-400">
-                          <th className="p-2 sm:p-3 text-left font-semibold sticky left-0 bg-white/5 w-1 whitespace-nowrap">{t.player}</th>
-                          <th className="p-2 sm:p-3 text-center font-semibold">{t.pts}</th>
-                          <th className="p-2 sm:p-3 text-center font-semibold">{t.reb}</th>
-                          <th className="p-2 sm:p-3 text-center font-semibold">{t.ast}</th>
-                          <th className="p-2 sm:p-3 text-center font-semibold">{t.fg}</th>
-                          <th className="p-2 sm:p-3 text-center font-semibold">{t.threeP}</th>
-                          <th className="p-2 sm:p-3 text-center font-semibold">{t.ft}</th>
+                          <th className="px-1.5 py-2 sm:p-3 text-center font-semibold sticky left-0 z-40 bg-slate-800 w-[30px] sm:w-[56px]">#</th>
+                          <th className="px-1.5 py-2 sm:p-3 text-left font-semibold sticky left-[30px] sm:left-[56px] z-30 bg-slate-800 w-[1%] whitespace-nowrap">{t.player}</th>
+                          {boxScoreColumns.map((column) => (
+                            <th key={column.key} className="p-2 sm:p-3 text-center font-semibold">{column.label}</th>
+                          ))}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/5">
                         {homeStats.map((player) => (
                           <tr key={player.playerId} className="hover:bg-white/5">
-                            <td className="p-2 sm:p-3 sticky left-0 bg-slate-900 w-1 whitespace-nowrap z-10">
-                              <div className="flex items-center gap-2">
+                            <td className="px-1.5 py-2 sm:p-3 text-center sticky left-0 bg-slate-900 z-20 text-slate-300 tabular-nums w-[30px] sm:w-[56px]">
+                              {player.number || 0}
+                            </td>
+                            <td className="px-1.5 py-2 sm:p-3 sticky left-[30px] sm:left-[56px] bg-slate-900 whitespace-nowrap z-10 w-[1%]">
+                              <div className="flex items-center gap-1 sm:gap-2">
                                 {player.headshot && (
-                                  <div className="w-7 h-7 sm:w-8 sm:h-8 flex-shrink-0">
+                                  <div className="hidden sm:block w-7 h-7 sm:w-8 sm:h-8 flex-shrink-0">
                                     <Image src={player.headshot} alt="" width={32} height={32} className="rounded-full object-cover w-full h-full" />
                                   </div>
                                 )}
                                 <div className="min-w-0">
-                                  <p className="font-medium text-xs sm:text-sm">
-                                    <span className="text-slate-400">#{player.number}</span> {player.lastName}
-                                  </p>
+                                  <p className="font-medium text-[11px] sm:text-sm sm:hidden">{getPlayerLastName(player)}</p>
+                                  <p className="font-medium text-xs sm:text-sm hidden sm:block">{getPlayerDisplayName(player)}</p>
                                 </div>
                               </div>
                             </td>
-                            <td className="p-2 sm:p-3 text-center font-bold text-sm sm:text-base">{player.pts}</td>
-                            <td className="p-2 sm:p-3 text-center text-sm">{player.reb}</td>
-                            <td className="p-2 sm:p-3 text-center text-sm">{player.ast}</td>
-                            <td className="p-2 sm:p-3 text-center text-xs sm:text-sm">{player.two_pm + player.three_pm}-{player.two_pa + player.three_pa}</td>
-                            <td className="p-2 sm:p-3 text-center text-xs sm:text-sm">{player.three_pm}-{player.three_pa}</td>
-                            <td className="p-2 sm:p-3 text-center text-xs sm:text-sm">{player.ft_m}-{player.ft_a}</td>
+                            {boxScoreColumns.map((column) => (
+                              <td key={column.key} className={`p-2 sm:p-3 text-center text-xs sm:text-sm tabular-nums ${column.className || ""}`}>
+                                {column.value(player)}
+                              </td>
+                            ))}
                           </tr>
                         ))}
                       </tbody>
@@ -559,34 +832,132 @@ export default function GamePage() {
               </div>
             )}
 
+            {/* Highlights Tab */}
+            {activeTab === "highlights" && (
+              <div className="space-y-4">
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4 sm:p-5">
+                  <p className="text-xs uppercase tracking-wider text-slate-400 mb-3">{t.highlightsVideo}</p>
+                  {highlightEmbed ? (
+                    <div className="overflow-hidden rounded-xl border border-white/10 bg-black">
+                      <div className="relative w-full aspect-video">
+                        {highlightEmbed.type === "iframe" ? (
+                          <iframe
+                            src={highlightEmbed.url}
+                            title={t.highlightsVideo}
+                            className="absolute left-0 top-0 h-full w-full"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                            allowFullScreen
+                          />
+                        ) : (
+                          <video controls className="absolute left-0 top-0 h-full w-full" src={highlightEmbed.url} />
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-400">{t.noHighlights}</p>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Pictures Tab */}
             {activeTab === "pictures" && (
               <div className="space-y-6">
-                <div className="rounded-xl border border-white/10 bg-white/5 p-8 text-center">
-                  <div className="mb-6">
-                    <svg className="mx-auto h-16 w-16 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
+                {gamePhotos.length > 0 ? (
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {gamePhotos.map((photoUrl, index) => (
+                      <button
+                        key={`${photoUrl}-${index}`}
+                        type="button"
+                        onClick={() => setActivePhotoIndex(index)}
+                        className="group relative overflow-hidden rounded-xl border border-white/10 bg-white/5 text-left"
+                        aria-label={`${t.tapToExpand} ${index + 1}`}
+                      >
+                        <Image
+                          src={photoUrl}
+                          alt={`${t.photosTitle} ${index + 1}`}
+                          width={480}
+                          height={320}
+                          className="h-44 w-full object-cover transition-transform duration-200 group-hover:scale-105"
+                          unoptimized
+                        />
+                        <div className="absolute inset-x-0 bottom-0 bg-black/55 px-3 py-1.5 text-[11px] text-slate-200 opacity-0 transition-opacity group-hover:opacity-100">
+                          {t.tapToExpand}
+                        </div>
+                      </button>
+                    ))}
                   </div>
-                  <h3 className="mb-2 text-xl font-bold text-white">
-                    {language === 'fr' ? 'Photos du Match' : 'Game Pictures'}
-                  </h3>
-                  <p className="text-sm text-slate-400 mb-6">
-                    {language === 'fr' 
-                      ? 'Les photos de ce match seront affichées ici.' 
-                      : 'Game pictures will be displayed here.'}
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    {language === 'fr' 
-                      ? 'Les administrateurs peuvent télécharger des photos via le panneau d\'administration.' 
-                      : 'Administrators can upload pictures via the admin panel.'}
-                  </p>
-                </div>
+                ) : (
+                  <div className="rounded-xl border border-white/10 bg-white/5 p-8 text-center">
+                    <div className="mb-6">
+                      <svg className="mx-auto h-16 w-16 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                    <h3 className="mb-2 text-xl font-bold text-white">
+                      {t.photosTitle}
+                    </h3>
+                    <p className="text-sm text-slate-400 mb-3">
+                      {t.noPhotosUploaded}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {t.photosAdmin}
+                    </p>
+                  </div>
+                )}
               </div>
             )}
           </>
         )}
       </main>
+
+      {activePhotoIndex !== null && gamePhotos[activePhotoIndex] && (
+        <div className="fixed inset-0 z-[70] bg-black/90 backdrop-blur-sm">
+          <button
+            type="button"
+            onClick={closePhotoViewer}
+            className="absolute right-4 top-4 z-20 rounded-lg border border-white/20 bg-black/50 px-3 py-1.5 text-xs font-semibold text-white hover:bg-black/70"
+          >
+            {t.close}
+          </button>
+
+          {gamePhotos.length > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={showPreviousPhoto}
+                className="absolute left-3 top-1/2 z-20 -translate-y-1/2 rounded-full border border-white/20 bg-black/50 p-3 text-white hover:bg-black/70"
+                aria-label={t.previous}
+              >
+                ‹
+              </button>
+              <button
+                type="button"
+                onClick={showNextPhoto}
+                className="absolute right-3 top-1/2 z-20 -translate-y-1/2 rounded-full border border-white/20 bg-black/50 p-3 text-white hover:bg-black/70"
+                aria-label={t.next}
+              >
+                ›
+              </button>
+            </>
+          )}
+
+          <div className="absolute left-1/2 top-4 z-20 -translate-x-1/2 rounded-md border border-white/20 bg-black/50 px-3 py-1 text-xs text-white">
+            {activePhotoIndex + 1} / {gamePhotos.length}
+          </div>
+
+          <div className="flex h-full w-full items-center justify-center p-4 sm:p-8">
+            <Image
+              src={gamePhotos[activePhotoIndex]}
+              alt={`${t.photosTitle} ${activePhotoIndex + 1}`}
+              width={1600}
+              height={1200}
+              className="max-h-full max-w-full rounded-lg object-contain"
+              unoptimized
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

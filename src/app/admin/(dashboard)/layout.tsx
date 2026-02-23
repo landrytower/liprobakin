@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState, createContext, useContext } from "react";
+import { useEffect, useState, createContext, useContext, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import { firebaseAuth, firebaseDB } from "@/lib/firebase";
-import { onAuthStateChanged, signOut } from "firebase/auth";
-import { doc, updateDoc, setDoc, serverTimestamp, onSnapshot, collection, query, where } from "firebase/firestore";
+import Image from "next/image";
+import { firebaseAuth, firebaseDB, firebaseStorage } from "@/lib/firebase";
+import { onAuthStateChanged, signOut, updateProfile } from "firebase/auth";
+import { doc, updateDoc, setDoc, serverTimestamp, onSnapshot, collection } from "firebase/firestore";
+import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import type { AdminUser } from "@/types/admin";
 import { getAdminUser, updateLastActivity } from "@/lib/adminAuth";
 
@@ -32,18 +34,20 @@ type NavItem = {
   href: string;
   icon: string;
   requiredPermission?: string;
+  masterOnly?: boolean;
 };
 
 const navItems: NavItem[] = [
   { key: "stories", label: { en: "Stories", fr: "Histoires" }, href: "/admin/stories", icon: "📰", requiredPermission: "canManageNews" },
   { key: "teams", label: { en: "Teams", fr: "Équipes" }, href: "/admin/teams", icon: "🏀", requiredPermission: "canManageTeams" },
-  { key: "traffic", label: { en: "Traffic", fr: "Trafic" }, href: "/admin/traffic", icon: "📊", requiredPermission: "canManageNews" },
   { key: "accounts", label: { en: "Accounts", fr: "Accounts" }, href: "/admin/accounts", icon: "👥", requiredPermission: "canManageUsers" },
   { key: "verifications", label: { en: "Verifications", fr: "Vérifications" }, href: "/admin/verifications", icon: "✓", requiredPermission: "canManageUsers" },
   { key: "games", label: { en: "Games", fr: "Matchs" }, href: "/admin/games", icon: "🏟️", requiredPermission: "canManageGames" },
   { key: "stats", label: { en: "Statistics", fr: "Statistiques" }, href: "/admin/stats", icon: "📈", requiredPermission: "canManageGames" },
   { key: "league", label: { en: "League Settings", fr: "Paramètres Ligue" }, href: "/admin/league", icon: "⚙️", requiredPermission: "canManageLeague" },
   { key: "admins", label: { en: "Administrators", fr: "Administrateurs" }, href: "/admin/admins", icon: "👤", requiredPermission: "canManageAdmins" },
+  { key: "activity", label: { en: "Activity Log", fr: "Journal d'activité" }, href: "/admin/activity", icon: "📋", masterOnly: true },
+  { key: "errors", label: { en: "Error Monitor", fr: "Surveillance Erreurs" }, href: "/admin/errors", icon: "⚠️", masterOnly: true },
 ];
 
 const translations = {
@@ -56,6 +60,32 @@ const translations = {
     resetDatabase: "Database Reset",
     resetDatabaseDesc: "Delete all games, standings and reset all team/player statistics to 0.",
     resetAllStats: "Reset All Stats",
+    editDisplayName: "Edit Display Name",
+    editProfilePicture: "Edit Profile Picture",
+    addProfilePicture: "Add Profile Picture",
+    displayName: "Display Name",
+    profilePicture: "Profile Picture",
+    chooseNewPhoto: "Choose new photo",
+    removePhoto: "Remove photo",
+    uploadImage: "Upload Image",
+    removeImage: "Remove Image",
+    save: "Save",
+    cancel: "Cancel",
+    saving: "Saving...",
+    firstLoginTitle: "Complete your profile",
+    firstLoginSubtitle: "On your first login, add your full name and profile picture to continue.",
+    firstLoginFullName: "Full name",
+    firstLoginFullNamePlaceholder: "e.g. Jean-Pierre Mbala",
+    firstLoginPhotoRequired: "Profile picture (optional)",
+    firstLoginChoosePhoto: "Choose profile picture",
+    firstLoginSubmit: "Continue to dashboard",
+    firstLoginNameError: "Please enter your full name (first and last name).",
+    firstLoginMustChangeNameError: "Please update your name (it must be different from the one set by the master admin).",
+    firstLoginPhotoError: "Please upload a profile picture.",
+    photoReminderTitle: "Complete your profile",
+    photoReminderSubtitle: "Add a profile picture so other admins can identify you quickly.",
+    photoReminderLater: "Not now",
+    photoReminderUpdate: "Update profile",
   },
   fr: {
     dashboard: "Tableau de bord administrateur",
@@ -66,6 +96,32 @@ const translations = {
     resetDatabase: "Réinitialisation de la base de données",
     resetDatabaseDesc: "Supprimer tous les matchs, classements et réinitialiser toutes les statistiques des équipes/joueurs à 0.",
     resetAllStats: "Réinitialiser toutes les stats",
+    editDisplayName: "Modifier le nom d'affichage",
+    editProfilePicture: "Modifier la photo de profil",
+    addProfilePicture: "Ajouter une photo de profil",
+    displayName: "Nom d'affichage",
+    profilePicture: "Photo de profil",
+    chooseNewPhoto: "Choisir une nouvelle photo",
+    removePhoto: "Supprimer la photo",
+    uploadImage: "Télécharger une image",
+    removeImage: "Supprimer l'image",
+    save: "Enregistrer",
+    cancel: "Annuler",
+    saving: "Enregistrement...",
+    firstLoginTitle: "Complétez votre profil",
+    firstLoginSubtitle: "Lors de votre première connexion, ajoutez votre nom complet et votre photo de profil pour continuer.",
+    firstLoginFullName: "Nom complet",
+    firstLoginFullNamePlaceholder: "ex. Jean-Pierre Mbala",
+    firstLoginPhotoRequired: "Photo de profil (optionnelle)",
+    firstLoginChoosePhoto: "Choisir une photo de profil",
+    firstLoginSubmit: "Continuer vers le tableau de bord",
+    firstLoginNameError: "Veuillez saisir votre nom complet (prénom et nom).",
+    firstLoginMustChangeNameError: "Veuillez modifier votre nom (il doit être différent de celui défini par l'admin principal).",
+    firstLoginPhotoError: "Veuillez téléverser une photo de profil.",
+    photoReminderTitle: "Complétez votre profil",
+    photoReminderSubtitle: "Ajoutez une photo de profil pour que les autres admins vous identifient rapidement.",
+    photoReminderLater: "Plus tard",
+    photoReminderUpdate: "Mettre à jour le profil",
   },
 };
 
@@ -73,8 +129,11 @@ type OnlineAdmin = {
   id: string;
   email: string;
   name?: string;
+  photo?: string;
   lastActivity: Date | null;
   connectedSince: Date | null;
+  status: 'active' | 'away' | 'idle' | 'offline';
+  minutesAgo: number;
 };
 
 export default function AdminDashboardLayout({ children }: { children: React.ReactNode }) {
@@ -86,26 +145,25 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
   const [onlineAdminsCount, setOnlineAdminsCount] = useState(0);
   const [onlineAdmins, setOnlineAdmins] = useState<OnlineAdmin[]>([]);
   const [showOnlineAdmins, setShowOnlineAdmins] = useState(false);
+  const onlineAdminsDropdownRef = useRef<HTMLDivElement | null>(null);
   const [showPasswordChange, setShowPasswordChange] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showDisplayNameEdit, setShowDisplayNameEdit] = useState(false);
+  const [newDisplayName, setNewDisplayName] = useState("");
+  const [displayNameSaving, setDisplayNameSaving] = useState(false);
+  const [showProfilePictureEdit, setShowProfilePictureEdit] = useState(false);
+  const [profileImageFile, setProfileImageFile] = useState<File | null>(null);
+  const [profileImagePreview, setProfileImagePreview] = useState<string>("");
+  const [profilePictureSaving, setProfilePictureSaving] = useState(false);
+  const [firstLoginName, setFirstLoginName] = useState("");
+  const [firstLoginPhotoFile, setFirstLoginPhotoFile] = useState<File | null>(null);
+  const [firstLoginPhotoPreview, setFirstLoginPhotoPreview] = useState<string>("");
+  const [firstLoginSaving, setFirstLoginSaving] = useState(false);
+  const [firstLoginError, setFirstLoginError] = useState<string | null>(null);
+  const [showPhotoReminder, setShowPhotoReminder] = useState(false);
 
   const t = translations[language];
-
-  // Helper function to format duration
-  const formatDuration = (date: Date | null): string => {
-    if (!date) return language === "fr" ? "Juste connecté" : "Just connected";
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMins / 60);
-    const diffDays = Math.floor(diffHours / 24);
-
-    if (diffMins < 1) return language === "fr" ? "À l'instant" : "Just now";
-    if (diffMins < 60) return language === "fr" ? `${diffMins} min` : `${diffMins} min`;
-    if (diffHours < 24) return language === "fr" ? `${diffHours}h ${diffMins % 60}m` : `${diffHours}h ${diffMins % 60}m`;
-    return language === "fr" ? `${diffDays}j ${diffHours % 24}h` : `${diffDays}d ${diffHours % 24}h`;
-  };
 
   // Check authentication
   useEffect(() => {
@@ -143,28 +201,76 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
     return () => unsubscribe();
   }, [router]);
 
-  // Listen for online admins
+  // Listen for all admins and derive presence status from recent activity
   useEffect(() => {
     const adminsRef = collection(firebaseDB, "adminUsers");
-    const q = query(adminsRef, where("isOnline", "==", true));
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setOnlineAdminsCount(snapshot.size);
-      const admins: OnlineAdmin[] = snapshot.docs.map((doc) => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          email: data.email || "Unknown",
-          name: data.name || data.email?.split("@")[0] || "Unknown",
-          lastActivity: data.lastActivity?.toDate() || null,
-          connectedSince: data.connectedSince?.toDate() || data.lastActivity?.toDate() || null,
-        };
-      });
+    const unsubscribe = onSnapshot(adminsRef, (snapshot) => {
+      const now = new Date();
+      
+      const admins: OnlineAdmin[] = snapshot.docs
+        .map((doc) => {
+          const data = doc.data();
+          const lastActivity = data.lastActivity?.toDate() || null;
+          const minutesAgo = lastActivity ? Math.floor((now.getTime() - lastActivity.getTime()) / 60000) : 999;
+          
+          // Determine status based on minutes ago
+          let status: OnlineAdmin['status'] = 'offline';
+          if (minutesAgo < 5) status = 'active';
+          else if (minutesAgo < 15) status = 'active';
+          else if (minutesAgo < 30) status = 'away';
+          else if (minutesAgo < 60) status = 'idle';
+          
+          return {
+            id: doc.id,
+            email: data.email || "Unknown",
+            name: data.displayName || data.name || data.email?.split("@")[0] || "Unknown",
+            photo: data.photo,
+            lastActivity,
+            connectedSince: data.connectedSince?.toDate() || lastActivity,
+            status,
+            minutesAgo,
+          };
+        })
+        .sort((a, b) => {
+          const statusPriority: Record<OnlineAdmin['status'], number> = {
+            active: 0,
+            away: 1,
+            idle: 2,
+            offline: 3,
+          };
+          const priorityDiff = statusPriority[a.status] - statusPriority[b.status];
+          if (priorityDiff !== 0) return priorityDiff;
+          return a.minutesAgo - b.minutesAgo;
+        });
+      
+      // Count only "active" admins (within 5 min) for the badge
+      const activeCount = admins.filter(a => a.minutesAgo < 5).length;
+      setOnlineAdminsCount(activeCount);
       setOnlineAdmins(admins);
     });
 
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!showOnlineAdmins) return;
+
+    const handleClickAway = (event: MouseEvent | TouchEvent) => {
+      const dropdown = onlineAdminsDropdownRef.current;
+      const target = event.target as Node | null;
+      if (dropdown && target && !dropdown.contains(target)) {
+        setShowOnlineAdmins(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickAway);
+    document.addEventListener("touchstart", handleClickAway);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickAway);
+      document.removeEventListener("touchstart", handleClickAway);
+    };
+  }, [showOnlineAdmins]);
 
   // Activity heartbeat
   useEffect(() => {
@@ -189,6 +295,192 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
       router.push("/admin");
     } catch (error) {
       console.error("Error signing out:", error);
+    }
+  };
+
+  const handleUpdateDisplayName = async () => {
+    if (!currentAdminUser || !newDisplayName.trim()) return;
+    
+    setDisplayNameSaving(true);
+    try {
+      await updateDoc(doc(firebaseDB, "adminUsers", currentAdminUser.id), {
+        displayName: newDisplayName.trim(),
+      });
+      
+      // Update local state
+      setCurrentAdminUser({
+        ...currentAdminUser,
+        displayName: newDisplayName.trim(),
+      });
+      
+      setShowDisplayNameEdit(false);
+      setNewDisplayName("");
+    } catch (error) {
+      console.error("Error updating display name:", error);
+      alert(language === "fr" ? "Erreur lors de la mise à jour du nom" : "Error updating display name");
+    } finally {
+      setDisplayNameSaving(false);
+    }
+  };
+
+  const handleProfileImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setProfileImageFile(file);
+      setProfileImagePreview(URL.createObjectURL(file));
+    }
+  };
+
+  const handleUpdateProfilePicture = async () => {
+    if (!currentAdminUser) return;
+    
+    setProfilePictureSaving(true);
+    try {
+      let imageUrl = currentAdminUser.photo;
+      
+      if (profileImageFile) {
+        const path = `admin-photos/${currentAdminUser.id}/${Date.now()}.png`;
+        const storageReference = storageRef(firebaseStorage, path);
+        await uploadBytes(storageReference, profileImageFile);
+        imageUrl = await getDownloadURL(storageReference);
+      } else if (profileImagePreview === "") {
+        // Remove image
+        imageUrl = "";
+      }
+      
+      await updateDoc(doc(firebaseDB, "adminUsers", currentAdminUser.id), {
+        photo: imageUrl,
+        profilePicturePrompted: true,
+        updatedAt: serverTimestamp(),
+      });
+      
+      // Update local state
+      setCurrentAdminUser({
+        ...currentAdminUser,
+        photo: imageUrl || undefined,
+        profilePicturePrompted: true,
+      });
+      setShowPhotoReminder(!imageUrl);
+      
+      setShowProfilePictureEdit(false);
+      setProfileImageFile(null);
+      setProfileImagePreview("");
+    } catch (error) {
+      console.error("Error updating profile picture:", error);
+      alert(language === "fr" ? "Erreur lors de la mise à jour de la photo" : "Error updating profile picture");
+    } finally {
+      setProfilePictureSaving(false);
+    }
+  };
+
+  const handleRemoveProfilePicture = () => {
+    setProfileImageFile(null);
+    setProfileImagePreview("");
+  };
+
+  const markPhotoReminderSeen = async () => {
+    if (!currentAdminUser || currentAdminUser.profilePicturePrompted) return;
+    try {
+      await updateDoc(doc(firebaseDB, "adminUsers", currentAdminUser.id), {
+        profilePicturePrompted: true,
+        updatedAt: serverTimestamp(),
+      });
+      setCurrentAdminUser({
+        ...currentAdminUser,
+        profilePicturePrompted: true,
+      });
+    } catch (error) {
+      console.error("Error marking photo reminder as seen:", error);
+    }
+  };
+
+  useEffect(() => {
+    if (!currentAdminUser?.isFirstLogin) return;
+    setFirstLoginName("");
+    setFirstLoginPhotoPreview(currentAdminUser.photo || "");
+    setFirstLoginPhotoFile(null);
+    setFirstLoginError(null);
+  }, [currentAdminUser]);
+
+  useEffect(() => {
+    if (!currentAdminUser) return;
+    if (currentAdminUser.isFirstLogin) {
+      setShowPhotoReminder(false);
+      return;
+    }
+    const shouldShowReminder = !currentAdminUser.photo && !currentAdminUser.profilePicturePrompted;
+    setShowPhotoReminder(shouldShowReminder);
+    if (shouldShowReminder) {
+      void markPhotoReminderSeen();
+    }
+  }, [currentAdminUser]);
+
+  const handleFirstLoginPhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setFirstLoginPhotoFile(file);
+    setFirstLoginPhotoPreview(URL.createObjectURL(file));
+  };
+
+  const handleCompleteFirstLogin = async () => {
+    if (!currentAdminUser) return;
+
+    const trimmedName = firstLoginName.trim();
+    const nameParts = trimmedName.split(/\s+/).filter(Boolean);
+    const existingName = (currentAdminUser.displayName || "").trim();
+    if (!trimmedName || nameParts.length < 2) {
+      setFirstLoginError(t.firstLoginNameError);
+      return;
+    }
+
+    if (existingName && trimmedName.toLowerCase() === existingName.toLowerCase()) {
+      setFirstLoginError(t.firstLoginMustChangeNameError);
+      return;
+    }
+
+    setFirstLoginSaving(true);
+    setFirstLoginError(null);
+
+    try {
+      let photoUrl = currentAdminUser.photo || "";
+
+      if (firstLoginPhotoFile) {
+        const path = `admin-photos/${currentAdminUser.id}/first-login-${Date.now()}.png`;
+        const storageReference = storageRef(firebaseStorage, path);
+        await uploadBytes(storageReference, firstLoginPhotoFile);
+        photoUrl = await getDownloadURL(storageReference);
+      }
+
+      await updateDoc(doc(firebaseDB, "adminUsers", currentAdminUser.id), {
+        displayName: trimmedName,
+        photo: photoUrl,
+        profilePicturePrompted: !!photoUrl,
+        isFirstLogin: false,
+        updatedAt: serverTimestamp(),
+      });
+
+      if (firebaseAuth.currentUser) {
+        await updateProfile(firebaseAuth.currentUser, {
+          displayName: trimmedName,
+          photoURL: photoUrl || null,
+        });
+      }
+
+      setCurrentAdminUser({
+        ...currentAdminUser,
+        displayName: trimmedName,
+        photo: photoUrl || undefined,
+        profilePicturePrompted: !!photoUrl,
+        isFirstLogin: false,
+      });
+      setShowPhotoReminder(!photoUrl);
+      setFirstLoginPhotoFile(null);
+      setFirstLoginError(null);
+    } catch (error) {
+      console.error("Error completing first login setup:", error);
+      setFirstLoginError(language === "fr" ? "Impossible de terminer la configuration." : "Failed to complete setup.");
+    } finally {
+      setFirstLoginSaving(false);
     }
   };
 
@@ -218,6 +510,7 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
         perms.canManageSales = true;
         perms.canManagePlayers = true;
         perms.canManageVenues = true;
+        perms.canManageEubakin = true;
       }
       
       return perms;
@@ -237,6 +530,7 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
         perms.canManageCommittee = true;
         perms.canManagePartners = true;
         perms.canManageSales = true;
+        perms.canManageEubakin = true;
       } else if (role === "news_editor") {
         perms.canManageNews = true;
       } else if (role === "team_manager") {
@@ -250,6 +544,8 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
       } else if (role === "partner_manager") {
         perms.canManagePartners = true;
         perms.canManageCommittee = true;
+      } else if (role === "eubakin_manager") {
+        perms.canManageEubakin = true;
       }
     });
     return perms;
@@ -266,6 +562,13 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
   }
 
   const filteredNavItems = navItems.filter((item) => {
+    // Master only items
+    if (item.masterOnly) {
+      return currentAdminUser?.roles?.includes('master');
+    }
+    if (item.key === "league") {
+      return permissions.canManageLeague || permissions.canManageEubakin;
+    }
     if (!item.requiredPermission) return true;
     return permissions[item.requiredPermission];
   });
@@ -277,9 +580,66 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
         <header className="sticky top-0 z-50 bg-slate-900/95 backdrop-blur-sm border-b border-white/10">
           <div className="max-w-[1800px] mx-auto px-4 sm:px-6 py-4">
             <div className="flex items-center justify-between flex-wrap gap-4">
-              <div>
-                <h1 className="text-xl font-bold text-white">{t.dashboard}</h1>
-                <p className="text-xs text-slate-400">{t.cms}</p>
+              <div className="flex items-center gap-3">
+                {/* Profile Picture */}
+                <div className="relative" ref={onlineAdminsDropdownRef}>
+                  {currentAdminUser?.photo ? (
+                    <div className="relative">
+                      <Image
+                        src={currentAdminUser.photo}
+                        alt="Profile"
+                        width={48}
+                        height={48}
+                        className="w-12 h-12 rounded-full object-cover border-2 border-orange-500/30"
+                      />
+                      <button
+                        onClick={() => setShowProfilePictureEdit(true)}
+                        className="absolute -bottom-1 -right-1 w-6 h-6 bg-orange-500 hover:bg-orange-600 rounded-full flex items-center justify-center text-white transition-colors"
+                        title={t.editProfilePicture}
+                      >
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center text-white font-semibold">
+                        {(currentAdminUser?.displayName || currentAdminUser?.email || "A")[0].toUpperCase()}
+                      </div>
+                      <button
+                        onClick={() => setShowProfilePictureEdit(true)}
+                        className="absolute -bottom-1 -right-1 w-6 h-6 bg-orange-500 hover:bg-orange-600 rounded-full flex items-center justify-center text-white transition-colors"
+                        title={t.addProfilePicture}
+                      >
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <h1 className="text-xl font-bold text-white">{t.dashboard}</h1>
+                  <div className="flex items-center gap-2 mt-1">
+                    <p className="text-sm text-orange-400 font-medium">
+                      {currentAdminUser?.displayName || currentAdminUser?.email}
+                    </p>
+                    <button
+                      onClick={() => {
+                        setNewDisplayName(currentAdminUser?.displayName || "");
+                        setShowDisplayNameEdit(true);
+                      }}
+                      className="text-slate-400 hover:text-orange-400 transition-colors"
+                      title={t.editDisplayName}
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-400">{t.cms}</p>
+                </div>
               </div>
               <div className="flex items-center gap-3 flex-wrap">
                 {/* Online admins indicator */}
@@ -300,46 +660,103 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
                   {/* Online Admins Dropdown */}
                   {showOnlineAdmins && (
                     <>
-                      <div className="fixed inset-0 z-40" onClick={() => setShowOnlineAdmins(false)} />
                       <div className="absolute right-0 top-full mt-2 z-50 w-80 bg-slate-900 border border-white/10 rounded-xl shadow-xl overflow-hidden">
                         <div className="px-4 py-3 border-b border-white/10 bg-slate-800/50">
                           <h3 className="text-sm font-semibold text-white flex items-center gap-2">
                             <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                            {language === "fr" ? "Administrateurs en ligne" : "Online Administrators"}
+                            {language === "fr" ? "Liste des administrateurs" : "Administrators"}
                           </h3>
                         </div>
                         <div className="max-h-64 overflow-y-auto">
                           {onlineAdmins.length === 0 ? (
                             <div className="px-4 py-6 text-center text-slate-500 text-sm">
-                              {language === "fr" ? "Aucun admin en ligne" : "No admins online"}
+                              {language === "fr" ? "Aucun administrateur" : "No administrators"}
                             </div>
                           ) : (
                             <ul className="divide-y divide-white/5">
-                              {onlineAdmins.map((admin) => (
-                                <li key={admin.id} className="px-4 py-3 hover:bg-white/5 transition-colors">
-                                  <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center text-white font-semibold text-sm">
-                                        {(admin.name || admin.email)[0].toUpperCase()}
+                              {onlineAdmins.map((admin) => {
+                                const statusColor = admin.status === 'active' 
+                                  ? 'text-green-400' 
+                                  : admin.status === 'away'
+                                    ? 'text-orange-400'
+                                    : admin.status === 'idle'
+                                      ? 'text-amber-400'
+                                      : 'text-slate-400';
+                                const dotColor = admin.status === 'active' 
+                                  ? 'bg-green-500' 
+                                  : admin.status === 'away'
+                                    ? 'bg-orange-500'
+                                    : admin.status === 'idle'
+                                      ? 'bg-amber-500'
+                                      : 'bg-slate-500';
+
+                                const statusText = admin.minutesAgo < 1
+                                  ? (language === "fr" ? "Connecté" : "Connected")
+                                  : admin.minutesAgo < 60
+                                    ? (language === "fr" ? `Connecté il y a ${admin.minutesAgo} min` : `Connected ${admin.minutesAgo} min ago`)
+                                    : (() => {
+                                        const hours = Math.floor(admin.minutesAgo / 60);
+                                        const mins = admin.minutesAgo % 60;
+                                        if (language === "fr") {
+                                          return mins > 0
+                                            ? `Dernière connexion il y a ${hours}h ${mins}min`
+                                            : `Dernière connexion il y a ${hours}h`;
+                                        }
+                                        return mins > 0
+                                          ? `Last connected ${hours}h ${mins}m ago`
+                                          : `Last connected ${hours}h ago`;
+                                      })();
+                                
+                                // Format connected since time
+                                const connectedSinceText = admin.lastActivity
+                                  ? admin.lastActivity.toLocaleTimeString(language === "fr" ? "fr-FR" : "en-US", {
+                                      hour: '2-digit', 
+                                      minute: '2-digit',
+                                      hour12: language !== "fr"
+                                    })
+                                  : null;
+                                
+                                return (
+                                  <li key={admin.id} className="px-4 py-3 hover:bg-white/5 transition-colors">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-3">
+                                        <div className="relative">
+                                          {admin.photo ? (
+                                            <Image
+                                              src={admin.photo}
+                                              alt="Profile"
+                                              width={32}
+                                              height={32}
+                                              className="w-8 h-8 rounded-full object-cover border border-orange-500/30"
+                                            />
+                                          ) : (
+                                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center text-white font-semibold text-sm">
+                                              {(admin.name || admin.email || "A")[0].toUpperCase()}
+                                            </div>
+                                          )}
+                                          <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 ${dotColor} rounded-full border-2 border-slate-900`}></div>
+                                        </div>
+                                        <div>
+                                          <p className="text-sm font-medium text-white">
+                                            {admin.name || admin.email?.split("@")[0] || "Unknown"}
+                                          </p>
+                                          <p className="text-xs text-slate-500">{admin.email}</p>
+                                        </div>
                                       </div>
-                                      <div>
-                                        <p className="text-sm font-medium text-white">
-                                          {admin.name || admin.email.split("@")[0]}
+                                      <div className="text-right">
+                                        <p className={`text-xs font-medium ${statusColor}`}>
+                                          {statusText}
                                         </p>
-                                        <p className="text-xs text-slate-500">{admin.email}</p>
+                                        {connectedSinceText && (
+                                          <p className="text-xs text-slate-500">
+                                            {language === "fr" ? `vu à ${connectedSinceText}` : `seen at ${connectedSinceText}`}
+                                          </p>
+                                        )}
                                       </div>
                                     </div>
-                                    <div className="text-right">
-                                      <p className="text-xs text-green-400 font-medium">
-                                        {language === "fr" ? "Connecté" : "Connected"}
-                                      </p>
-                                      <p className="text-xs text-slate-500">
-                                        {formatDuration(admin.connectedSince)}
-                                      </p>
-                                    </div>
-                                  </div>
-                                </li>
-                              ))}
+                                  </li>
+                                );
+                              })}
                             </ul>
                           )}
                         </div>
@@ -428,9 +845,14 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
           </div>
         )}
 
-        {/* Main content */}
+        {/* Main content with page transition */}
         <main className="max-w-[1800px] mx-auto px-4 sm:px-6 py-6">
-          {children}
+          <div 
+            key={pathname}
+            className="animate-in fade-in slide-in-from-right-4 duration-300"
+          >
+            {children}
+          </div>
         </main>
 
         {/* Password Change Modal */}
@@ -466,6 +888,211 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
                     {language === "fr" ? "Enregistrer" : "Save"}
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Display Name Edit Modal */}
+        {showDisplayNameEdit && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-sm">
+            <div className="bg-slate-900 border border-white/10 rounded-2xl p-6 w-full max-w-md">
+              <h3 className="text-lg font-semibold text-white mb-4">{t.editDisplayName}</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm text-slate-400 mb-2">{t.displayName}</label>
+                  <input
+                    type="text"
+                    placeholder={currentAdminUser?.email}
+                    value={newDisplayName}
+                    onChange={(e) => setNewDisplayName(e.target.value)}
+                    className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    autoFocus
+                  />
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      setShowDisplayNameEdit(false);
+                      setNewDisplayName("");
+                    }}
+                    disabled={displayNameSaving}
+                    className="flex-1 px-4 py-3 rounded-xl border border-white/10 text-slate-400 hover:bg-white/5 transition-colors disabled:opacity-50"
+                  >
+                    {t.cancel}
+                  </button>
+                  <button
+                    onClick={handleUpdateDisplayName}
+                    disabled={displayNameSaving || !newDisplayName.trim()}
+                    className="flex-1 px-4 py-3 rounded-xl bg-orange-500 text-white font-semibold hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {displayNameSaving ? t.saving : t.save}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Profile Picture Edit Modal */}
+        {showProfilePictureEdit && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-sm">
+            <div className="bg-slate-900 border border-white/10 rounded-2xl p-6 w-full max-w-md">
+              <h3 className="text-lg font-semibold text-white mb-4">{t.editProfilePicture}</h3>
+              <div className="space-y-4">
+                <div className="text-center">
+                  <div className="relative inline-block">
+                    {profileImagePreview || currentAdminUser?.photo ? (
+                      <Image
+                        src={profileImagePreview || currentAdminUser?.photo || ""}
+                        alt="Profile preview"
+                        width={120}
+                        height={120}
+                        className="w-30 h-30 rounded-full object-cover border-2 border-orange-500/30"
+                      />
+                    ) : (
+                      <div className="w-30 h-30 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center text-white font-bold text-3xl">
+                        {(currentAdminUser?.displayName || currentAdminUser?.email || "A")[0].toUpperCase()}
+                      </div>
+                    )}
+                    {(profileImagePreview || currentAdminUser?.photo) && (
+                      <button
+                        onClick={handleRemoveProfilePicture}
+                        className="absolute -top-2 -right-2 w-8 h-8 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center text-white transition-colors"
+                        title={t.removePhoto}
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm text-slate-400 mb-2">{t.chooseNewPhoto}</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleProfileImageChange}
+                    title={t.chooseNewPhoto}
+                    className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-white/10 text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:bg-orange-500 file:text-white hover:file:bg-orange-600 cursor-pointer"
+                  />
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      setShowProfilePictureEdit(false);
+                      setProfileImageFile(null);
+                      setProfileImagePreview("");
+                    }}
+                    disabled={profilePictureSaving}
+                    className="flex-1 px-4 py-3 rounded-xl border border-white/10 text-slate-400 hover:bg-white/5 transition-colors disabled:opacity-50"
+                  >
+                    {t.cancel}
+                  </button>
+                  <button
+                    onClick={handleUpdateProfilePicture}
+                    disabled={profilePictureSaving}
+                    className="flex-1 px-4 py-3 rounded-xl bg-orange-500 text-white font-semibold hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {profilePictureSaving ? t.saving : t.save}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* First Login Setup Modal */}
+        {currentAdminUser?.isFirstLogin && (
+          <div className="fixed inset-0 z-[220] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+            <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-900 p-6">
+              <h3 className="text-xl font-semibold text-white mb-2">{t.firstLoginTitle}</h3>
+              <p className="text-sm text-slate-400 mb-5">{t.firstLoginSubtitle}</p>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm text-slate-300 mb-2">{t.firstLoginFullName}</label>
+                  <input
+                    type="text"
+                    value={firstLoginName}
+                    onChange={(e) => setFirstLoginName(e.target.value)}
+                    placeholder={t.firstLoginFullNamePlaceholder}
+                    title={t.firstLoginFullName}
+                    className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    autoFocus
+                  />
+                  {currentAdminUser.displayName && (
+                    <p className="mt-2 text-xs text-slate-500">
+                      {language === "fr"
+                        ? `Nom actuel défini par l'admin principal: ${currentAdminUser.displayName}`
+                        : `Current name set by master admin: ${currentAdminUser.displayName}`}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm text-slate-300 mb-2">{t.firstLoginPhotoRequired}</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFirstLoginPhotoChange}
+                    title={t.firstLoginChoosePhoto}
+                    className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-white/10 text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:bg-orange-500 file:text-white hover:file:bg-orange-600 cursor-pointer"
+                  />
+                </div>
+
+                {(firstLoginPhotoPreview || currentAdminUser.photo) && (
+                  <div className="flex justify-center">
+                    <Image
+                      src={firstLoginPhotoPreview || currentAdminUser.photo || ""}
+                      alt="Profile preview"
+                      width={96}
+                      height={96}
+                      className="h-24 w-24 rounded-full object-cover border border-orange-500/40"
+                    />
+                  </div>
+                )}
+
+                {firstLoginError && (
+                  <p className="text-sm text-rose-300">{firstLoginError}</p>
+                )}
+
+                <button
+                  onClick={handleCompleteFirstLogin}
+                  disabled={firstLoginSaving}
+                  className="w-full px-4 py-3 rounded-xl bg-orange-500 text-white font-semibold hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {firstLoginSaving ? t.saving : t.firstLoginSubmit}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Profile Picture Reminder */}
+        {showPhotoReminder && (
+          <div className="fixed inset-0 z-[215] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-900 p-6">
+              <h3 className="text-xl font-semibold text-white mb-2">{t.photoReminderTitle}</h3>
+              <p className="text-sm text-slate-400 mb-6">{t.photoReminderSubtitle}</p>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowPhotoReminder(false)}
+                  className="flex-1 px-4 py-3 rounded-xl border border-white/10 text-slate-300 hover:bg-white/5 transition-colors"
+                >
+                  {t.photoReminderLater}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowPhotoReminder(false);
+                    setShowProfilePictureEdit(true);
+                  }}
+                  className="flex-1 px-4 py-3 rounded-xl bg-orange-500 text-white font-semibold hover:bg-orange-600 transition-colors"
+                >
+                  {t.photoReminderUpdate}
+                </button>
               </div>
             </div>
           </div>

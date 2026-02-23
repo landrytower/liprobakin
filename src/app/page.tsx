@@ -1,7 +1,7 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { collection, query, orderBy, limit, getDocs, onSnapshot, where } from "firebase/firestore";
@@ -27,15 +27,20 @@ import {
 } from "@/data/febaco";
 import type { FeaturedMatchup, Franchise, RosterPlayer, SpotlightPlayer } from "@/data/febaco";
 
+type MatchupReferee = {
+  id: string;
+  fullName: string;
+  displayName: string;
+  headshot?: string;
+};
+
 type EnhancedMatchup = FeaturedMatchup & {
   homeTeamLogo?: string;
   awayTeamLogo?: string;
   homeTeam?: string;
   awayTeam?: string;
   gender?: "men" | "women";
-  refereeHomeTeam1?: string;
-  refereeHomeTeam2?: string;
-  refereeAwayTeam?: string;
+  referees?: MatchupReferee[];
   dateTime?: string;
 };
 
@@ -49,10 +54,333 @@ type NewsArticle = {
   headline: string; // French (base/default)
   headline_en?: string; // English translation
   imageUrl?: string;
+  additionalMedia?: {
+    type: "image" | "video";
+    url: string;
+    size?: "full" | "half" | "third";
+    align?: "left" | "center" | "right";
+    textWrap?: AdditionalMediaWrap;
+    wrapSide?: AdditionalMediaWrapSide;
+    height?: number;
+    order?: number;
+    widthPercent?: number;
+    offsetX?: number;
+    offsetY?: number;
+    distanceTop?: number;
+    distanceRight?: number;
+    distanceBottom?: number;
+    distanceLeft?: number;
+  }[];
+  additionalImageUrls?: string[];
+  videoUrl?: string;
+  videoTrimStart?: number;
+  videoTrimEnd?: number;
+  videoScale?: number;
+  videoOffsetX?: number;
+  videoOffsetY?: number;
   imagePosition?: number;
   createdAt: Date | null;
   author?: string; // Author name
+  authorPhoto?: string; // Author profile photo URL
+  isPaused?: boolean;
 };
+
+type AdditionalMediaSize = "full" | "half" | "third";
+type AdditionalMediaAlign = "left" | "center" | "right";
+type CanonicalAdditionalMediaWrap = "inline" | "square" | "tight" | "through" | "topBottom" | "behind" | "front";
+type AdditionalMediaWrap = CanonicalAdditionalMediaWrap | "wrap" | "break";
+type AdditionalMediaWrapSide = "bothSides" | "leftOnly" | "rightOnly" | "largestOnly";
+type NormalizedAdditionalMediaItem = {
+  type: "image" | "video";
+  url: string;
+  size: AdditionalMediaSize;
+  align: AdditionalMediaAlign;
+  textWrap: AdditionalMediaWrap;
+  wrapSide: AdditionalMediaWrapSide;
+  height: number;
+  order: number;
+  widthPercent: number;
+  offsetX: number;
+  offsetY: number;
+  distanceTop: number;
+  distanceRight: number;
+  distanceBottom: number;
+  distanceLeft: number;
+};
+
+const MIN_ADDITIONAL_MEDIA_HEIGHT = 160;
+const MAX_ADDITIONAL_MEDIA_HEIGHT = 640;
+const DEFAULT_ADDITIONAL_MEDIA_HEIGHT = 320;
+const MIN_ADDITIONAL_MEDIA_WIDTH = 35;
+const MAX_ADDITIONAL_MEDIA_WIDTH = 100;
+const DEFAULT_ADDITIONAL_MEDIA_WIDTH = 100;
+const MIN_ADDITIONAL_MEDIA_OFFSET_X = -200;
+const MAX_ADDITIONAL_MEDIA_OFFSET_X = 200;
+const MIN_ADDITIONAL_MEDIA_OFFSET_Y = -200;
+const MAX_ADDITIONAL_MEDIA_OFFSET_Y = 200;
+const MIN_FIXED_MEDIA_TRANSLATE_X = -1200;
+const MAX_FIXED_MEDIA_TRANSLATE_X = 1200;
+const MIN_FIXED_MEDIA_TRANSLATE_Y = -1200;
+const MAX_FIXED_MEDIA_TRANSLATE_Y = 1200;
+const MIN_MEDIA_TEXT_DISTANCE = 0;
+const MAX_MEDIA_TEXT_DISTANCE = 48;
+const DEFAULT_MEDIA_TEXT_DISTANCE = 12;
+
+// DRC (Kinshasa) timezone - UTC+1
+const DRC_TIMEZONE = 'Africa/Kinshasa';
+
+// Helper to get current time in DRC timezone
+const getDRCNow = (): Date => {
+  const now = new Date();
+  return new Date(now.toLocaleString('en-US', { timeZone: DRC_TIMEZONE }));
+};
+
+const isTrustedNewsMediaUrl = (url?: string | null) => {
+  if (!url) return false;
+  const normalized = url.trim();
+  if (!normalized) return false;
+  return normalized.includes("firebasestorage.googleapis.com") || normalized.includes("storage.googleapis.com");
+};
+
+const normalizeWrapMode = (wrap?: AdditionalMediaWrap): CanonicalAdditionalMediaWrap => {
+  if (wrap === "wrap") return "square";
+  if (wrap === "break") return "topBottom";
+  if (wrap === "inline" || wrap === "square" || wrap === "tight" || wrap === "through" || wrap === "topBottom" || wrap === "behind" || wrap === "front") {
+    return wrap;
+  }
+  return "inline";
+};
+
+const normalizeWrapSide = (side?: AdditionalMediaWrapSide): AdditionalMediaWrapSide => {
+  if (side === "leftOnly" || side === "rightOnly" || side === "largestOnly" || side === "bothSides") {
+    return side;
+  }
+  return "bothSides";
+};
+
+const normalizeTextDistance = (value?: number): number => {
+  return Math.max(MIN_MEDIA_TEXT_DISTANCE, Math.min(MAX_MEDIA_TEXT_DISTANCE, Number(value ?? DEFAULT_MEDIA_TEXT_DISTANCE)));
+};
+
+const normalizeAdditionalMediaItem = (
+  item: Partial<NormalizedAdditionalMediaItem> | null | undefined,
+  fallbackIndex: number
+): NormalizedAdditionalMediaItem | null => {
+  if (!item) return null;
+  const type = item.type === "video" ? "video" : item.type === "image" ? "image" : null;
+  const url = typeof item.url === "string" ? item.url.trim() : "";
+  if (!type || !isTrustedNewsMediaUrl(url)) return null;
+  const size: AdditionalMediaSize = item.size === "half" || item.size === "third" ? item.size : "full";
+  const align: AdditionalMediaAlign = item.align === "left" || item.align === "right" ? item.align : "center";
+  const textWrap = normalizeWrapMode(item.textWrap);
+  const wrapSide = normalizeWrapSide(item.wrapSide);
+  const height = Math.max(
+    MIN_ADDITIONAL_MEDIA_HEIGHT,
+    Math.min(MAX_ADDITIONAL_MEDIA_HEIGHT, Number(item.height || DEFAULT_ADDITIONAL_MEDIA_HEIGHT))
+  );
+  const order = Math.max(1, Math.min(3, Math.round(Number(item.order || fallbackIndex + 1))));
+  const widthPercent = Math.max(
+    MIN_ADDITIONAL_MEDIA_WIDTH,
+    Math.min(MAX_ADDITIONAL_MEDIA_WIDTH, Number(item.widthPercent || DEFAULT_ADDITIONAL_MEDIA_WIDTH))
+  );
+  const isFixedPosition = textWrap === "behind" || textWrap === "front";
+  const offsetX = Math.max(
+    isFixedPosition ? MIN_FIXED_MEDIA_TRANSLATE_X : MIN_ADDITIONAL_MEDIA_OFFSET_X,
+    Math.min(isFixedPosition ? MAX_FIXED_MEDIA_TRANSLATE_X : MAX_ADDITIONAL_MEDIA_OFFSET_X, Number(item.offsetX || 0))
+  );
+  const offsetY = Math.max(
+    isFixedPosition ? MIN_FIXED_MEDIA_TRANSLATE_Y : MIN_ADDITIONAL_MEDIA_OFFSET_Y,
+    Math.min(isFixedPosition ? MAX_FIXED_MEDIA_TRANSLATE_Y : MAX_ADDITIONAL_MEDIA_OFFSET_Y, Number(item.offsetY || 0))
+  );
+  const distanceTop = normalizeTextDistance(item.distanceTop);
+  const distanceRight = normalizeTextDistance(item.distanceRight);
+  const distanceBottom = normalizeTextDistance(item.distanceBottom);
+  const distanceLeft = normalizeTextDistance(item.distanceLeft);
+
+  return {
+    type,
+    url,
+    size,
+    align,
+    textWrap,
+    wrapSide,
+    height,
+    order,
+    widthPercent,
+    offsetX,
+    offsetY,
+    distanceTop,
+    distanceRight,
+    distanceBottom,
+    distanceLeft,
+  };
+};
+
+const getAdditionalMediaWidthClass = (size: AdditionalMediaSize) => {
+  if (size === "half") return "w-full sm:w-2/3";
+  if (size === "third") return "w-full sm:w-1/2";
+  return "w-full";
+};
+
+const getAdditionalMediaAlignClass = (align: AdditionalMediaAlign) => {
+  if (align === "left") return "mr-auto ml-0";
+  if (align === "right") return "ml-auto mr-0";
+  return "mx-auto";
+};
+
+const isTextWrappingMode = (wrap: CanonicalAdditionalMediaWrap): boolean => {
+  return wrap === "square" || wrap === "tight" || wrap === "through";
+};
+
+const getTextWrapFloatClass = (wrapMode: CanonicalAdditionalMediaWrap, wrapSide: AdditionalMediaWrapSide): string => {
+  if (!isTextWrappingMode(wrapMode)) return "";
+  if (wrapSide === "leftOnly") return "sm:float-right";
+  return "sm:float-left";
+};
+
+function AutoPlayOnVisibleVideo({ src, className, style }: { src: string; className: string; style?: CSSProperties }) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  useEffect(() => {
+    const node = videoRef.current;
+    if (!node) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!videoRef.current) return;
+        if (entry.isIntersecting) {
+          const playPromise = videoRef.current.play();
+          if (playPromise && typeof playPromise.catch === "function") {
+            playPromise.catch(() => {
+              // Autoplay can be blocked by browser policy until user interacts.
+            });
+          }
+        } else {
+          videoRef.current.pause();
+        }
+      },
+      { threshold: 0.6 }
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [src]);
+
+  return (
+    <video
+      ref={videoRef}
+      src={src}
+      className={className}
+      style={style}
+      controls
+      playsInline
+      preload="metadata"
+      muted
+    />
+  );
+}
+
+const NEWS_ARTICLE_SWITCH_MS = 15000;
+const HOME_BOOTSTRAP_CACHE_KEY = "febaco:home:bootstrap:v1";
+const HOME_BOOTSTRAP_CACHE_TTL_MS = 1000 * 60 * 10;
+
+type CachedNewsArticle = Omit<NewsArticle, "createdAt"> & { createdAt: string | null };
+
+type HomeBootstrapSnapshot = {
+  menTeams: Franchise[];
+  womenTeams: Franchise[];
+  newsArticles: CachedNewsArticle[];
+  featuredArticleId: string | null;
+  partners: Array<{ id: string; name: string; logo: string }>;
+};
+
+type HomeBootstrapCache = HomeBootstrapSnapshot & { savedAt: number };
+
+const emptyHomeBootstrapSnapshot = (): HomeBootstrapSnapshot => ({
+  menTeams: [],
+  womenTeams: [],
+  newsArticles: [],
+  featuredArticleId: null,
+  partners: [],
+});
+
+const parseHomeBootstrapCache = (raw: string | null): HomeBootstrapCache | null => {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<HomeBootstrapCache>;
+    if (!parsed || typeof parsed !== "object" || typeof parsed.savedAt !== "number") {
+      return null;
+    }
+
+    return {
+      savedAt: parsed.savedAt,
+      menTeams: Array.isArray(parsed.menTeams) ? parsed.menTeams : [],
+      womenTeams: Array.isArray(parsed.womenTeams) ? parsed.womenTeams : [],
+      newsArticles: Array.isArray(parsed.newsArticles) ? parsed.newsArticles : [],
+      featuredArticleId: typeof parsed.featuredArticleId === "string" ? parsed.featuredArticleId : null,
+      partners: Array.isArray(parsed.partners) ? parsed.partners : [],
+    };
+  } catch {
+    return null;
+  }
+};
+
+const readHomeBootstrapCache = (): HomeBootstrapSnapshot | null => {
+  if (typeof window === "undefined") return null;
+  const cache = parseHomeBootstrapCache(window.localStorage.getItem(HOME_BOOTSTRAP_CACHE_KEY));
+  if (!cache) return null;
+
+  if (Date.now() - cache.savedAt > HOME_BOOTSTRAP_CACHE_TTL_MS) {
+    window.localStorage.removeItem(HOME_BOOTSTRAP_CACHE_KEY);
+    return null;
+  }
+
+  return {
+    menTeams: cache.menTeams,
+    womenTeams: cache.womenTeams,
+    newsArticles: cache.newsArticles,
+    featuredArticleId: cache.featuredArticleId,
+    partners: cache.partners,
+  };
+};
+
+const writeHomeBootstrapCache = (snapshot: HomeBootstrapSnapshot) => {
+  if (typeof window === "undefined") return;
+  const payload: HomeBootstrapCache = {
+    ...snapshot,
+    savedAt: Date.now(),
+  };
+  window.localStorage.setItem(HOME_BOOTSTRAP_CACHE_KEY, JSON.stringify(payload));
+};
+
+const mergeHomeBootstrapCache = (partial: Partial<HomeBootstrapSnapshot>) => {
+  if (typeof window === "undefined") return;
+  const current = parseHomeBootstrapCache(window.localStorage.getItem(HOME_BOOTSTRAP_CACHE_KEY));
+  const base: HomeBootstrapSnapshot = current
+    ? {
+        menTeams: current.menTeams,
+        womenTeams: current.womenTeams,
+        newsArticles: current.newsArticles,
+        featuredArticleId: current.featuredArticleId,
+        partners: current.partners,
+      }
+    : emptyHomeBootstrapSnapshot();
+
+  writeHomeBootstrapCache({
+    ...base,
+    ...partial,
+  });
+};
+
+const toCachedNewsArticle = (article: NewsArticle): CachedNewsArticle => ({
+  ...article,
+  createdAt: article.createdAt ? article.createdAt.toISOString() : null,
+});
+
+const fromCachedNewsArticle = (article: CachedNewsArticle): NewsArticle => ({
+  ...article,
+  createdAt: article.createdAt ? new Date(article.createdAt) : null,
+});
 
 type SectionHeaderProps = {
   id: string;
@@ -60,35 +388,62 @@ type SectionHeaderProps = {
   title: string;
   description?: string;
   actions?: ReactNode;
+  titleHref?: string;
+  autoShine?: boolean;
+  shineMode?: "once" | "twice";
 };
 
-const SectionHeader = ({ id, eyebrow, title, description, actions }: SectionHeaderProps) => (
+const SectionHeader = ({ id, eyebrow, title, description, actions, titleHref, autoShine = false, shineMode = "once" }: SectionHeaderProps) => {
+  const shineClass = autoShine ? (shineMode === "twice" ? "gold-auto-shine-twice" : "gold-auto-shine-once gold-mobile-glow") : "";
+  const shineClassNoGlow = autoShine ? (shineMode === "twice" ? "gold-auto-shine-twice" : "gold-auto-shine-once") : "";
+  
+  return (
   <div aria-labelledby={`${id}-title`} className={actions ? "space-y-0" : "space-y-4"}>
     <div className="flex flex-wrap items-end justify-between gap-4">
-      <div>
-        {eyebrow ? (
-          <p className="text-xs uppercase tracking-[0.4em] text-slate-400">{eyebrow}</p>
-        ) : null}
-        <h2 id={`${id}-title`} className="text-3xl font-semibold text-white">
-          {title}
-        </h2>
-        {description ? (
-          <p className="mt-2 text-sm text-slate-300">{description}</p>
-        ) : null}
-      </div>
+      {titleHref ? (
+        <Link href={titleHref} className="group block">
+          <div>
+            {eyebrow ? (
+              <p className={`gold-hover-text text-xs uppercase tracking-[0.4em] text-slate-400 ${shineClass}`}>{eyebrow}</p>
+            ) : null}
+            <h2 id={`${id}-title`} className={`gold-hover-text text-3xl font-semibold text-white ${shineClass}`}>
+              {title}
+            </h2>
+            {description ? (
+              <p className={`gold-hover-text mt-2 text-sm text-slate-300 ${shineClassNoGlow}`}>{description}</p>
+            ) : null}
+          </div>
+        </Link>
+      ) : (
+        <div>
+          {eyebrow ? (
+            <p className="text-xs uppercase tracking-[0.4em] text-slate-400">{eyebrow}</p>
+          ) : null}
+          <h2 id={`${id}-title`} className="text-3xl font-semibold text-white">
+            {title}
+          </h2>
+          {description ? (
+            <p className="mt-2 text-sm text-slate-300">{description}</p>
+          ) : null}
+        </div>
+      )}
       {actions ?? <div className="h-px flex-1 bg-slate-800" aria-hidden />}
     </div>
     {actions ? <div className="h-px w-full bg-slate-800" aria-hidden /> : null}
   </div>
 );
+};
 
 const slug = (label: string) => label.toLowerCase();
 
+const normalizeTeamName = (name: string) =>
+  name.replace(/^espoir\s+espoir\s+/i, "Espoir ").trim();
+
 const formatFranchiseName = (team: Franchise) =>
-  [team.city, team.name].filter(Boolean).join(" ").trim();
+  normalizeTeamName([team.city, team.name].filter(Boolean).join(" ").trim());
 
 const formatTimeAgo = (date: Date): string => {
-  const now = Date.now();
+  const now = getDRCNow().getTime();
   const diff = now - date.getTime();
   const minutes = Math.floor(diff / (1000 * 60));
   const hours = Math.floor(diff / (1000 * 60 * 60));
@@ -108,10 +463,12 @@ const formatISODate = (isoString: string, language: Locale): string => {
     const date = new Date(isoString);
     if (isNaN(date.getTime())) return isoString;
     
-    const month = date.getMonth() + 1;
-    const day = date.getDate();
-    let hours = date.getHours();
-    const minutes = date.getMinutes().toString().padStart(2, '0');
+    // Convert to DRC timezone
+    const drcDate = new Date(date.toLocaleString('en-US', { timeZone: DRC_TIMEZONE }));
+    const month = drcDate.getMonth() + 1;
+    const day = drcDate.getDate();
+    let hours = drcDate.getHours();
+    const minutes = drcDate.getMinutes().toString().padStart(2, '0');
     
     if (language === 'en') {
       const period = hours >= 12 ? 'PM' : 'AM';
@@ -237,12 +594,12 @@ const translations = {
       standings: {
         eyebrow: "Standings",
         title: "Playoff Picture",
-        description: "Top nine teams pathing toward the Liprobakin Showcase.",
+        description: "Top seven teams pathing toward the Liprobakin Showcase.",
       },
       teams: {
         eyebrow: "Teams",
         title: "Franchises",
-        description: "Nine clubs setting the pace for the Liprobakin climb.",
+        description: "Seven clubs setting the pace for the Liprobakin climb.",
       },
       partners: {
         eyebrow: "Partners",
@@ -272,7 +629,7 @@ const translations = {
       team: "Team",
       wins: "W",
       losses: "L",
-      totalPoints: "Tot Points",
+      totalPoints: "PTS",
     },
   },
   fr: {
@@ -360,7 +717,7 @@ const translations = {
       team: "Équipe",
       wins: "V",
       losses: "D",
-      totalPoints: "Pts totaux",
+      totalPoints: "PTS",
     },
   },
 } as const;
@@ -385,10 +742,10 @@ type Gender = "men" | "women";
 type SelectedTeamState = { label: string; gender: Gender } | null;
 
 const findFranchiseByName = (teamName: string, allTeams: Franchise[]) => {
-  const normalized = teamName.toLowerCase();
+  const normalized = normalizeTeamName(teamName).toLowerCase();
   return allTeams.find((team) => {
     const display = formatFranchiseName(team).toLowerCase();
-    return display === normalized || team.name.toLowerCase() === normalized;
+    return display === normalized || normalizeTeamName(team.name).toLowerCase() === normalized;
   });
 };
 
@@ -455,7 +812,7 @@ const LeaderRow = ({ leader, allFranchises }: { leader: FeaturedMatchup["leaders
 
 const MatchupTeam = ({ team, record, logo, allFranchises }: { team: string; record: string; logo?: string; allFranchises: Franchise[] }) => {
   const franchise = findFranchiseByName(team, allFranchises);
-  const displayName = franchise ? formatFranchiseName(franchise) : team;
+  const displayName = franchise ? formatFranchiseName(franchise) : normalizeTeamName(team);
   const colors = franchise?.colors ?? ["#1e293b", "#0f172a"];
   const label = franchise?.city?.trim();
   const showLabel = Boolean(label && label.toLowerCase() !== displayName.toLowerCase());
@@ -467,8 +824,24 @@ const MatchupTeam = ({ team, record, logo, allFranchises }: { team: string; reco
     .slice(0, 2)
     .toUpperCase();
 
+  const handleTeamOpenAnimation = () => {
+    if (typeof window === "undefined") return;
+    window.sessionStorage.setItem(
+      "teamPageTransition",
+      JSON.stringify({
+        teamName: displayName,
+        logo: teamLogo || "",
+        colors,
+      })
+    );
+  };
+
   return (
-    <Link href={`/team/${encodeURIComponent(displayName)}`} className="flex flex-col items-center gap-1 md:gap-2 text-center min-w-0 transition hover:opacity-80">
+    <Link
+      href={`/team/${encodeURIComponent(displayName)}`}
+      onClick={handleTeamOpenAnimation}
+      className="flex flex-col items-center gap-1 md:gap-2 text-center min-w-0 transition hover:opacity-80"
+    >
       {teamLogo ? (
         <Image
           src={teamLogo}
@@ -504,7 +877,7 @@ const ScoreTeamRow = ({
   allFranchises: Franchise[];
 }) => {
   const franchise = findFranchiseByName(team, allFranchises);
-  const displayName = franchise ? formatFranchiseName(franchise) : team;
+  const displayName = franchise ? formatFranchiseName(franchise) : normalizeTeamName(team);
   const initials = team
     .split(" ")
     .map((word) => word[0])
@@ -541,7 +914,7 @@ const ScoreTeamRow = ({
 
 const ScheduleTeam = ({ team, label, allFranchises }: { team: string; label: string; allFranchises: Franchise[] }) => {
   const franchise = findFranchiseByName(team, allFranchises);
-  const displayName = franchise ? formatFranchiseName(franchise) : team;
+  const displayName = franchise ? formatFranchiseName(franchise) : normalizeTeamName(team);
   const initials = team
     .split(" ")
     .map((word) => word[0])
@@ -1053,6 +1426,8 @@ export default function Home() {
   const [featuredArticleId, setFeaturedArticleId] = useState<string | null>(null);
   const [expandedArticleId, setExpandedArticleId] = useState<string | null>(null);
   const [newsGridStartIndex, setNewsGridStartIndex] = useState(0);
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+  const [isFeaturedVideoMuted, setIsFeaturedVideoMuted] = useState(true);
   const [touchStartX, setTouchStartX] = useState(0);
   const [touchEndX, setTouchEndX] = useState(0);
   const [isSwiping, setIsSwiping] = useState(false);
@@ -1064,6 +1439,7 @@ export default function Home() {
   const [visiblePartners, setVisiblePartners] = useState<number[]>([0, 1, 2, 3]);
   const [partnerAnimating, setPartnerAnimating] = useState<number | null>(null);
   const [dynamicCommittee, setDynamicCommittee] = useState<any[]>([]);
+  const [dynamicCommission, setDynamicCommission] = useState<any[]>([]);
   const [playerCardExpanded, setPlayerCardExpanded] = useState(true);
   const [playerData, setPlayerData] = useState<RosterPlayer | null>(null);
   const [nextGame, setNextGame] = useState<EnhancedMatchup | null>(null);
@@ -1075,7 +1451,12 @@ export default function Home() {
   const [selectedScheduleDate, setSelectedScheduleDate] = useState<Date | null>(null);
   const [allScheduledGames, setAllScheduledGames] = useState<EnhancedMatchup[]>([]);
   const scheduleScrollRef = useRef<HTMLDivElement>(null);
+  const finalBuzzerScrollRef = useRef<HTMLDivElement>(null);
   const teamsScrollRef = useRef<HTMLDivElement>(null);
+  const standingsHistoryRef = useRef<Record<string, number>>({});
+  const featuredVideoCompletionRef = useRef(false);
+  const featuredArticleStartTimeRef = useRef<number>(Date.now());
+  const featuredVideoRotateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   // Fan favorites state
   const [showFavoritePlayer, setShowFavoritePlayer] = useState(false);
@@ -1095,6 +1476,10 @@ export default function Home() {
   const [franchiseGender, setFranchiseGender] = useState<Gender>("men");
   const [playersGender, setPlayersGender] = useState<Gender>("men");
   const [teamSearch, setTeamSearch] = useState<string>("");
+  const [glowedStandingPlayerPhotos, setGlowedStandingPlayerPhotos] = useState<Record<string, boolean>>({});
+  const glowedStandingPlayerPhotoIdsRef = useRef<Set<string>>(new Set());
+  const standingsShineTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [standingsAutoShine, setStandingsAutoShine] = useState(false);
 
   // Share player card using native share API
   const sharePlayerCard = useCallback(async (platform: 'ig' | 'fb') => {
@@ -1428,12 +1813,94 @@ export default function Home() {
   const genderPlayers = playersGender === "men" ? spotlightPlayers : spotlightPlayersWomen;
   // Always use dynamic standings calculated from games - no fallback to static data
   const genderStandings = dynamicStandings.filter((s) => s.gender === standingsGender);
+  const homepageStandings = genderStandings;
   const genderFranchises = franchiseGender === "men" ? menTeams : womenTeams;
   const filteredFranchises = genderFranchises.filter(team => {
     const fullName = [team.city, team.name].filter(Boolean).join(" ").trim().toLowerCase();
     return fullName.includes(teamSearch.toLowerCase());
   });
-  const allFranchises = [...menTeams, ...womenTeams];
+  const visibleFranchises = filteredFranchises.slice(0, 7);
+  const allFranchises = useMemo(() => [...menTeams, ...womenTeams], [menTeams, womenTeams]);
+
+  useEffect(() => {
+    const cached = readHomeBootstrapCache();
+    if (!cached) {
+      return;
+    }
+
+    if (cached.menTeams.length > 0) {
+      setMenTeams(cached.menTeams);
+    }
+
+    if (cached.womenTeams.length > 0) {
+      setWomenTeams(cached.womenTeams);
+    }
+
+    if (cached.newsArticles.length > 0) {
+      const hydratedNews = cached.newsArticles.map(fromCachedNewsArticle);
+      setNewsArticles(hydratedNews);
+      if (cached.featuredArticleId) {
+        setFeaturedArticleId(cached.featuredArticleId);
+      } else {
+        setFeaturedArticleId(hydratedNews[0]?.id ?? null);
+      }
+    }
+
+    if (cached.partners.length > 0) {
+      setDynamicPartners(cached.partners);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (menTeams.length === 0 && womenTeams.length === 0) {
+      return;
+    }
+
+    mergeHomeBootstrapCache({
+      menTeams,
+      womenTeams,
+    });
+  }, [menTeams, womenTeams]);
+
+  useEffect(() => {
+    if (newsArticles.length === 0) {
+      return;
+    }
+
+    mergeHomeBootstrapCache({
+      newsArticles: newsArticles.map(toCachedNewsArticle),
+      featuredArticleId: featuredArticleId ?? newsArticles[0]?.id ?? null,
+    });
+  }, [newsArticles, featuredArticleId]);
+
+  useEffect(() => {
+    if (!Array.isArray(dynamicPartners) || dynamicPartners.length === 0) {
+      return;
+    }
+
+    mergeHomeBootstrapCache({
+      partners: dynamicPartners.map((partner) => ({
+        id: String(partner.id ?? ""),
+        name: String(partner.name ?? ""),
+        logo: String(partner.logo ?? ""),
+      })),
+    });
+  }, [dynamicPartners]);
+
+  const scrollFinalBuzzer = useCallback((direction: "prev" | "next") => {
+    const container = finalBuzzerScrollRef.current;
+    if (!container) {
+      return;
+    }
+
+    const amount = Math.max(container.clientWidth * 0.8, 280);
+    container.scrollBy({
+      left: direction === "next" ? amount : -amount,
+      behavior: "smooth",
+    });
+  }, []);
+
+
   const playerLeaders = [...genderPlayers].sort(
     (a, b) => b.leaderboard[playerMetric] - a.leaderboard[playerMetric]
   );
@@ -1455,6 +1922,108 @@ export default function Home() {
       sessionStorage.setItem('selectedGender', gender);
     }
   }, [gender]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || window.innerWidth > 768) {
+      return;
+    }
+
+    const photoNodes = Array.from(
+      document.querySelectorAll<HTMLElement>("[data-standing-player-photo-id]")
+    );
+
+    if (photoNodes.length === 0) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) {
+            return;
+          }
+
+          const element = entry.target as HTMLElement;
+          const photoId = element.dataset.standingPlayerPhotoId;
+
+          if (!photoId || glowedStandingPlayerPhotoIdsRef.current.has(photoId)) {
+            observer.unobserve(element);
+            return;
+          }
+
+          glowedStandingPlayerPhotoIdsRef.current.add(photoId);
+          setGlowedStandingPlayerPhotos((previous) => ({
+            ...previous,
+            [photoId]: true,
+          }));
+
+          observer.unobserve(element);
+        });
+      },
+      { threshold: 0.45 }
+    );
+
+    photoNodes.forEach((node) => {
+      const photoId = node.dataset.standingPlayerPhotoId;
+      if (!photoId || glowedStandingPlayerPhotoIdsRef.current.has(photoId)) {
+        return;
+      }
+      observer.observe(node);
+    });
+
+    return () => observer.disconnect();
+  }, [playersGender, playerMetric, leagueLeadersExpanded]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const standingsSection = document.getElementById("standings");
+    if (!standingsSection) {
+      return;
+    }
+
+    let wasIntersecting = false;
+    let glowDelayTimeout: NodeJS.Timeout | null = null;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && !wasIntersecting) {
+            // Wait 2 seconds before starting glow
+            glowDelayTimeout = setTimeout(() => {
+              setStandingsAutoShine(true);
+
+              if (standingsShineTimeoutRef.current) {
+                clearTimeout(standingsShineTimeoutRef.current);
+              }
+
+              standingsShineTimeoutRef.current = setTimeout(() => {
+                setStandingsAutoShine(false);
+                standingsShineTimeoutRef.current = null;
+              }, 4500); // 4.5s to match goldAutoShineTwice animation duration
+            }, 2000);
+          } else if (!entry.isIntersecting && glowDelayTimeout) {
+            clearTimeout(glowDelayTimeout);
+            glowDelayTimeout = null;
+          }
+
+          wasIntersecting = entry.isIntersecting;
+        });
+      },
+      { threshold: 0.35 }
+    );
+
+    observer.observe(standingsSection);
+
+    return () => {
+      observer.disconnect();
+      if (standingsShineTimeoutRef.current) {
+        clearTimeout(standingsShineTimeoutRef.current);
+        standingsShineTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   // Teams section now static – no auto-scroll animations
 
@@ -1507,7 +2076,6 @@ export default function Home() {
         
         const men: Franchise[] = [];
         const women: Franchise[] = [];
-        
         teamsSnapshot.docs.forEach((doc) => {
           const data = doc.data();
           const colors: [string, string] = Array.isArray(data.colors) && data.colors.length >= 2
@@ -1555,7 +2123,8 @@ export default function Home() {
           title_en: data.title_en,
           headline: data.headline,
           headline_en: data.headline_en,
-          author: data.author
+          author: data.author,
+          isPaused: data.isPaused
         });
         
         return {
@@ -1567,12 +2136,35 @@ export default function Home() {
           category: data.category || "News",
           headline: data.headline || "",
           headline_en: data.headline_en || "",
-          imageUrl: data.imageUrl,
+          imageUrl: isTrustedNewsMediaUrl(data.imageUrl) ? data.imageUrl : undefined,
+          additionalMedia: Array.isArray(data.additionalMedia)
+            ? data.additionalMedia
+                .map((item: unknown, index: number) =>
+                  normalizeAdditionalMediaItem(
+                    item && typeof item === "object"
+                      ? (item as Partial<NormalizedAdditionalMediaItem>)
+                      : null,
+                    index
+                  )
+                )
+                .filter((item: NormalizedAdditionalMediaItem | null): item is NormalizedAdditionalMediaItem => !!item)
+            : [],
+          additionalImageUrls: Array.isArray(data.additionalImageUrls)
+            ? data.additionalImageUrls.filter((url: unknown): url is string => isTrustedNewsMediaUrl(typeof url === "string" ? url : ""))
+            : [],
+          videoUrl: isTrustedNewsMediaUrl(data.videoUrl) ? data.videoUrl : undefined,
+          videoTrimStart: data.videoTrimStart ?? 0,
+          videoTrimEnd: data.videoTrimEnd ?? null,
+          videoScale: data.videoScale ?? 1,
+          videoOffsetX: data.videoOffsetX ?? 0,
+          videoOffsetY: data.videoOffsetY ?? 0,
           imagePosition: data.imagePosition ?? 50,
           createdAt: data.createdAt?.toDate() || null,
           author: data.author || "LIPROBAKIN Staff",
+          authorPhoto: data.authorPhoto || "",
+          isPaused: data.isPaused || false,
         };
-      });
+      }).filter(article => !article.isPaused); // Filter out paused articles
       
       console.log('✅ Total articles (real-time):', articles.length);
       console.log('📰 Articles:', articles.map(a => ({ id: a.id, title: a.title })));
@@ -1590,6 +2182,25 @@ export default function Home() {
     // Cleanup listener on unmount
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || newsArticles.length === 0) {
+      return;
+    }
+
+    const articleId = new URLSearchParams(window.location.search).get("article");
+    if (!articleId) {
+      return;
+    }
+
+    const matchingArticle = newsArticles.find((article) => article.id === articleId);
+    if (!matchingArticle) {
+      return;
+    }
+
+    setFeaturedArticleId(matchingArticle.id);
+    setExpandedArticleId(matchingArticle.id);
+  }, [newsArticles]);
 
   useEffect(() => {
     const fetchPartners = async () => {
@@ -1734,7 +2345,7 @@ export default function Home() {
             // Find next game for this player's team
             const upcomingGames = dynamicSpotlightGames.filter(game => {
               if (!game.dateTime) return false;
-              const now = new Date();
+              const now = getDRCNow();
               const gameDate = new Date(game.dateTime);
               return gameDate > now && (game.homeTeam === userProfile.teamName || game.awayTeam === userProfile.teamName);
             }).sort((a, b) => {
@@ -1785,7 +2396,7 @@ export default function Home() {
 
     const updateCountdown = () => {
       const gameDate = new Date(nextGame.dateTime!);
-      const now = new Date();
+      const now = getDRCNow();
       const diff = gameDate.getTime() - now.getTime();
 
       if (diff <= 0) {
@@ -1862,12 +2473,63 @@ export default function Home() {
       }
     };
     
+    const fetchCommission = async () => {
+      try {
+        const commissionRef = collection(firebaseDB, "commission");
+        const commissionSnapshot = await getDocs(commissionRef);
+        
+        const members = commissionSnapshot.docs.map((doc) => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            name: `${data.firstName || ""} ${data.lastName || ""}`.trim(),
+            role: data.role || "",
+            photo: data.photo || "",
+          };
+        }).sort((a, b) => a.name.localeCompare(b.name));
+        
+        setDynamicCommission(members);
+      } catch (error) {
+        console.error("Error fetching commission:", error);
+      }
+    };
+    
     fetchCommittee();
+    fetchCommission();
   }, []);
 
   useEffect(() => {
+    const STANDINGS_HISTORY_KEY = "liprobakin:standings-history";
+    let historyLoaded = false;
+
+    const loadStandingsHistory = () => {
+      if (historyLoaded || typeof window === "undefined") return;
+      historyLoaded = true;
+      try {
+        const raw = window.localStorage.getItem(STANDINGS_HISTORY_KEY);
+        if (!raw) return;
+        const parsed = JSON.parse(raw) as Record<string, number>;
+        if (parsed && typeof parsed === "object") {
+          standingsHistoryRef.current = parsed;
+        }
+      } catch {
+        // Ignore malformed local storage data
+      }
+    };
+
+    const persistStandingsHistory = (history: Record<string, number>) => {
+      if (typeof window === "undefined") return;
+      try {
+        window.localStorage.setItem(STANDINGS_HISTORY_KEY, JSON.stringify(history));
+      } catch {
+        // Ignore storage quota / privacy errors
+      }
+    };
+
     const calculateStandings = async () => {
       try {
+        loadStandingsHistory();
+
         // First, fetch ALL teams to ensure they all show up in standings
         const teamsRef = collection(firebaseDB, "teams");
         const teamsSnapshot = await getDocs(teamsRef);
@@ -1908,11 +2570,18 @@ export default function Home() {
         
         gamesSnapshot.docs.forEach((doc) => {
           const game = doc.data();
-          
-          if (game.winnerTeamId && game.loserTeamId) {
-            const homeTeam = game.homeTeamId;
-            const awayTeam = game.awayTeamId;
-            const winnerTeam = game.winnerTeamId;
+
+          const homeTeam = game.homeTeamId;
+          const awayTeam = game.awayTeamId;
+          const winnerTeam = game.winnerTeamId || game.winnerId;
+          const loserTeam = game.loserTeamId || (winnerTeam === homeTeam ? awayTeam : homeTeam);
+          const isCompletedGame = Boolean(
+            (winnerTeam && homeTeam && awayTeam) ||
+            game.completed === true ||
+            game.status === "completed"
+          );
+
+          if (isCompletedGame && winnerTeam && loserTeam) {
             const winnerScore = game.winnerScore || 0;
             const loserScore = game.loserScore || 0;
             const homeTeamName = game.homeTeamName || "";
@@ -1992,20 +2661,62 @@ export default function Home() {
         menStandings.forEach((s, i) => s.seed = i + 1);
         womenStandings.forEach((s, i) => s.seed = i + 1);
         
-        console.log("Final standings:", [...menStandings, ...womenStandings]);
+        const previousRanks = standingsHistoryRef.current;
+        const finalStandings = [...menStandings, ...womenStandings].map((standing) => {
+          const key = `${standing.gender}:${standing.team}`.toLowerCase();
+          const previousSeed = previousRanks[key];
+          const rankChange = typeof previousSeed === "number"
+            ? standing.seed < previousSeed
+              ? "up"
+              : standing.seed > previousSeed
+                ? "down"
+                : "same"
+            : "same";
+
+          return {
+            ...standing,
+            rankChange,
+          };
+        });
+
+        const nextRanks: Record<string, number> = {};
+        finalStandings.forEach((standing) => {
+          const key = `${standing.gender}:${standing.team}`.toLowerCase();
+          nextRanks[key] = standing.seed;
+        });
+        standingsHistoryRef.current = nextRanks;
+        persistStandingsHistory(nextRanks);
+
+        console.log("Final standings:", finalStandings);
         
-        setDynamicStandings([...menStandings, ...womenStandings]);
+        setDynamicStandings(finalStandings);
       } catch (error) {
         console.error("Error calculating standings:", error);
       }
     };
-    
+
+    const unsubscribeTeams = onSnapshot(collection(firebaseDB, "teams"), () => {
+      calculateStandings();
+    });
+
+    const unsubscribeGames = onSnapshot(collection(firebaseDB, "games"), () => {
+      calculateStandings();
+    });
+
     calculateStandings();
+
+    return () => {
+      unsubscribeTeams();
+      unsubscribeGames();
+    };
   }, []);
 
-  // Auto-rotate news articles every 10 seconds
+  // Auto-rotate non-video featured news articles every configured interval
   useEffect(() => {
-    if (newsArticles.length <= 1 || expandedArticleId) return; // Don't rotate if expanded
+    if (newsArticles.length <= 1 || expandedArticleId) return;
+
+    const featuredArticle = newsArticles.find((article) => article.id === featuredArticleId);
+    if (featuredArticle?.videoUrl) return;
     
     const interval = setInterval(() => {
       setNewsArticles(prev => {
@@ -2028,10 +2739,66 @@ export default function Home() {
         
         return prev;
       });
-    }, 15000); // 15 seconds
+    }, NEWS_ARTICLE_SWITCH_MS);
     
     return () => clearInterval(interval);
   }, [newsArticles, featuredArticleId, expandedArticleId]);
+
+  useEffect(() => {
+    return () => {
+      if (featuredVideoRotateTimeoutRef.current) {
+        clearTimeout(featuredVideoRotateTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (featuredVideoRotateTimeoutRef.current) {
+      clearTimeout(featuredVideoRotateTimeoutRef.current);
+      featuredVideoRotateTimeoutRef.current = null;
+    }
+    setIsFeaturedVideoMuted(true);
+    featuredVideoCompletionRef.current = false;
+    featuredArticleStartTimeRef.current = Date.now();
+  }, [featuredArticleId]);
+
+  useEffect(() => {
+    if (!expandedArticleId) return;
+    if (featuredVideoRotateTimeoutRef.current) {
+      clearTimeout(featuredVideoRotateTimeoutRef.current);
+      featuredVideoRotateTimeoutRef.current = null;
+    }
+  }, [expandedArticleId]);
+
+  const rotateToNextArticle = useCallback((currentFeaturedId: string) => {
+    if (newsArticles.length <= 1 || expandedArticleId) return;
+    setIsArticleChanging(true);
+    const currentIndex = newsArticles.findIndex((article) => article.id === currentFeaturedId);
+    const nextIndex = (currentIndex + 1) % newsArticles.length;
+    setTimeout(() => {
+      setFeaturedArticleId(newsArticles[nextIndex].id);
+      setTimeout(() => setIsArticleChanging(false), 50);
+    }, 300);
+  }, [newsArticles, expandedArticleId]);
+
+  const rotateToNextArticleWithDelay = useCallback((currentFeaturedId: string) => {
+    if (featuredVideoRotateTimeoutRef.current) {
+      clearTimeout(featuredVideoRotateTimeoutRef.current);
+    }
+
+    if (expandedArticleId) {
+      featuredVideoRotateTimeoutRef.current = null;
+      return;
+    }
+
+    const elapsed = Date.now() - featuredArticleStartTimeRef.current;
+    const remainingDelay = Math.max(0, NEWS_ARTICLE_SWITCH_MS - elapsed);
+
+    featuredVideoRotateTimeoutRef.current = setTimeout(() => {
+      featuredVideoRotateTimeoutRef.current = null;
+      rotateToNextArticle(currentFeaturedId);
+    }, remainingDelay);
+  }, [rotateToNextArticle, expandedArticleId]);
 
   // Auto-rotate partners - individual random rotation
   useEffect(() => {
@@ -2186,10 +2953,10 @@ export default function Home() {
         const gamesQuery = query(gamesRef, orderBy("date", "asc"));
         const snapshot = await getDocs(gamesQuery);
         
-        const now = new Date();
+        const now = getDRCNow();
         const twoAndHalfHoursInMs = 2.5 * 60 * 60 * 1000; // 2 hours and 30 minutes
         
-        console.log("Checking for live games at:", now.toLocaleString());
+        console.log("Checking for live games at (DRC time):", now.toLocaleString());
         console.log("Total games found:", snapshot.docs.length);
         
         const live = snapshot.docs
@@ -2266,14 +3033,46 @@ export default function Home() {
         // Fetch teams to get records
         const teamsRef = collection(firebaseDB, "teams");
         const teamsSnapshot = await getDocs(teamsRef);
-        const teamsMap = new Map();
+        const teamsMap = new Map<string, { wins: number; losses: number }>();
+        const teamsByName = new Map<string, { id: string; wins: number; losses: number }>();
+        const normalizeTeamName = (value: string) =>
+          value
+            .toLowerCase()
+            .replace(/[^a-z0-9\s]/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+
         teamsSnapshot.docs.forEach((doc) => {
-          const data = doc.data();
-          teamsMap.set(doc.id, {
-            wins: data.wins || 0,
-            losses: data.losses || 0,
-          });
+          const data = doc.data() as { wins?: number; losses?: number; name?: string; city?: string };
+          const wins = data.wins || 0;
+          const losses = data.losses || 0;
+          const name = (data.name || "").trim();
+          const city = (data.city || "").trim();
+          const fullName = city ? `${city} ${name}`.trim() : name;
+
+          teamsMap.set(doc.id, { wins, losses });
+
+          if (name) {
+            teamsByName.set(normalizeTeamName(name), { id: doc.id, wins, losses });
+          }
+          if (fullName) {
+            teamsByName.set(normalizeTeamName(fullName), { id: doc.id, wins, losses });
+          }
         });
+
+        const resolveTeamInfo = (teamId?: string, teamName?: string) => {
+          if (teamId && teamsMap.has(teamId)) {
+            const record = teamsMap.get(teamId)!;
+            return { id: teamId, wins: record.wins, losses: record.losses };
+          }
+
+          const normalizedName = normalizeTeamName(teamName || "");
+          if (normalizedName && teamsByName.has(normalizedName)) {
+            return teamsByName.get(normalizedName)!;
+          }
+
+          return { id: teamId || "", wins: 0, losses: 0 };
+        };
         
         // Fetch referees to get their names
         const refereesRef = collection(firebaseDB, "referees");
@@ -2282,12 +3081,32 @@ export default function Home() {
         refereesSnapshot.docs.forEach((doc) => {
           const data = doc.data();
           refereesMap.set(doc.id, {
+            id: doc.id,
             firstName: data.firstName || "",
             lastName: data.lastName || "",
+            headshot: data.headshot || "",
+            phone: data.phone || "",
+            email: data.email || "",
+            bio: data.bio || data.biography || "",
           });
         });
         
-        const allGames = snapshot.docs
+        const now = getDRCNow();
+        
+        // Get the start of current week (Monday) - DRC timezone
+        const currentDay = now.getDay();
+        const diffToMonday = currentDay === 0 ? -6 : 1 - currentDay; // If Sunday, go back 6 days, else go to Monday
+        const startOfWeek = new Date(now);
+        startOfWeek.setDate(now.getDate() + diffToMonday);
+        startOfWeek.setHours(0, 0, 0, 0);
+        
+        // Get the end of current week (Sunday)
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 6);
+        endOfWeek.setHours(23, 59, 59, 999);
+
+        // Get all upcoming games (not completed, not started yet)
+        const upcomingGames = snapshot.docs
           .map((doc) => {
             const data = doc.data();
             const dateStr = data.date || "";
@@ -2303,30 +3122,19 @@ export default function Home() {
           })
           .filter((game) => {
             if (game.completed) return false;
-            
-            const now = new Date();
-            
-            // Get the start of current week (Monday)
-            const currentDay = now.getDay();
-            const diffToMonday = currentDay === 0 ? -6 : 1 - currentDay; // If Sunday, go back 6 days, else go to Monday
-            const startOfWeek = new Date(now);
-            startOfWeek.setDate(now.getDate() + diffToMonday);
-            startOfWeek.setHours(0, 0, 0, 0);
-            
-            // Get the end of current week (Sunday)
-            const endOfWeek = new Date(startOfWeek);
-            endOfWeek.setDate(startOfWeek.getDate() + 6);
-            endOfWeek.setHours(23, 59, 59, 999);
-            
-            // Check if game is within current week
-            const gameInCurrentWeek = game.dateObj >= startOfWeek && game.dateObj <= endOfWeek;
-            
             // Hide game at exact start time
             const gameNotStarted = now < game.dateObj;
-            
-            return gameInCurrentWeek && gameNotStarted;
+            return gameNotStarted;
           })
           .sort((a, b) => a.dateObj.getTime() - b.dateObj.getTime());
+        
+        // Try to get games from current week first
+        const currentWeekGames = upcomingGames.filter((game) => {
+          return game.dateObj >= startOfWeek && game.dateObj <= endOfWeek;
+        });
+        
+        // If no games this week, use the closest upcoming games instead
+        const allGames = currentWeekGames.length > 0 ? currentWeekGames : upcomingGames;
 
         // Get top 3 for spotlight (earliest upcoming games)
         const spotlightGamesData = allGames.slice(0, 3);
@@ -2425,26 +3233,32 @@ export default function Home() {
             return `${dateStr} · ${timeStr}`;
           };
           
-          const homeTeam = teamsMap.get(game.data.homeTeamId) || { wins: 0, losses: 0 };
-          const awayTeam = teamsMap.get(game.data.awayTeamId) || { wins: 0, losses: 0 };
+          const homeTeam = resolveTeamInfo(game.data.homeTeamId, game.data.homeTeamName || game.data.homeTeam || game.data.team1);
+          const awayTeam = resolveTeamInfo(game.data.awayTeamId, game.data.awayTeamName || game.data.awayTeam || game.data.team2);
           
-          // Get referee last names from IDs
-          const getRefereeLastName = (refId: string | undefined) => {
-            if (!refId) return undefined;
+          // Map referee IDs to display metadata
+          const refereeAssignments = (game.data.referees || []).map((refId: string) => {
             const referee = refereesMap.get(refId);
-            return referee?.lastName || undefined;
-          };
+            if (!referee) return null;
+            const fullName = `${referee.firstName || ""} ${referee.lastName || ""}`.trim() || "Referee";
+            return {
+              id: refId,
+              fullName,
+              displayName: referee.lastName || referee.firstName || fullName,
+              headshot: referee.headshot || undefined,
+            } satisfies MatchupReferee;
+          }).filter(Boolean) as MatchupReferee[];
           
           // Get top player from each team's roster
           const leaders: FeaturedMatchup["leaders"] = [];
           
-          if (game.data.homeTeamId) {
-            const homeLeader = await getTopPlayerForTeam(game.data.homeTeamId, game.data.homeTeamName || "Home");
+          if (homeTeam.id) {
+            const homeLeader = await getTopPlayerForTeam(homeTeam.id, game.data.homeTeamName || game.data.homeTeam || "Home");
             if (homeLeader) leaders.push(homeLeader);
           }
           
-          if (game.data.awayTeamId) {
-            const awayLeader = await getTopPlayerForTeam(game.data.awayTeamId, game.data.awayTeamName || "Away");
+          if (awayTeam.id) {
+            const awayLeader = await getTopPlayerForTeam(awayTeam.id, game.data.awayTeamName || game.data.awayTeam || "Away");
             if (awayLeader) leaders.push(awayLeader);
           }
           
@@ -2468,9 +3282,7 @@ export default function Home() {
             awayTeamLogo: game.data.awayTeamLogo,
             gender: game.data.gender,
             dateTime: game.dateObj ? game.dateObj.toISOString() : "",
-            refereeHomeTeam1: getRefereeLastName(game.data.refereeHomeTeam1),
-            refereeHomeTeam2: getRefereeLastName(game.data.refereeHomeTeam2),
-            refereeAwayTeam: getRefereeLastName(game.data.refereeAwayTeam),
+            referees: refereeAssignments,
             leaders,
           };
         };
@@ -2488,44 +3300,82 @@ export default function Home() {
         setWeeklyScheduleGames(allWeeklyGames);
         
         // Fetch completed games for Final Buzzer section
+        const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
         const completedGamesQuery = query(
           gamesRef,
-          orderBy("date", "desc"),
-          limit(10)
+          orderBy("date", "desc")
         );
         const completedSnapshot = await getDocs(completedGamesQuery);
-        
-        // Get current date
-        const now = new Date();
-        
-        // Get the start of current week (Monday)
-        const currentDay = now.getDay();
-        const diffToMonday = currentDay === 0 ? -6 : 1 - currentDay; // If Sunday, go back 6 days, else go to Monday
-        const startOfWeek = new Date(now);
-        startOfWeek.setDate(now.getDate() + diffToMonday);
-        startOfWeek.setHours(0, 0, 0, 0);
-        
-        // Get the end of current week (Sunday)
-        const endOfWeek = new Date(startOfWeek);
-        endOfWeek.setDate(startOfWeek.getDate() + 6);
-        endOfWeek.setHours(23, 59, 59, 999);
         
         const completedGamesData = completedSnapshot.docs
           .map((doc) => {
             const data = doc.data();
+            const toDateObject = (value: any): Date | null => {
+              if (!value) return null;
+              if (value instanceof Date) return value;
+              if (typeof value?.toDate === "function") return value.toDate();
+              if (typeof value === "string" || typeof value === "number") {
+                const parsed = new Date(value);
+                return Number.isFinite(parsed.getTime()) ? parsed : null;
+              }
+              return null;
+            };
+
+            const toNumberOrNull = (value: any): number | null => {
+              if (typeof value === "number" && Number.isFinite(value)) return value;
+              if (typeof value === "string" && value.trim() !== "") {
+                const parsed = Number(value);
+                return Number.isFinite(parsed) ? parsed : null;
+              }
+              return null;
+            };
+
+            const dateObj = data.date
+              ? new Date(data.time ? `${data.date}T${data.time}` : data.date)
+              : null;
+
+            const completedAtObj = toDateObject(data.completedAt);
+            const updatedAtObj = toDateObject(data.updatedAt);
+            const effectiveCompletedAt = completedAtObj || updatedAtObj || dateObj;
+
+            const winnerScore = toNumberOrNull(data.winnerScore);
+            const loserScore = toNumberOrNull(data.loserScore);
+            const homeScore = toNumberOrNull(data.homeScore);
+            const awayScore = toNumberOrNull(data.awayScore);
+
+            const hasWinnerLoserScores =
+              winnerScore !== null && loserScore !== null;
+            const hasHomeAwayScores =
+              homeScore !== null && awayScore !== null;
+            const hasFinalScore = hasWinnerLoserScores || hasHomeAwayScores;
+
+            const isCompleted =
+              data.completed === true ||
+              data.archived === true ||
+              (Boolean(data.winnerTeamId) && hasWinnerLoserScores) ||
+              hasHomeAwayScores;
+
             return {
               id: doc.id,
               ...data,
-              dateObj: data.date ? new Date(data.date) : null,
+              dateObj,
+              completedAtObj: effectiveCompletedAt,
+              winnerScore,
+              loserScore,
+              homeScore,
+              awayScore,
+              hasFinalScore,
+              isCompleted,
             };
           })
           .filter((game: any) => {
-            // Only show completed games from the current week (Monday to Sunday)
-            if (game.completed !== true) return false;
-            if (!game.dateObj) return false;
-            return game.dateObj >= startOfWeek && game.dateObj <= endOfWeek;
+            // Show completed games with final score from the last 7 days
+            if (!game.completedAtObj) return false;
+            if (game.completedAtObj < oneWeekAgo || game.completedAtObj > now) return false;
+
+            return game.isCompleted && game.hasFinalScore;
           })
-          .sort((a: any, b: any) => (b.dateObj?.getTime() || 0) - (a.dateObj?.getTime() || 0))
+          .sort((a: any, b: any) => (b.completedAtObj?.getTime() || 0) - (a.completedAtObj?.getTime() || 0))
           .slice(0, 7);
         
         setCompletedGames(completedGamesData);
@@ -2654,6 +3504,18 @@ export default function Home() {
                   {copy.nav[slug(section) as keyof typeof copy.nav] ?? section}
                 </a>
                 ))}
+              <Link
+                href="/d2"
+                className="group relative px-2 py-1.5 text-[13px] font-bold uppercase tracking-[0.28em] text-amber-200/90 transition-colors duration-300 hover:text-amber-100"
+              >
+                <span className="bg-gradient-to-r from-amber-300 via-yellow-200 to-amber-300 bg-clip-text text-transparent">
+                  EUBAKIN
+                </span>
+                <span
+                  aria-hidden
+                  className="absolute bottom-0 left-0 h-[2px] w-full origin-left scale-x-75 bg-gradient-to-r from-transparent via-amber-300/90 to-transparent transition-transform duration-300 group-hover:scale-x-100"
+                />
+              </Link>
             </div>
             {user && !isAdmin ? (
               <div className="hidden items-center gap-3 lg:flex">
@@ -2679,6 +3541,9 @@ export default function Home() {
                 </button>
               </div>
             ) : (
+              // LOGIN BUTTON TEMPORARILY HIDDEN - UNCOMMENT TO RESTORE
+              null
+              /*
               <button
                 onClick={() => setAuthModalOpen(true)}
                 className="animated-send-btn !p-2.5"
@@ -2693,6 +3558,7 @@ export default function Home() {
                   </div>
                 </div>
               </button>
+              */
             )}
             <div className="hidden md:flex items-center gap-1.5 sm:gap-2 border-l border-white/10 pl-2 sm:pl-4">
               <button
@@ -2798,6 +3664,27 @@ export default function Home() {
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent transform translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-out" />
                 </a>
               ))}
+              <Link
+                href="/d2"
+                onClick={() => setMobileNavOpen(false)}
+                className={`group relative overflow-hidden border-l-2 border-amber-300/70 bg-gradient-to-r from-amber-500/10 via-yellow-400/5 to-transparent px-7 py-6 text-lg font-bold uppercase tracking-[0.22em] text-amber-100 transition-all duration-500 hover:border-amber-200 hover:text-yellow-50 hover:translate-x-1 transform-gpu ${
+                  mobileNavOpen
+                    ? 'opacity-100 translate-y-0'
+                    : 'opacity-0 translate-y-8'
+                }`}
+                style={{
+                  transitionDelay: mobileNavOpen ? `${400 + (mobileNavSections.length * 100)}ms` : '0ms'
+                }}
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-amber-500/0 via-amber-400/10 to-yellow-400/0 opacity-0 transition-all duration-500 group-hover:opacity-100" />
+                <div className="relative z-10 flex items-center justify-between">
+                  <span className="bg-gradient-to-r from-amber-300 via-yellow-200 to-amber-300 bg-clip-text text-transparent">EUBAKIN</span>
+                  <svg className="h-5 w-5 text-amber-200 transform transition-transform duration-300 group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-100/10 to-transparent transform translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-out" />
+              </Link>
             </div>
             
             {/* User Section with Enhanced Styling */}
@@ -2862,487 +3749,479 @@ export default function Home() {
 
       {/* News Section */}
       {newsArticles.length > 0 && featuredArticleId && (
-        <section className="w-full">
+        <section className="w-full px-4 md:px-8 lg:px-12">
           {(() => {
             const featured = newsArticles.find((article) => article.id === featuredArticleId);
             if (!featured) return null;
+            const allSecondaryArticles = newsArticles.filter((article) => article.id !== featured.id);
+
+            const getArticleTitle = (article: NewsArticle) =>
+              language === "en" && article.title_en ? article.title_en : article.title;
+
+            const getArticleExcerpt = (article: NewsArticle) => {
+              const baseText = language === "en" && article.headline_en ? article.headline_en : article.headline;
+              return baseText
+                .replace(/<[^>]*>/g, " ")
+                .replace(/\s+/g, " ")
+                .trim();
+            };
+
+            const getArticleSummary = (article: NewsArticle) =>
+              language === "en" && article.summary_en ? article.summary_en : article.summary;
+
+            const articleShareUrl =
+              typeof window === "undefined"
+                ? `https://liprobakin.com/?article=${encodeURIComponent(featured.id)}`
+                : `${window.location.origin}${window.location.pathname}?article=${encodeURIComponent(featured.id)}`;
+            const articleShareTitle = getArticleTitle(featured);
+            const articleShareExcerpt = getArticleExcerpt(featured).slice(0, 100);
+            const articleImageUrl = featured.imageUrl || "https://liprobakin.com/logos/liprobakin.png";
             
+            // Facebook: Use simple sharer URL (iOS will prompt to open FB app)
+            const facebookShareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(articleShareUrl)}`;
+            
+            // X (Twitter): Include hashtags and full share text
+            const xShareUrl = `https://x.com/intent/tweet?url=${encodeURIComponent(articleShareUrl)}&text=${encodeURIComponent(`${articleShareTitle} - ${articleShareExcerpt}`)}&hashtags=Liprobakin,Basketball`;
+            
+            // Instagram: Prepare share handler (will use native share or copy link)
+            const handleInstagramShare = async (e: React.MouseEvent) => {
+              e.preventDefault();
+              e.stopPropagation();
+              
+              // Try native share API first (mobile)
+              if (navigator.share) {
+                try {
+                  await navigator.share({
+                    title: articleShareTitle,
+                    text: `${articleShareTitle} - ${articleShareExcerpt}`,
+                    url: articleShareUrl,
+                  });
+                  return;
+                } catch (err) {
+                  // User cancelled or error - try fallback
+                  console.log('Native share cancelled, trying fallback');
+                }
+              }
+              
+              // Fallback: Copy link and try to open Instagram
+              try {
+                await navigator.clipboard.writeText(`${articleShareTitle}\n\n${articleShareUrl}`);
+                alert(language === 'fr' 
+                  ? '📋 Lien copié ! Collez-le dans votre story ou publication Instagram.'
+                  : '📋 Link copied! Paste it in your Instagram story or post.');
+                // Try to open Instagram app
+                const igDeepLink = 'instagram://app';
+                const igWebUrl = 'https://www.instagram.com';
+                window.open(igDeepLink, '_blank');
+                setTimeout(() => window.open(igWebUrl, '_blank'), 500);
+              } catch (err) {
+                // If clipboard fails, just open Instagram
+                window.open('https://www.instagram.com', '_blank');
+              }
+            };
+            
+            // Facebook: App-only deep link (no web fallback)
+            const handleFacebookShare = (e: React.MouseEvent) => {
+              e.preventDefault();
+              e.stopPropagation();
+              
+              const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+              
+              if (isMobile) {
+                const fbAppShareUrl = `fb://facewebmodal/f?href=${encodeURIComponent(articleShareUrl)}`;
+                window.location.href = fbAppShareUrl;
+                return;
+              }
+              
+              alert('Please open this on mobile to share in the Facebook app.');
+            };
+            
+            // X: Enhanced handler with app deep link attempt
+            const handleXShare = (e: React.MouseEvent) => {
+              e.preventDefault();
+              e.stopPropagation();
+              
+              const tweetText = `${articleShareTitle} - ${articleShareExcerpt}`;
+              const xAppUrl = `twitter://post?message=${encodeURIComponent(tweetText + ' ' + articleShareUrl)}`;
+              const xWebUrl = xShareUrl;
+              
+              // Open web share in popup
+              window.open(xWebUrl, '_blank', 'width=600,height=400,scrollbars=yes');
+              
+              // Also try deep link for mobile
+              if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+                window.location.href = xAppUrl;
+              }
+            };
+
             const isExpanded = expandedArticleId === featured.id;
+            // Desktop: 4 when collapsed, 2 when expanded
+            // Mobile: always 2
+            const desktopSecondaryArticles = isExpanded
+              ? allSecondaryArticles.slice(0, 2)
+              : allSecondaryArticles.slice(0, 4);
             
             return (
-              <div className="space-y-8">
-                {/* Click-away backdrop when expanded */}
-                {isExpanded && (
-                  <div 
-                    className="fixed inset-0 bg-black/50 z-40 cursor-pointer"
-                    onClick={() => setExpandedArticleId(null)}
-                    aria-label="Close article"
-                  />
-                )}
-                
-                {/* Featured Article */}
-                <div 
-                  className={`relative overflow-hidden border-y border-white/10 bg-gradient-to-br from-slate-900/80 to-slate-950/90 transition-opacity duration-300 ${isArticleChanging ? 'opacity-0' : 'opacity-100'} ${isExpanded ? 'z-50' : ''}`}
-                >
-                  {featured.imageUrl && (
-                    <div className={`relative overflow-hidden transition-all duration-500 ${isExpanded ? 'min-h-[600px]' : 'h-[600px]'}`}>
-                      <Image
-                        src={featured.imageUrl}
-                        alt={language === 'en' && featured.title_en ? featured.title_en : featured.title}
-                        fill
-                        className="object-cover"
-                        style={{ objectPosition: `center ${featured.imagePosition ?? 50}%` }}
-                        priority
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-b from-slate-950/80 via-slate-950/40 to-slate-950" />
-                      
-                      {/* Article Grid - Fixed position above title */}
-                      <div 
-                        className={`absolute left-0 right-0 px-4 md:px-8 lg:px-16 z-30 transition-all duration-700 ease-out ${
-                          isExpanded 
-                            ? 'opacity-0 translate-y-8 pointer-events-none' 
-                            : 'opacity-100 translate-y-0'
-                        }`}
-                        style={{bottom: 'calc(1.25rem - 3%)'}}
-                      >
-                        {newsArticles.length > 0 && (
-                          <>
-                            {/* Mobile Swipeable Grid */}
-                            <div className="sm:hidden">
-                            <div className="relative max-w-4xl mx-auto w-full">
-                              {/* Smooth Scroll Container - Hold and drag to scroll */}
-                              <div 
-                                className="flex gap-3 overflow-x-auto scroll-smooth snap-x snap-mandatory scrollbar-hide touch-pan-x pb-3"
-                                style={{
-                                  WebkitOverflowScrolling: 'touch',
-                                  scrollbarWidth: 'none',
-                                  msOverflowStyle: 'none'
-                                }}
-                              >
-                                {/* Individual scrollable cards - reordered to start from current featured */}
-                                {(() => {
-                                  const currentFeaturedIndex = newsArticles.findIndex(a => a.id === featuredArticleId);
-                                  const reorderedArticles = [];
-                                  for (let i = 0; i < newsArticles.length; i++) {
-                                    const articleIndex = (currentFeaturedIndex + i) % newsArticles.length;
-                                    reorderedArticles.push(newsArticles[articleIndex]);
-                                  }
-                                  return reorderedArticles.map((article) => (
-                                        <button
-                                          key={article.id}
-                                          onClick={() => {
-                                            setIsArticleChanging(true);
-                                            setTimeout(() => {
-                                              setFeaturedArticleId(article.id);
-                                              setExpandedArticleId(null);
-                                              setIsArticleChanging(false);
-                                              const newsSection = document.querySelector('section');
-                                              if (newsSection) {
-                                                newsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                                              }
-                                            }, 300);
-                                          }}
-                                          className={`group relative overflow-hidden rounded-xl border text-left transition-all duration-300 backdrop-blur-md snap-start flex-shrink-0 w-[45vw] ${
-                                            article.id === featured.id 
-                                              ? 'border-white/30 bg-white/10' 
-                                              : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10'
-                                          }`}
-                                        >
-                                          {article.id === featured.id && !expandedArticleId && (
-                                            <div className="absolute top-0 left-0 right-0 h-1 bg-white/5 overflow-hidden z-20">
-                                              <div 
-                                                className="h-full bg-white/40 backdrop-blur-md relative"
-                                                style={{
-                                                  animation: 'progressBar 15s linear infinite'
-                                                }}
-                                              >
-                                                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer" />
-                                              </div>
-                                            </div>
-                                          )}
-                                          
-                                          {article.imageUrl && (
-                                            <div className="relative h-20 overflow-hidden">
-                                              <Image
-                                                src={article.imageUrl}
-                                                alt={language === 'en' && article.title_en ? article.title_en : article.title}
-                                                fill
-                                                className="object-cover transition duration-300 group-hover:scale-105"
-                                                style={{ objectPosition: `center ${article.imagePosition ?? 50}%` }}
-                                              />
-                                              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent" />
-                                            </div>
-                                          )}
-                                          
-                                          <div className="p-2">
-                                            <span className="mb-1 inline-block text-[9px] font-semibold uppercase tracking-wider text-orange-500">
-                                              {article.category}
-                                            </span>
-                                            
-                                            <h3 className="mb-1 text-[10px] font-bold leading-tight text-white group-hover:text-orange-500 transition-colors line-clamp-2">
-                                              {language === 'en' && article.title_en ? article.title_en : article.title}
-                                            </h3>
-                                            
-                                            <p className="text-[9px] text-slate-400 line-clamp-2">
-                                              {language === 'en' && article.headline_en ? article.headline_en : article.headline}
-                                            </p>
-                                            
-                                            {article.createdAt && (
-                                              <p className="mt-1 text-[9px] text-slate-500">
-                                                {new Intl.DateTimeFormat(language === 'fr' ? "fr-FR" : "en-US", {
-                                                  month: "short",
-                                                  day: "numeric",
-                                                }).format(article.createdAt)}
-                                              </p>
-                                            )}
-                                          </div>
-                                        </button>
-                                  ));
-                                })()}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Desktop Grid */}
-                          <div className="hidden sm:block">
-                            <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 max-w-4xl mx-auto w-full">
-                              {(() => {
-                                const articlesToShow = 3;
-                                const gridArticles = [];
-                                
-                                // Find the current featured article index
-                                const currentFeaturedIndex = newsArticles.findIndex(a => a.id === featuredArticleId);
-                                
-                                // Show current featured + next 2 articles (wrapping around)
-                                for (let i = 0; i < Math.min(articlesToShow, newsArticles.length); i++) {
-                                  const articleIndex = (currentFeaturedIndex + i) % newsArticles.length;
-                                  gridArticles.push(newsArticles[articleIndex]);
-                                }
-                                
-                                return gridArticles.map((article, index) => (
-                                  <button
-                                    key={article.id}
-                                    onClick={() => {
-                                      setIsArticleChanging(true);
-                                      setTimeout(() => {
-                                        setFeaturedArticleId(article.id);
-                                        setExpandedArticleId(null);
-                                        setIsArticleChanging(false);
-                                        const newsSection = document.querySelector('section');
-                                        if (newsSection) {
-                                          newsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                                        }
-                                      }, 300);
-                                    }}
-                                    className={`group relative overflow-hidden rounded-xl border text-left transition-all duration-300 backdrop-blur-md ${
-                                      article.id === featured.id 
-                                        ? 'border-white/30 bg-white/10' 
-                                        : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10'
-                                    } ${index === 2 ? 'hidden sm:block' : ''}`}
-                                  >
-                                    {article.id === featured.id && !expandedArticleId && (
-                                      <div className="absolute top-0 left-0 right-0 h-1 bg-white/5 overflow-hidden z-20">
-                                        <div 
-                                          className="h-full bg-white/40 backdrop-blur-md relative"
-                                          style={{
-                                            animation: 'progressBar 15s linear infinite'
-                                          }}
-                                        >
-                                          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer" />
-                                        </div>
-                                      </div>
-                                    )}
-                                    
-                                    {article.imageUrl && (
-                                      <div className="relative h-20 md:h-28 overflow-hidden">
-                                        <Image
-                                          src={article.imageUrl}
-                                          alt={language === 'en' && article.title_en ? article.title_en : article.title}
-                                          fill
-                                          className="object-cover transition duration-300 group-hover:scale-105"
-                                          style={{ objectPosition: `center ${article.imagePosition ?? 50}%` }}
-                                        />
-                                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent" />
-                                      </div>
-                                    )}
-                                    
-                                    <div className="p-2 md:p-3">
-                                      <span className="mb-1 inline-block text-[9px] md:text-[10px] font-semibold uppercase tracking-wider text-orange-500">
-                                        {article.category}
-                                      </span>
-                                      
-                                      <h3 className="mb-1 md:mb-1.5 text-[10px] md:text-xs font-bold leading-tight text-white group-hover:text-orange-500 transition-colors line-clamp-2">
-                                        {language === 'en' && article.title_en ? article.title_en : article.title}
-                                      </h3>
-                                      
-                                      <p className="text-[9px] md:text-[11px] text-slate-400 line-clamp-2">
-                                        {language === 'en' && article.headline_en ? article.headline_en : article.headline}
-                                      </p>
-                                      
-                                      {article.createdAt && (
-                                        <p className="mt-1 md:mt-1.5 text-[9px] md:text-[10px] text-slate-500">
-                                          {new Intl.DateTimeFormat(language === 'fr' ? "fr-FR" : "en-US", {
-                                            month: "short",
-                                            day: "numeric",
-                                          }).format(article.createdAt)}
-                                        </p>
-                                      )}
-                                    </div>
-                                  </button>
-                                ));
-                              })()}
-                            </div>
-                          </div>
-                          </>
-                        )}
-                      </div>
-
-                      {/* Title and Headline on top of image */}
-                      <div className={`absolute inset-0 flex flex-col p-8 md:p-16 ${isExpanded ? 'relative' : 'justify-start'} z-10`}>
-                        <div className="pointer-events-auto">
-                        <div>
-                          <span className="mb-2 inline-block w-fit rounded-full bg-orange-600 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-white">
-                            {featured.category}
-                          </span>
-                          
-                          <h1 className="mb-2 text-2xl font-bold leading-tight text-white md:text-3xl lg:text-4xl max-w-4xl line-clamp-2">
-                            {language === 'en' && featured.title_en ? featured.title_en : featured.title}
-                          </h1>
-                          
-                          <p className="mb-2 text-sm md:text-base text-slate-200 max-w-3xl line-clamp-2">
-                            {language === 'en' && featured.headline_en ? featured.headline_en : featured.headline}
-                          </p>
-                          
-                          {featured.createdAt && (
-                            <p className="mb-4 text-xs text-slate-300">
-                              {formatTimeAgo(featured.createdAt)}
-                            </p>
-                          )}
-                          
-                          <AnimatedButton
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              setExpandedArticleId(isExpanded ? null : featured.id);
+              <div className="space-y-5">
+              <div className="grid gap-6 lg:grid-cols-12">
+                <div className="space-y-5 lg:col-span-7">
+                  <article
+                    className={`group overflow-hidden rounded-2xl border border-white/10 bg-slate-900/70 text-left shadow-lg shadow-black/30 transition-all duration-500 ease-out ${isExpanded ? "shadow-xl shadow-sky-500/5" : "hover:-translate-y-1 hover:border-white/20 hover:shadow-2xl hover:shadow-sky-500/10"}`}
+                  >
+                    <div className={`relative overflow-hidden transition-all duration-500 ease-out ${isExpanded ? "h-56 sm:h-72 lg:h-[340px]" : "h-64 sm:h-80 lg:h-[420px]"}`}>
+                      {featured.videoUrl ? (
+                        <>
+                          <video
+                            src={featured.videoUrl}
+                            className="h-full w-full object-cover"
+                            autoPlay
+                            muted={isFeaturedVideoMuted}
+                            playsInline
+                            onPlay={() => setIsVideoPlaying(true)}
+                            onEnded={() => {
+                              setIsVideoPlaying(false);
+                              if (featuredVideoCompletionRef.current) return;
+                              featuredVideoCompletionRef.current = true;
+                              rotateToNextArticleWithDelay(featured.id);
                             }}
-                            icon="book"
-                            ariaLabel={language === 'fr' ? (isExpanded ? "Fermer" : "Lire") : (isExpanded ? "Close" : "Read")}
+                            onLoadedMetadata={(event) => {
+                              featuredVideoCompletionRef.current = false;
+                              const start = Math.max(0, Number(featured.videoTrimStart || 0));
+                              if (start > 0) {
+                                try {
+                                  event.currentTarget.currentTime = start;
+                                } catch {
+                                  // ignore seek errors
+                                }
+                              }
+                            }}
+                            onTimeUpdate={(event) => {
+                              const end = Number(featured.videoTrimEnd || 0);
+                              if (!end || featuredVideoCompletionRef.current) return;
+                              if (event.currentTarget.currentTime >= end) {
+                                featuredVideoCompletionRef.current = true;
+                                event.currentTarget.pause();
+                                setIsVideoPlaying(false);
+                                rotateToNextArticleWithDelay(featured.id);
+                              }
+                            }}
+                            onError={() => setIsVideoPlaying(false)}
+                            style={{
+                              transform: `scale(${Math.max(1, Number(featured.videoScale || 1))}) translate(${Number(featured.videoOffsetX || 0)}%, ${Number(featured.videoOffsetY || 0)}%)`,
+                              transformOrigin: "center center",
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setIsFeaturedVideoMuted((prev) => !prev);
+                            }}
+                            aria-label={isFeaturedVideoMuted ? (language === "fr" ? "Activer le son" : "Unmute video") : (language === "fr" ? "Couper le son" : "Mute video")}
+                            className="absolute bottom-3 left-3 inline-flex items-center gap-2 rounded-full border border-white/30 bg-black/55 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm transition hover:bg-black/70"
                           >
-                            {language === 'fr' ? (isExpanded ? "Fermer" : "Lire") : (isExpanded ? "Close" : "Read")}
-                          </AnimatedButton>
-                        </div>
-                          
-                          {/* Expandable Article Content - Modern slide-in overlay with animations */}
-                          {isExpanded && (
-                            <>
-                              {/* Backdrop overlay for click-outside to close */}
-                              <div 
-                                className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 animate-in fade-in duration-300"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  // Trigger basketball animation on the close button
-                                  const closeButton = document.querySelector(`[data-article-close="${featured.id}"]`) as HTMLElement;
-                                  if (closeButton) {
-                                    closeButton.style.animation = 'basketball-bounce 0.6s ease-out';
-                                  }
-                                  setTimeout(() => {
-                                    setExpandedArticleId(null);
-                                  }, 400);
-                                }}
-                                aria-label="Close article overlay"
-                              />
-                              
-                              {/* Article content positioned above backdrop */}
-                              <div className="relative z-50">
-                                <div 
-                                  className={`overflow-hidden transition-all duration-700 ease-in-out ${
-                                    isExpanded 
-                                      ? 'max-h-[800px] opacity-100 mt-8' 
-                                      : 'max-h-0 opacity-0 mt-0'
-                                  }`}
-                                >
-                                  <div className={`transform transition-all duration-700 ease-in-out ${
-                                    isExpanded 
-                                      ? 'translate-y-0 scale-100 delay-100' 
-                                      : 'translate-y-8 scale-95'
-                                  }`}>
-                                    <div 
-                                      className="relative rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/95 via-slate-950/95 to-black/95 backdrop-blur-xl p-6 md:p-8 shadow-2xl"
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      {/* Close button - top right with basketball theme */}
-                                      <button
-                                        data-article-close={featured.id}
-                                        onClick={(e) => {
-                                          e.preventDefault();
-                                          e.stopPropagation();
-                                          // Add basketball bounce animation
-                                          const button = e.currentTarget;
-                                          button.style.animation = 'basketball-bounce 0.6s ease-out';
-                                          setTimeout(() => {
-                                            setExpandedArticleId(null);
-                                          }, 400);
-                                        }}
-                                        className="absolute top-4 right-4 flex items-center justify-center w-10 h-10 rounded-full border-2 border-orange-500/40 bg-gradient-to-br from-orange-600/20 to-orange-800/20 backdrop-blur-md text-orange-400 transition-all hover:border-orange-400 hover:from-orange-500/30 hover:to-orange-700/30 hover:text-orange-300 hover:scale-110 hover:rotate-12 active:scale-95 cursor-pointer z-50 group"
-                                        type="button"
-                                        aria-label="Close article"
-                                        style={{ boxShadow: '0 0 20px rgba(249, 115, 22, 0.3), inset 0 0 10px rgba(249, 115, 22, 0.1)' }}
-                                      >
-                                        {/* Basketball seams effect */}
-                                        <div className="absolute inset-0 rounded-full overflow-hidden opacity-30">
-                                          <div className="absolute top-0 left-1/2 w-px h-full bg-orange-400/50 -translate-x-1/2"></div>
-                                          <div className="absolute top-1/2 left-0 w-full h-px bg-orange-400/50 -translate-y-1/2"></div>
-                                        </div>
-                                        <span className="text-xl leading-none relative z-10 group-hover:scale-125 transition-transform">×</span>
-                                      </button>
-                                      
-                                      <style jsx>{`
-                                        @keyframes basketball-bounce {
-                                          0% {
-                                            transform: translateY(0) scale(1) rotate(0deg);
-                                            opacity: 1;
-                                          }
-                                          25% {
-                                            transform: translateY(-15px) scale(1.1) rotate(90deg);
-                                            opacity: 0.9;
-                                          }
-                                          50% {
-                                            transform: translateY(0) scale(0.95) rotate(180deg);
-                                            opacity: 0.7;
-                                          }
-                                          70% {
-                                            transform: translateY(-8px) scale(1.05) rotate(270deg);
-                                            opacity: 0.5;
-                                          }
-                                          85% {
-                                            transform: translateY(0) scale(0.98) rotate(340deg);
-                                            opacity: 0.3;
-                                          }
-                                          100% {
-                                            transform: translateY(50px) scale(0.5) rotate(360deg);
-                                            opacity: 0;
-                                          }
-                                        }
-                                      `}</style>
-
-                                {/* Decorative gradient line */}
-                                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-t-2xl" />
-
-                                {/* Article content with custom scrollbar */}
-                                <div className="max-h-[500px] overflow-y-auto pr-4 custom-scrollbar">
-                                  {/* Article Header */}
-                                  <div className="mb-6 pb-6 border-b border-white/10">
-                                    <h2 className="text-2xl md:text-3xl font-bold text-white mb-3 leading-tight">
-                                      {language === 'en' && featured.title_en ? featured.title_en : featured.title}
-                                    </h2>
-                                    <p className="text-base md:text-lg text-slate-300 font-medium italic">
-                                      {language === 'en' && featured.headline_en ? featured.headline_en : featured.headline}
-                                    </p>
-                                    {featured.createdAt && (
-                                      <div className="flex items-center gap-3 mt-4 text-sm text-slate-400">
-                                        <span className="flex items-center gap-1.5">
-                                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                          </svg>
-                                          {new Intl.DateTimeFormat(language === 'fr' ? "fr-FR" : "en-US", {
-                                            year: 'numeric',
-                                            month: 'long',
-                                            day: 'numeric',
-                                          }).format(featured.createdAt)}
-                                        </span>
-                                        <span className="text-slate-600">•</span>
-                                        <span className="uppercase tracking-wider text-xs font-semibold text-orange-400">
-                                          {featured.category}
-                                        </span>
-                                      </div>
-                                    )}
-                                  </div>
-                                  
-                                  {/* Article Body */}
-                                  <div className="prose prose-invert prose-slate max-w-none">
-                                    <ArticleContent 
-                                      htmlContent={language === 'en' && featured.summary_en ? featured.summary_en : featured.summary}
-                                      className="text-base md:text-lg leading-relaxed text-slate-200 space-y-4"
-                                    />
-                                  </div>
-
-                                  {/* Players/Teams Mentioned */}
-                                  <MentionedEntities 
-                                    htmlContent={language === 'en' && featured.summary_en ? featured.summary_en : featured.summary}
-                                    language={language}
-                                  />
-
-                                  {/* Article Footer */}
-                                  <div className="mt-8 pt-6 border-t border-white/10">
-                                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                                      {/* Author Info */}
-                                      <div className="flex items-center gap-3">
-                                        <div className="flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 text-white font-bold text-sm">
-                                          {(featured.author || 'LIPROBAKIN Staff').charAt(0).toUpperCase()}
-                                        </div>
-                                        <div>
-                                          <p className="text-xs text-slate-400 uppercase tracking-wider">
-                                            {language === 'fr' ? 'Publié par' : 'Posted By'}
-                                          </p>
-                                          <p className="text-sm font-semibold text-white">
-                                            {featured.author || 'LIPROBAKIN Staff'}
-                                          </p>
-                                        </div>
-                                      </div>
-                                      
-                                      {/* Share Section */}
-                                      <div className="flex flex-wrap items-center gap-3">
-                                        <span className="text-sm text-slate-400">
-                                          {language === 'fr' ? 'Partager' : 'Share'}
-                                        </span>
-                                        <div className="flex gap-2">
-                                          {/* Social Share Buttons */}
-                                          <button 
-                                            onClick={() => {
-                                              const url = typeof window !== 'undefined' ? window.location.href : '';
-                                              const text = language === 'en' && featured.title_en ? featured.title_en : featured.title;
-                                              window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`, '_blank');
-                                            }}
-                                            className="p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition text-slate-400 hover:text-white"
-                                            aria-label="Share on Facebook"
-                                          >
-                                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                                              <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-                                            </svg>
-                                          </button>
-                                          <button 
-                                            onClick={() => {
-                                              const url = typeof window !== 'undefined' ? window.location.href : '';
-                                              const text = language === 'en' && featured.title_en ? featured.title_en : featured.title;
-                                              window.open(`https://twitter.com/intent/tweet?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`, '_blank');
-                                            }}
-                                            className="p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition text-slate-400 hover:text-white"
-                                            aria-label="Share on Twitter"
-                                          >
-                                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                                              <path d="M23.953 4.57a10 10 0 01-2.825.775 4.958 4.958 0 002.163-2.723c-.951.555-2.005.959-3.127 1.184a4.92 4.92 0 00-8.384 4.482C7.69 8.095 4.067 6.13 1.64 3.162a4.822 4.822 0 00-.666 2.475c0 1.71.87 3.213 2.188 4.096a4.904 4.904 0 01-2.228-.616v.06a4.923 4.923 0 003.946 4.827 4.996 4.996 0 01-2.212.085 4.936 4.936 0 004.604 3.417 9.867 9.867 0 01-6.102 2.105c-.39 0-.779-.023-1.17-.067a13.995 13.995 0 007.557 2.209c9.053 0 13.998-7.496 13.998-13.985 0-.21 0-.42-.015-.63A9.935 9.935 0 0024 4.59z"/>
-                                            </svg>
-                                          </button>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-
-                                {/* Gradient fade at bottom */}
-                                <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-slate-950 to-transparent pointer-events-none rounded-b-2xl" />
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            </>
-                          )}
+                            <span>{isFeaturedVideoMuted ? "🔇" : "🔊"}</span>
+                            <span>{isFeaturedVideoMuted ? (language === "fr" ? "Activer" : "Unmute") : (language === "fr" ? "Muet" : "Mute")}</span>
+                          </button>
+                        </>
+                      ) : featured.imageUrl ? (
+                        <Image
+                          src={featured.imageUrl}
+                          alt={getArticleTitle(featured)}
+                          fill
+                          className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+                          style={{ objectPosition: `center ${featured.imagePosition ?? 50}%` }}
+                          priority
+                        />
+                      ) : (
+                        <div className="h-full w-full bg-slate-800" />
+                      )}
+                    </div>
+                    {!isExpanded && (
+                      <div className="article-text-content border-l-4 border-sky-500 px-4 py-4 transition-colors duration-300 group-hover:border-sky-400 sm:px-6 sm:py-5">
+                        <h4 className="mb-2 text-sm font-medium text-slate-300 sm:text-base">{featured.category}</h4>
+                        <h3 className="mb-3 text-2xl font-semibold leading-tight text-white sm:text-4xl">
+                          {getArticleTitle(featured)}
+                        </h3>
+                        <p className="text-base leading-snug text-slate-300 line-clamp-4 sm:text-lg">
+                          {getArticleExcerpt(featured)}
+                        </p>
+                        <div className="mt-4 flex items-center justify-between gap-3">
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setExpandedArticleId(featured.id);
+                            }}
+                            className="inline-flex items-center rounded-md border border-orange-400/60 px-3 py-1.5 text-sm font-medium text-orange-300 transition hover:border-orange-300 hover:text-orange-200"
+                          >
+                            {language === "fr" ? "Lire plus" : "Read more"}
+                          </button>
+                          {/* Social share icon */}
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={handleFacebookShare}
+                              aria-label={language === "fr" ? "Partager sur Facebook" : "Share on Facebook"}
+                              className="social-icon-gold inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/20 text-slate-300 transition cursor-pointer"
+                            >
+                              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor" aria-hidden>
+                                <path d="M22 12a10 10 0 10-11.56 9.88v-6.99H7.9V12h2.54V9.8c0-2.5 1.49-3.88 3.77-3.88 1.09 0 2.23.2 2.23.2v2.46H15.2c-1.2 0-1.57.74-1.57 1.5V12h2.67l-.43 2.89h-2.24v6.99A10 10 0 0022 12z" />
+                              </svg>
+                            </button>
+                          </div>
                         </div>
                       </div>
+                    )}
+                  </article>
+
+                </div>
+
+                <div className={`space-y-4 lg:col-span-5 ${isExpanded ? "hidden lg:block" : ""}`}>
+                    {desktopSecondaryArticles.map((article, index) => (
+                      <button
+                        key={article.id}
+                        type="button"
+                        onClick={() => {
+                          setIsArticleChanging(true);
+                          setTimeout(() => {
+                            setFeaturedArticleId(article.id);
+                            setExpandedArticleId(null);
+                            setIsArticleChanging(false);
+                          }, 180);
+                        }}
+                        className={`group flex w-full items-start gap-3 border-t border-sky-500/50 pt-3 text-left ${index >= 2 ? "hidden md:flex" : ""}`}
+                      >
+                        <div className="relative h-24 w-40 flex-shrink-0 overflow-hidden rounded-md bg-slate-800 sm:h-28 sm:w-44">
+                          {article.videoUrl ? (
+                            <video
+                              src={article.videoUrl}
+                              className="h-full w-full object-cover"
+                              muted
+                              playsInline
+                              preload="metadata"
+                              onLoadedMetadata={(event) => {
+                                const videoElement = event.currentTarget;
+                                const trimStart = Math.max(0, Number(article.videoTrimStart || 0));
+                                const trimEnd = Number(article.videoTrimEnd || 0);
+                                const maxPoint = trimEnd > 0 ? trimEnd : (videoElement.duration || 0);
+                                const targetTime = Math.min(trimStart + 3, Math.max(trimStart, maxPoint - 0.1));
+                                if (targetTime > 0) {
+                                  try {
+                                    videoElement.currentTime = targetTime;
+                                  } catch {
+                                    // ignore seek issues for unsupported files
+                                  }
+                                }
+                              }}
+                              style={{
+                                transform: `scale(${Math.max(1, Number(article.videoScale || 1))}) translate(${Number(article.videoOffsetX || 0)}%, ${Number(article.videoOffsetY || 0)}%)`,
+                                transformOrigin: "center center",
+                              }}
+                            />
+                          ) : article.imageUrl ? (
+                            <Image
+                              src={article.imageUrl}
+                              alt={getArticleTitle(article)}
+                              fill
+                              className="object-cover transition duration-300 group-hover:scale-105"
+                              style={{ objectPosition: `center ${article.imagePosition ?? 50}%` }}
+                            />
+                          ) : null}
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="text-sm font-medium text-slate-300 line-clamp-1">{article.category}</h4>
+                          <h3 className="mt-1 text-xl font-semibold leading-tight text-white line-clamp-2 transition-colors group-hover:text-sky-200 sm:text-2xl">
+                            {getArticleTitle(article)}
+                          </h3>
+                          <p className="mt-1 text-base leading-snug text-slate-400 line-clamp-3">
+                            {getArticleExcerpt(article)}
+                          </p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+              </div>
+
+              {/* Expanded article panel - spans full width below grid */}
+              <div
+                className={`news-expand-panel ${isExpanded ? "is-open" : "is-closed"}`}
+                aria-hidden={!isExpanded}
+              >
+                <article className="news-expand-panel-inner relative rounded-xl border border-sky-500/30 bg-[#0c1629] p-6 sm:p-8 shadow-2xl shadow-sky-900/20">
+                  <button
+                    type="button"
+                    onClick={() => setExpandedArticleId(null)}
+                    aria-label={language === "fr" ? "Fermer l'article" : "Close article"}
+                    className="absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 text-slate-300 transition hover:border-white/30 hover:text-white"
+                  >
+                    <span className="text-lg leading-none">×</span>
+                  </button>
+                  <h2 className="news-expand-panel-title text-2xl font-bold text-white sm:text-3xl leading-tight">{getArticleTitle(featured)}</h2>
+                  <p className="news-expand-panel-date mt-2 text-xs text-slate-500 tracking-wide">{formatTimeAgo(featured.createdAt || new Date())}</p>
+                  {!!(featured.additionalMedia?.length || featured.additionalImageUrls?.length) && (
+                    <div className="mt-6 space-y-4">
+                      {(featured.additionalMedia?.length
+                        ? featured.additionalMedia
+                            .map((item, index) => normalizeAdditionalMediaItem(item, index))
+                            .filter((item): item is NormalizedAdditionalMediaItem => !!item)
+                        : (featured.additionalImageUrls || [])
+                            .map((url, index) => normalizeAdditionalMediaItem({ type: "image", url, order: index + 1 }, index))
+                            .filter((item): item is NormalizedAdditionalMediaItem => !!item)
+                      )
+                        .sort((a, b) => a.order - b.order)
+                        .map((mediaItem, index) => {
+                          const wrapMode = normalizeWrapMode(mediaItem.textWrap);
+                          const wrapSide = normalizeWrapSide(mediaItem.wrapSide);
+                          const textWrapFloatClass = getTextWrapFloatClass(wrapMode, wrapSide);
+                          const alignClass = isTextWrappingMode(wrapMode) ? "" : getAdditionalMediaAlignClass(mediaItem.align);
+                          const usesTextWrap = isTextWrappingMode(wrapMode);
+                          const flowOffsetX = usesTextWrap ? Math.round(Number(mediaItem.offsetX || 0)) : 0;
+                          const flowOffsetY = usesTextWrap ? Math.round(Number(mediaItem.offsetY || 0)) : 0;
+                          return (
+                          <div
+                            key={`${featured.id}-extra-media-${index}`}
+                            className={`${getAdditionalMediaWidthClass(mediaItem.size)} ${alignClass} relative overflow-hidden rounded-xl border border-white/10 ${wrapMode === "front" ? "z-30 -mt-10" : ""} ${wrapMode === "behind" ? "z-0 -mt-10 opacity-70" : ""} ${textWrapFloatClass} ${wrapMode === "inline" ? "inline-block" : ""} ${wrapMode === "topBottom" ? "clear-both" : ""}`}
+                            style={{
+                              height: `${Math.round(mediaItem.height)}px`,
+                              width: `${Math.round(mediaItem.widthPercent || 100)}%`,
+                              transform: wrapMode === "behind" || wrapMode === "front"
+                                ? `translate(${Math.round(Number(mediaItem.offsetX || 0))}px, ${Math.round(Number(mediaItem.offsetY || 0))}px)`
+                                : undefined,
+                              shapeOutside: wrapMode === "tight" || wrapMode === "through" ? "inset(0 round 16px)" : undefined,
+                              marginTop: wrapMode === "inline" || wrapMode === "behind" || wrapMode === "front" ? undefined : `${normalizeTextDistance(mediaItem.distanceTop) + flowOffsetY}px`,
+                              marginRight: wrapMode === "inline" || wrapMode === "behind" || wrapMode === "front" ? undefined : `${normalizeTextDistance(mediaItem.distanceRight) + Math.max(0, -flowOffsetX)}px`,
+                              marginBottom: wrapMode === "inline" || wrapMode === "behind" || wrapMode === "front" ? undefined : `${normalizeTextDistance(mediaItem.distanceBottom)}px`,
+                              marginLeft: wrapMode === "inline" || wrapMode === "behind" || wrapMode === "front" ? undefined : `${normalizeTextDistance(mediaItem.distanceLeft) + Math.max(0, flowOffsetX)}px`,
+                            }}
+                          >
+                            {mediaItem.type === "video" ? (
+                              <AutoPlayOnVisibleVideo
+                                src={mediaItem.url}
+                                className="h-full w-full object-fill"
+                                style={{
+                                  objectPosition: wrapMode === "behind" || wrapMode === "front"
+                                    ? "50% 50%"
+                                    : `${50 + Number(mediaItem.offsetX || 0)}% ${50 + Number(mediaItem.offsetY || 0)}%`,
+                                }}
+                              />
+                            ) : (
+                              <Image
+                                src={mediaItem.url}
+                                alt={`${getArticleTitle(featured)} media ${index + 1}`}
+                                fill
+                                className="object-fill"
+                                style={{
+                                  objectPosition: wrapMode === "behind" || wrapMode === "front"
+                                    ? "50% 50%"
+                                    : `${50 + Number(mediaItem.offsetX || 0)}% ${50 + Number(mediaItem.offsetY || 0)}%`,
+                                }}
+                                sizes="(max-width: 768px) 100vw, 900px"
+                                unoptimized
+                              />
+                            )}
+                          </div>
+                        );
+                        })}
                     </div>
                   )}
-                </div>
+                  <div className="mt-6 article-content-body space-y-4 text-base leading-relaxed text-slate-200">
+                    <ArticleContent htmlContent={getArticleSummary(featured)} className="text-base leading-relaxed text-slate-200" />
+                    <div className="clear-both" />
+                  </div>
+                  <MentionedEntities htmlContent={getArticleSummary(featured)} language={language} />
+                  <div className="mt-8 flex justify-end border-t border-slate-700/50 pt-4">
+                    <button
+                      type="button"
+                      onClick={() => setExpandedArticleId(null)}
+                      className="text-sm font-medium text-slate-400 transition hover:text-cyan-400"
+                    >
+                      {language === "fr" ? "Fermer l'article" : "Close article"}
+                    </button>
+                  </div>
+                </article>
+              </div>
+
+              <style jsx>{`
+                .news-expand-panel {
+                  max-height: 0;
+                  margin-top: 0;
+                  opacity: 0;
+                  overflow: hidden;
+                  pointer-events: none;
+                  transform: translateY(-16px) scale(0.98);
+                  filter: blur(6px);
+                  transform-origin: top center;
+                  transition:
+                    max-height 700ms cubic-bezier(0.16, 1, 0.3, 1),
+                    margin-top 500ms cubic-bezier(0.16, 1, 0.3, 1),
+                    opacity 360ms ease,
+                    transform 700ms cubic-bezier(0.16, 1, 0.3, 1),
+                    filter 500ms ease;
+                }
+
+                .news-expand-panel.is-open {
+                  max-height: 5000px;
+                  margin-top: 1.5rem;
+                  opacity: 1;
+                  pointer-events: auto;
+                  transform: translateY(0) scale(1);
+                  filter: blur(0);
+                }
+
+                @media (max-width: 640px) {
+                  .news-expand-panel.is-open {
+                    max-height: 9999px;
+                    overflow: visible;
+                  }
+                }
+
+                .news-expand-panel-title {
+                  animation: fadeSlideIn 400ms cubic-bezier(0.16, 1, 0.3, 1) 80ms both;
+                }
+                .news-expand-panel-date {
+                  animation: fadeSlideIn 400ms cubic-bezier(0.16, 1, 0.3, 1) 120ms both;
+                }
+                .news-expand-panel .article-content-body {
+                  animation: fadeSlideIn 450ms cubic-bezier(0.16, 1, 0.3, 1) 180ms both;
+                }
+
+                @keyframes fadeSlideIn {
+                  0% {
+                    opacity: 0;
+                    transform: translateY(12px);
+                  }
+                  100% {
+                    opacity: 1;
+                    transform: translateY(0);
+                  }
+                }
+
+                .article-text-content {
+                  animation: textFadeIn 380ms cubic-bezier(0.16, 1, 0.3, 1) both;
+                }
+
+                @keyframes textFadeIn {
+                  0% {
+                    opacity: 0;
+                    transform: translateY(-8px);
+                  }
+                  100% {
+                    opacity: 1;
+                    transform: translateY(0);
+                  }
+                }
+
+                .article-content-body :global(a) {
+                  color: #22d3ee;
+                  text-decoration: none;
+                  transition: color 0.15s;
+                }
+                .article-content-body :global(a:hover) {
+                  color: #67e8f9;
+                  text-decoration: underline;
+                }
+              `}</style>
               </div>
             );
           })()}
@@ -3673,179 +4552,8 @@ export default function Home() {
         </section>
       )}
 
-      {/* Grid Layout for Main Sections */}
+      {/* Main Content Sections */}
       <main className="mx-auto max-w-6xl px-4 pb-20 pt-12 md:px-8">
-        <div className="mb-12">
-          <h1 className="text-4xl md:text-5xl font-bold text-white mb-4 text-center">
-            {language === 'fr' ? 'Tableau de bord' : 'Dashboard'}
-          </h1>
-          <p className="text-lg text-slate-300 text-center max-w-2xl mx-auto">
-            {language === 'fr' ? 'Gérer les arbitres, les membres du comité et les sites' : 'Manage referees, committee members and sites'}
-          </p>
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-20">
-          {/* Schedule Card */}
-          <a 
-            href="#schedule"
-            className="group relative overflow-hidden rounded-2xl border border-blue-500/30 bg-gradient-to-br from-blue-600/20 to-blue-900/20 p-6 transition hover:border-blue-500/50 hover:shadow-lg hover:shadow-blue-500/20"
-            onClick={(e) => {
-              e.preventDefault();
-              document.getElementById('schedule')?.scrollIntoView({ behavior: 'smooth' });
-            }}
-          >
-            <div className="relative z-10">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-3xl">📅</span>
-                <svg className="w-5 h-5 text-blue-400 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path>
-                </svg>
-              </div>
-              <h3 className="text-lg font-bold text-white mb-1">
-                {language === 'fr' ? 'Calendrier' : 'Schedule'}
-              </h3>
-              <p className="text-sm text-blue-300">
-                {language === 'fr' ? 'Voir les matchs à venir' : 'View upcoming games'}
-              </p>
-            </div>
-            <div className="absolute inset-0 bg-gradient-to-t from-blue-500/5 to-transparent opacity-0 group-hover:opacity-100 transition"></div>
-          </a>
-
-          {/* Players Card */}
-          <a 
-            href="#players"
-            className="group relative overflow-hidden rounded-2xl border border-green-500/30 bg-gradient-to-br from-green-600/20 to-green-900/20 p-6 transition hover:border-green-500/50 hover:shadow-lg hover:shadow-green-500/20"
-            onClick={(e) => {
-              e.preventDefault();
-              document.getElementById('players')?.scrollIntoView({ behavior: 'smooth' });
-            }}
-          >
-            <div className="relative z-10">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-3xl">🏀</span>
-                <svg className="w-5 h-5 text-green-400 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path>
-                </svg>
-              </div>
-              <h3 className="text-lg font-bold text-white mb-1">
-                {language === 'fr' ? 'Joueurs' : 'Players'}
-              </h3>
-              <p className="text-sm text-green-300">
-                {language === 'fr' ? 'Statistiques des joueurs' : 'Player statistics'}
-              </p>
-            </div>
-            <div className="absolute inset-0 bg-gradient-to-t from-green-500/5 to-transparent opacity-0 group-hover:opacity-100 transition"></div>
-          </a>
-
-          {/* Standings Card */}
-          <a 
-            href="#standings"
-            className="group relative overflow-hidden rounded-2xl border border-purple-500/30 bg-gradient-to-br from-purple-600/20 to-purple-900/20 p-6 transition hover:border-purple-500/50 hover:shadow-lg hover:shadow-purple-500/20"
-            onClick={(e) => {
-              e.preventDefault();
-              document.getElementById('standings')?.scrollIntoView({ behavior: 'smooth' });
-            }}
-          >
-            <div className="relative z-10">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-3xl">🏆</span>
-                <svg className="w-5 h-5 text-purple-400 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path>
-                </svg>
-              </div>
-              <h3 className="text-lg font-bold text-white mb-1">
-                {language === 'fr' ? 'Classements' : 'Standings'}
-              </h3>
-              <p className="text-sm text-purple-300">
-                {language === 'fr' ? 'Classement des équipes' : 'Team rankings'}
-              </p>
-            </div>
-            <div className="absolute inset-0 bg-gradient-to-t from-purple-500/5 to-transparent opacity-0 group-hover:opacity-100 transition"></div>
-          </a>
-
-          {/* Teams Card */}
-          <a 
-            href="#teams"
-            className="group relative overflow-hidden rounded-2xl border border-orange-500/30 bg-gradient-to-br from-orange-600/20 to-orange-900/20 p-6 transition hover:border-orange-500/50 hover:shadow-lg hover:shadow-orange-500/20"
-            onClick={(e) => {
-              e.preventDefault();
-              document.getElementById('teams')?.scrollIntoView({ behavior: 'smooth' });
-            }}
-          >
-            <div className="relative z-10">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-3xl">🏟️</span>
-                <svg className="w-5 h-5 text-orange-400 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path>
-                </svg>
-              </div>
-              <h3 className="text-lg font-bold text-white mb-1">
-                {language === 'fr' ? 'Équipes' : 'Teams'}
-              </h3>
-              <p className="text-sm text-orange-300">
-                {language === 'fr' ? 'Toutes les équipes' : 'All teams'}
-              </p>
-            </div>
-            <div className="absolute inset-0 bg-gradient-to-t from-orange-500/5 to-transparent opacity-0 group-hover:opacity-100 transition"></div>
-          </a>
-
-          {/* Stats Card */}
-          <a 
-            href="#stats"
-            className="group relative overflow-hidden rounded-2xl border border-red-500/30 bg-gradient-to-br from-red-600/20 to-red-900/20 p-6 transition hover:border-red-500/50 hover:shadow-lg hover:shadow-red-500/20"
-            onClick={(e) => {
-              e.preventDefault();
-              document.getElementById('stats')?.scrollIntoView({ behavior: 'smooth' });
-            }}
-          >
-            <div className="relative z-10">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-3xl">📊</span>
-                <svg className="w-5 h-5 text-red-400 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path>
-                </svg>
-              </div>
-              <h3 className="text-lg font-bold text-white mb-1">
-                {language === 'fr' ? 'Statistiques' : 'Statistics'}
-              </h3>
-              <p className="text-sm text-red-300">
-                {language === 'fr' ? 'Matchs en vedette' : 'Featured games'}
-              </p>
-            </div>
-            <div className="absolute inset-0 bg-gradient-to-t from-red-500/5 to-transparent opacity-0 group-hover:opacity-100 transition"></div>
-          </a>
-
-          {/* News Card */}
-          <a 
-            href="#news"
-            className="group relative overflow-hidden rounded-2xl border border-indigo-500/30 bg-gradient-to-br from-indigo-600/20 to-indigo-900/20 p-6 transition hover:border-indigo-500/50 hover:shadow-lg hover:shadow-indigo-500/20"
-            onClick={(e) => {
-              e.preventDefault();
-              const newsSection = document.querySelector('section');
-              if (newsSection) {
-                newsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-              }
-            }}
-          >
-            <div className="relative z-10">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-3xl">📰</span>
-                <svg className="w-5 h-5 text-indigo-400 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path>
-                </svg>
-              </div>
-              <h3 className="text-lg font-bold text-white mb-1">
-                {language === 'fr' ? 'Actualités' : 'News'}
-              </h3>
-              <p className="text-sm text-indigo-300">
-                {language === 'fr' ? 'Dernières nouvelles' : 'Latest news'}
-              </p>
-            </div>
-            <div className="absolute inset-0 bg-gradient-to-t from-indigo-500/5 to-transparent opacity-0 group-hover:opacity-100 transition"></div>
-          </a>
-        </div>
-
-        {/* Original sections below the grid */}
         <div className="space-y-20">
         <section id="stats" className="space-y-8">
           <SectionHeader
@@ -3878,9 +4586,22 @@ export default function Home() {
                       <div className="min-w-0 w-full">
                         <p className="text-xs md:text-sm font-semibold text-white truncate">{formatGameDateTime(matchup.tipoff, language)}</p>
                         <p className="text-[10px] md:text-xs text-slate-300 truncate">{matchup.venue}</p>
-                        {(matchup.refereeHomeTeam1 || matchup.refereeHomeTeam2 || matchup.refereeAwayTeam) && (
-                          <p className="mt-0.5 md:mt-1 text-[10px] md:text-xs text-slate-400 truncate">
-                            Refs: {[matchup.refereeHomeTeam1, matchup.refereeHomeTeam2, matchup.refereeAwayTeam].filter(Boolean).join(", ")}
+                        {matchup.referees && matchup.referees.length > 0 && (
+                          <p className="mt-0.5 md:mt-1 text-[10px] md:text-xs text-white truncate">
+                            <span className="text-white/70 mr-1">Ref:</span>
+                            {matchup.referees.map((ref, idx, arr) => (
+                              <span key={ref.id} className="inline-flex items-center">
+                                <Link
+                                  href={`/referees/${ref.id}`}
+                                  className="text-white hover:text-orange-300 underline decoration-white/30 underline-offset-4 transition-colors"
+                                >
+                                  {ref.displayName}
+                                </Link>
+                                {idx < arr.length - 1 && (
+                                  <span className="text-white/60">{", "}</span>
+                                )}
+                              </span>
+                            ))}
                           </p>
                         )}
                       </div>
@@ -4131,8 +4852,28 @@ export default function Home() {
                     <div className="space-y-2">
                       {/* Top Row: Date/Time on left, Venue & Gender on right (mobile) */}
                       <div className="flex items-center justify-between gap-2">
-                        <div className="text-xs md:text-sm font-semibold text-white flex-shrink-0">
-                          {formatGameDateTime(game.tipoff, language)}
+                        <div className="flex-shrink-0">
+                          <div className="text-xs md:text-sm font-semibold text-white">
+                            {formatGameDateTime(game.tipoff, language)}
+                          </div>
+                          {game.referees && game.referees.length > 0 && (
+                            <div className="text-[10px] md:text-xs text-white mt-0.5">
+                              <span className="text-white/70 mr-1">Ref:</span>
+                              {game.referees.map((ref, idx, arr) => (
+                                <span key={ref.id} className="inline-flex items-center">
+                                  <Link
+                                    href={`/referees/${ref.id}`}
+                                    className="text-white hover:text-orange-300 underline decoration-white/30 underline-offset-4 transition-colors"
+                                  >
+                                    {ref.displayName}
+                                  </Link>
+                                  {idx < arr.length - 1 && (
+                                    <span className="text-white/60">{", "}</span>
+                                  )}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
                         
                         {/* Venue & Gender - Horizontal on mobile, vertical on desktop */}
@@ -4228,92 +4969,193 @@ export default function Home() {
                 <p className="mt-2 text-sm text-slate-500">Check back after games are finished!</p>
               </div>
             ) : (
-              <div className="grid gap-4 grid-cols-2 sm:grid-cols-2">
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => scrollFinalBuzzer("prev")}
+                  className="absolute left-0 top-1/2 z-10 hidden -translate-y-1/2 rounded-full border border-white/20 bg-black/60 p-2 text-white transition hover:bg-black/80 md:flex"
+                  aria-label={language === "fr" ? "Matchs précédents" : "Previous games"}
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+
+                <div
+                  ref={finalBuzzerScrollRef}
+                  className="flex gap-3 overflow-x-auto pb-2 scroll-smooth snap-x snap-mandatory"
+                >
                 {completedGames.map((game) => {
-                  const homeWon = game.winnerTeamId === game.homeTeamId;
-                  const awayWon = game.winnerTeamId === game.awayTeamId;
-                  const homeScore = homeWon ? game.winnerScore : game.loserScore;
-                  const awayScore = awayWon ? game.winnerScore : game.loserScore;
+                  const hasWinnerLoserScores =
+                    typeof game.winnerScore === "number" && typeof game.loserScore === "number";
+                  const hasHomeAwayScores =
+                    typeof game.homeScore === "number" && typeof game.awayScore === "number";
+
+                  const homeScore = hasWinnerLoserScores
+                    ? game.winnerTeamId === game.homeTeamId
+                      ? game.winnerScore
+                      : game.loserScore
+                    : hasHomeAwayScores
+                      ? game.homeScore
+                      : 0;
+
+                  const awayScore = hasWinnerLoserScores
+                    ? game.winnerTeamId === game.awayTeamId
+                      ? game.winnerScore
+                      : game.loserScore
+                    : hasHomeAwayScores
+                      ? game.awayScore
+                      : 0;
+
+                  const homeWon = game.winnerTeamId
+                    ? game.winnerTeamId === game.homeTeamId
+                    : homeScore > awayScore;
+                  const awayWon = game.winnerTeamId
+                    ? game.winnerTeamId === game.awayTeamId
+                    : awayScore > homeScore;
+
+                  const gameDate = game.dateObj
+                    ? new Intl.DateTimeFormat(language === "fr" ? "fr-FR" : "en-US", {
+                        day: "2-digit",
+                        month: "2-digit",
+                      }).format(game.dateObj)
+                    : "";
+
+                  const gameTime = game.dateObj
+                    ? new Intl.DateTimeFormat(language === "fr" ? "fr-FR" : "en-US", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        hour12: false,
+                      }).format(game.dateObj)
+                    : "";
+
+                  const rawMatchday =
+                    game.matchday ??
+                    game.matchDay ??
+                    game.journee ??
+                    game.round ??
+                    game.matchdayNumber ??
+                    game.journeeNumber ??
+                    game.gameweek ??
+                    game.week;
+
+                  const matchdayNumber = (() => {
+                    if (typeof rawMatchday === "number" && Number.isFinite(rawMatchday)) {
+                      return rawMatchday;
+                    }
+                    if (typeof rawMatchday === "string") {
+                      const trimmed = rawMatchday.trim();
+                      if (!trimmed) {
+                        return null;
+                      }
+                      const numeric = Number(trimmed);
+                      if (Number.isFinite(numeric)) {
+                        return numeric;
+                      }
+                      const extracted = trimmed.match(/\d+/);
+                      if (extracted) {
+                        const parsed = Number(extracted[0]);
+                        return Number.isFinite(parsed) ? parsed : null;
+                      }
+                    }
+                    return null;
+                  })();
+
+                  const toAbbreviation = (teamName: string | undefined) => {
+                    if (!teamName) return "---";
+                    const words = teamName
+                      .split(" ")
+                      .map((value: string) => value.trim())
+                      .filter(Boolean);
+                    if (words.length === 1) {
+                      return words[0].slice(0, 3).toUpperCase();
+                    }
+                    return words
+                      .slice(0, 3)
+                      .map((value: string) => value[0])
+                      .join("")
+                      .toUpperCase();
+                  };
                   
                   return (
                     <Link
                       key={game.id}
                       href={`/game/${game.id}`}
-                      className="block rounded-2xl border border-white/5 bg-slate-900/70 p-3 sm:p-4 overflow-hidden transition-all hover:border-orange-500 hover:bg-slate-900/80 cursor-pointer"
+                      className="inline-block w-fit shrink-0 snap-start rounded-xl border border-white/10 bg-slate-950/80 p-3 sm:p-4 transition-all hover:border-orange-500/70 hover:bg-slate-900/90"
                     >
-                      <div className="flex items-center justify-between mb-2 sm:mb-3">
-                        <div className="flex items-center gap-2">
-                          <span className="rounded-full border border-white/15 px-1.5 py-0.5 sm:px-2 text-[8px] sm:text-[9px] font-semibold uppercase tracking-[0.2em] text-slate-300">
-                            FINAL
-                          </span>
-                          <span className="text-[8px] sm:text-[9px] text-slate-500 uppercase tracking-wider">
-                            {game.gender === "men" ? "M" : game.gender === "women" ? "W" : ""}
-                          </span>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-[10px] sm:text-xs text-slate-400">
-                            {game.dateObj ? new Intl.DateTimeFormat(language === 'fr' ? "fr-FR" : "en-US", {
-                              month: "short",
-                              day: "numeric",
-                            }).format(game.dateObj) : ""}
-                          </p>
-                        </div>
+                      <div className="mb-2 flex items-center justify-between text-[11px] sm:text-xs text-slate-400">
+                        <span className="font-medium tracking-wide">{gameDate}{gameTime ? `  ${gameTime}` : ""}</span>
                       </div>
-                      
-                      <div className="space-y-1.5 sm:space-y-2">
-                        {/* Away Team */}
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
+
+                      <div className="mb-2 flex items-center gap-3 text-[10px] sm:text-[11px] uppercase tracking-[0.18em] text-slate-500">
+                        <span>{matchdayNumber !== null ? `${language === "fr" ? "Journée" : "Matchday"} ${matchdayNumber}` : (language === "fr" ? "Journée" : "Matchday")}</span>
+                        <span>{game.gender === "men" ? "M" : game.gender === "women" ? "W" : ""}</span>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <div className="flex w-fit items-center border border-white/5 bg-white/[0.02] px-2 py-1.5">
+                          <div className="flex min-w-0 items-center gap-2">
                             {game.awayTeamLogo && (
                               <Image
                                 src={game.awayTeamLogo}
                                 alt={game.awayTeamName || "Away team"}
                                 width={32}
                                 height={32}
-                                className="h-5 w-5 sm:h-8 sm:w-8 rounded-full border border-white/10 bg-white/5 object-cover flex-shrink-0"
+                                className="h-7 w-7 rounded-full border border-white/10 bg-white/5 object-cover"
                               />
                             )}
-                            <span className={`text-[11px] sm:text-sm font-medium truncate ${
+                            <span className={`text-xs font-semibold tracking-[0.12em] ${
                               awayWon ? "text-white" : "text-slate-400"
-                            }`}>
-                              {game.awayTeamName || "Away"}
+                            } inline-block w-[2.8rem]`}>
+                              {toAbbreviation(game.awayTeamName)}
+                            </span>
+                            <span className={`text-lg font-bold ${
+                              awayWon ? "text-white" : "text-slate-500"
+                            } inline-block w-[2.2rem] text-right`}>
+                              {awayScore ?? 0}
                             </span>
                           </div>
-                          <span className={`text-base sm:text-xl font-bold ${
-                            awayWon ? "text-white" : "text-slate-500"
-                          }`}>
-                            {awayScore ?? 0}
-                          </span>
                         </div>
-                        
-                        {/* Home Team */}
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
+
+                        <div className="flex w-fit items-center border border-white/5 bg-white/[0.02] px-2 py-1.5">
+                          <div className="flex min-w-0 items-center gap-2">
                             {game.homeTeamLogo && (
                               <Image
                                 src={game.homeTeamLogo}
                                 alt={game.homeTeamName || "Home team"}
                                 width={32}
                                 height={32}
-                                className="h-5 w-5 sm:h-8 sm:w-8 rounded-full border border-white/10 bg-white/5 object-cover flex-shrink-0"
+                                className="h-7 w-7 rounded-full border border-white/10 bg-white/5 object-cover"
                               />
                             )}
-                            <span className={`text-[11px] sm:text-sm font-medium truncate ${
+                            <span className={`text-xs font-semibold tracking-[0.12em] ${
                               homeWon ? "text-white" : "text-slate-400"
-                            }`}>
-                              {game.homeTeamName || "Home"}
+                            } inline-block w-[2.8rem]`}>
+                              {toAbbreviation(game.homeTeamName)}
+                            </span>
+                            <span className={`text-lg font-bold ${
+                              homeWon ? "text-white" : "text-slate-500"
+                            } inline-block w-[2.2rem] text-right`}>
+                              {homeScore ?? 0}
                             </span>
                           </div>
-                          <span className={`text-base sm:text-xl font-bold ${
-                            homeWon ? "text-white" : "text-slate-500"
-                          }`}>
-                            {homeScore ?? 0}
-                          </span>
                         </div>
                       </div>
                     </Link>
                   );
                 })}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => scrollFinalBuzzer("next")}
+                  className="absolute right-0 top-1/2 z-10 hidden -translate-y-1/2 rounded-full border border-white/20 bg-black/60 p-2 text-white transition hover:bg-black/80 md:flex"
+                  aria-label={language === "fr" ? "Matchs suivants" : "Next games"}
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
               </div>
             )}
           </div>
@@ -4366,6 +5208,7 @@ export default function Home() {
                 .map((player, index) => {
                 const playerName = `${player.firstName} ${player.lastName}`.trim();
                 const playerImage = player.headshot || player.teamLogo || "/logos/liprobakin.png";
+                const playerPhotoGlowKey = `${playersGender}-${player.id}`;
                 const statValue = playerMetric === "pts" ? player.stats.pts
                   : playerMetric === "reb" ? player.stats.reb
                   : playerMetric === "ast" ? player.stats.ast
@@ -4385,7 +5228,10 @@ export default function Home() {
                         alt={`${player.name} portrait`}
                         width={180}
                         height={180}
-                        className="rounded-full border-4 border-white/10 object-cover mb-4"
+                        data-standing-player-photo-id={playerPhotoGlowKey}
+                        className={`rounded-full border-4 border-white/10 object-cover mb-4 ${
+                          glowedStandingPlayerPhotos[playerPhotoGlowKey] ? "standings-player-photo-glow-once" : ""
+                        }`}
                         style={{
                           width: 180,
                           height: 180,
@@ -4428,24 +5274,44 @@ export default function Home() {
             id="standings"
             eyebrow={sectionCopy.standings.eyebrow}
             title={sectionCopy.standings.title}
+            titleHref="/classement"
+            autoShine={standingsAutoShine}
+            shineMode="twice"
             actions={<GenderToggle value={standingsGender} onChange={setStandingsGender} language={language} />}
           />
           <div className="overflow-hidden rounded-2xl border border-white/5">
-            <div className="max-sm:overflow-x-auto max-h-[280px] overflow-y-auto">
+            <div className="max-sm:overflow-x-auto max-h-[320px] overflow-y-auto">
             <table className="w-full border-collapse text-left text-sm">
               <thead className="sticky top-0 bg-slate-950 text-sm uppercase tracking-[0.3em] text-slate-300 border-b border-white/5">
                 <tr>
-                  <th className="px-3 py-2">{copy.standingsTable.seed}</th>
-                  <th className="px-3 py-2">{copy.standingsTable.team}</th>
+                  <th className="pl-3 pr-1 py-2">N°</th>
+                  <th className="pl-1 pr-3 py-2">{copy.standingsTable.team}</th>
                   <th className="px-3 py-2">{copy.standingsTable.wins}</th>
                   <th className="px-3 py-2">{copy.standingsTable.losses}</th>
                   <th className="px-3 py-2">{copy.standingsTable.totalPoints}</th>
+                  <th className="px-2 py-2"></th>
                 </tr>
               </thead>
               <tbody>
-                {genderStandings.map((row, index) => (
-                  <tr key={row.team} className="odd:bg-white/5 hover:bg-orange-500/10 cursor-pointer transition-colors">
-                    <td className="px-3 py-2 text-slate-300">
+                {homepageStandings.map((row, index) => {
+                  const franchise = findFranchiseByName(row.team, allFranchises);
+                  const displayName = franchise ? formatFranchiseName(franchise) : normalizeTeamName(row.team);
+                  const normalizedName = displayName.replace(/^espoir\s+espoir\s+/i, "Espoir ");
+                  const truncatedName = normalizedName.length > 15
+                    ? `${normalizedName.slice(0, 12)}...`
+                    : normalizedName;
+                  const teamLogo = franchise?.logo;
+                  const initials = normalizedName
+                    .split(" ")
+                    .map((word) => word[0])
+                    .join("")
+                    .slice(0, 2)
+                    .toUpperCase();
+                  const linkTeamName = franchise ? displayName : row.team;
+
+                  return (
+                    <tr key={row.team} className="odd:bg-white/5 hover:bg-orange-500/10 cursor-pointer transition-colors">
+                    <td className="pl-3 pr-1 py-2 text-slate-300">
                       <Link 
                         href={`/team/${encodeURIComponent(row.team)}`}
                         className="block"
@@ -4453,12 +5319,26 @@ export default function Home() {
                         {row.seed}
                       </Link>
                     </td>
-                    <td className="px-3 py-2 font-semibold">
+                    <td className="pl-1 pr-3 py-2 font-semibold">
                       <Link 
-                        href={`/team/${encodeURIComponent(row.team)}`}
-                        className="block text-white group-hover:text-orange-500 transition-colors"
+                        href={`/team/${encodeURIComponent(linkTeamName)}`}
+                        className="flex items-center gap-3 text-white transition-colors hover:text-orange-500"
                       >
-                        {row.team}
+                        {teamLogo ? (
+                          <Image
+                            src={teamLogo}
+                            alt={`${displayName} logo`}
+                            width={28}
+                            height={28}
+                            className="h-7 w-7 rounded-full border border-white/10 bg-white/5 object-cover"
+                          />
+                        ) : (
+                          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-[10px] font-semibold">
+                            {initials}
+                          </span>
+                        )}
+                        <span className="truncate md:hidden" title={normalizedName}>{truncatedName}</span>
+                        <span className="hidden md:inline truncate" title={normalizedName}>{normalizedName}</span>
                       </Link>
                     </td>
                     <td className="px-3 py-2">
@@ -4485,8 +5365,18 @@ export default function Home() {
                         {row.totalPoints || getTotalPoints(row.wins, row.losses)}
                       </Link>
                     </td>
-                  </tr>
-                ))}
+                    <td className="px-2 py-2">
+                      {row.rankChange === "up" ? (
+                        <span className="text-emerald-400">▲</span>
+                      ) : row.rankChange === "down" ? (
+                        <span className="text-red-400">▼</span>
+                      ) : (
+                        <span className="text-slate-500">-</span>
+                      )}
+                    </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
             </div>
@@ -4531,6 +5421,7 @@ export default function Home() {
                 {language === 'en' ? 'No teams found' : 'Aucune équipe trouvée'}
               </p>
             )}
+
           </div>
           
           <div className={`relative mt-3 sm:mt-4 ${teamSearch ? 'px-1 sm:px-4' : 'px-1 sm:px-0 md:w-screen md:left-1/2 md:right-1/2 md:-ml-[50vw] md:-mr-[50vw] md:px-0 md:relative'}`}>
@@ -4541,7 +5432,7 @@ export default function Home() {
                   <div className="marquee-container overflow-hidden flex justify-center" style={{ width: '100%' }}>
                     <div className="marquee-content flex animate-marquee hover:animation-pause">
                       {/* First set of search results */}
-                      {filteredFranchises.map((team) => {
+                      {visibleFranchises.map((team) => {
                         const fullName = [team.city, team.name].filter(Boolean).join(" ").trim();
                         return (
                           <Link
@@ -4580,7 +5471,7 @@ export default function Home() {
                         );
                       })}
                       {/* Duplicate set for seamless loop */}
-                      {filteredFranchises.map((team) => {
+                      {visibleFranchises.map((team) => {
                         const fullName = [team.city, team.name].filter(Boolean).join(" ").trim();
                         return (
                           <Link
@@ -4630,7 +5521,7 @@ export default function Home() {
                   <div className="marquee-container overflow-hidden flex justify-center" style={{ width: '100%' }}>
                     <div className="marquee-content flex animate-marquee hover:animation-pause">
                       {/* First set of logos */}
-                      {filteredFranchises.map((team) => {
+                      {visibleFranchises.map((team) => {
                         const fullName = [team.city, team.name].filter(Boolean).join(" ").trim();
                         return (
                           <Link
@@ -4669,7 +5560,7 @@ export default function Home() {
                         );
                       })}
                       {/* Duplicate set for seamless loop */}
-                      {filteredFranchises.map((team) => {
+                      {visibleFranchises.map((team) => {
                         const fullName = [team.city, team.name].filter(Boolean).join(" ").trim();
                         return (
                           <Link
@@ -4723,9 +5614,10 @@ export default function Home() {
             title={sectionCopy.committee.title}
             description={sectionCopy.committee.description}
           />
-          {dynamicCommittee.length > 0 ? (
+          {(dynamicCommittee.length > 0 || dynamicCommission.length > 0) ? (
             <div className="overflow-x-auto overflow-y-hidden pb-4 -mx-4 px-4">
               <div className="flex gap-3 md:gap-4">
+                {/* Committee Members */}
                 {dynamicCommittee.map((member) => (
                   <Link
                     key={member.id}
@@ -4756,6 +5648,40 @@ export default function Home() {
                       </div>
                       {/* Hover overlay */}
                       <div className="absolute inset-0 bg-orange-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                  </Link>
+                ))}
+                {/* Commission Members - Blue styling */}
+                {dynamicCommission.map((member) => (
+                  <Link
+                    key={member.id}
+                    href={`/staff/${member.id}`}
+                    className="group relative overflow-hidden rounded-lg border border-white/10 bg-slate-900/50 transition-all hover:border-blue-500/30 hover:shadow-lg hover:shadow-blue-500/10 flex-shrink-0 w-[162px] sm:w-[180px] md:w-[198px]"
+                  >
+                    <div className="aspect-[4/5] relative">
+                      {member.photo ? (
+                        <Image
+                          src={member.photo}
+                          alt={member.name}
+                          fill
+                          className="object-cover transition-transform duration-500 group-hover:scale-105"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-blue-900/20 via-slate-900 to-slate-900">
+                          <div className="flex h-12 w-12 md:h-14 md:w-14 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-blue-600 text-xl md:text-2xl font-bold text-white shadow-lg">
+                            {member.name.charAt(0)}
+                          </div>
+                        </div>
+                      )}
+                      {/* Gradient overlay */}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
+                      {/* Info at bottom */}
+                      <div className="absolute bottom-0 left-0 right-0 p-2 md:p-3">
+                        <p className="font-semibold text-white text-xs md:text-sm truncate">{member.name}</p>
+                        <p className="text-[10px] md:text-xs text-blue-400 truncate">{member.role}</p>
+                      </div>
+                      {/* Hover overlay */}
+                      <div className="absolute inset-0 bg-blue-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />
                     </div>
                   </Link>
                 ))}

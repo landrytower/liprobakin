@@ -258,6 +258,126 @@ body {
   animation-play-state: paused;
 }
 
+@keyframes goldTextFlash {
+  0% {
+    color: #fde68a;
+    text-shadow: 0 0 8px rgba(251, 191, 36, 0.75), 0 0 18px rgba(245, 158, 11, 0.55);
+  }
+  100% {
+    color: inherit;
+    text-shadow: none;
+  }
+}
+
+@keyframes goldAutoShineOnce {
+  0% {
+    color: inherit;
+    text-shadow: none;
+  }
+  35% {
+    color: #fcd34d;
+    text-shadow: 0 0 8px rgba(251, 191, 36, 0.75), 0 0 18px rgba(245, 158, 11, 0.55);
+  }
+  100% {
+    color: inherit;
+    text-shadow: none;
+  }
+}
+
+/* Shine twice: first shine (0-44%), pause 1.5s (44%-78%), quick second shine (78%-100%) - Total 4.5s */
+@keyframes goldAutoShineTwice {
+  0% {
+    color: inherit;
+    text-shadow: none;
+  }
+  /* First shine peak at ~35% of first 2s = 15.5% of total */
+  15% {
+    color: #fcd34d;
+    text-shadow: 0 0 8px rgba(251, 191, 36, 0.75), 0 0 18px rgba(245, 158, 11, 0.55);
+  }
+  /* End of first shine at 44% */
+  44% {
+    color: inherit;
+    text-shadow: none;
+  }
+  /* Pause until 78% (1.5s gap) */
+  78% {
+    color: inherit;
+    text-shadow: none;
+  }
+  /* Quick second shine peak */
+  88% {
+    color: #fcd34d;
+    text-shadow: 0 0 10px rgba(251, 191, 36, 0.85), 0 0 20px rgba(245, 158, 11, 0.65);
+  }
+  100% {
+    color: inherit;
+    text-shadow: none;
+  }
+}
+
+@keyframes standingsPhotoGlowOnce {
+  0% {
+    box-shadow: 0 0 0 rgba(251, 191, 36, 0);
+  }
+  35% {
+    box-shadow:
+      0 0 0 2px rgba(251, 191, 36, 0.65),
+      0 0 14px rgba(245, 158, 11, 0.8),
+      0 0 28px rgba(249, 115, 22, 0.55);
+  }
+  100% {
+    box-shadow: 0 0 0 rgba(251, 191, 36, 0);
+  }
+}
+
+.gold-hover-text {
+  transition: color 1s ease, text-shadow 1s ease;
+}
+
+.group:hover .gold-hover-text {
+  color: #fcd34d;
+  text-shadow: 0 0 8px rgba(251, 191, 36, 0.7), 0 0 18px rgba(245, 158, 11, 0.45);
+}
+
+.social-icon-gold {
+  transition: color 220ms ease, border-color 220ms ease, background 220ms ease, box-shadow 220ms ease, transform 220ms ease;
+}
+
+.social-icon-gold:hover {
+  color: #fcd34d !important;
+  border-color: rgba(251, 191, 36, 0.75) !important;
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.16), rgba(245, 158, 11, 0.12)) !important;
+  box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.2), 0 10px 24px rgba(180, 83, 9, 0.3);
+  transform: translateY(-1px);
+}
+
+.social-icon-gold:hover svg {
+  filter: drop-shadow(0 0 8px rgba(251, 191, 36, 0.7));
+}
+
+.gold-auto-shine-once {
+  animation: goldAutoShineOnce 2s ease-out 1;
+}
+
+.gold-auto-shine-twice {
+  animation: goldAutoShineTwice 4.5s ease-out 1;
+}
+
+@media (max-width: 768px) {
+  .gold-mobile-glow {
+    animation: goldTextFlash 1s ease-out 1;
+  }
+
+  .gold-auto-shine-twice {
+    animation: goldAutoShineTwice 4.5s ease-out 1;
+  }
+
+  .standings-player-photo-glow-once {
+    animation: standingsPhotoGlowOnce 900ms ease-out 1;
+  }
+}
+
 /* Hardware acceleration for better mobile performance */
 .marquee-content {
   transform: translateZ(0);
@@ -288,3 +408,15 @@ body {
   }
 }
 
+/* Animation delay utilities for Liprobakin AI */
+.animation-delay-0 {
+  animation-delay: 0ms;
+}
+
+.animation-delay-150 {
+  animation-delay: 150ms;
+}
+
+.animation-delay-300 {
+  animation-delay: 300ms;
+}

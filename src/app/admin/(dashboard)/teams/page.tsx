@@ -7,6 +7,7 @@ import { useAdmin } from "../layout";
 import { firebaseDB, firebaseStorage, firebaseAuth } from "@/lib/firebase";
 import {
   collection,
+  getDoc,
   getDocs,
   addDoc,
   updateDoc,
@@ -18,6 +19,7 @@ import {
 } from "firebase/firestore";
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { signInWithEmailAndPassword } from "firebase/auth";
+import { logAuditAction } from "@/lib/auditLog";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -70,6 +72,10 @@ const t = {
     resetAllStats: "Reset All Stats",
     resetTeamStats: "Reset Team Stats",
     resetPlayerStats: "Reset Player Stats",
+    adjustPlayerStats: "Adjust Player Stats",
+    saveAdjustedStats: "Save Adjustments",
+    quickTeamReset: "Team Reset",
+    quickPlayerTools: "Player Tools",
     selectTeam: "Select Team",
     selectPlayer: "Select Player",
     resetting: "Resetting...",
@@ -113,6 +119,10 @@ const t = {
     resetAllStats: "Réinitialiser toutes les stats",
     resetTeamStats: "Réinitialiser une équipe",
     resetPlayerStats: "Réinitialiser un joueur",
+    adjustPlayerStats: "Ajuster les stats joueur",
+    saveAdjustedStats: "Enregistrer les ajustements",
+    quickTeamReset: "Reset équipe",
+    quickPlayerTools: "Outils joueur",
     selectTeam: "Sélectionner équipe",
     selectPlayer: "Sélectionner joueur",
     resetting: "Réinitialisation...",
@@ -152,10 +162,18 @@ export default function TeamsPage() {
 
   // Stats reset state
   const [statsResetOpen, setStatsResetOpen] = useState(false);
-  const [statsTab, setStatsTab] = useState<"all" | "team" | "player">("all");
+  const [statsTab, setStatsTab] = useState<"all" | "team" | "player" | "adjust">("all");
   const [selectedTeamId, setSelectedTeamId] = useState("");
   const [selectedPlayerId, setSelectedPlayerId] = useState("");
   const [teamRoster, setTeamRoster] = useState<{ id: string; firstName: string; lastName: string; number: number | null }[]>([]);
+  const [playerStatsForm, setPlayerStatsForm] = useState({
+    pts: "0.0",
+    reb: "0.0",
+    ast: "0.0",
+    stl: "0.0",
+    blk: "0.0",
+    gamesPlayed: "0",
+  });
   const [resetting, setResetting] = useState(false);
   
   // Password verification modal state
@@ -278,6 +296,20 @@ export default function TeamsPage() {
         updatedAt: serverTimestamp(),
       });
 
+      await logAuditAction(
+        "team_created", 
+        currentAdminUser?.id || "unknown", 
+        currentAdminUser?.email || "unknown", 
+        "team", 
+        newTeamForm.name.trim(), 
+        newTeamForm.name.trim(), 
+        {
+          gender: newTeamForm.gender,
+          hasLogo: !!logoUrl,
+          colors: colors.join(", "),
+        }
+      );
+
       setStatus({ type: "success", message: `Team "${newTeamForm.name}" created!` });
       setNewTeamForm({ name: "", gender: "men", colorsInput: "#38bdf8, #a855f7" });
       setLogoFile(null);
@@ -297,6 +329,7 @@ export default function TeamsPage() {
     setSelectedTeamId(teamId);
     setSelectedPlayerId("");
     setTeamRoster([]);
+    setPlayerStatsForm({ pts: "0.0", reb: "0.0", ast: "0.0", stl: "0.0", blk: "0.0", gamesPlayed: "0" });
 
     if (teamId) {
       try {
@@ -316,6 +349,35 @@ export default function TeamsPage() {
       }
     }
   };
+
+  useEffect(() => {
+    const loadSelectedPlayerStats = async () => {
+      if (!selectedTeamId || !selectedPlayerId) {
+        setPlayerStatsForm({ pts: "0.0", reb: "0.0", ast: "0.0", stl: "0.0", blk: "0.0", gamesPlayed: "0" });
+        return;
+      }
+
+      try {
+        const playerRef = doc(firebaseDB, `teams/${selectedTeamId}/roster/${selectedPlayerId}`);
+        const playerSnap = await getDoc(playerRef);
+        if (!playerSnap.exists()) return;
+        const data = playerSnap.data();
+        const stats = data.stats || {};
+        setPlayerStatsForm({
+          pts: String(stats.pts ?? "0.0"),
+          reb: String(stats.reb ?? "0.0"),
+          ast: String(stats.ast ?? "0.0"),
+          stl: String(stats.stl ?? "0.0"),
+          blk: String(stats.blk ?? "0.0"),
+          gamesPlayed: String(data.gamesPlayed ?? "0"),
+        });
+      } catch (error) {
+        console.error("Error loading selected player stats:", error);
+      }
+    };
+
+    loadSelectedPlayerStats();
+  }, [selectedTeamId, selectedPlayerId]);
 
   // Show password modal before reset
   const handleResetAllStats = async () => {
@@ -345,7 +407,7 @@ export default function TeamsPage() {
       
       // Perform the actual reset
       await performStatsReset();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Password verification failed:", error);
       setPasswordError(
         language === "fr" 
@@ -389,6 +451,19 @@ export default function TeamsPage() {
         })
       );
 
+      await logAuditAction(
+        "all_stats_reset", 
+        currentAdminUser?.id || "unknown", 
+        currentAdminUser?.email || "unknown", 
+        "system", 
+        "all", 
+        "Full Database Reset", 
+        {
+          gamesDeleted: gamesSnap.docs.length,
+          teamsReset: teamsSnap.docs.length,
+        }
+      );
+
       setStatus({ type: "success", message: `✓ ${copy.resetCompleteAll} Deleted ${gamesSnap.docs.length} games, reset ${teamsSnap.docs.length} teams.` });
       fetchTeams();
     } catch (error) {
@@ -427,6 +502,18 @@ export default function TeamsPage() {
         )
       );
 
+      await logAuditAction(
+        "team_stats_reset", 
+        currentAdminUser?.id || "unknown", 
+        currentAdminUser?.email || "unknown", 
+        "team", 
+        selectedTeamId, 
+        team?.name || "Unknown", 
+        {
+          playersReset: rosterSnap.docs.length,
+        }
+      );
+
       setStatus({ type: "success", message: `✓ ${copy.resetCompleteTeam} (${rosterSnap.docs.length} players)` });
       await handleSelectTeamForReset(selectedTeamId);
       fetchTeams();
@@ -454,11 +541,83 @@ export default function TeamsPage() {
         updatedAt: serverTimestamp(),
       });
 
+      await logAuditAction(
+        "player_stats_reset", 
+        currentAdminUser?.id || "unknown", 
+        currentAdminUser?.email || "unknown", 
+        "player", 
+        selectedPlayerId, 
+        player ? `${player.firstName} ${player.lastName}` : "Unknown", 
+        {
+          teamName: teams.find(t => t.id === selectedTeamId)?.name,
+          jerseyNumber: player?.number,
+        }
+      );
+
       setStatus({ type: "success", message: `✓ ${copy.resetCompletePlayer}` });
       setSelectedPlayerId("");
     } catch (error) {
       console.error("Error resetting player stats:", error);
       setStatus({ type: "error", message: "Failed to reset player stats" });
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  const handleAdjustPlayerStats = async () => {
+    if (!selectedTeamId || !selectedPlayerId) return;
+
+    const player = teamRoster.find((p) => p.id === selectedPlayerId);
+    if (!window.confirm(`⚠️ Save adjusted stats for ${player?.firstName} ${player?.lastName}?`)) return;
+
+    const normalizeStat = (value: string) => {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed.toFixed(1) : "0.0";
+    };
+
+    const gamesPlayed = Number.parseInt(playerStatsForm.gamesPlayed, 10);
+    const safeGamesPlayed = Number.isFinite(gamesPlayed) && gamesPlayed >= 0 ? gamesPlayed : 0;
+
+    setResetting(true);
+    setStatus({ type: "info", message: "Updating player stats..." });
+
+    try {
+      await updateDoc(doc(firebaseDB, `teams/${selectedTeamId}/roster/${selectedPlayerId}`), {
+        stats: {
+          pts: normalizeStat(playerStatsForm.pts),
+          reb: normalizeStat(playerStatsForm.reb),
+          ast: normalizeStat(playerStatsForm.ast),
+          stl: normalizeStat(playerStatsForm.stl),
+          blk: normalizeStat(playerStatsForm.blk),
+        },
+        gamesPlayed: safeGamesPlayed,
+        updatedAt: serverTimestamp(),
+      });
+
+      await logAuditAction(
+        "player_stats_modified",
+        currentAdminUser?.id || "unknown",
+        currentAdminUser?.email || "unknown",
+        "player",
+        selectedPlayerId,
+        player ? `${player.firstName} ${player.lastName}` : "Unknown",
+        {
+          teamName: teams.find(t => t.id === selectedTeamId)?.name,
+          stats: {
+            pts: normalizeStat(playerStatsForm.pts),
+            reb: normalizeStat(playerStatsForm.reb),
+            ast: normalizeStat(playerStatsForm.ast),
+            stl: normalizeStat(playerStatsForm.stl),
+            blk: normalizeStat(playerStatsForm.blk),
+            gamesPlayed: safeGamesPlayed,
+          },
+        }
+      );
+
+      setStatus({ type: "success", message: "✓ Player stats updated successfully." });
+    } catch (error) {
+      console.error("Error adjusting player stats:", error);
+      setStatus({ type: "error", message: "Failed to update player stats" });
     } finally {
       setResetting(false);
     }
@@ -652,32 +811,59 @@ export default function TeamsPage() {
         {filteredTeams.length === 0 ? (
           <p className="text-center text-slate-500 py-8">{copy.noTeams}</p>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-4">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7">
             {filteredTeams.map((team) => (
-              <Link
+              <div
                 key={team.id}
-                href={`/admin/edit-team/${team.id}`}
-                className="group relative overflow-hidden rounded-2xl border border-white/10 bg-slate-800/50 p-4 text-center transition hover:border-cyan-500/50 hover:bg-slate-800"
+                className="group relative overflow-hidden rounded-2xl border border-white/10 bg-slate-800/50 p-3 text-center transition hover:border-cyan-500/50 hover:bg-slate-800"
               >
-                <div className="relative mx-auto mb-3 h-16 w-16 overflow-hidden rounded-xl bg-black/40 border border-white/10">
-                  {team.logo ? (
-                    <Image
-                      src={team.logo}
-                      alt={team.name}
-                      fill
-                      className="object-contain p-1"
-                      unoptimized
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-2xl">🏀</div>
-                  )}
+                <Link href={`/admin/edit-team/${team.id}`} className="block">
+                  <div className="relative mx-auto mb-3 h-16 w-16 overflow-hidden rounded-xl border border-white/10 bg-black/40">
+                    {team.logo ? (
+                      <Image
+                        src={team.logo}
+                        alt={team.name}
+                        fill
+                        className="object-contain p-1"
+                        unoptimized
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-2xl">🏀</div>
+                    )}
+                  </div>
+                  <h3 className="truncate text-sm font-semibold text-white">{team.name}</h3>
+                  <p className="text-xs text-slate-500">{team.wins}-{team.losses}</p>
+                </Link>
+
+                <div className="mt-3 grid grid-cols-1 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={async (event) => {
+                      event.preventDefault();
+                      setStatsResetOpen(true);
+                      setStatsTab("team");
+                      await handleSelectTeamForReset(team.id);
+                    }}
+                    className="rounded-lg border border-orange-500/40 bg-orange-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-orange-200 transition hover:bg-orange-500/20"
+                  >
+                    {copy.quickTeamReset}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async (event) => {
+                      event.preventDefault();
+                      setStatsResetOpen(true);
+                      setStatsTab("adjust");
+                      await handleSelectTeamForReset(team.id);
+                    }}
+                    className="rounded-lg border border-yellow-500/40 bg-yellow-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-yellow-100 transition hover:bg-yellow-500/20"
+                  >
+                    {copy.quickPlayerTools}
+                  </button>
                 </div>
-                <h3 className="text-sm font-semibold text-white truncate">{team.name}</h3>
-                <p className="text-xs text-slate-500">
-                  {team.wins}-{team.losses}
-                </p>
-                <div className="absolute inset-0 bg-gradient-to-t from-cyan-500/5 to-transparent opacity-0 group-hover:opacity-100 transition pointer-events-none" />
-              </Link>
+
+                <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-cyan-500/5 to-transparent opacity-0 transition group-hover:opacity-100" />
+              </div>
             ))}
           </div>
         )}
@@ -735,6 +921,17 @@ export default function TeamsPage() {
               }`}
             >
               👤 {copy.resetPlayerStats}
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatsTab("adjust")}
+              className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wider transition ${
+                statsTab === "adjust"
+                  ? "bg-cyan-500/30 text-cyan-100 border border-cyan-500/50"
+                  : "bg-slate-800 text-slate-400 border border-white/10 hover:bg-slate-700"
+              }`}
+            >
+              ✏️ {copy.adjustPlayerStats}
             </button>
           </div>
 
@@ -859,6 +1056,82 @@ export default function TeamsPage() {
                 className="rounded-full border border-yellow-400/60 bg-yellow-500/20 px-6 py-2 text-xs font-semibold uppercase tracking-[0.4em] text-yellow-100 transition disabled:opacity-50"
               >
                 {resetting ? copy.resetting : copy.resetPlayerStats}
+              </button>
+            </div>
+          )}
+
+          {statsTab === "adjust" && (
+            <div className="space-y-4 rounded-2xl border border-cyan-500/30 bg-cyan-500/10 p-6">
+              <h3 className="text-lg font-semibold text-cyan-100">{copy.adjustPlayerStats}</h3>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block text-xs text-slate-300">
+                  {copy.selectTeam}
+                  <select
+                    value={selectedTeamId}
+                    onChange={(e) => handleSelectTeamForReset(e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-white/10 bg-slate-800 px-3 py-2 text-sm text-white"
+                  >
+                    <option value="">-- {copy.selectTeam} --</option>
+                    {teams
+                      .sort((a, b) => a.name.localeCompare(b.name))
+                      .map((team) => (
+                        <option key={team.id} value={team.id}>
+                          {team.name} ({team.gender === "men" ? copy.men : copy.women})
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                <label className="block text-xs text-slate-300">
+                  {copy.selectPlayer}
+                  <select
+                    value={selectedPlayerId}
+                    onChange={(e) => setSelectedPlayerId(e.target.value)}
+                    disabled={!selectedTeamId}
+                    className="mt-1 w-full rounded-xl border border-white/10 bg-slate-800 px-3 py-2 text-sm text-white disabled:opacity-50"
+                  >
+                    <option value="">-- {copy.selectPlayer} --</option>
+                    {teamRoster.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        #{p.number || "?"} {p.firstName} {p.lastName}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                {[
+                  { key: "pts", label: "PTS" },
+                  { key: "reb", label: "REB" },
+                  { key: "ast", label: "AST" },
+                  { key: "stl", label: "STL" },
+                  { key: "blk", label: "BLK" },
+                  { key: "gamesPlayed", label: "GP" },
+                ].map((item) => (
+                  <label key={item.key} className="block text-xs text-slate-300">
+                    {item.label}
+                    <input
+                      type="number"
+                      step={item.key === "gamesPlayed" ? "1" : "0.1"}
+                      min="0"
+                      value={playerStatsForm[item.key as keyof typeof playerStatsForm]}
+                      onChange={(e) =>
+                        setPlayerStatsForm((prev) => ({ ...prev, [item.key]: e.target.value }))
+                      }
+                      disabled={!selectedPlayerId}
+                      className="mt-1 w-full rounded-xl border border-white/10 bg-slate-800 px-3 py-2 text-sm text-white disabled:opacity-50"
+                    />
+                  </label>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={handleAdjustPlayerStats}
+                disabled={resetting || !selectedPlayerId}
+                className="rounded-full border border-cyan-400/60 bg-cyan-500/20 px-6 py-2 text-xs font-semibold uppercase tracking-[0.4em] text-cyan-100 transition disabled:opacity-50"
+              >
+                {resetting ? copy.resetting : copy.saveAdjustedStats}
               </button>
             </div>
           )}

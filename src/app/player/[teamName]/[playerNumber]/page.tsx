@@ -40,8 +40,10 @@ const translations = {
     profileSettings: "Profile Settings",
     viewFullStats: "View Full Stats Report",
     seasonStatistics: "Season Statistics",
+    lastFiveGamesStats: "Last 5 Games Stats",
     pointsPerGame: "Points Per Game",
     reboundsPerGame: "Rebounds Per Game",
+    assistsPerGame: "Assists Per Game",
     stealsPerGame: "Steals Per Game",
     blocksPerGame: "Blocks Per Game",
     inLeague: "in League",
@@ -92,8 +94,10 @@ const translations = {
     profileSettings: "Paramètres du Profil",
     viewFullStats: "Voir le Rapport Complet des Stats",
     seasonStatistics: "Statistiques de Saison",
+    lastFiveGamesStats: "Statistiques des 5 Derniers Matchs",
     pointsPerGame: "Points Par Match",
     reboundsPerGame: "Rebonds Par Match",
+    assistsPerGame: "Passes Décisives Par Match",
     stealsPerGame: "Interceptions Par Match",
     blocksPerGame: "Contres Par Match",
     inLeague: "dans la Ligue",
@@ -137,6 +141,19 @@ function getNationalityFlag(nationality: string): string {
   // fallback
   return "🌍";
 }
+
+const normalizeTeamLabel = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const dedupeConsecutiveWords = (value: string) => {
+  const words = value.split(/\s+/).filter(Boolean);
+  const compact = words.filter((word, index) => index === 0 || word.toLowerCase() !== words[index - 1].toLowerCase());
+  return compact.join(" ");
+};
 
 type GameLog = {
   gameId: string;
@@ -195,7 +212,8 @@ export default function PlayerProfilePage() {
         
         let foundPlayer: (RosterPlayer & { id: string }) | null = null;
         let playerTeamId = "";
-        let targetTeamDoc = null;
+        let targetTeamData: Record<string, unknown> | null = null;
+        const normalizedRequestedTeam = normalizeTeamLabel(teamName);
         
         // Find the team document that matches our team name
         for (const teamDoc of teamsSnapshot.docs) {
@@ -204,22 +222,30 @@ export default function PlayerProfilePage() {
           const teamDocCity = teamData.city ?? "";
           const fullTeamName = teamDocCity ? `${teamDocCity} ${teamDocName}` : teamDocName;
           
-          if (fullTeamName === teamName) {
-            targetTeamDoc = teamDoc;
+          const candidates = [
+            teamDocName,
+            fullTeamName,
+            dedupeConsecutiveWords(teamDocName),
+            dedupeConsecutiveWords(fullTeamName),
+          ]
+            .map((entry) => normalizeTeamLabel(entry))
+            .filter(Boolean);
+
+          if (candidates.includes(normalizedRequestedTeam)) {
+            targetTeamData = teamData as Record<string, unknown>;
             playerTeamId = teamDoc.id;
             break;
           }
         }
         
-        if (!targetTeamDoc) {
+        if (!targetTeamData) {
           setLoading(false);
           return;
         }
         
         // Extract team photo URL if available
-        const teamData = targetTeamDoc.data();
-        if (teamData.teamPhoto) {
-          setTeamPhoto(teamData.teamPhoto);
+        if (typeof targetTeamData.teamPhoto === "string" && targetTeamData.teamPhoto) {
+          setTeamPhoto(targetTeamData.teamPhoto);
         }
         
         // Fetch only the target team's roster
@@ -352,6 +378,16 @@ export default function PlayerProfilePage() {
       </div>
     );
   }
+
+  const recentGameCount = gameLogs.length;
+  const lastFiveAverages = recentGameCount
+    ? {
+        pts: (gameLogs.reduce((sum, game) => sum + game.pts, 0) / recentGameCount).toFixed(1),
+        reb: (gameLogs.reduce((sum, game) => sum + game.reb, 0) / recentGameCount).toFixed(1),
+        ast: (gameLogs.reduce((sum, game) => sum + game.ast, 0) / recentGameCount).toFixed(1),
+        stl: (gameLogs.reduce((sum, game) => sum + game.stl, 0) / recentGameCount).toFixed(1),
+      }
+    : null;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
@@ -664,6 +700,32 @@ export default function PlayerProfilePage() {
               <p className="text-[10px] font-semibold text-emerald-400 sm:text-sm">#{rankings.blk} {t.inLeague}</p>
             </div>
           </div>
+
+          {lastFiveAverages && (
+            <div className="mt-6 rounded-2xl border border-white/10 bg-slate-900/40 p-3 sm:p-5">
+              <h3 className="mb-3 text-sm font-bold uppercase tracking-wider text-slate-300 sm:mb-4 sm:text-base">
+                {t.lastFiveGamesStats}
+              </h3>
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+                <div className="rounded-xl border border-white/10 bg-slate-900/60 p-3 sm:p-4">
+                  <p className="text-[10px] uppercase tracking-wider text-slate-400 sm:text-xs">{t.pointsPerGame}</p>
+                  <p className="mt-1 text-2xl font-bold text-white sm:text-3xl">{lastFiveAverages.pts}</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-slate-900/60 p-3 sm:p-4">
+                  <p className="text-[10px] uppercase tracking-wider text-slate-400 sm:text-xs">{t.reboundsPerGame}</p>
+                  <p className="mt-1 text-2xl font-bold text-white sm:text-3xl">{lastFiveAverages.reb}</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-slate-900/60 p-3 sm:p-4">
+                  <p className="text-[10px] uppercase tracking-wider text-slate-400 sm:text-xs">{t.assistsPerGame}</p>
+                  <p className="mt-1 text-2xl font-bold text-white sm:text-3xl">{lastFiveAverages.ast}</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-slate-900/60 p-3 sm:p-4">
+                  <p className="text-[10px] uppercase tracking-wider text-slate-400 sm:text-xs">{t.stealsPerGame}</p>
+                  <p className="mt-1 text-2xl font-bold text-white sm:text-3xl">{lastFiveAverages.stl}</p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Detailed Statistics - Last 5 Games */}

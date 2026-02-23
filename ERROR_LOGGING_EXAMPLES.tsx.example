@@ -1,0 +1,155 @@
+// Example: Adding Error Logging to an Admin Component
+// This demonstrates how to integrate the error logging system
+
+import { logError } from "@/lib/errorLogger";
+import { useAuth } from "@/contexts/AuthContext";
+
+export function ExampleComponent() {
+  const { user } = useAuth();
+
+  // Example 1: Basic try-catch with error logging
+  const handleSubmit = async (data: any) => {
+    try {
+      const response = await fetch('/api/example', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`API request failed with status ${response.status}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      // Log the error with context
+      logError(error as Error, {
+        source: "ExampleComponent/handleSubmit",
+        type: "api",
+        severity: "high",
+        userId: user?.uid,
+        userEmail: user?.email || undefined,
+        metadata: {
+          endpoint: '/api/example',
+          requestData: data,
+        },
+      });
+      
+      // Re-throw or handle the error
+      throw error;
+    }
+  };
+
+  // Example 2: Database operation error logging
+  const fetchData = async () => {
+    try {
+      const snapshot = await getDocs(collection(firebaseDB, "example"));
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    } catch (error) {
+      logError(error as Error, {
+        source: "ExampleComponent/fetchData",
+        type: "database",
+        severity: "critical",
+        userId: user?.uid,
+        userEmail: user?.email || undefined,
+      });
+      return [];
+    }
+  };
+
+  // Example 3: Validation error logging
+  const validateForm = (formData: any) => {
+    if (!formData.email || !formData.email.includes('@')) {
+      const error = new Error('Invalid email address');
+      logError(error, {
+        source: "ExampleComponent/validateForm",
+        type: "validation",
+        severity: "low",
+        userId: user?.uid,
+        userEmail: user?.email || undefined,
+        metadata: {
+          field: 'email',
+          value: formData.email,
+        },
+      });
+      return false;
+    }
+    return true;
+  };
+
+  // Example 4: Authentication error logging
+  const handleLogin = async (credentials: any) => {
+    try {
+      await signInWithEmailAndPassword(auth, credentials.email, credentials.password);
+    } catch (error: any) {
+      logError(error, {
+        source: "ExampleComponent/handleLogin",
+        type: "auth",
+        severity: error.code === 'auth/wrong-password' ? 'medium' : 'high',
+        metadata: {
+          errorCode: error.code,
+          email: credentials.email,
+        },
+      });
+      throw error;
+    }
+  };
+
+  return <div>Example Component</div>;
+}
+
+// Example 5: Error Boundary Component
+import React from 'react';
+import { logErrorBoundary } from "@/lib/errorLogger";
+
+class ExampleErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    // Log to error monitoring system
+    logErrorBoundary(error, errorInfo, "ExampleErrorBoundary");
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="error-fallback">
+          <h2>Something went wrong</h2>
+          <p>The error has been logged and our team will investigate.</p>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+// Example 6: Global initialization in root layout
+// Add this to your src/app/layout.tsx or root component
+
+"use client";
+
+import { useEffect } from 'react';
+import { initializeGlobalErrorHandler } from "@/lib/errorLogger";
+
+export function RootLayout({ children }: { children: React.ReactNode }) {
+  useEffect(() => {
+    // Initialize global error handlers (only runs client-side)
+    initializeGlobalErrorHandler();
+  }, []);
+
+  return (
+    <html>
+      <body>{children}</body>
+    </html>
+  );
+}

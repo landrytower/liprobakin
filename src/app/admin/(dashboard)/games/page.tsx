@@ -1,21 +1,25 @@
 "use client";
 
-import React, { useState, useEffect, FormEvent, useMemo } from "react";
+import React, { useState, useEffect, FormEvent, useMemo, useRef } from "react";
 import Image from "next/image";
 import { useAdmin } from "../layout";
 import { firebaseDB } from "@/lib/firebase";
+import { logAuditAction } from "@/lib/auditLog";
+import { recalculateLeagueStatsFromGames } from "@/lib/league-stats";
 import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 import {
   collection,
   query,
   orderBy,
+  getDocs,
   onSnapshot,
   addDoc,
   updateDoc,
   deleteDoc,
   doc,
   serverTimestamp,
+  where,
+  writeBatch,
 } from "firebase/firestore";
 
 // ============================================================================
@@ -44,6 +48,12 @@ type Referee = {
   id: string;
   firstName: string;
   lastName: string;
+};
+
+type Sponsor = {
+  id: string;
+  name: string;
+  logo: string;
 };
 
 type Matchday = {
@@ -181,6 +191,7 @@ const translations = {
     startDate: "Start Date",
     endDate: "End Date",
     saveMatchday: "Save Matchday",
+    fixDates: "Fix dates",
     deleteMatchday: "Delete Matchday",
     viewGames: "View Games",
     noMatchdays: "No matchdays created yet",
@@ -192,6 +203,9 @@ const translations = {
     noGamesForDate: "No games scheduled for this date",
     selectDate: "Select a date to view games",
     downloadPDF: "Download PDF",
+    dateRangeRequired: "No date range is set for this matchday. Please create or edit the matchday dates first.",
+    dateOutsideMatchday: "Selected date is outside this matchday range. Please pick a date between {start} and {end}, or update the matchday dates.",
+    allowedDateRange: "Allowed range: {start} to {end}",
   },
   fr: {
     title: "Gestion des Matchs",
@@ -263,6 +277,7 @@ const translations = {
     startDate: "Date de Début",
     endDate: "Date de Fin",
     saveMatchday: "Enregistrer",
+    fixDates: "Corriger dates",
     deleteMatchday: "Supprimer la Journée",
     viewGames: "Voir les Matchs",
     noMatchdays: "Aucune journée créée",
@@ -274,6 +289,9 @@ const translations = {
     noGamesForDate: "Aucun match programmé pour cette date",
     selectDate: "Sélectionnez une date pour afficher les matchs",
     downloadPDF: "Télécharger PDF",
+    dateRangeRequired: "Aucune période n'est définie pour cette journée. Veuillez d'abord créer ou modifier les dates de la journée.",
+    dateOutsideMatchday: "La date choisie est hors de la période de cette journée. Choisissez une date entre {start} et {end}, ou modifiez les dates de la journée.",
+    allowedDateRange: "Période autorisée : {start} à {end}",
   },
 };
 
@@ -317,6 +335,7 @@ export default function GamesPage() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [venues, setVenues] = useState<Venue[]>([]);
   const [referees, setReferees] = useState<Referee[]>([]);
+  const [sponsors, setSponsors] = useState<Sponsor[]>([]);
   const [matchdays, setMatchdays] = useState<Matchday[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -327,6 +346,7 @@ export default function GamesPage() {
   const [matchdayFormState, setMatchdayFormState] = useState<MatchdayFormState>(initialMatchdayFormState);
   const [submitting, setSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
+  const gameFormPanelRef = useRef<HTMLDivElement | null>(null);
 
   // Score entry state
   const [scoreEntryGame, setScoreEntryGame] = useState<Game | null>(null);
@@ -334,6 +354,14 @@ export default function GamesPage() {
 
   // Current season (could be dynamic)
   const currentSeasonId = "2024-25";
+
+  useEffect(() => {
+    if (!formVisible) return;
+    const timer = window.setTimeout(() => {
+      gameFormPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 60);
+    return () => window.clearTimeout(timer);
+  }, [formVisible]);
 
   // ============================================================================
   // DATA FETCHING
@@ -349,6 +377,11 @@ export default function GamesPage() {
     const unsubscribe = onSnapshot(gamesQuery, (snapshot) => {
       const fetchedGames: Game[] = snapshot.docs.map((docSnap) => {
         const data = docSnap.data();
+        const hasLegacyCompletion =
+          data.completed === true ||
+          data.winnerScore !== undefined ||
+          data.winnerTeamId ||
+          data.winnerId;
         return {
           id: docSnap.id,
           gender: data.gender || "men",
@@ -364,7 +397,7 @@ export default function GamesPage() {
           time: data.time,
           venue: data.venue,
           venueCity: data.venueCity,
-          status: data.status || (data.winnerScore ? "completed" : "scheduled"),
+          status: data.status || (hasLegacyCompletion ? "completed" : "scheduled"),
           homeScore: data.homeScore ?? data.winnerScore,
           awayScore: data.awayScore ?? data.loserScore,
           winnerId: data.winnerId || data.winnerTeamId,
@@ -457,6 +490,21 @@ export default function GamesPage() {
     return () => unsubscribe();
   }, []);
 
+  // Fetch sponsors/partners for PDF footer branding
+  useEffect(() => {
+    const partnersQuery = query(collection(firebaseDB, "partners"), orderBy("name"));
+    const unsubscribe = onSnapshot(partnersQuery, (snapshot) => {
+      setSponsors(
+        snapshot.docs.map((docSnap) => ({
+          id: docSnap.id,
+          name: docSnap.data().name || "Partner",
+          logo: docSnap.data().logo || "",
+        }))
+      );
+    });
+    return () => unsubscribe();
+  }, []);
+
   // ============================================================================
   // COMPUTED DATA
   // ============================================================================
@@ -465,6 +513,39 @@ export default function GamesPage() {
   const filteredTeams = useMemo(() => {
     return teams.filter((team) => team.gender === formState.gender);
   }, [teams, formState.gender]);
+
+  const selectedHomeTeam = useMemo(
+    () => teams.find((team) => team.id === formState.homeTeamId),
+    [teams, formState.homeTeamId]
+  );
+
+  const selectedAwayTeam = useMemo(
+    () => teams.find((team) => team.id === formState.awayTeamId),
+    [teams, formState.awayTeamId]
+  );
+
+  const selectedMatchdayForForm = useMemo(() => {
+    const exact = matchdays.find(
+      (matchday) =>
+        matchday.week === formState.week &&
+        (matchday.gender === formState.gender || matchday.gender === "all")
+    );
+
+    if (!exact) {
+      return null;
+    }
+
+    if (exact.gender === formState.gender) {
+      return exact;
+    }
+
+    return (
+      matchdays.find(
+        (matchday) =>
+          matchday.week === formState.week && matchday.gender === formState.gender
+      ) || exact
+    );
+  }, [formState.gender, formState.week, matchdays]);
 
   // Filter games based on current view and filters
   const filteredGames = useMemo(() => {
@@ -599,6 +680,38 @@ export default function GamesPage() {
     }
   };
 
+  const handleFixMatchdayDates = () => {
+    const { startDate, endDate } = matchdayFormState;
+
+    if (!startDate && !endDate) {
+      return;
+    }
+
+    if (startDate && !endDate) {
+      setMatchdayFormState((prev) => ({ ...prev, endDate: startDate }));
+      setStatusMessage({ type: "info", message: language === "fr" ? "Date de fin alignée sur la date de début" : "End date aligned to start date" });
+      return;
+    }
+
+    if (!startDate && endDate) {
+      setMatchdayFormState((prev) => ({ ...prev, startDate: endDate }));
+      setStatusMessage({ type: "info", message: language === "fr" ? "Date de début alignée sur la date de fin" : "Start date aligned to end date" });
+      return;
+    }
+
+    if (startDate > endDate) {
+      setMatchdayFormState((prev) => ({
+        ...prev,
+        startDate: endDate,
+        endDate: startDate,
+      }));
+      setStatusMessage({ type: "success", message: language === "fr" ? "Période corrigée automatiquement" : "Date range fixed automatically" });
+      return;
+    }
+
+    setStatusMessage({ type: "info", message: language === "fr" ? "Les dates sont déjà valides" : "Dates are already valid" });
+  };
+
   const handleDeleteMatchday = async (matchday: Matchday) => {
     if (!window.confirm("Are you sure you want to delete this matchday?")) return;
 
@@ -630,6 +743,36 @@ export default function GamesPage() {
     setStatusMessage({ type: "info", message: t.editGame });
   };
 
+  const handleGameDateChange = (nextDate: string) => {
+    if (!nextDate) {
+      setFormState((prev) => ({ ...prev, date: "" }));
+      return;
+    }
+
+    const hasRange =
+      selectedMatchdayForForm?.startDate && selectedMatchdayForForm?.endDate;
+
+    if (!hasRange) {
+      setStatusMessage({ type: "error", message: t.dateRangeRequired });
+      window.alert(t.dateRangeRequired);
+      return;
+    }
+
+    const start = selectedMatchdayForForm.startDate;
+    const end = selectedMatchdayForForm.endDate;
+
+    if (nextDate < start || nextDate > end) {
+      const outsideMessage = t.dateOutsideMatchday
+        .replace("{start}", start)
+        .replace("{end}", end);
+      setStatusMessage({ type: "error", message: outsideMessage });
+      window.alert(outsideMessage);
+      return;
+    }
+
+    setFormState((prev) => ({ ...prev, date: nextDate }));
+  };
+
   const handleSubmitGame = async (e: FormEvent) => {
     e.preventDefault();
 
@@ -646,6 +789,26 @@ export default function GamesPage() {
     }
     if (!formState.date || !formState.time || !formState.venue) {
       setStatusMessage({ type: "error", message: t.errorRequiredFields });
+      return;
+    }
+
+    const hasRange =
+      selectedMatchdayForForm?.startDate && selectedMatchdayForForm?.endDate;
+    if (!hasRange) {
+      setStatusMessage({ type: "error", message: t.dateRangeRequired });
+      window.alert(t.dateRangeRequired);
+      return;
+    }
+
+    if (
+      formState.date < selectedMatchdayForForm.startDate ||
+      formState.date > selectedMatchdayForForm.endDate
+    ) {
+      const outsideMessage = t.dateOutsideMatchday
+        .replace("{start}", selectedMatchdayForForm.startDate)
+        .replace("{end}", selectedMatchdayForForm.endDate);
+      setStatusMessage({ type: "error", message: outsideMessage });
+      window.alert(outsideMessage);
       return;
     }
 
@@ -682,12 +845,48 @@ export default function GamesPage() {
 
       if (formState.id) {
         await updateDoc(doc(firebaseDB, "games", formState.id), payload);
+        // Audit log for game update
+        await logAuditAction(
+          "game_updated", 
+          currentAdminUser?.id || "unknown", 
+          currentAdminUser?.email || "unknown", 
+          "game", 
+          formState.id, 
+          `${awayTeam.name} @ ${homeTeam.name}`, 
+          {
+            homeTeam: homeTeam.name,
+            awayTeam: awayTeam.name,
+            gameDate: formState.date,
+            time: formState.time,
+            venue: formState.venue,
+            week: formState.week,
+            gender: formState.gender
+          }
+        );
         setStatusMessage({ type: "success", message: t.successUpdated });
       } else {
-        await addDoc(collection(firebaseDB, "games"), {
+        const newGameRef = await addDoc(collection(firebaseDB, "games"), {
           ...payload,
           createdAt: serverTimestamp(),
         });
+        // Audit log for game creation
+        await logAuditAction(
+          "game_created", 
+          currentAdminUser?.id || "unknown", 
+          currentAdminUser?.email || "unknown", 
+          "game", 
+          newGameRef.id, 
+          `${awayTeam.name} @ ${homeTeam.name}`, 
+          {
+            homeTeam: homeTeam.name,
+            awayTeam: awayTeam.name,
+            gameDate: formState.date,
+            time: formState.time,
+            venue: formState.venue,
+            week: formState.week,
+            gender: formState.gender
+          }
+        );
         setStatusMessage({ type: "success", message: t.successCreated });
       }
 
@@ -701,10 +900,43 @@ export default function GamesPage() {
   };
 
   const handleDeleteGame = async (game: Game) => {
-    if (!window.confirm(t.confirmDelete)) return;
+    const isCompletedGame = game.status === "completed";
+    const completedWarning = language === "fr"
+      ? "\n\nCe match est terminé. Sa suppression retirera ses statistiques joueurs/équipes et recalculera automatiquement les moyennes à partir des matchs restants."
+      : "\n\nThis game is completed. Deleting it will remove its player/team stats contribution and automatically recalculate averages from remaining games.";
+
+    if (!window.confirm(`${t.confirmDelete}${isCompletedGame ? completedWarning : ""}`)) return;
 
     try {
+      const playerGameStatsSnapshot = await getDocs(
+        query(collection(firebaseDB, "playerGameStats"), where("gameId", "==", game.id))
+      );
+
+      if (!playerGameStatsSnapshot.empty) {
+        const deleteBatch = writeBatch(firebaseDB);
+        playerGameStatsSnapshot.docs.forEach((statDoc) => {
+          deleteBatch.delete(statDoc.ref);
+        });
+        await deleteBatch.commit();
+      }
+
       await deleteDoc(doc(firebaseDB, "games", game.id));
+      await recalculateLeagueStatsFromGames();
+      // Audit log for game deletion
+      await logAuditAction(
+        "game_deleted", 
+        currentAdminUser?.id || "unknown", 
+        currentAdminUser?.email || "unknown", 
+        "game", 
+        game.id, 
+        `${game.awayTeamName} @ ${game.homeTeamName}`, 
+        {
+          homeTeam: game.homeTeamName,
+          awayTeam: game.awayTeamName,
+          gameDate: game.date,
+          venue: game.venue
+        }
+      );
       setStatusMessage({ type: "success", message: t.successDeleted });
     } catch (error) {
       console.error("Error deleting game:", error);
@@ -749,6 +981,25 @@ export default function GamesPage() {
         await updateDoc(loserRef, { losses: (loserTeam.losses || 0) + 1 });
       }
 
+      // Audit log for score update
+      await logAuditAction(
+        "game_stats_updated", 
+        currentAdminUser?.id || "unknown", 
+        currentAdminUser?.email || "unknown", 
+        "game", 
+        scoreEntryGame.id, 
+        `${scoreEntryGame.homeTeamName} vs ${scoreEntryGame.awayTeamName}`, 
+        {
+          homeTeam: scoreEntryGame.homeTeamName,
+          awayTeam: scoreEntryGame.awayTeamName,
+          homeScore,
+          awayScore,
+          winner: winnerTeam?.name || "Unknown",
+          loser: loserTeam?.name || "Unknown",
+          gameDate: scoreEntryGame.date
+        }
+      );
+
       setScoreEntryGame(null);
       setScoreForm({ homeScore: "", awayScore: "" });
       setStatusMessage({ type: "success", message: "Score saved and game archived" });
@@ -758,105 +1009,273 @@ export default function GamesPage() {
     }
   };
 
-  const handleDownloadPDF = () => {
-    const doc = new jsPDF();
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
-    let yPosition = 20;
+  const handleDownloadPDF = async () => {
+    const pdfDoc = new jsPDF("p", "mm", "a4");
+    const pageWidth = pdfDoc.internal.pageSize.getWidth();
+    const pageHeight = pdfDoc.internal.pageSize.getHeight();
+    const sponsorAreaTop = pageHeight - 26;
 
-    // Title
-    doc.setFontSize(18);
-    doc.text(language === "fr" ? "Liste des Matchs" : "Games List", pageWidth / 2, yPosition, { align: "center" });
-    yPosition += 15;
+    const toAbsoluteUrl = (url: string) => {
+      if (!url) return "";
+      if (url.startsWith("http://") || url.startsWith("https://")) return url;
+      return `${window.location.origin}${url.startsWith("/") ? "" : "/"}${url}`;
+    };
 
-    // Date/Matchday info
-    doc.setFontSize(12);
-    if (selectedMatchday) {
-      doc.text(
-        `${t.week} ${selectedMatchday.week} - ${selectedMatchday.startDate} ${language === "fr" ? "à" : "to"} ${selectedMatchday.endDate}`,
-        pageWidth / 2,
-        yPosition,
-        { align: "center" }
-      );
-    } else if (selectedDate) {
-      const dateFormatted = new Date(selectedDate + "T00:00:00").toLocaleDateString(language === "fr" ? "fr-FR" : "en-US", {
-        weekday: "long",
-        month: "long",
-        day: "numeric",
+    const blobToDataUrl = async (blob: Blob): Promise<string | null> => {
+      return await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const result = reader.result;
+          resolve(typeof result === "string" ? result : null);
+        };
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(blob);
       });
-      doc.text(`${dateFormatted}`, pageWidth / 2, yPosition, { align: "center" });
-    }
-    yPosition += 12;
+    };
 
-    // Games table data
-    const tableData = filteredGames.map((game, idx) => [
-      idx + 1,
-      game.homeTeamName,
-      game.awayTeamName,
-      formatDate(game.date),
-      game.time,
-      game.venue,
-      game.status ? t.gameStatus[game.status] : "Unknown",
-      game.homeScore !== undefined && game.awayScore !== undefined ? `${game.homeScore}-${game.awayScore}` : "-",
-    ]);
+    const toProxyUrl = (url: string) => {
+      const absoluteUrl = toAbsoluteUrl(url);
+      if (!absoluteUrl) return "";
+      if (absoluteUrl.startsWith(window.location.origin)) return absoluteUrl;
+      return `${window.location.origin}/api/image-proxy?url=${encodeURIComponent(absoluteUrl)}`;
+    };
 
-    // Add table using autotable
-    autoTable(doc, {
-      head: [
-        [
-          "#",
-          language === "fr" ? "Équipe Locale" : "Home Team",
-          language === "fr" ? "Équipe Visiteur" : "Away Team",
-          language === "fr" ? "Date" : "Date",
-          language === "fr" ? "Heure" : "Time",
-          language === "fr" ? "Lieu" : "Venue",
-          language === "fr" ? "Statut" : "Status",
-          language === "fr" ? "Score" : "Score",
-        ],
-      ],
-      body: tableData,
-      startY: yPosition,
-      margin: { top: 20, right: 10, bottom: 10, left: 10 },
-      styles: {
-        fontSize: 10,
-        cellPadding: 3,
-      },
-      headStyles: {
-        fillColor: [255, 140, 0],
-        textColor: [255, 255, 255],
-        fontStyle: "bold",
-      },
-      alternateRowStyles: {
-        fillColor: [240, 240, 240],
-      },
+    const toDataUrl = async (url: string): Promise<string | null> => {
+      try {
+        if (!url) return null;
+        if (url.startsWith("data:image/")) return url;
+        const response = await fetch(toProxyUrl(url), { cache: "no-store" });
+        if (!response.ok) return null;
+        const blob = await response.blob();
+        return await blobToDataUrl(blob);
+      } catch {
+        return null;
+      }
+    };
+
+    const drawDataImage = (dataUrl: string | null, x: number, y: number, width: number, height: number) => {
+      if (!dataUrl) return;
+      const format = dataUrl.includes("image/png") ? "PNG" : "JPEG";
+      try {
+        pdfDoc.addImage(dataUrl, format, x, y, width, height);
+      } catch {
+        // ignore invalid image bytes
+      }
+    };
+
+    const lipoLogo = await toDataUrl("/logos/liprobakin.png");
+    const footerSponsors = sponsors.slice(0, 5);
+    const sponsorLogoEntries = await Promise.all(
+      footerSponsors.map(async (sponsor) => ({
+        id: sponsor.id,
+        name: sponsor.name,
+        logo: sponsor.logo ? await toDataUrl(sponsor.logo) : null,
+      }))
+    );
+    const sponsorLogoMap = new Map(sponsorLogoEntries.map((entry) => [entry.id, entry.logo]));
+
+    const uniqueTeamLogoUrls = Array.from(
+      new Set(
+        filteredGames
+          .flatMap((game) => [game.homeTeamLogo, game.awayTeamLogo])
+          .filter((logoUrl): logoUrl is string => Boolean(logoUrl))
+      )
+    );
+    const teamLogoEntries = await Promise.all(
+      uniqueTeamLogoUrls.map(async (logoUrl) => ({ logoUrl, data: await toDataUrl(logoUrl) }))
+    );
+    const teamLogos = new Map(teamLogoEntries.map((entry) => [entry.logoUrl, entry.data]));
+
+    const subtitle = selectedMatchday
+      ? `${language === "fr" ? "Journée" : "Matchday"} ${selectedMatchday.week} • ${selectedMatchday.startDate} ${language === "fr" ? "au" : "to"} ${selectedMatchday.endDate}`
+      : selectedDate
+        ? new Date(`${selectedDate}T00:00:00`).toLocaleDateString(language === "fr" ? "fr-FR" : "en-US", {
+            weekday: "long",
+            month: "long",
+            day: "numeric",
+            year: "numeric",
+          })
+        : language === "fr"
+          ? "Programme des matchs"
+          : "Game Program";
+
+    const drawHexagon = (centerX: number, centerY: number, radius: number) => {
+      const points = Array.from({ length: 6 }, (_, index) => {
+        const angle = (Math.PI / 180) * (60 * index - 30);
+        return {
+          x: centerX + radius * Math.cos(angle),
+          y: centerY + radius * Math.sin(angle),
+        };
+      });
+
+      pdfDoc.lines(
+        points.slice(1).map((point, index) => [point.x - points[index].x, point.y - points[index].y]),
+        points[0].x,
+        points[0].y,
+        [1, 1],
+        "S",
+        true
+      );
+    };
+
+    const drawPageHeader = () => {
+      pdfDoc.setFillColor(255, 255, 255);
+      pdfDoc.rect(0, 0, pageWidth, pageHeight, "F");
+
+      pdfDoc.setFillColor(4, 20, 44);
+      pdfDoc.rect(0, 0, pageWidth, pageHeight, "F");
+
+      pdfDoc.setFillColor(255, 255, 255);
+      pdfDoc.roundedRect(5, 6, pageWidth - 10, pageHeight - 12, 2.5, 2.5, "F");
+
+      pdfDoc.setDrawColor(215, 222, 231);
+      pdfDoc.setLineWidth(0.25);
+      pdfDoc.roundedRect(5, 6, pageWidth - 10, pageHeight - 12, 2.5, 2.5);
+
+      pdfDoc.setDrawColor(241, 245, 249);
+      pdfDoc.setLineWidth(0.2);
+      drawHexagon(pageWidth * 0.32, pageHeight * 0.22, 21);
+      drawHexagon(pageWidth * 0.56, pageHeight * 0.22, 21);
+      drawHexagon(pageWidth * 0.44, pageHeight * 0.38, 21);
+      drawHexagon(pageWidth * 0.56, pageHeight * 0.54, 21);
+      drawHexagon(pageWidth * 0.32, pageHeight * 0.70, 21);
+
+      pdfDoc.setFillColor(255, 255, 255);
+      pdfDoc.roundedRect(12, 12, pageWidth - 24, 44, 2.5, 2.5, "F");
+
+      drawDataImage(lipoLogo, pageWidth / 2 - 16, 14, 32, 20);
+
+      pdfDoc.setTextColor(15, 18, 33);
+      pdfDoc.setFont("helvetica", "bold");
+      pdfDoc.setFontSize(15.5);
+      pdfDoc.text(language === "fr" ? "PROGRAMME DES MATCHS" : "GAME PROGRAM", pageWidth / 2, 39, { align: "center" });
+
+      pdfDoc.setTextColor(86, 96, 111);
+      pdfDoc.setFont("helvetica", "normal");
+      pdfDoc.setFontSize(8.8);
+      pdfDoc.text(subtitle, pageWidth / 2, 45.5, { align: "center" });
+    };
+
+    const drawTeamFallback = (teamName: string, x: number, y: number, size: number) => {
+      pdfDoc.setFillColor(226, 232, 240);
+      pdfDoc.circle(x + size / 2, y + size / 2, size / 2, "F");
+      pdfDoc.setTextColor(30, 41, 59);
+      pdfDoc.setFont("helvetica", "bold");
+      pdfDoc.setFontSize(6.5);
+      pdfDoc.text((teamName || "?").charAt(0).toUpperCase(), x + size / 2, y + size / 2 + 2, { align: "center" });
+    };
+
+    const drawSponsorsFooter = () => {
+      pdfDoc.setFillColor(255, 255, 255);
+      pdfDoc.roundedRect(11.5, sponsorAreaTop - 0.5, pageWidth - 23, 18, 2.5, 2.5, "F");
+      pdfDoc.setDrawColor(226, 232, 240);
+      pdfDoc.setLineWidth(0.2);
+      pdfDoc.roundedRect(11.5, sponsorAreaTop - 0.5, pageWidth - 23, 18, 2.5, 2.5);
+
+      pdfDoc.setTextColor(71, 85, 105);
+      pdfDoc.setFont("helvetica", "bold");
+      pdfDoc.setFontSize(7.4);
+      pdfDoc.text(language === "fr" ? "Partenaires officiels" : "Official partners", pageWidth / 2, sponsorAreaTop + 2.3, {
+        align: "center",
+      });
+
+      if (footerSponsors.length > 0) {
+        const slotWidth = (pageWidth - 35) / footerSponsors.length;
+        footerSponsors.forEach((sponsor, index) => {
+          const boxX = 17 + index * slotWidth;
+          pdfDoc.setFillColor(248, 250, 252);
+          pdfDoc.roundedRect(boxX, sponsorAreaTop + 4, slotWidth - 4, 11.5, 1.7, 1.7, "F");
+
+          const sponsorLogo = sponsorLogoMap.get(sponsor.id) || null;
+          if (sponsorLogo) {
+            drawDataImage(sponsorLogo, boxX + 1.5, sponsorAreaTop + 4.5, slotWidth - 7, 10);
+          } else {
+            pdfDoc.setTextColor(71, 85, 105);
+            pdfDoc.setFont("helvetica", "bold");
+            pdfDoc.setFontSize(6.2);
+            const sponsorName = (sponsor.name || "Sponsor").slice(0, 16);
+            pdfDoc.text(sponsorName, boxX + (slotWidth - 4) / 2, sponsorAreaTop + 10.7, { align: "center" });
+          }
+        });
+      } else {
+        pdfDoc.setTextColor(71, 85, 105);
+        pdfDoc.setFontSize(8);
+        pdfDoc.text(language === "fr" ? "Partenaires officiels" : "Official Partners", pageWidth / 2, sponsorAreaTop + 10.5, { align: "center" });
+      }
+
+    };
+
+    drawPageHeader();
+
+    let yPosition = 60;
+    const rowHeight = 22.4;
+
+    filteredGames.forEach((game) => {
+      if (yPosition + rowHeight > sponsorAreaTop - 3) {
+        drawSponsorsFooter();
+        pdfDoc.addPage();
+        drawPageHeader();
+        yPosition = 56;
+      }
+
+      pdfDoc.setFillColor(255, 255, 255);
+      pdfDoc.roundedRect(10, yPosition, pageWidth - 20, rowHeight - 1.2, 2.8, 2.8, "F");
+      pdfDoc.setDrawColor(37, 99, 235);
+      pdfDoc.setLineWidth(0.38);
+      pdfDoc.roundedRect(10, yPosition, pageWidth - 20, rowHeight - 1.2, 2.8, 2.8);
+
+      const homeLogo = teamLogos.get(game.homeTeamLogo);
+      const awayLogo = teamLogos.get(game.awayTeamLogo);
+      if (homeLogo) {
+        drawDataImage(homeLogo, 12.8, yPosition + 4.2, 9.2, 9.2);
+      } else {
+        drawTeamFallback(game.homeTeamName, 12.8, yPosition + 4.2, 9.2);
+      }
+      if (awayLogo) {
+        drawDataImage(awayLogo, pageWidth - 22, yPosition + 4.2, 9.2, 9.2);
+      } else {
+        drawTeamFallback(game.awayTeamName, pageWidth - 22, yPosition + 4.2, 9.2);
+      }
+
+      pdfDoc.setFont("helvetica", "bold");
+      pdfDoc.setFontSize(10.8);
+      pdfDoc.setTextColor(17, 24, 39);
+      pdfDoc.text(game.homeTeamName, 24.5, yPosition + 9.6);
+      pdfDoc.text(game.awayTeamName, pageWidth - 24.5, yPosition + 9.6, { align: "right" });
+
+      pdfDoc.setFont("helvetica", "normal");
+      pdfDoc.setFontSize(8.4);
+      pdfDoc.setTextColor(75, 85, 99);
+      const middleLabel = `${formatDate(game.date)} • ${game.time}`;
+      pdfDoc.text(middleLabel, pageWidth / 2, yPosition + 8.8, { align: "center" });
+      pdfDoc.text("vs", pageWidth / 2, yPosition + 13.1, { align: "center" });
+
+      const venueText = game.venueCity ? `${game.venue} • ${game.venueCity}` : game.venue;
+      pdfDoc.text(venueText || "-", pageWidth / 2, yPosition + 17.7, { align: "center" });
+
+      yPosition += rowHeight;
     });
 
-    // Add timestamp at the bottom
-    const currentDate = new Date();
-    const timestamp = currentDate.toLocaleDateString(language === "fr" ? "fr-FR" : "en-US", {
+    drawSponsorsFooter();
+
+    const generatedAt = new Date();
+    const timestamp = generatedAt.toLocaleString(language === "fr" ? "fr-FR" : "en-US", {
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
-    }) + " " + currentDate.toLocaleTimeString(language === "fr" ? "fr-FR" : "en-US", {
       hour: "2-digit",
       minute: "2-digit",
-      second: "2-digit",
+    });
+    pdfDoc.setTextColor(100, 116, 139);
+    pdfDoc.setFontSize(7.5);
+    pdfDoc.text(`${language === "fr" ? "Généré le" : "Generated"}: ${timestamp}`, pageWidth / 2, pageHeight - 5.2, {
+      align: "center",
     });
 
-    doc.setFontSize(8);
-    doc.setTextColor(128, 128, 128); // Grey color
-    doc.text(
-      `${language === "fr" ? "Téléchargé le" : "Downloaded"}: ${timestamp}`,
-      pageWidth / 2,
-      pageHeight - 10,
-      { align: "center" }
-    );
-
-    // Download the PDF
     const filename = selectedMatchday
-      ? `games_week${selectedMatchday.week}_${new Date().getTime()}.pdf`
-      : `games_${selectedDate}_${new Date().getTime()}.pdf`;
-    doc.save(filename);
+      ? `programme-journee-${selectedMatchday.week}-${Date.now()}.pdf`
+      : `programme-matchs-${selectedDate || Date.now()}-${Date.now()}.pdf`;
+    pdfDoc.save(filename);
   };
 
   // ============================================================================
@@ -864,7 +1283,11 @@ export default function GamesPage() {
   // ============================================================================
 
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
+    const parts = dateStr.split("-").map((part) => Number(part));
+    const date =
+      parts.length === 3 && parts.every((part) => Number.isFinite(part))
+        ? new Date(parts[0], parts[1] - 1, parts[2])
+        : new Date(`${dateStr}T00:00:00`);
     return date.toLocaleDateString(language === "fr" ? "fr-FR" : "en-US", {
       weekday: "short",
       month: "short",
@@ -1149,6 +1572,16 @@ export default function GamesPage() {
                 </div>
               </div>
 
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleFixMatchdayDates}
+                  className="rounded-md border border-white/15 px-3 py-1.5 text-xs font-medium text-slate-300 transition hover:bg-slate-800"
+                >
+                  {t.fixDates}
+                </button>
+              </div>
+
               {/* Actions */}
               <div className="flex gap-3 pt-4">
                 <button
@@ -1171,15 +1604,29 @@ export default function GamesPage() {
         </div>
       )}
 
-      {/* Game Form Modal */}
+      {/* Game Form Panel */}
       {formVisible && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-white/10 bg-slate-900 p-6 shadow-2xl">
-            <h2 className="text-xl font-bold text-white mb-6">
-              {formState.id ? t.editGame : t.scheduleGame}
-            </h2>
+        <div
+          ref={gameFormPanelRef}
+          className="rounded-2xl border border-white/10 bg-slate-900/95 p-6 shadow-2xl md:p-8"
+        >
+          <div className="mb-6 flex items-start justify-between gap-4 border-b border-white/10 pb-4">
+            <div>
+              <p className="text-xs uppercase tracking-[0.25em] text-slate-400">{t.quickActions}</p>
+              <h2 className="mt-1 text-2xl font-bold text-white">
+                {formState.id ? t.editGame : t.scheduleGame}
+              </h2>
+            </div>
+            <button
+              type="button"
+              onClick={resetForm}
+              className="rounded-lg border border-white/10 px-3 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800 transition"
+            >
+              {t.cancelEdit}
+            </button>
+          </div>
 
-            <form onSubmit={handleSubmitGame} className="space-y-5">
+          <form onSubmit={handleSubmitGame} className="space-y-5">
               {/* Gender & Week Row */}
               <div className="grid grid-cols-2 gap-4">
                 {/* Gender */}
@@ -1244,6 +1691,18 @@ export default function GamesPage() {
                       </option>
                     ))}
                   </select>
+                  {selectedHomeTeam && (
+                    <div className="mt-2 rounded-lg border border-white/10 bg-slate-800/40 px-3 py-2">
+                      <div className="flex items-center gap-2.5">
+                        {selectedHomeTeam.logo ? (
+                          <Image src={selectedHomeTeam.logo} alt={selectedHomeTeam.name} width={24} height={24} className="rounded-md" unoptimized />
+                        ) : (
+                          <div className="h-6 w-6 rounded-md bg-slate-700" />
+                        )}
+                        <span className="text-sm font-medium text-white truncate">{selectedHomeTeam.name}</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* VS Divider */}
@@ -1272,21 +1731,44 @@ export default function GamesPage() {
                         </option>
                       ))}
                   </select>
+                  {selectedAwayTeam && (
+                    <div className="mt-2 rounded-lg border border-white/10 bg-slate-800/40 px-3 py-2">
+                      <div className="flex items-center gap-2.5">
+                        {selectedAwayTeam.logo ? (
+                          <Image src={selectedAwayTeam.logo} alt={selectedAwayTeam.name} width={24} height={24} className="rounded-md" unoptimized />
+                        ) : (
+                          <div className="h-6 w-6 rounded-md bg-slate-700" />
+                        )}
+                        <span className="text-sm font-medium text-white truncate">{selectedAwayTeam.name}</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
               {/* Date, Time, Venue */}
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <div>
                   <label className="block text-xs font-medium text-slate-400 mb-2 uppercase tracking-wider">{t.date}</label>
                   <input
                     type="date"
                     value={formState.date}
-                    onChange={(e) => setFormState((prev) => ({ ...prev, date: e.target.value }))}
+                    onChange={(e) => handleGameDateChange(e.target.value)}
+                    min={selectedMatchdayForForm?.startDate || undefined}
+                    max={selectedMatchdayForForm?.endDate || undefined}
                     aria-label={t.date}
                     className="w-full rounded-lg border border-white/10 bg-slate-950/60 px-4 py-2.5 text-white focus:border-orange-500"
                     required
                   />
+                  {selectedMatchdayForForm?.startDate && selectedMatchdayForForm?.endDate ? (
+                    <p className="mt-2 text-xs text-slate-400">
+                      {t.allowedDateRange
+                        .replace("{start}", selectedMatchdayForForm.startDate)
+                        .replace("{end}", selectedMatchdayForForm.endDate)}
+                    </p>
+                  ) : (
+                    <p className="mt-2 text-xs text-amber-300">{t.dateRangeRequired}</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-400 mb-2 uppercase tracking-wider">{t.time}</label>
@@ -1320,28 +1802,61 @@ export default function GamesPage() {
 
               {/* Referees (Optional) */}
               <div>
-                <label className="block text-xs font-medium text-slate-400 mb-2 uppercase tracking-wider">{t.referees}</label>
-                <select
-                  multiple
-                  value={formState.refereeIds}
-                  onChange={(e) => {
-                    const selected = Array.from(e.target.selectedOptions, (option) => option.value);
-                    setFormState((prev) => ({ ...prev, refereeIds: selected }));
-                  }}
-                  aria-label={t.referees}
-                  className="w-full rounded-lg border border-white/10 bg-slate-950/60 px-4 py-2.5 text-white focus:border-orange-500 min-h-[80px]"
-                >
-                  {referees.map((ref) => (
-                    <option key={ref.id} value={ref.id}>
-                      {ref.firstName} {ref.lastName}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-xs text-slate-500 mt-1">{t.selectReferees}</p>
+                <label className="block text-xs font-medium text-slate-400 mb-2 uppercase tracking-wider">{t.referees} (Max 3)</label>
+                <div className="rounded-lg border border-white/10 bg-slate-950/60 p-4 max-h-[200px] overflow-y-auto">
+                  {referees.length === 0 ? (
+                    <p className="text-sm text-slate-500">No referees available</p>
+                  ) : (
+                    <div className="space-y-2.5">
+                      {referees.map((ref) => {
+                        const isChecked = formState.refereeIds.includes(ref.id);
+                        const isDisabled = !isChecked && formState.refereeIds.length >= 3;
+                        return (
+                          <label
+                            key={ref.id}
+                            className={`flex items-center gap-3 rounded-lg p-2 transition-colors ${
+                              isDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-white/5'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              disabled={isDisabled}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  if (formState.refereeIds.length < 3) {
+                                    setFormState((prev) => ({
+                                      ...prev,
+                                      refereeIds: [...prev.refereeIds, ref.id],
+                                    }));
+                                  }
+                                } else {
+                                  setFormState((prev) => ({
+                                    ...prev,
+                                    refereeIds: prev.refereeIds.filter((id) => id !== ref.id),
+                                  }));
+                                }
+                              }}
+                              className="w-4 h-4 rounded border-white/20 bg-slate-900 text-orange-500 focus:ring-orange-500 focus:ring-offset-0 cursor-pointer disabled:cursor-not-allowed"
+                            />
+                            <span className="text-sm text-white">
+                              {ref.firstName} {ref.lastName}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500 mt-1">
+                  {formState.refereeIds.length > 0 
+                    ? `${formState.refereeIds.length}/3 referee(s) selected` 
+                    : t.selectReferees}
+                </p>
               </div>
 
               {/* Actions */}
-              <div className="flex gap-3 pt-4">
+              <div className="flex flex-col gap-3 pt-4 sm:flex-row">
                 <button
                   type="submit"
                   disabled={submitting}
@@ -1357,8 +1872,7 @@ export default function GamesPage() {
                   {t.cancelEdit}
                 </button>
               </div>
-            </form>
-          </div>
+          </form>
         </div>
       )}
 
@@ -1993,17 +2507,15 @@ function GameCard({ game, t, formatDate, getStatusBadge, onEdit, onDelete, onEnt
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
               </svg>
             </button>
-            {!isCompleted && (
-              <button
-                onClick={() => onDelete(game)}
-                className="rounded-lg border border-rose-500/30 p-2 text-rose-400 hover:bg-rose-500/10 transition"
-                title={t.deleteGame}
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-              </button>
-            )}
+            <button
+              onClick={() => onDelete(game)}
+              className="rounded-lg border border-rose-500/30 p-2 text-rose-400 hover:bg-rose-500/10 transition"
+              title={t.deleteGame}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
           </div>
         </div>
       </div>

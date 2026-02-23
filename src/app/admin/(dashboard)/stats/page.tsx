@@ -36,6 +36,7 @@ type PlayerStat = {
   playerId: string;
   name: string;
   jerseyNumber?: string;
+  dnp: boolean;  // Did Not Play
   points: number;
   minutes: string;  // Format: "MM:SS"
   rebounds: number;
@@ -58,7 +59,7 @@ type PlayerStat = {
   plusMinus: number;
 };
 
-type StatField = Exclude<keyof PlayerStat, "playerId" | "name" | "jerseyNumber">;
+type StatField = Exclude<keyof PlayerStat, "playerId" | "name" | "jerseyNumber" | "dnp">;
 
 type StatColumn = {
   field: StatField;
@@ -110,6 +111,7 @@ const t = {
     offensiveRebounds: "OREB", defensiveRebounds: "DREB", turnovers: "TOV", foulsDrawn: "FD",
     fieldGoalsMade: "FGM", fieldGoalsAttempted: "FGA", twoPointsMade: "2PM", twoPointsAttempted: "2PA",
     threePointsMade: "3PM", threePointsAttempted: "3PA", freeThrowsMade: "FTM", freeThrowsAttempted: "FTA", plusMinus: "+/-",
+    dnp: "DNP",
     playerStats: "Player Statistics",
     loadingPlayers: "Loading players...",
     step1: "1. Select Winner",
@@ -155,6 +157,7 @@ const t = {
     fouls: "F", foulsDrawn: "FP",  // Fautes (F, FP)
     plusMinus: "+/-",
     points: "PTS",
+    dnp: "NPJ",  // N'a Pas Joué
     playerStats: "Statistiques Joueurs",
     loadingPlayers: "Chargement des joueurs...",
     step1: "1. Sélectionnez le Gagnant",
@@ -200,6 +203,7 @@ const createEmptyPlayerStat = (player: Player): PlayerStat => ({
   playerId: player.id,
   name: player.name || "Unknown Player",
   jerseyNumber: player.jerseyNumber,
+  dnp: false,  // Did Not Play
   points: 0,
   minutes: "",  // Format: "MM:SS"
   rebounds: 0,
@@ -371,6 +375,7 @@ export default function StatsPage() {
   const [importMessage, setImportMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [popupError, setPopupError] = useState<string | null>(null);
   const [cellErrors, setCellErrors] = useState<Record<string, boolean>>({});
+  const [touchedFields, setTouchedFields] = useState<Record<string, boolean>>({});  // Track which fields have been touched
   const popupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showValidationError = useCallback((message: string, cellKey?: string) => {
@@ -433,13 +438,17 @@ export default function StatsPage() {
     };
   }, []);
 
-  const statInputValue = useCallback((value: number | string | undefined, isTimeField?: boolean): string => {
+  const statInputValue = useCallback((value: number | string | undefined, isTimeField?: boolean, hasTouched?: boolean): string => {
     if (isTimeField) {
       // For time fields like minutes, return as-is or empty
       return typeof value === 'string' ? value : '';
     }
-    const numeric = Number(value || 0);
-    return numeric === 0 ? "" : String(numeric);
+    const numeric = Number(value ?? 0);
+    // Show 0 as "0" if value was explicitly set, otherwise show empty for untouched fields
+    if (numeric === 0) {
+      return hasTouched ? "0" : "";
+    }
+    return String(numeric);
   }, []);
 
   const fetchGames = useCallback(async () => {
@@ -718,6 +727,27 @@ export default function StatsPage() {
       return {
         ...prev,
         [playerId]: next,
+      };
+    };
+
+    if (isHome) {
+      setHomeStats(applyUpdate);
+    } else {
+      setAwayStats(applyUpdate);
+    }
+    
+    // Mark field as touched
+    const touchKey = `${isHome ? 'home' : 'away'}_${playerId}_${field}`;
+    setTouchedFields(prev => ({ ...prev, [touchKey]: true }));
+  };
+
+  const togglePlayerDNP = (playerId: string, isHome: boolean) => {
+    const applyUpdate = (prev: Record<string, PlayerStat>) => {
+      const current = prev[playerId];
+      if (!current) return prev;
+      return {
+        ...prev,
+        [playerId]: { ...current, dnp: !current.dnp },
       };
     };
 
@@ -1592,22 +1622,37 @@ export default function StatsPage() {
                                       <tr className="text-slate-400 border-b border-white/10">
                                         <th className="text-left p-3">#</th>
                                         <th className="text-left p-3">Player</th>
+                                        <th className="text-center p-2 w-12">{copy.dnp}</th>
                                         {statColumns.map((column) => (
                                           <th key={column.field} className="text-center p-2 w-14">{column.label}</th>
                                         ))}
                                       </tr>
                                     </thead>
                                     <tbody>
-                                      {awayPlayers.map((player) => (
-                                        <tr key={player.id} className="border-b border-white/5 hover:bg-white/5">
+                                      {awayPlayers.map((player) => {
+                                        const playerStat = awayStats[player.id];
+                                        const isDNP = playerStat?.dnp || false;
+                                        return (
+                                        <tr key={player.id} className={`border-b border-white/5 hover:bg-white/5 ${isDNP ? 'opacity-50' : ''}`}>
                                           <td className="p-3 text-slate-400 font-mono">{player.jerseyNumber || "-"}</td>
                                           <td className="p-3 text-white font-medium">{player.name}</td>
+                                          <td className="p-1 text-center">
+                                            <button
+                                              type="button"
+                                              onClick={() => togglePlayerDNP(player.id, false)}
+                                              className={`w-8 h-8 rounded text-xs font-bold transition-colors ${isDNP ? 'bg-red-600 text-white' : 'bg-slate-700 text-slate-400 hover:bg-slate-600'}`}
+                                              title={isDNP ? "Click to mark as played" : "Click to mark as DNP"}
+                                            >
+                                              {isDNP ? '✓' : '—'}
+                                            </button>
+                                          </td>
                                           {statColumns.map((column) => (
                                             <td key={column.field} className="p-1">
                                               {(() => {
-                                                const playerStat = awayStats[player.id];
                                                 const cellKey = getCellKey(false, player.id, column.field);
+                                                const touchKey = `away_${player.id}_${column.field}`;
                                                 const hasError = Boolean(cellErrors[cellKey]);
+                                                const hasTouched = Boolean(touchedFields[touchKey]);
                                                 const maxValue = column.field === "twoPointsMade"
                                                   ? Number(playerStat?.twoPointsAttempted || 0)
                                                   : column.field === "threePointsMade"
@@ -1619,21 +1664,22 @@ export default function StatsPage() {
                                                 return (
                                               <input
                                                 type={column.isTimeField ? "text" : "number"}
-                                                placeholder={column.isTimeField ? "00:00" : undefined}
+                                                placeholder={column.isTimeField ? "00:00" : "0"}
                                                 min={column.field === "plusMinus" || column.isTimeField ? undefined : "0"}
                                                 max={maxValue !== undefined ? String(maxValue) : undefined}
                                                 title={`${player.name} ${column.field}`}
-                                                value={statInputValue(playerStat?.[column.field], column.isTimeField)}
+                                                value={statInputValue(playerStat?.[column.field], column.isTimeField, hasTouched)}
                                                 onChange={(e) => updatePlayerStat(player.id, false, column.field, e.target.value, player.name || "Player", column.isTimeField)}
-                                                disabled={column.readOnly}
-                                                className={`${column.isTimeField ? 'w-14' : 'w-12'} px-2 py-1 border rounded text-center text-sm ${column.readOnly ? "bg-slate-900/70 text-slate-300 border-slate-600/40" : "bg-slate-700 text-white"} ${hasError ? "border-red-500 ring-1 ring-red-500/70" : "border-white/10"}`}
+                                                disabled={column.readOnly || isDNP}
+                                                className={`${column.isTimeField ? 'w-14' : 'w-12'} px-2 py-1 border rounded text-center text-sm ${column.readOnly || isDNP ? "bg-slate-900/70 text-slate-300 border-slate-600/40" : "bg-slate-700 text-white"} ${hasError ? "border-red-500 ring-1 ring-red-500/70" : "border-white/10"}`}
                                               />
                                                 );
                                               })()}
                                             </td>
                                           ))}
                                         </tr>
-                                      ))}
+                                        );
+                                      })}
                                     </tbody>
                                   </table>
                                 </div>
@@ -1654,22 +1700,37 @@ export default function StatsPage() {
                                       <tr className="text-slate-400 border-b border-white/10">
                                         <th className="text-left p-3">#</th>
                                         <th className="text-left p-3">Player</th>
+                                        <th className="text-center p-2 w-12">{copy.dnp}</th>
                                         {statColumns.map((column) => (
                                           <th key={column.field} className="text-center p-2 w-14">{column.label}</th>
                                         ))}
                                       </tr>
                                     </thead>
                                     <tbody>
-                                      {homePlayers.map((player) => (
-                                        <tr key={player.id} className="border-b border-white/5 hover:bg-white/5">
+                                      {homePlayers.map((player) => {
+                                        const playerStat = homeStats[player.id];
+                                        const isDNP = playerStat?.dnp || false;
+                                        return (
+                                        <tr key={player.id} className={`border-b border-white/5 hover:bg-white/5 ${isDNP ? 'opacity-50' : ''}`}>
                                           <td className="p-3 text-slate-400 font-mono">{player.jerseyNumber || "-"}</td>
                                           <td className="p-3 text-white font-medium">{player.name}</td>
+                                          <td className="p-1 text-center">
+                                            <button
+                                              type="button"
+                                              onClick={() => togglePlayerDNP(player.id, true)}
+                                              className={`w-8 h-8 rounded text-xs font-bold transition-colors ${isDNP ? 'bg-red-600 text-white' : 'bg-slate-700 text-slate-400 hover:bg-slate-600'}`}
+                                              title={isDNP ? "Click to mark as played" : "Click to mark as DNP"}
+                                            >
+                                              {isDNP ? '✓' : '—'}
+                                            </button>
+                                          </td>
                                           {statColumns.map((column) => (
                                             <td key={column.field} className="p-1">
                                               {(() => {
-                                                const playerStat = homeStats[player.id];
                                                 const cellKey = getCellKey(true, player.id, column.field);
+                                                const touchKey = `home_${player.id}_${column.field}`;
                                                 const hasError = Boolean(cellErrors[cellKey]);
+                                                const hasTouched = Boolean(touchedFields[touchKey]);
                                                 const maxValue = column.field === "twoPointsMade"
                                                   ? Number(playerStat?.twoPointsAttempted || 0)
                                                   : column.field === "threePointsMade"
@@ -1681,21 +1742,22 @@ export default function StatsPage() {
                                                 return (
                                               <input
                                                 type={column.isTimeField ? "text" : "number"}
-                                                placeholder={column.isTimeField ? "00:00" : undefined}
+                                                placeholder={column.isTimeField ? "00:00" : "0"}
                                                 min={column.field === "plusMinus" || column.isTimeField ? undefined : "0"}
                                                 max={maxValue !== undefined ? String(maxValue) : undefined}
                                                 title={`${player.name} ${column.field}`}
-                                                value={statInputValue(playerStat?.[column.field], column.isTimeField)}
+                                                value={statInputValue(playerStat?.[column.field], column.isTimeField, hasTouched)}
                                                 onChange={(e) => updatePlayerStat(player.id, true, column.field, e.target.value, player.name || "Player", column.isTimeField)}
-                                                disabled={column.readOnly}
-                                                className={`${column.isTimeField ? 'w-14' : 'w-12'} px-2 py-1 border rounded text-center text-sm ${column.readOnly ? "bg-slate-900/70 text-slate-300 border-slate-600/40" : "bg-slate-700 text-white"} ${hasError ? "border-red-500 ring-1 ring-red-500/70" : "border-white/10"}`}
+                                                disabled={column.readOnly || isDNP}
+                                                className={`${column.isTimeField ? 'w-14' : 'w-12'} px-2 py-1 border rounded text-center text-sm ${column.readOnly || isDNP ? "bg-slate-900/70 text-slate-300 border-slate-600/40" : "bg-slate-700 text-white"} ${hasError ? "border-red-500 ring-1 ring-red-500/70" : "border-white/10"}`}
                                               />
                                                 );
                                               })()}
                                             </td>
                                           ))}
                                         </tr>
-                                      ))}
+                                        );
+                                      })}
                                     </tbody>
                                   </table>
                                 </div>

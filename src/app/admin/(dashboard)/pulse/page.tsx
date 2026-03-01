@@ -201,7 +201,7 @@ function AnimatedCounter({
   return (
     <span>
       {prefix}
-      {decimals > 0 ? display.toFixed(decimals) : Math.round(display)}
+      {decimals > 0 ? Number(display).toFixed(decimals) : Math.round(Number(display))}
       {suffix}
     </span>
   );
@@ -979,7 +979,7 @@ function LeaguePulseDashboard() {
 
                       {/* Win % */}
                       <span className="text-xs font-bold text-slate-300 w-12 text-right">
-                        {wp.toFixed(0)}%
+                        {Number(wp).toFixed(0)}%
                       </span>
                     </div>
                   );
@@ -1131,7 +1131,7 @@ function LeaguePulseDashboard() {
                               {t.heatIndex}
                             </span>
                             <span className="text-sm font-black text-orange-400">
-                              {player.heatIndex.toFixed(1)}
+                              {Number(player.heatIndex).toFixed(1)}
                             </span>
                           </div>
                           <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
@@ -1231,7 +1231,7 @@ function LeaguePulseDashboard() {
                           </span>
                         </div>
                         <span className="text-xs font-black text-white ml-2">
-                          {ptsVal.toFixed(1)}
+                          {Number(ptsVal).toFixed(1)}
                         </span>
                       </div>
                       <div className="h-2 bg-slate-800 rounded-full overflow-hidden">

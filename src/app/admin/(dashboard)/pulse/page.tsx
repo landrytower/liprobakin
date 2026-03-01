@@ -1,6 +1,9 @@
 "use client";
+/* eslint-disable react-compiler/react-compiler */
+"use no memo";
 
-import { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import React, { useEffect, useState, useMemo, useCallback, useRef, Component } from "react";
+import type { ReactNode, ErrorInfo } from "react";
 import Image from "next/image";
 import { firebaseDB } from "@/lib/firebase";
 import {
@@ -10,6 +13,47 @@ import {
 } from "firebase/firestore";
 import { useAdmin } from "../layout";
 import "./pulse.css";
+
+/* ─────────────────── ERROR BOUNDARY ─────────────────── */
+
+interface EBState { hasError: boolean; error: Error | null }
+
+class PulseErrorBoundary extends Component<{ children: ReactNode }, EBState> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error: Error): EBState {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error("[LeaguePulse] render error:", error, info.componentStack);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="max-w-[1800px] mx-auto px-4 sm:px-6 py-12">
+          <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-8 text-center">
+            <p className="text-red-400 text-lg font-bold mb-2">Dashboard Error</p>
+            <p className="text-sm text-slate-400 mb-4">
+              {this.state.error?.message ?? "Unknown error"}
+            </p>
+            <pre className="text-xs text-slate-500 text-left overflow-auto max-h-48 bg-slate-900 rounded-lg p-4">
+              {this.state.error?.stack}
+            </pre>
+            <button
+              onClick={() => this.setState({ hasError: false, error: null })}
+              className="mt-4 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-bold hover:bg-orange-400 transition-colors"
+            >
+              Try Again
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 /* ─────────────────────── TYPES ─────────────────────── */
 
@@ -200,7 +244,9 @@ function DonutChart({
   return (
     <svg width={size} height={size} className="drop-shadow-lg">
       {data.map((slice, i) => {
-        const { segLen, offset } = segments[i];
+        const seg = segments[i];
+        if (!seg) return null;
+        const { segLen, offset } = seg;
         return (
           <circle
             key={i}
@@ -359,7 +405,15 @@ function MiniSparkline({
    MAIN DASHBOARD PAGE
    ═══════════════════════════════════════════════════════ */
 
-export default function LeaguePulseDashboard() {
+export default function LeaguePulseDashboardPage() {
+  return (
+    <PulseErrorBoundary>
+      <LeaguePulseDashboard />
+    </PulseErrorBoundary>
+  );
+}
+
+function LeaguePulseDashboard() {
   const { language } = useAdmin();
   const t = language === "fr" ? FR : EN;
 
@@ -646,34 +700,32 @@ export default function LeaguePulseDashboard() {
         closeGames: 0,
       };
 
-    let totalMargin = 0;
-    let highestScore = 0;
-    let total3PM = 0;
-    let closeGames = 0;
+    // Use reduce to avoid mutable let accumulators
+    const acc = completedGames.reduce(
+      (a, g) => {
+        const margin = Math.abs((g.winnerScore ?? 0) - (g.loserScore ?? 0));
+        const three = (g.playerStats ?? []).reduce((s, ps) => s + (ps.three_pm ?? 0), 0);
+        return {
+          totalMargin: a.totalMargin + margin,
+          closeGames: a.closeGames + (margin <= 5 ? 1 : 0),
+          highestScore: Math.max(a.highestScore, g.winnerScore ?? 0),
+          total3PM: a.total3PM + three,
+        };
+      },
+      { totalMargin: 0, closeGames: 0, highestScore: 0, total3PM: 0 }
+    );
 
-    completedGames.forEach((g) => {
-      const margin = Math.abs(
-        (g.winnerScore ?? 0) - (g.loserScore ?? 0)
-      );
-      totalMargin += margin;
-      if (margin <= 5) closeGames++;
-      highestScore = Math.max(highestScore, g.winnerScore ?? 0);
-      (g.playerStats ?? []).forEach((ps) => {
-        total3PM += ps.three_pm ?? 0;
-      });
-    });
-
-    const avgMargin = totalMargin / completedGames.length;
+    const avgMargin = acc.totalMargin / completedGames.length;
     const competitiveIndex = Math.min(
       100,
       Math.round(
-        ((closeGames / completedGames.length) * 50 +
+        ((acc.closeGames / completedGames.length) * 50 +
           (1 / (avgMargin / 10 + 1)) * 50) *
           1
       )
     );
 
-    return { avgMargin, highestScore, total3PM, competitiveIndex, closeGames };
+    return { avgMargin, highestScore: acc.highestScore, total3PM: acc.total3PM, competitiveIndex, closeGames: acc.closeGames };
   }, [completedGames]);
 
   /* ── countdown to next game ── */
@@ -1043,7 +1095,7 @@ export default function LeaguePulseDashboard() {
                             className="w-12 h-12 rounded-full overflow-hidden border-2 flex-shrink-0"
                             style={{ borderColor: accentColor }}
                           >
-                            {player.headshot ? (
+                            {typeof player.headshot === "string" && player.headshot ? (
                               <Image
                                 src={
                                   player.headshot.startsWith("http") ||
@@ -1155,7 +1207,7 @@ export default function LeaguePulseDashboard() {
                       <div className="flex items-center justify-between mb-1">
                         <div className="flex items-center gap-2 min-w-0">
                           <div className="w-6 h-6 rounded-full overflow-hidden bg-slate-800 flex-shrink-0 border border-white/10">
-                            {p.headshot ? (
+                            {typeof p.headshot === "string" && p.headshot ? (
                               <Image
                                 src={
                                   p.headshot.startsWith("http") ||

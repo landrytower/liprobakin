@@ -50,6 +50,8 @@ import {
 import { logAuditAction, formatAuditLogDisplay, logSessionStart, logSessionEnd, logSessionActivity } from "@/lib/auditLog";
 import { autoTranslateNewsArticle } from "@/lib/translate";
 import { recalculateLeagueStatsFromGames } from "@/lib/league-stats";
+import { convertLocalDateTimeToCongo } from "@/lib/congo-time";
+import { normalizeTeamGender } from "@/lib/team-gender";
 
 type AdminNewsArticle = {
   id: string;
@@ -62,6 +64,15 @@ type AdminNewsArticle = {
   createdAt: Date | null;
   author?: string;
   isPaused?: boolean;
+};
+
+type AdminNewsComment = {
+  id: string;
+  articleId: string;
+  path: string;
+  name: string;
+  message: string;
+  createdAt: Date | null;
 };
 
 type GameEntry = {
@@ -380,7 +391,8 @@ const staticTeamCatalog: AdminTeam[] = [
   ...franchisesWomen.map((team, index) => mapFranchiseToAdminTeam(team, "women", index)),
 ].sort((a, b) => a.name.localeCompare(b.name));
 
-const getTeamKey = (team: Pick<AdminTeam, "gender" | "name">) => `${team.gender}-${team.name.trim().toLowerCase()}`;
+const normalizeTeamNameForKey = (name: string) => name.trim().replace(/\s+/g, " ").toLowerCase();
+const getTeamKey = (team: Pick<AdminTeam, "gender" | "name">) => `${team.gender}-${normalizeTeamNameForKey(team.name)}`;
 
 const initialFormState: NewsFormState = {
   title: "",
@@ -456,6 +468,11 @@ const isTrustedNewsMediaUrl = (url?: string | null) => {
   return normalized.includes("firebasestorage.googleapis.com") || normalized.includes("storage.googleapis.com");
 };
 
+const hasEmbeddedSummaryMedia = (content?: string | null) => {
+  if (!content) return false;
+  return /(<|&lt;)(img|video)\b/i.test(content);
+};
+
 const getDateField = (value: unknown): Date | null => {
   if (value && typeof value === "object" && "toDate" in value && typeof (value as { toDate: () => Date }).toDate === "function") {
     return (value as { toDate: () => Date }).toDate();
@@ -486,7 +503,7 @@ const mapSnapshotToTeam = (snapshot: DocumentSnapshot<DocumentData>): AdminTeam 
   return {
     id: snapshot.id,
     name: data?.name ?? "",
-    gender: data?.gender === "women" ? "women" : "men",
+    gender: normalizeTeamGender(data?.gender, data?.logo, "men"),
     colors,
     logo: data?.logo ?? "",
     wins: typeof data?.wins === "number" ? data.wins : 0,
@@ -743,6 +760,13 @@ export default function AdminPage() {
   const [showStoryImagePositionModal, setShowStoryImagePositionModal] = useState(false);
   const [storyImagePositionY, setStoryImagePositionY] = useState(50);
   const [imagePreview, setImagePreview] = useState<string>("");
+  const [moderationComments, setModerationComments] = useState<AdminNewsComment[]>([]);
+  const [commentModerationSearch, setCommentModerationSearch] = useState("");
+  const [commentModerationArticleFilter, setCommentModerationArticleFilter] = useState<string>("all");
+  const [deletingModerationCommentId, setDeletingModerationCommentId] = useState<string | null>(null);
+  const [submittingModerationReplyId, setSubmittingModerationReplyId] = useState<string | null>(null);
+  const [moderationReplyDrafts, setModerationReplyDrafts] = useState<Record<string, string>>({});
+  const [commentModerationStatus, setCommentModerationStatus] = useState<StatusCallout | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [status, setStatus] = useState<StatusCallout | null>(null);
   const [teams, setTeams] = useState<AdminTeam[]>([]);
@@ -900,6 +924,7 @@ export default function AdminPage() {
   const [statsMgmtStatus, setStatsMgmtStatus] = useState<StatusCallout | null>(null);
   const [statsMgmtSubmitting, setStatsMgmtSubmitting] = useState(false);
   const newsPreviewBlobRef = useRef<string | null>(null);
+  const commentsModerationRef = useRef<HTMLElement | null>(null);
   const teamLogoPreviewBlobRef = useRef<string | null>(null);
   const playerHeadshotPreviewBlobRef = useRef<string | null>(null);
   // Sync Firestore teams with franchise list for display
@@ -956,6 +981,42 @@ export default function AdminPage() {
     const firestoreKeys = new Set(teams.map((team) => getTeamKey(team)));
     return staticTeamCatalog.filter((team) => !firestoreKeys.has(getTeamKey(team)));
   }, [teams]);
+
+  const articleTitleById = useMemo(() => {
+    const map = new Map<string, string>();
+    news.forEach((article) => {
+      map.set(article.id, article.title || article.headline || article.id);
+    });
+    return map;
+  }, [news]);
+
+  const filteredModerationComments = useMemo(() => {
+    const normalizedSearch = commentModerationSearch.trim().toLowerCase();
+
+    return moderationComments.filter((comment) => {
+      if (commentModerationArticleFilter !== "all" && comment.articleId !== commentModerationArticleFilter) {
+        return false;
+      }
+
+      if (!normalizedSearch) {
+        return true;
+      }
+
+      const articleTitle = (articleTitleById.get(comment.articleId) || "").toLowerCase();
+      return (
+        comment.name.toLowerCase().includes(normalizedSearch) ||
+        comment.message.toLowerCase().includes(normalizedSearch) ||
+        articleTitle.includes(normalizedSearch)
+      );
+    });
+  }, [articleTitleById, commentModerationArticleFilter, commentModerationSearch, moderationComments]);
+
+  const commentCountByArticleId = useMemo(() => {
+    return moderationComments.reduce<Record<string, number>>((counts, comment) => {
+      counts[comment.articleId] = (counts[comment.articleId] ?? 0) + 1;
+      return counts;
+    }, {});
+  }, [moderationComments]);
 
   // Translations
   const t = {
@@ -1259,6 +1320,161 @@ export default function AdminPage() {
     });
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!currentAdminUser?.permissions.canManageNews) {
+      setModerationComments([]);
+      return;
+    }
+
+    if (news.length === 0) {
+      setModerationComments([]);
+      return;
+    }
+
+    const commentsByArticleId: Record<string, AdminNewsComment[]> = {};
+    const unsubscribeFns = news.map((article) => {
+      const articleCommentsRef = collection(firebaseDB, "news", article.id, "comments");
+      return onSnapshot(articleCommentsRef, (snapshot) => {
+        const commentsForArticle = snapshot.docs
+          .map((commentDoc) => {
+            const data = commentDoc.data() as {
+              name?: string;
+              message?: string;
+              createdAt?: { toDate?: () => Date } | Date;
+            };
+
+            const message = String(data.message || "").trim();
+            if (!message) {
+              return null;
+            }
+
+            const createdAt =
+              data.createdAt instanceof Date
+                ? data.createdAt
+                : data.createdAt && typeof data.createdAt.toDate === "function"
+                  ? data.createdAt.toDate()
+                  : null;
+
+            return {
+              id: commentDoc.id,
+              articleId: article.id,
+              path: commentDoc.ref.path,
+              name: String(data.name || "Anonymous").trim() || "Anonymous",
+              message,
+              createdAt,
+            } as AdminNewsComment;
+          })
+          .filter((comment): comment is AdminNewsComment => !!comment);
+
+        commentsByArticleId[article.id] = commentsForArticle;
+
+        const mergedComments = Object.values(commentsByArticleId)
+          .flat()
+          .sort((a, b) => {
+            const timeA = a.createdAt ? a.createdAt.getTime() : 0;
+            const timeB = b.createdAt ? b.createdAt.getTime() : 0;
+            return timeB - timeA;
+          });
+
+        setModerationComments(mergedComments);
+      });
+    });
+
+    return () => {
+      unsubscribeFns.forEach((unsubscribe) => unsubscribe());
+    };
+  }, [currentAdminUser?.permissions.canManageNews, news]);
+
+  const handleDeleteModerationComment = async (comment: AdminNewsComment) => {
+    const articleTitle = articleTitleById.get(comment.articleId) || comment.articleId;
+    const confirmDelete = window.confirm(
+      language === "fr"
+        ? `Supprimer ce commentaire de \"${articleTitle}\" ?\n\nCette action est irréversible.`
+        : `Delete this comment from \"${articleTitle}\"?\n\nThis action cannot be undone.`
+    );
+
+    if (!confirmDelete) {
+      return;
+    }
+
+    try {
+      setDeletingModerationCommentId(comment.id);
+      setCommentModerationStatus(null);
+      await deleteDoc(doc(firebaseDB, comment.path));
+      setCommentModerationStatus({
+        type: "success",
+        message: language === "fr" ? "Commentaire supprimé." : "Comment deleted.",
+      });
+    } catch (error) {
+      console.error("Error deleting moderated comment:", error);
+      setCommentModerationStatus({
+        type: "error",
+        message: language === "fr" ? "Échec de suppression du commentaire." : "Failed to delete comment.",
+      });
+    } finally {
+      setDeletingModerationCommentId(null);
+    }
+  };
+
+  const handleOpenArticleCommentsModeration = (articleId: string) => {
+    setCommentModerationArticleFilter(articleId);
+    setCommentModerationSearch("");
+    commentsModerationRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const handleSubmitModerationReply = async (comment: AdminNewsComment) => {
+    if (submittingModerationReplyId) {
+      return;
+    }
+
+    const draftKey = `${comment.articleId}-${comment.id}`;
+    const message = (moderationReplyDrafts[draftKey] || "").trim().slice(0, 600);
+
+    if (!message) {
+      setCommentModerationStatus({
+        type: "error",
+        message: language === "fr" ? "La réponse admin est requise." : "Admin reply is required.",
+      });
+      return;
+    }
+
+    const adminName =
+      currentAdminUser?.displayName?.trim() ||
+      user?.displayName?.trim() ||
+      (language === "fr" ? "Admin" : "Admin");
+
+    try {
+      setSubmittingModerationReplyId(comment.id);
+      setCommentModerationStatus(null);
+
+      await addDoc(collection(firebaseDB, "news", comment.articleId, "comments", comment.id, "replies"), {
+        name: adminName,
+        message,
+        createdAt: serverTimestamp(),
+        isAdmin: true,
+        adminUid: user?.uid ?? null,
+      });
+
+      setModerationReplyDrafts((previous) => ({
+        ...previous,
+        [draftKey]: "",
+      }));
+
+      setCommentModerationStatus({
+        type: "success",
+        message: language === "fr" ? "Réponse admin publiée." : "Admin reply posted.",
+      });
+    } catch (error) {
+      console.error("Error posting admin reply:", error);
+      setCommentModerationStatus({
+        type: "error",
+        message: language === "fr" ? "Échec de publication de la réponse admin." : "Failed to post admin reply.",
+      });
+    } finally {
+      setSubmittingModerationReplyId(null);
+    }
+  };
 
   useEffect(() => {
     if (!selectedTeamId) {
@@ -1944,8 +2160,17 @@ export default function AdminPage() {
         };
       }
 
+      const translatedTitleEn = "title_en" in translatedContent ? translatedContent.title_en : translatedContent.title;
+      const translatedHeadlineEn = "headline_en" in translatedContent ? translatedContent.headline_en : translatedContent.headline;
+      const translatedSummaryEn = "summary_en" in translatedContent ? translatedContent.summary_en : translatedContent.summary;
+
       const payload = {
-        ...translatedContent,
+        title: translatedContent.title,
+        headline: translatedContent.headline,
+        summary: translatedContent.summary,
+        title_en: translatedTitleEn,
+        headline_en: translatedHeadlineEn,
+        summary_en: translatedSummaryEn,
         category: form.category.trim() || "News",
         imageUrl: finalImage,
         videoUrl: finalVideo,
@@ -1953,6 +2178,11 @@ export default function AdminPage() {
         author: form.author?.trim() || user?.email || "LIPROBAKIN Staff",
         authorPhoto: currentAdminUser?.photo || "",
       };
+
+      if (hasEmbeddedSummaryMedia(form.summary)) {
+        payload.summary = form.summary;
+        payload.summary_en = form.summary;
+      }
       
       console.log('📦 Final payload:', payload);
 
@@ -2490,7 +2720,7 @@ export default function AdminPage() {
       return;
     }
 
-    const name = teamForm.name.trim();
+    const name = teamForm.name.trim().replace(/\s+/g, " ");
     let logo = teamForm.logo.trim();
     const colors = teamForm.colorsInput
       .split(",")
@@ -2499,6 +2729,22 @@ export default function AdminPage() {
 
     if (!name) {
       setTeamStatus({ type: "error", message: "A team name is required." });
+      return;
+    }
+
+    const existingTeams = teams.length > 0
+      ? teams
+      : (await getDocs(collection(firebaseDB, "teams"))).docs.map(mapSnapshotToTeam);
+    const incomingKey = getTeamKey({ gender: teamForm.gender, name });
+    const duplicateTeam = existingTeams.find(
+      (team) => team.id !== teamForm.id && getTeamKey(team) === incomingKey
+    );
+
+    if (duplicateTeam) {
+      setTeamStatus({
+        type: "error",
+        message: `A ${teamForm.gender} team named \"${name}\" already exists. Please edit the existing team instead.`,
+      });
       return;
     }
 
@@ -4112,6 +4358,7 @@ export default function AdminPage() {
     try {
       const homeTeam = teams.find((t) => t.id === gameForm.homeTeamId);
       const awayTeam = teams.find((t) => t.id === gameForm.awayTeamId);
+      const congoDateTime = convertLocalDateTimeToCongo(gameForm.date, gameForm.time);
 
       if (!homeTeam || !awayTeam) {
         setGameStatus({ type: "error", message: "Selected teams not found." });
@@ -4127,8 +4374,8 @@ export default function AdminPage() {
         awayTeamId: awayTeam.id,
         awayTeamName: awayTeam.name,
         awayTeamLogo: awayTeam.logo,
-        date: gameForm.date,
-        time: gameForm.time,
+        date: congoDateTime.date,
+        time: congoDateTime.time,
         venue: gameForm.venue.trim(),
         refereeHomeTeam1: gameForm.refereeHomeTeam1 || null,
         refereeHomeTeam2: gameForm.refereeHomeTeam2 || null,
@@ -4141,7 +4388,8 @@ export default function AdminPage() {
         await logAuditAction("game_updated", user.uid, user.email || "unknown", "game", gameForm.id, `${awayTeam.name} @ ${homeTeam.name}`, {
           homeTeam: homeTeam.name,
           awayTeam: awayTeam.name,
-          gameDate: gameForm.date,
+          gameDate: congoDateTime.date,
+          time: congoDateTime.time,
           venue: gameForm.venue,
           week: gameForm.week,
           gender: gameForm.gender,
@@ -4156,8 +4404,8 @@ export default function AdminPage() {
         await logAuditAction("game_created", user.uid, user.email || "unknown", "game", newGameRef.id, `${awayTeam.name} @ ${homeTeam.name}`, {
           homeTeam: homeTeam.name,
           awayTeam: awayTeam.name,
-          gameDate: gameForm.date,
-          time: gameForm.time,
+          gameDate: congoDateTime.date,
+          time: congoDateTime.time,
           venue: gameForm.venue,
           week: gameForm.week,
           gender: gameForm.gender,
@@ -5640,6 +5888,13 @@ export default function AdminPage() {
                       <div className="flex gap-2 flex-shrink-0">
                         <button
                           type="button"
+                          onClick={() => handleOpenArticleCommentsModeration(article.id)}
+                          className="rounded border border-cyan-500/30 px-3 py-1 text-xs text-cyan-300 hover:bg-cyan-500/10"
+                        >
+                          {language === 'fr' ? 'Commentaires' : 'Comments'} ({commentCountByArticleId[article.id] ?? 0})
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => handleEdit(article)}
                           className="rounded border border-white/20 px-3 py-1 text-xs text-slate-300 hover:bg-white/5"
                         >
@@ -5666,6 +5921,121 @@ export default function AdminPage() {
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+            </section>
+
+            <section ref={commentsModerationRef} className="rounded-2xl border border-white/10 bg-slate-900/70 p-4">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-lg font-bold text-white">
+                  {language === 'fr' ? '🛡️ Modération des commentaires' : '🛡️ Comment Moderation'} ({moderationComments.length})
+                </h2>
+                <span className="text-xs text-slate-400">
+                  {language === 'fr' ? 'Recherche + suppression rapide' : 'Search + fast delete'}
+                </span>
+              </div>
+
+              {commentModerationStatus && (
+                <div className={`mb-3 rounded-lg border px-3 py-2 text-xs ${statusClassMap[commentModerationStatus.type]}`}>
+                  {commentModerationStatus.message}
+                </div>
+              )}
+
+              <div className="mb-3 grid gap-2 sm:grid-cols-[2fr_1fr]">
+                <input
+                  type="text"
+                  value={commentModerationSearch}
+                  onChange={(event) => setCommentModerationSearch(event.target.value)}
+                  aria-label={language === 'fr' ? 'Rechercher les commentaires' : 'Search comments'}
+                  placeholder={language === 'fr' ? 'Rechercher par nom, commentaire ou article...' : 'Search by name, comment, or article...'}
+                  className="w-full rounded-lg border border-white/10 bg-slate-800/50 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-orange-500 focus:outline-none"
+                />
+                <select
+                  value={commentModerationArticleFilter}
+                  onChange={(event) => setCommentModerationArticleFilter(event.target.value)}
+                  aria-label={language === 'fr' ? 'Filtrer les commentaires par article' : 'Filter comments by article'}
+                  className="w-full rounded-lg border border-white/10 bg-slate-800/50 px-3 py-2 text-sm text-white focus:border-orange-500 focus:outline-none"
+                >
+                  <option value="all">{language === 'fr' ? 'Tous les articles' : 'All articles'}</option>
+                  {news.map((article) => (
+                    <option key={article.id} value={article.id}>
+                      {article.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {filteredModerationComments.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-white/10 bg-slate-800/20 px-4 py-6 text-center">
+                  <p className="text-sm text-slate-400">
+                    {language === 'fr' ? 'Aucun commentaire trouvé avec ces filtres.' : 'No comments found for these filters.'}
+                  </p>
+                </div>
+              ) : (
+                <div className="max-h-[520px] space-y-2 overflow-y-auto pr-1">
+                  {filteredModerationComments.map((comment) => {
+                    const articleTitle = articleTitleById.get(comment.articleId) || comment.articleId;
+                    const replyDraftKey = `${comment.articleId}-${comment.id}`;
+                    const replyDraftValue = moderationReplyDrafts[replyDraftKey] || "";
+                    return (
+                      <article
+                        key={`${comment.articleId}-${comment.id}`}
+                        className="rounded-lg border border-white/10 bg-slate-800/30 p-3"
+                      >
+                        <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-orange-300">{articleTitle}</p>
+                          <span className="text-[11px] text-slate-500">
+                            {comment.createdAt ? formatAdminPublishedLabel(comment.createdAt) : (language === 'fr' ? 'À l\'instant' : 'Just now')}
+                          </span>
+                        </div>
+                        <p className="mb-2 text-sm font-medium text-white">{comment.name}</p>
+                        <p className="mb-3 whitespace-pre-wrap text-sm text-slate-200">{comment.message}</p>
+                        <div className="mb-3 space-y-2 rounded-lg border border-white/10 bg-slate-900/40 p-2">
+                          <p className="text-[11px] uppercase tracking-wider text-cyan-300">
+                            {language === 'fr' ? 'Répondre en tant qu\'admin' : 'Reply as admin'}
+                          </p>
+                          <textarea
+                            value={replyDraftValue}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              setModerationReplyDrafts((previous) => ({
+                                ...previous,
+                                [replyDraftKey]: value,
+                              }));
+                            }}
+                            rows={2}
+                            maxLength={600}
+                            placeholder={language === 'fr' ? 'Écrire une réponse admin...' : 'Write an admin reply...'}
+                            className="w-full rounded border border-white/10 bg-slate-800/70 px-2 py-2 text-xs text-white placeholder:text-slate-500 focus:border-cyan-500 focus:outline-none"
+                          />
+                          <div className="flex justify-end">
+                            <button
+                              type="button"
+                              onClick={() => handleSubmitModerationReply(comment)}
+                              disabled={submittingModerationReplyId === comment.id || !replyDraftValue.trim()}
+                              className="rounded border border-cyan-500/30 px-3 py-1 text-xs text-cyan-300 hover:bg-cyan-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {submittingModerationReplyId === comment.id
+                                ? (language === 'fr' ? 'Publication...' : 'Posting...')
+                                : (language === 'fr' ? 'Publier la réponse' : 'Post reply')}
+                            </button>
+                          </div>
+                        </div>
+                        <div className="flex justify-end">
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteModerationComment(comment)}
+                            disabled={deletingModerationCommentId === comment.id}
+                            className="rounded border border-rose-500/30 px-3 py-1 text-xs text-rose-300 hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {deletingModerationCommentId === comment.id
+                              ? (language === 'fr' ? 'Suppression...' : 'Deleting...')
+                              : t.delete}
+                          </button>
+                        </div>
+                      </article>
+                    );
+                  })}
                 </div>
               )}
             </section>

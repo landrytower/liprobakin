@@ -1,19 +1,79 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import PasswordResetModal from "./PasswordResetModal";
 import { isValidPhoneNumber } from "@/lib/passwordReset";
 import { ConfirmationResult } from "firebase/auth";
+import {
+  type CountryCode,
+  getCountries,
+  getCountryCallingCode,
+  parsePhoneNumberFromString,
+} from "libphonenumber-js";
 
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-// DRC country code as default
-const DEFAULT_COUNTRY_CODE = "+243";
+// Default country for DRC users
+const DEFAULT_COUNTRY: CountryCode = "CD";
+
+const PREFERRED_COUNTRY_BY_CALLING_CODE: Record<string, CountryCode | undefined> = {
+  // NANPA is shared by many; default UX expectation is USA for "+1".
+  "1": "US",
+};
+
+function normalizeCallingCodeQuery(query: string): string | null {
+  const q = query.trim();
+  if (!q) return null;
+  if (/^\+\d+$/.test(q)) return q.slice(1);
+  if (/^\d+$/.test(q)) return q;
+  return null;
+}
+
+function splitFullName(fullName: string): { firstName: string; lastName: string } {
+  const parts = fullName
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  const firstName = parts[0] ?? "";
+  const lastName = parts.slice(1).join(" ");
+  return { firstName, lastName };
+}
+
+function countryFlagEmoji(countryCode: string): string {
+  const code = countryCode.toUpperCase();
+  if (!/^[A-Z]{2}$/.test(code)) return "🌐";
+  // Some user agents may not support every flag emoji
+  try {
+    const first = 0x1f1e6 + (code.charCodeAt(0) - 65);
+    const second = 0x1f1e6 + (code.charCodeAt(1) - 65);
+    return String.fromCodePoint(first, second);
+  } catch {
+    return "🌐";
+  }
+}
+
+function getRegionDisplayName(countryCode: string): string {
+  try {
+    const language = typeof navigator !== "undefined" ? navigator.language : "en";
+    const dn = new Intl.DisplayNames([language], { type: "region" });
+    return dn.of(countryCode) || countryCode;
+  } catch {
+    return countryCode;
+  }
+}
+
+function safeGetCountryCallingCode(countryCode: string): string | null {
+  try {
+    return getCountryCallingCode(countryCode as CountryCode);
+  } catch {
+    return null;
+  }
+}
 
 export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
   const router = useRouter();
@@ -37,9 +97,171 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
   // Form fields
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [phoneNumber, setPhoneNumber] = useState(DEFAULT_COUNTRY_CODE);
+  const [phoneCountry, setPhoneCountry] = useState<CountryCode>(DEFAULT_COUNTRY);
+  const [phoneNationalNumber, setPhoneNationalNumber] = useState("");
+  const [countryQuery, setCountryQuery] = useState("");
+
+  const geoCountryAppliedRef = useRef(false);
+
+  const countries = useMemo(() => getCountries() as CountryCode[], []);
+
+  const countryOptions = useMemo(() => {
+    const language = typeof navigator !== "undefined" ? navigator.language : "en";
+    const regionNames = (() => {
+      try {
+        return new Intl.DisplayNames([language], { type: "region" });
+      } catch {
+        return null;
+      }
+    })();
+    return countries
+      .map((cc) => {
+        const name = regionNames?.of(cc) || cc;
+        const callingCode = safeGetCountryCallingCode(cc);
+        if (!callingCode) return null;
+        const flag = countryFlagEmoji(cc);
+        const search = `${cc} ${name} +${callingCode}`.toLowerCase();
+        return { cc, name, callingCode, flag, search };
+      })
+      .filter((v): v is NonNullable<typeof v> => Boolean(v))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [countries]);
+
+  const filteredCountryOptions = useMemo(() => {
+    const q = countryQuery.trim().toLowerCase();
+    if (!q) return countryOptions;
+    // Accept searches like "+1" or "1" for calling codes
+    const qNormalized = q.startsWith("+") ? q : q;
+    return countryOptions.filter((opt) => {
+      if (opt.search.includes(q)) return true;
+      if (qNormalized.startsWith("+") && (`+${opt.callingCode}`.startsWith(qNormalized) || opt.search.includes(qNormalized))) {
+        return true;
+      }
+      if (!qNormalized.startsWith("+") && (/^\d+$/.test(qNormalized) && opt.callingCode.startsWith(qNormalized))) {
+        return true;
+      }
+      return false;
+    });
+  }, [countryOptions, countryQuery]);
+
+  // If the current selection is not in the filtered list,
+  // automatically switch to the first filtered option.
+  useEffect(() => {
+    const q = countryQuery.trim();
+    if (!q) return;
+    if (filteredCountryOptions.length === 0) return;
+    const stillVisible = filteredCountryOptions.some((opt) => opt.cc === phoneCountry);
+    if (!stillVisible) {
+      const callingCodeQuery = normalizeCallingCodeQuery(q);
+      if (callingCodeQuery) {
+        const preferred = PREFERRED_COUNTRY_BY_CALLING_CODE[callingCodeQuery];
+        const preferredOpt = preferred
+          ? filteredCountryOptions.find((opt) => opt.cc === preferred)
+          : undefined;
+        if (preferredOpt) {
+          setPhoneCountry(preferredOpt.cc);
+          return;
+        }
+      }
+      setPhoneCountry(filteredCountryOptions[0].cc);
+    }
+  }, [countryQuery, filteredCountryOptions, phoneCountry]);
+  const phoneNationalDigits = useMemo(() => phoneNationalNumber.replace(/\D/g, ""), [phoneNationalNumber]);
+  const phoneCallingCode = useMemo(() => {
+    return (
+      safeGetCountryCallingCode(phoneCountry) ??
+      safeGetCountryCallingCode(DEFAULT_COUNTRY) ??
+      ""
+    );
+  }, [phoneCountry]);
+
+  useEffect(() => {
+    if (!safeGetCountryCallingCode(phoneCountry)) {
+      setPhoneCountry(DEFAULT_COUNTRY);
+    }
+  }, [phoneCountry]);
+  const phoneE164 = useMemo(() => {
+    const digits = phoneNationalDigits;
+    return digits ? `+${phoneCallingCode}${digits}` : `+${phoneCallingCode}`;
+  }, [phoneCallingCode, phoneNationalDigits]);
+
+  const handlePhoneInputChange = (rawValue: string) => {
+    const trimmed = rawValue.trim();
+    if (trimmed.startsWith("+")) {
+      const digitsOnly = trimmed.replace(/\D/g, "");
+      if (!digitsOnly) {
+        setPhoneNationalNumber("");
+        return;
+      }
+
+      // User typed only a calling code like "+1" or "+243".
+      if (/^\+\d{1,4}$/.test(trimmed)) {
+        const preferred = PREFERRED_COUNTRY_BY_CALLING_CODE[digitsOnly];
+        const exactMatches = countryOptions.filter((opt) => opt.callingCode === digitsOnly);
+        const chosen =
+          (preferred ? exactMatches.find((opt) => opt.cc === preferred)?.cc : undefined) ||
+          (exactMatches.length === 1 ? exactMatches[0].cc : undefined);
+
+        if (chosen) {
+          setPhoneCountry(chosen);
+          setCountryQuery("");
+        }
+        setPhoneNationalNumber("");
+        return;
+      }
+
+      const parsed = parsePhoneNumberFromString(trimmed);
+      if (parsed) {
+        const preferred = PREFERRED_COUNTRY_BY_CALLING_CODE[parsed.countryCallingCode];
+        const nextCountry =
+          parsed.country ||
+          (preferred && countries.includes(preferred) ? preferred : undefined);
+
+        if (nextCountry) {
+          setPhoneCountry(nextCountry);
+          setCountryQuery("");
+        }
+
+        if (parsed.nationalNumber) {
+          setPhoneNationalNumber(parsed.nationalNumber);
+          return;
+        }
+
+        // Fallback for incomplete numbers: strip the calling code if possible.
+        const cc = parsed.countryCallingCode;
+        if (digitsOnly.startsWith(cc)) {
+          setPhoneNationalNumber(digitsOnly.slice(cc.length));
+        } else {
+          setPhoneNationalNumber(digitsOnly);
+        }
+        return;
+      }
+
+      // Manual fallback for incomplete numbers where parsing fails.
+      const candidates = countryOptions.filter((opt) => digitsOnly.startsWith(opt.callingCode));
+      if (candidates.length > 0) {
+        const maxLen = Math.max(...candidates.map((c) => c.callingCode.length));
+        const best = candidates.filter((c) => c.callingCode.length === maxLen);
+        const callingCode = best[0].callingCode;
+        const preferred = PREFERRED_COUNTRY_BY_CALLING_CODE[callingCode];
+        const chosen =
+          (preferred ? best.find((c) => c.cc === preferred)?.cc : undefined) || best[0].cc;
+
+        setPhoneCountry(chosen);
+        setCountryQuery("");
+        setPhoneNationalNumber(digitsOnly.slice(callingCode.length));
+        return;
+      }
+
+      // If no calling code match, keep digits only.
+      setPhoneNationalNumber(digitsOnly);
+      return;
+    }
+    setPhoneNationalNumber(rawValue.replace(/\D/g, ""));
+  };
 
   // Countdown timer for resend OTP
   useEffect(() => {
@@ -57,7 +279,37 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
       setConfirmationResult(null);
       setCountdown(0);
       setEmailSignupStep("form");
+      geoCountryAppliedRef.current = false;
     }
+  }, [isOpen]);
+
+  // Best-effort initial country selection (similar to intl-tel-input initialCountry=auto)
+  useEffect(() => {
+    if (!isOpen) return;
+    if (geoCountryAppliedRef.current) return;
+    geoCountryAppliedRef.current = true;
+
+    // Only auto-set if user hasn't started typing
+    if (phoneNationalDigits) return;
+
+    const controller = new AbortController();
+    (async () => {
+      try {
+        const res = await fetch("https://ipapi.co/json/", { signal: controller.signal });
+        if (!res.ok) return;
+        const data = (await res.json()) as { country_code?: string };
+        const cc = (data.country_code || "").toUpperCase();
+        if (!cc || cc.length !== 2) return;
+        if (countries.includes(cc as CountryCode)) {
+          setPhoneCountry(cc as CountryCode);
+        }
+      } catch {
+        // ignore geo lookup failures
+      }
+    })();
+
+    return () => controller.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   // Send OTP for email signup phone verification
@@ -67,8 +319,8 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
     try {
       // Validate all form fields first
-      if (!firstName || !lastName) {
-        throw new Error("Please enter your first and last name");
+      if (!fullName.trim()) {
+        throw new Error("Please enter your full name");
       }
       if (!email) {
         throw new Error("Please enter your email address");
@@ -76,14 +328,21 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
       if (!password || password.length < 6) {
         throw new Error("Password must be at least 6 characters");
       }
-      if (!phoneNumber || phoneNumber === DEFAULT_COUNTRY_CODE) {
+      if (!phoneNationalDigits) {
         throw new Error("Please enter your phone number");
       }
-      if (!isValidPhoneNumber(phoneNumber)) {
+      if (!isValidPhoneNumber(phoneE164)) {
         throw new Error("Please enter a valid phone number with country code");
       }
 
-      const result = await sendPhoneOTP(phoneNumber, "recaptcha-container");
+      const { firstName: derivedFirst, lastName: derivedLast } = splitFullName(fullName);
+      if (!derivedFirst || !derivedLast) {
+        throw new Error("Please enter your first and last name");
+      }
+      setFirstName(derivedFirst);
+      setLastName(derivedLast);
+
+      const result = await sendPhoneOTP(phoneE164, "recaptcha-container");
       setConfirmationResult(result);
       setEmailSignupStep("verify");
       setCountdown(60);
@@ -114,8 +373,13 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
         throw new Error("Please enter the 6-digit code");
       }
 
+      const { firstName: derivedFirst, lastName: derivedLast } = splitFullName(fullName);
+      if (!derivedFirst || !derivedLast) {
+        throw new Error("Please enter your first and last name");
+      }
+
       // Verify the OTP first (this signs in with phone)
-      await verifyPhoneOTP(confirmationResult, otp, firstName, lastName);
+      await verifyPhoneOTP(confirmationResult, otp, derivedFirst, derivedLast);
       
       // TODO: In future, could link email/password to the phone-verified account
       // For now, the phone verification creates the account
@@ -144,15 +408,15 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
     try {
       // Validate phone number
-      if (!phoneNumber || phoneNumber === DEFAULT_COUNTRY_CODE) {
+      if (!phoneNationalDigits) {
         throw new Error("Please enter your phone number");
       }
 
-      if (!isValidPhoneNumber(phoneNumber)) {
+      if (!isValidPhoneNumber(phoneE164)) {
         throw new Error("Please enter a valid phone number with country code");
       }
 
-      const result = await sendPhoneOTP(phoneNumber, "recaptcha-container");
+      const result = await sendPhoneOTP(phoneE164, "recaptcha-container");
       setConfirmationResult(result);
       setOtpSent(true);
       setCountdown(60); // 60 second countdown for resend
@@ -184,15 +448,20 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
       }
 
       // For signup, require name fields
-      if (mode === "signup" && (!firstName || !lastName)) {
+      if (mode === "signup" && !fullName.trim()) {
+        throw new Error("Please enter your full name");
+      }
+
+      const derived = mode === "signup" ? splitFullName(fullName) : { firstName: undefined, lastName: undefined };
+      if (mode === "signup" && (!derived.firstName || !derived.lastName)) {
         throw new Error("Please enter your first and last name");
       }
 
       await verifyPhoneOTP(
         confirmationResult, 
         otp,
-        mode === "signup" ? firstName : undefined,
-        mode === "signup" ? lastName : undefined
+        mode === "signup" ? derived.firstName : undefined,
+        mode === "signup" ? derived.lastName : undefined
       );
       
       router.push("/profile-setup");
@@ -258,9 +527,12 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
   const resetForm = () => {
     setEmail("");
     setPassword("");
+    setFullName("");
     setFirstName("");
     setLastName("");
-    setPhoneNumber(DEFAULT_COUNTRY_CODE);
+    setPhoneCountry(DEFAULT_COUNTRY);
+    setPhoneNationalNumber("");
+    setCountryQuery("");
     setError("");
     setOtpSent(false);
     setOtp("");
@@ -423,55 +695,62 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                   <>
                     {/* Name fields for signup */}
                     {mode === "signup" && (
-                      <div className="grid grid-cols-2 gap-2 sm:gap-3">
-                        <div>
-                          <input
-                            required
-                            type="text"
-                            value={firstName}
-                            onChange={(e) => setFirstName(e.target.value)}
-                            placeholder="First Name"
-                            className="w-full px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg sm:rounded-xl bg-slate-900/70 border border-white/10 text-white placeholder:text-slate-500 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition-all text-sm"
-                          />
-                        </div>
-                        <div>
-                          <input
-                            required
-                            type="text"
-                            value={lastName}
-                            onChange={(e) => setLastName(e.target.value)}
-                            placeholder="Last Name"
-                            className="w-full px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg sm:rounded-xl bg-slate-900/70 border border-white/10 text-white placeholder:text-slate-500 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition-all text-sm"
-                          />
-                        </div>
+                      <div>
+                        <input
+                          required
+                          type="text"
+                          value={fullName}
+                          onChange={(e) => setFullName(e.target.value)}
+                          placeholder="Full Name"
+                          className="w-full px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg sm:rounded-xl bg-slate-900/70 border border-white/10 text-white placeholder:text-slate-500 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition-all text-sm"
+                        />
                       </div>
                     )}
 
                     {/* Phone Number Input */}
                     {!otpSent ? (
                       <div>
-                        <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none">
-                            🇨🇩
-                          </span>
-                          <input
-                            required
-                            type="tel"
-                            value={phoneNumber}
-                            onChange={(e) => {
-                              let value = e.target.value;
-                              // Ensure it starts with + for international format
-                              if (value && !value.startsWith("+")) {
-                                value = "+" + value;
-                              }
-                              setPhoneNumber(value);
-                            }}
-                            placeholder="+243 XXX XXX XXX"
-                            className="w-full pl-10 pr-3 sm:pl-12 sm:pr-4 py-2.5 sm:py-3 rounded-lg sm:rounded-xl bg-slate-900/70 border border-white/10 text-white placeholder:text-slate-500 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition-all text-sm"
-                          />
+                        <div className="flex gap-2">
+                          <div className="w-[52%]">
+                            <input
+                              type="text"
+                              value={countryQuery}
+                              onChange={(e) => setCountryQuery(e.target.value)}
+                              placeholder="Search country"
+                              aria-label="Search country"
+                              className="w-full mb-2 px-3 sm:px-4 py-2 rounded-lg sm:rounded-xl bg-slate-900/70 border border-white/10 text-white placeholder:text-slate-500 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition-all text-sm"
+                            />
+                          <select
+                            value={phoneCountry}
+                            onChange={(e) => setPhoneCountry(e.target.value as CountryCode)}
+                            aria-label="Country"
+                            title="Select country"
+                            className="w-full px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg sm:rounded-xl bg-slate-900/70 border border-white/10 text-white focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition-all text-sm"
+                          >
+                            {filteredCountryOptions.map((opt) => (
+                              <option key={opt.cc} value={opt.cc}>
+                                {opt.flag} {opt.name} (+{opt.callingCode})
+                              </option>
+                            ))}
+                          </select>
+                          </div>
+                          <div className="w-[48%] flex rounded-lg sm:rounded-xl bg-slate-900/70 border border-white/10 overflow-hidden focus-within:border-cyan-500/50 focus-within:ring-1 focus-within:ring-cyan-500/20 transition-all">
+                            <div className="flex items-center px-3 sm:px-4 text-slate-300 text-sm border-r border-white/10">
+                              +{phoneCallingCode}
+                            </div>
+                            <input
+                              required
+                              type="tel"
+                              value={phoneNationalNumber}
+                              onChange={(e) => handlePhoneInputChange(e.target.value)}
+                              inputMode="tel"
+                              placeholder="Phone number"
+                              className="w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-transparent text-white placeholder:text-slate-500 focus:outline-none text-sm"
+                            />
+                          </div>
                         </div>
                         <p className="mt-1 sm:mt-1.5 text-[10px] sm:text-xs text-slate-500 pl-1">
-                          Default: DRC (+243). Other codes: +1 (US), +44 (UK), +237 (CM)
+                          Selected: {getRegionDisplayName(phoneCountry)} (+{phoneCallingCode})
                         </p>
                       </div>
                     ) : (
@@ -479,7 +758,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                         {/* OTP Input */}
                         <div className="text-center mb-2">
                           <p className="text-sm text-slate-400">
-                            Code sent to <span className="text-cyan-400">{phoneNumber}</span>
+                            Code sent to <span className="text-cyan-400">{phoneE164}</span>
                           </p>
                         </div>
                         <div>
@@ -531,7 +810,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                           </div>
                           <p className="text-sm text-slate-300 font-medium">Verify Your Phone</p>
                           <p className="text-xs text-slate-400 mt-1">
-                            Enter the code sent to <span className="text-cyan-400">{phoneNumber}</span>
+                            Enter the code sent to <span className="text-cyan-400">{phoneE164}</span>
                           </p>
                         </div>
                         <div>
@@ -569,46 +848,58 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                       <>
                         {mode === "signup" && (
                           <>
-                            {/* Name Fields */}
-                            <div className="grid grid-cols-2 gap-2 sm:gap-3">
-                              <div>
-                                <input
-                                  required
-                                  type="text"
-                                  value={firstName}
-                                  onChange={(e) => setFirstName(e.target.value)}
-                                  placeholder="First Name"
-                                  className="w-full px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg sm:rounded-xl bg-slate-900/70 border border-white/10 text-white placeholder:text-slate-500 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition-all text-sm"
-                                />
-                              </div>
-                              <div>
-                                <input
-                                  required
-                                  type="text"
-                                  value={lastName}
-                                  onChange={(e) => setLastName(e.target.value)}
-                                  placeholder="Last Name"
-                                  className="w-full px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg sm:rounded-xl bg-slate-900/70 border border-white/10 text-white placeholder:text-slate-500 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition-all text-sm"
-                                />
-                              </div>
+                            {/* Full Name */}
+                            <div>
+                              <input
+                                required
+                                type="text"
+                                value={fullName}
+                                onChange={(e) => setFullName(e.target.value)}
+                                placeholder="Full Name"
+                                className="w-full px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg sm:rounded-xl bg-slate-900/70 border border-white/10 text-white placeholder:text-slate-500 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition-all text-sm"
+                              />
                             </div>
 
                             {/* Phone for email signup */}
                             <div>
-                              <div className="relative">
-                                <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-                                  <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                                  </svg>
+                              <div className="flex gap-2">
+                                <div className="w-[52%]">
+                                  <input
+                                    type="text"
+                                    value={countryQuery}
+                                    onChange={(e) => setCountryQuery(e.target.value)}
+                                    placeholder="Search country"
+                                    aria-label="Search country"
+                                    className="w-full mb-2 px-3 sm:px-4 py-2 rounded-lg sm:rounded-xl bg-slate-900/70 border border-white/10 text-white placeholder:text-slate-500 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition-all text-sm"
+                                  />
+                                <select
+                                  value={phoneCountry}
+                                  onChange={(e) => setPhoneCountry(e.target.value as CountryCode)}
+                                  aria-label="Country"
+                                  title="Select country"
+                                  className="w-full px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg sm:rounded-xl bg-slate-900/70 border border-white/10 text-white focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition-all text-sm"
+                                >
+                                  {filteredCountryOptions.map((opt) => (
+                                    <option key={opt.cc} value={opt.cc}>
+                                      {opt.flag} {opt.name} (+{opt.callingCode})
+                                    </option>
+                                  ))}
+                                </select>
                                 </div>
-                                <input
-                                  required
-                                  type="tel"
-                                  value={phoneNumber}
-                                  onChange={(e) => setPhoneNumber(e.target.value)}
-                                  placeholder="Phone (+243...)"
-                                  className="w-full pl-10 pr-3 py-2.5 sm:py-3 rounded-lg sm:rounded-xl bg-slate-900/70 border border-white/10 text-white placeholder:text-slate-500 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition-all text-sm"
-                                />
+                                <div className="w-[48%] flex rounded-lg sm:rounded-xl bg-slate-900/70 border border-white/10 overflow-hidden focus-within:border-cyan-500/50 focus-within:ring-1 focus-within:ring-cyan-500/20 transition-all">
+                                  <div className="flex items-center px-3 sm:px-4 text-slate-300 text-sm border-r border-white/10">
+                                    +{phoneCallingCode}
+                                  </div>
+                                  <input
+                                    required
+                                    type="tel"
+                                    value={phoneNationalNumber}
+                                    onChange={(e) => handlePhoneInputChange(e.target.value)}
+                                    inputMode="tel"
+                                    placeholder="Phone number"
+                                    className="w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-transparent text-white placeholder:text-slate-500 focus:outline-none text-sm"
+                                  />
+                                </div>
                               </div>
                               <p className="mt-1 text-[10px] text-slate-500 pl-1">
                                 📱 A verification code will be sent to this number

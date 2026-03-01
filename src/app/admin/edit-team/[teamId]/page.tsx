@@ -8,6 +8,7 @@ import { logAuditAction } from "@/lib/auditLog";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { getAdminUser } from "@/lib/adminAuth";
+import { normalizeTeamGender } from "@/lib/team-gender";
 import type { AdminUser } from "@/types/admin";
 import Image from "next/image";
 import { countries, flagFromCode, nameForCountryCode } from "@/data/countries";
@@ -590,6 +591,18 @@ export default function EditTeamPage() {
     }
     if (transferTargetTeamId === team.id) {
       alert("Cannot transfer to the same team");
+      return;
+    }
+
+    const sourceGender = normalizeTeamGender(team.gender, team.logo, "men");
+    const transferTargetTeam = allTeams.find((entry) => entry.id === transferTargetTeamId);
+    if (!transferTargetTeam) {
+      alert("Destination team not found");
+      return;
+    }
+    const targetGender = normalizeTeamGender(transferTargetTeam.gender, transferTargetTeam.logo, "men");
+    if (sourceGender !== targetGender) {
+      alert("Transfers are only allowed between teams of the same gender.");
       return;
     }
 
@@ -1906,7 +1919,12 @@ export default function EditTeamPage() {
             >
               <option value="">-- Select team --</option>
               {allTeams
-                .filter((t) => t.id !== teamId)
+                .filter(
+                  (t) =>
+                    t.id !== teamId &&
+                    normalizeTeamGender(t.gender, t.logo, "men") ===
+                      normalizeTeamGender(team?.gender, team?.logo, "men")
+                )
                 .map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.name} ({t.gender === "men" ? "Men" : "Women"})

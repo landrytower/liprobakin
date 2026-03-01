@@ -94,14 +94,14 @@ const DEFAULT_ADDITIONAL_MEDIA_HEIGHT = 320;
 const MIN_ADDITIONAL_MEDIA_WIDTH = 35;
 const MAX_ADDITIONAL_MEDIA_WIDTH = 100;
 const DEFAULT_ADDITIONAL_MEDIA_WIDTH = 100;
-const MIN_ADDITIONAL_MEDIA_OFFSET_X = -200;
-const MAX_ADDITIONAL_MEDIA_OFFSET_X = 200;
-const MIN_ADDITIONAL_MEDIA_OFFSET_Y = -200;
-const MAX_ADDITIONAL_MEDIA_OFFSET_Y = 200;
-const MIN_FIXED_MEDIA_TRANSLATE_X = -1200;
-const MAX_FIXED_MEDIA_TRANSLATE_X = 1200;
-const MIN_FIXED_MEDIA_TRANSLATE_Y = -1200;
-const MAX_FIXED_MEDIA_TRANSLATE_Y = 1200;
+const MIN_ADDITIONAL_MEDIA_OFFSET_X = -5000;
+const MAX_ADDITIONAL_MEDIA_OFFSET_X = 5000;
+const MIN_ADDITIONAL_MEDIA_OFFSET_Y = -5000;
+const MAX_ADDITIONAL_MEDIA_OFFSET_Y = 5000;
+const MIN_FIXED_MEDIA_TRANSLATE_X = -5000;
+const MAX_FIXED_MEDIA_TRANSLATE_X = 5000;
+const MIN_FIXED_MEDIA_TRANSLATE_Y = -5000;
+const MAX_FIXED_MEDIA_TRANSLATE_Y = 5000;
 const MIN_MEDIA_TEXT_DISTANCE = 0;
 const MAX_MEDIA_TEXT_DISTANCE = 48;
 const DEFAULT_MEDIA_TEXT_DISTANCE = 12;
@@ -123,7 +123,8 @@ const getMediaKindFromUrl = (url?: string | null): "image" | "video" => {
 const normalizeWrapMode = (wrap?: AdditionalMediaWrap): CanonicalAdditionalMediaWrap => {
   if (wrap === "wrap") return "square";
   if (wrap === "break") return "topBottom";
-  if (wrap === "inline" || wrap === "square" || wrap === "tight" || wrap === "through" || wrap === "topBottom" || wrap === "behind" || wrap === "front") {
+  if (wrap === "behind" || wrap === "front") return "square";
+  if (wrap === "inline" || wrap === "square" || wrap === "tight" || wrap === "through" || wrap === "topBottom") {
     return wrap;
   }
   return "inline";
@@ -363,6 +364,7 @@ export default function StoriesPage() {
   const router = useRouter();
   const { language, currentAdminUser } = useAdmin();
   const copy = t[language];
+  const showLegacyAdditionalMedia = false;
 
   const [articles, setArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1223,6 +1225,7 @@ export default function StoriesPage() {
               <RichTextEditor
                 content={form.summary}
                 onChange={(html) => updateFormField("summary", html)}
+                language={language}
                 placeholder={language === 'fr' ? "Écrivez votre article ici... Utilisez @ pour mentionner un joueur." : "Write your article here... Use @ to mention a player."}
               />
             </div>
@@ -1332,65 +1335,67 @@ export default function StoriesPage() {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-slate-400">{copy.additionalPhotos}</label>
-                <p className="text-xs text-slate-500">{copy.additionalPhotosHelp}</p>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  {Array.from({ length: MAX_ADDITIONAL_STORY_MEDIA }, (_, index) => (
-                    <div key={`additional-photo-${index}`} className="space-y-2 rounded-lg border border-white/10 bg-slate-900/40 p-3">
-                      <label className="block text-xs text-slate-400">
-                        {copy.additionalPhotoLabel} {index + 1}
-                      </label>
-                      <input
-                        type="file"
-                        accept="image/*,video/*"
-                        onChange={(event) => handleAdditionalMediaChange(index, event)}
-                        className="w-full text-xs text-slate-400 file:mr-2 file:rounded file:border-0 file:bg-orange-500 file:px-2 file:py-1 file:text-xs file:text-white hover:file:bg-orange-600"
-                      />
-                      {(additionalMediaFiles[index] || form.additionalMedia[index]) && (
-                        <button
-                          type="button"
-                          onClick={() => removeAdditionalMedia(index)}
-                          className="rounded border border-white/20 px-2 py-1 text-[10px] text-slate-300 hover:bg-white/5"
-                        >
-                          {copy.removeAdditional}
-                        </button>
-                      )}
-                      {additionalMediaPreviews[index] && additionalMediaKinds[index] === "video" && (
-                        <video
-                          src={additionalMediaPreviews[index]}
-                          className="h-24 w-full rounded border border-white/10 bg-black object-cover"
-                          controls
-                          muted
-                          playsInline
+              {showLegacyAdditionalMedia && (
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-slate-400">{copy.additionalPhotos}</label>
+                  <p className="text-xs text-slate-500">{copy.additionalPhotosHelp}</p>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    {Array.from({ length: MAX_ADDITIONAL_STORY_MEDIA }, (_, index) => (
+                      <div key={`additional-photo-${index}`} className="space-y-2 rounded-lg border border-white/10 bg-slate-900/40 p-3">
+                        <label className="block text-xs text-slate-400">
+                          {copy.additionalPhotoLabel} {index + 1}
+                        </label>
+                        <input
+                          type="file"
+                          accept="image/*,video/*"
+                          onChange={(event) => handleAdditionalMediaChange(index, event)}
+                          className="w-full text-xs text-slate-400 file:mr-2 file:rounded file:border-0 file:bg-orange-500 file:px-2 file:py-1 file:text-xs file:text-white hover:file:bg-orange-600"
                         />
-                      )}
-                      {additionalMediaPreviews[index] && additionalMediaKinds[index] !== "video" && (
-                        <div className="relative h-24 overflow-hidden rounded border border-white/10">
-                          <Image
+                        {(additionalMediaFiles[index] || form.additionalMedia[index]) && (
+                          <button
+                            type="button"
+                            onClick={() => removeAdditionalMedia(index)}
+                            className="rounded border border-white/20 px-2 py-1 text-[10px] text-slate-300 hover:bg-white/5"
+                          >
+                            {copy.removeAdditional}
+                          </button>
+                        )}
+                        {additionalMediaPreviews[index] && additionalMediaKinds[index] === "video" && (
+                          <video
                             src={additionalMediaPreviews[index]}
-                            alt={`${copy.additionalPhotoLabel} ${index + 1}`}
-                            fill
-                            className="object-cover"
-                            sizes="180px"
-                            unoptimized
+                            className="h-24 w-full rounded border border-white/10 bg-black object-cover"
+                            controls
+                            muted
+                            playsInline
                           />
-                        </div>
-                      )}
-                      {form.additionalMedia[index] && (
-                        <p className="rounded border border-cyan-500/30 bg-cyan-500/10 px-2 py-1 text-[10px] text-cyan-200">
-                          {language === "fr"
-                            ? "Utilisez la page Aperçu pour redimensionner et positionner ce média."
-                            : "Use the Preview page to resize and position this media."}
-                        </p>
-                      )}
-                      {!additionalMediaFiles[index] && form.additionalMedia[index] && (
-                        <p className="text-[10px] text-slate-500">{copy.existingAdditionalPhoto}</p>
-                      )}
-                    </div>
-                  ))}
+                        )}
+                        {additionalMediaPreviews[index] && additionalMediaKinds[index] !== "video" && (
+                          <div className="relative h-24 overflow-hidden rounded border border-white/10">
+                            <Image
+                              src={additionalMediaPreviews[index]}
+                              alt={`${copy.additionalPhotoLabel} ${index + 1}`}
+                              fill
+                              className="object-cover"
+                              sizes="180px"
+                              unoptimized
+                            />
+                          </div>
+                        )}
+                        {form.additionalMedia[index] && (
+                          <p className="rounded border border-cyan-500/30 bg-cyan-500/10 px-2 py-1 text-[10px] text-cyan-200">
+                            {language === "fr"
+                              ? "Utilisez la page Aperçu pour redimensionner et positionner ce média."
+                              : "Use the Preview page to resize and position this media."}
+                          </p>
+                        )}
+                        {!additionalMediaFiles[index] && form.additionalMedia[index] && (
+                          <p className="text-[10px] text-slate-500">{copy.existingAdditionalPhoto}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {(imagePreview && !hasCoverVideoSelected) && (
                 <div className="relative h-32 overflow-hidden rounded-lg border border-white/10">

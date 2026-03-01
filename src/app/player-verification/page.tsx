@@ -8,6 +8,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { collection, getDocs, addDoc, serverTimestamp, query, where } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { firebaseDB, firebaseStorage } from "@/lib/firebase";
+import { normalizeTeamGender } from "@/lib/team-gender";
 import { countries, codeForCountryName, flagFromCode, nameForCountryCode } from "@/data/countries";
 
 type Player = {
@@ -168,7 +169,7 @@ export default function PlayerVerificationPage() {
         id: doc.id,
         name: doc.data().name || "",
         city: doc.data().city || "",
-        gender: doc.data().gender || "",
+        gender: normalizeTeamGender(doc.data().gender, doc.data().logo, "men"),
       }));
       setTeams(teamsList);
     };

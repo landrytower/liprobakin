@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useAdmin } from "../layout";
 import { firebaseDB, firebaseStorage, firebaseAuth } from "@/lib/firebase";
+import { normalizeTeamGender } from "@/lib/team-gender";
 import {
   collection,
   getDoc,
@@ -214,7 +215,7 @@ export default function TeamsPage() {
             id: d.id,
             name: data.name || "",
             city: data.city || "",
-            gender: data.gender || "men",
+            gender: normalizeTeamGender(data.gender, data.logo, "men"),
             colors: data.colors || [],
             logo: data.logo || "",
             wins: record.wins,

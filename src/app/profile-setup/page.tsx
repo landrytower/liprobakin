@@ -1,5 +1,7 @@
 ﻿"use client";
 
+import { normalizeTeamGender } from "@/lib/team-gender";
+
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
@@ -32,13 +34,13 @@ const translations = {
     mensLeague: "Men's League",
     womensLeague: "Women's League",
     chooseATeam: "Choose a team...",
-    changeGender: "â† Change gender",
+    changeGender: "← Change gender",
     selectPlayerStaff: "Select Your Name from Roster",
     chooseYourName: "Choose your name...",
     cantFindName: "Don't see your name in the roster?",
     createOwnProfile: "Create your own player profile",
     createPlayerProfile: "Create Player Profile",
-    backToRoster: "â† Back to roster selection",
+    backToRoster: "← Back to roster selection",
     firstName: "First Name",
     lastName: "Last Name",
     jerseyNumber: "Jersey #",
@@ -106,35 +108,37 @@ const translations = {
     showOnRosterYes: "Yes, show my profile on the team roster",
     showOnRosterNo: "No, keep my profile private",
     showOnRosterNote: "Your profile visibility will be approved by an administrator",
-    backToTeamSelection: "â† Back to team selection",
-    backToCoachStaffChoice: "â† Back to role selection",
+    backToTeamSelection: "← Back to team selection",
+    backToCoachStaffChoice: "← Back to role selection",
     coachSelected: "Coach selected",
     createCoachProfile: "Create Coach Profile",
     createStaffProfile: "Create Staff Profile",
     alreadyClaimed: "(Already Claimed)",
+    media: "Media",
+    mediaAccreditationCta: "clicker ici pour avoir votre accreditation",
   },
   fr: {
-    completeYourProfile: "ComplÃ©tez Votre Profil",
+    completeYourProfile: "Complétez Votre Profil",
     letsGetYouSetup: "Configurons votre compte",
-    whatBringsYouHere: "Qu'est-ce qui vous amÃ¨ne ici ?",
-    chooseYourRole: "Choisissez votre rÃ´le pour continuer",
+    whatBringsYouHere: "Qu'est-ce qui vous amène ici ?",
+    chooseYourRole: "Choisissez votre rôle pour continuer",
     player: "Joueur",
     iAmAPlayer: "Je suis un joueur de basketball",
-    coachStaff: "EntraÃ®neur / Staff",
-    iAmACoach: "Je suis un entraÃ®neur ou membre du staff",
+    coachStaff: "Entraîneur / Staff",
+    iAmACoach: "Je suis un entraîneur ou membre du staff",
     fan: "Fan",
     iAmAFan: "Je suis un fan de basketball",
-    verificationRequired: "VÃ©rification Requise",
-    accountWillBeReviewed: "Votre compte sera examinÃ© par un administrateur avant approbation.",
-    selectGender: "SÃ©lectionnez le Genre",
-    chooseToSeeTeams: "Choisissez pour voir les Ã©quipes disponibles",
+    verificationRequired: "Vérification Requise",
+    accountWillBeReviewed: "Votre compte sera examiné par un administrateur avant approbation.",
+    selectGender: "Sélectionnez le Genre",
+    chooseToSeeTeams: "Choisissez pour voir les équipes disponibles",
     men: "Hommes",
     women: "Femmes",
-    selectYourTeam: "SÃ©lectionnez Votre Ã‰quipe",
+    selectYourTeam: "Sélectionnez Votre Équipe",
     mensLeague: "Ligue Masculine",
-    womensLeague: "Ligue FÃ©minine",
-    chooseATeam: "Choisissez une Ã©quipe...",
-    changeGender: "â† Changer de genre",
+    womensLeague: "Ligue Féminine",
+    chooseATeam: "Choisissez une équipe...",
+    changeGender: "← Changer de genre",
     selectPlayerStaff: "SÃ©lectionnez Votre Nom dans le Roster",
     chooseYourName: "Choisissez votre nom...",
     cantFindName: "Vous ne voyez pas votre nom dans le roster ?",
@@ -192,8 +196,8 @@ const translations = {
     noCoachesToClaim: "Aucun entraÃ®neur disponible Ã  rÃ©clamer",
     createNewCoach: "CrÃ©er un Nouveau Profil d'EntraÃ®neur",
     coachPositionsFull: "Le poste d'entraÃ®neur principal et les deux postes d'assistant sont occupÃ©s. Veuillez vous inscrire en tant que staff.",
-    staffRole: "RÃ´le Staff",
-    selectStaffRole: "SÃ©lectionnez votre rÃ´le...",
+    staffRole: "Rôle Staff",
+    selectStaffRole: "Sélectionnez votre rôle...",
     president: "PrÃ©sident",
     vicePresident: "Vice-PrÃ©sident",
     secretary: "SecrÃ©taire",
@@ -208,12 +212,14 @@ const translations = {
     showOnRosterYes: "Oui, afficher mon profil sur le roster",
     showOnRosterNo: "Non, garder mon profil privÃ©",
     showOnRosterNote: "La visibilitÃ© de votre profil sera approuvÃ©e par un administrateur",
-    backToTeamSelection: "â† Retour Ã  la sÃ©lection d'Ã©quipe",
-    backToCoachStaffChoice: "â† Retour Ã  la sÃ©lection du rÃ´le",
+    backToTeamSelection: "← Retour à la sélection d'équipe",
+    backToCoachStaffChoice: "← Retour à la sélection du rôle",
     coachSelected: "EntraÃ®neur sÃ©lectionnÃ©",
     createCoachProfile: "CrÃ©er un Profil d'EntraÃ®neur",
     createStaffProfile: "CrÃ©er un Profil Staff",
-    alreadyClaimed: "(DÃ©jÃ  Pris)",
+    alreadyClaimed: "(Déjà Pris)",
+    media: "Media",
+    mediaAccreditationCta: "clicker ici pour avoir votre accreditation",
   },
 };
 
@@ -262,10 +268,7 @@ export default function ProfileSetup() {
   
   const [coachOrStaffChoice, setCoachOrStaffChoice] = useState<"coach" | "staff" | "">("");
   const [teamCoaches, setTeamCoaches] = useState<TeamCoach[]>([]);
-  const [teamStaffMembers, setTeamStaffMembers] = useState<TeamStaff[]>([]);
   const [claimedStaffPositions, setClaimedStaffPositions] = useState<StaffPosition[]>([]);
-  const [headCoachTaken, setHeadCoachTaken] = useState(false);
-  const [assistantCoachCount, setAssistantCoachCount] = useState(0);
   const [selectedCoachId, setSelectedCoachId] = useState("");
   const [createNewCoach, setCreateNewCoach] = useState(false);
   const [coachType, setCoachType] = useState<CoachStaffRole | "">("");
@@ -337,7 +340,7 @@ export default function ProfileSetup() {
       const allTeams = teamsSnapshot.docs.map((doc) => ({
         id: doc.id,
         name: doc.data().name || doc.id,
-        gender: doc.data().gender || "men",
+        gender: normalizeTeamGender(doc.data().gender, doc.data().logo, "men"),
       }));
 
       if (step === "fan-setup") {
@@ -389,7 +392,6 @@ export default function ProfileSetup() {
           headshot: doc.data().headshot || "",
           claimed: doc.data().linkedUserId ? true : false, // Check if linked to a user account
         }));
-      setTeamStaffMembers(staffMembers);
 
       // Track positions that are already filled (exclude staff_member as it allows multiple)
       const filledPositions = staffMembers
@@ -397,11 +399,7 @@ export default function ProfileSetup() {
         .map(staff => staff.position);
       setClaimedStaffPositions(filledPositions);
 
-      // Track coach positions that are taken
-      const headCoaches = coaches.filter(c => c.role === "head_coach");
-      const assistantCoaches = coaches.filter(c => c.role === "assistant_coach");
-      setHeadCoachTaken(headCoaches.length > 0);
-      setAssistantCoachCount(assistantCoaches.length);
+      // Coach position availability is derived from teamCoaches via getAvailableCoachPositions()
     };
 
     if (selectedTeamId && step === "coach-staff-setup") {

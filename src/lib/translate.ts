@@ -23,6 +23,11 @@ export async function translateText(text: string, fromLang = 'fr', toLang = 'en'
   }
 }
 
+const hasEmbeddedMedia = (content: string): boolean => {
+  if (!content) return false;
+  return /(<|&lt;)(img|video)\b/i.test(content);
+};
+
 /**
  * Detect if text is primarily in English or French
  */
@@ -74,11 +79,14 @@ export async function autoTranslateNewsArticle(article: {
     console.log('📝 Content is in English, translating to French...');
     
     try {
-      const [titleFr, headlineFr, summaryFr] = await Promise.all([
+      const [titleFr, headlineFr] = await Promise.all([
         translateText(article.title, 'en', 'fr'),
         translateText(article.headline, 'en', 'fr'),
-        translateSummary(article.summary, 'en', 'fr'),
       ]);
+
+      const summaryFr = hasEmbeddedMedia(article.summary)
+        ? article.summary
+        : await translateSummary(article.summary, 'en', 'fr');
       
       console.log('✅ Translation complete!');
       console.log('French title:', titleFr);
@@ -108,11 +116,14 @@ export async function autoTranslateNewsArticle(article: {
     console.log('📝 Content is in French, translating to English...');
     
     try {
-      const [titleEn, headlineEn, summaryEn] = await Promise.all([
+      const [titleEn, headlineEn] = await Promise.all([
         translateText(article.title, 'fr', 'en'),
         translateText(article.headline, 'fr', 'en'),
-        translateSummary(article.summary, 'fr', 'en'),
       ]);
+
+      const summaryEn = hasEmbeddedMedia(article.summary)
+        ? article.summary
+        : await translateSummary(article.summary, 'fr', 'en');
       
       console.log('✅ Translation complete!');
       console.log('English title:', titleEn);

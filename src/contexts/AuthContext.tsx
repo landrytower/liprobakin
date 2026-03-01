@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, ReactNode } from "react";
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -65,6 +65,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null);
+  const recaptchaContainerIdRef = useRef<string | null>(null);
 
   const fetchUserProfile = async (uid: string) => {
     const userDoc = await getDoc(doc(firebaseDB, "users", uid));
@@ -323,13 +326,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Phone Authentication Methods
   const setupRecaptcha = (containerId: string): RecaptchaVerifier => {
-    // Clear any existing reCAPTCHA
     const container = document.getElementById(containerId);
-    if (container) {
-      container.innerHTML = '';
+    if (!container) {
+      throw new Error("reCAPTCHA container not found. Please refresh and try again.");
     }
-    
-    const recaptchaVerifier = new RecaptchaVerifier(firebaseAuth, containerId, {
+
+    if (recaptchaVerifierRef.current) {
+      try {
+        recaptchaVerifierRef.current.clear();
+      } catch {
+        // ignore
+      }
+      recaptchaVerifierRef.current = null;
+      recaptchaContainerIdRef.current = null;
+    }
+
+    // Clear any existing reCAPTCHA markup
+    container.innerHTML = "";
+
+    const recaptchaVerifier = new RecaptchaVerifier(firebaseAuth, container, {
       size: "invisible",
       callback: () => {
         console.log("✅ reCAPTCHA solved");
@@ -338,6 +353,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log("⚠️ reCAPTCHA expired");
       },
     });
+
+    recaptchaVerifierRef.current = recaptchaVerifier;
+    recaptchaContainerIdRef.current = containerId;
     return recaptchaVerifier;
   };
 
@@ -350,20 +368,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     try {
       console.log(`📱 Sending OTP to: ${normalizedPhone}`);
+      // Ensure widget is rendered before verification
+      await recaptchaVerifier.render();
       const confirmationResult = await signInWithPhoneNumber(firebaseAuth, normalizedPhone, recaptchaVerifier);
       console.log("✅ OTP sent successfully!");
       return confirmationResult;
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Clear reCAPTCHA on error
       recaptchaVerifier.clear();
-      console.error("❌ Phone Auth Error:", error.code, error.message);
+      const err = error as { code?: string; message?: string };
+      console.error("❌ Phone Auth Error:", err.code, err.message);
       
       // Provide helpful error messages
-      if (error.code === "auth/operation-not-allowed") {
+      if (err.code === "auth/operation-not-allowed") {
         throw new Error("Phone authentication is not enabled. Please enable it in Firebase Console → Authentication → Sign-in method → Phone");
-      } else if (error.code === "auth/invalid-app-credential") {
-        throw new Error("reCAPTCHA verification failed. Please refresh the page and try again.");
-      } else if (error.code === "auth/quota-exceeded") {
+      } else if (err.code === "auth/invalid-app-credential") {
+        const host = typeof window !== "undefined" ? window.location.host : "";
+        const protocol = typeof window !== "undefined" ? window.location.protocol : "";
+        const isLocalhost = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+        const isSecureOk = typeof window !== "undefined" && (window.isSecureContext || isLocalhost);
+
+        const hints = [
+          host ? `Current site: ${protocol}//${host}` : undefined,
+          "Verify this domain is listed in Firebase Console → Authentication → Settings → Authorized domains",
+          "If you’re testing on a LAN IP (e.g. 192.168.x.x) add it there too",
+          !isSecureOk ? "Use https (or localhost) — reCAPTCHA can fail on insecure origins" : undefined,
+          "Disable adblock/VPN/privacy extensions that can block reCAPTCHA",
+        ].filter(Boolean);
+
+        throw new Error(`reCAPTCHA verification failed (${err.code}).\n${hints.join("\n")}`);
+      } else if (err.code === "auth/quota-exceeded") {
         throw new Error("SMS quota exceeded. Please try again later or use a test phone number.");
       }
       throw error;
@@ -451,9 +485,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       // Use signInWithPhoneNumber to get the verification ID
       // Then we'll use linkWithCredential after verification
+      await recaptchaVerifier.render();
       const confirmationResult = await signInWithPhoneNumber(firebaseAuth, normalizedPhone, recaptchaVerifier);
       return confirmationResult;
-    } catch (error: any) {
+    } catch (error: unknown) {
       recaptchaVerifier.clear();
       throw error;
     }
@@ -481,8 +516,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         phoneVerified: true,
         updatedAt: serverTimestamp(),
       }, { merge: true });
-    } catch (error: any) {
-      if (error.code === "auth/credential-already-in-use") {
+    } catch (error: unknown) {
+      const err = error as { code?: string };
+      if (err.code === "auth/credential-already-in-use") {
         throw new Error("This phone number is already linked to another account");
       }
       throw error;

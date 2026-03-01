@@ -5,6 +5,7 @@ import committeeRaw from "./exports/committee.json";
 // import standingsRaw from "./exports/standings.json"; // Standings now calculated from games only
 import teamTrafficRaw from "./exports/teamTraffic.json";
 import teamsRaw from "./exports/teams.json";
+import { CONGO_TIMEZONE, parseCongoDateTime } from "@/lib/congo-time";
 
 type FirestoreTimestamp = {
   _seconds: number;
@@ -122,14 +123,7 @@ const toDate = (timestamp?: FirestoreTimestamp): Date | undefined => {
 };
 
 const parseDateTime = (date?: string, time?: string): Date | undefined => {
-  if (!date) {
-    return undefined;
-  }
-
-  const timeSegment = time ? time.replace(/^(\d{2})(\d{2})$/, "$1:$2") : "00:00";
-  const isoCandidate = `${date}T${timeSegment}`;
-  const parsed = Date.parse(isoCandidate);
-  return Number.isNaN(parsed) ? undefined : new Date(parsed);
+  return parseCongoDateTime(date, time);
 };
 
 const formatDateLabel = (date?: Date): string => {
@@ -137,6 +131,7 @@ const formatDateLabel = (date?: Date): string => {
     return "TBD";
   }
   return new Intl.DateTimeFormat("en-US", {
+    timeZone: CONGO_TIMEZONE,
     weekday: "short",
     month: "short",
     day: "numeric",
@@ -148,6 +143,7 @@ const formatTimeLabel = (date?: Date): string => {
     return "TBD";
   }
   return new Intl.DateTimeFormat("en-US", {
+    timeZone: CONGO_TIMEZONE,
     hour: "numeric",
     minute: "2-digit",
   }).format(date);
@@ -158,6 +154,7 @@ const formatTipoffLabel = (date?: Date): string => {
     return "TBD";
   }
   return `${new Intl.DateTimeFormat("en-US", {
+    timeZone: CONGO_TIMEZONE,
     month: "short",
     day: "numeric",
   }).format(date)} · ${formatTimeLabel(date)}`;

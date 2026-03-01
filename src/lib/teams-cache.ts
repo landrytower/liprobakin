@@ -1,5 +1,6 @@
 import { collection, getDocs } from "firebase/firestore";
 import { firebaseDB } from "@/lib/firebase";
+import { normalizeTeamGender } from "@/lib/team-gender";
 
 export type CachedTeam = {
   id: string;
@@ -61,7 +62,7 @@ export const fetchTeamsAndRefreshCache = async (): Promise<CachedTeam[]> => {
     id: doc.id,
     name: doc.data().name || doc.id,
     city: doc.data().city || "",
-    gender: doc.data().gender || "men",
+    gender: normalizeTeamGender(doc.data().gender, doc.data().logo, "men"),
   }));
 
   writeTeamsToCache(teams);

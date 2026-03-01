@@ -53,8 +53,8 @@ export function normalizePhoneNumber(phone: string): string {
  */
 export function isValidPhoneNumber(phone: string): boolean {
   const normalized = normalizePhoneNumber(phone);
-  // E.164 format: + followed by 10-15 digits (includes country code)
-  return /^\+\d{10,15}$/.test(normalized);
+  // E.164 format: + followed by 7-15 digits (includes country code)
+  return /^\+\d{7,15}$/.test(normalized);
 }
 
 /**

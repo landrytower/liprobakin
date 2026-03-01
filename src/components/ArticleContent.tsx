@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useMemo, type ReactNode } from 'react';
+import { useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
 import { firebaseDB } from '@/lib/firebase';
@@ -14,114 +14,93 @@ interface ArticleContentProps {
 const unescapeHtml = (text: string): string => {
   const textarea = document.createElement('textarea');
   textarea.innerHTML = text;
-  return textarea.value;
+  return textarea.value.replace(/\u00A0/g, " ");
+};
+
+const isTrustedNewsMediaUrl = (url?: string | null) => {
+  if (!url) return false;
+  const normalized = url.trim();
+  if (!normalized) return false;
+  return normalized.includes('firebasestorage.googleapis.com') || normalized.includes('storage.googleapis.com');
 };
 
 export default function ArticleContent({ htmlContent, className = '' }: ArticleContentProps) {
   const contentRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
-  const escapeRegex = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const sanitizedHtml = useMemo(() => {
+    if (!htmlContent) return '';
 
-  const createLinkNodes = (text: string, keyPrefix: string): ReactNode[] => {
-    const nodes: ReactNode[] = [];
-    const urlRegex = /(https?:\/\/[^\s]+)/g;
-    let lastIndex = 0;
-    let match: RegExpExecArray | null;
-    let linkIndex = 0;
+    const source = htmlContent.includes('&lt;') ? unescapeHtml(htmlContent) : htmlContent;
+    const parser = new DOMParser();
+    const parsed = parser.parseFromString(source, 'text/html');
 
-    while ((match = urlRegex.exec(text)) !== null) {
-      if (match.index > lastIndex) {
-        nodes.push(text.slice(lastIndex, match.index));
+    const blockedSelectors = ['script', 'style', 'iframe', 'object', 'embed', 'form', 'input', 'button', 'textarea', 'select', 'link', 'meta'];
+    blockedSelectors.forEach((selector) => {
+      parsed.body.querySelectorAll(selector).forEach((node) => node.remove());
+    });
+
+    parsed.body.querySelectorAll('*').forEach((element) => {
+      Array.from(element.attributes).forEach((attribute) => {
+        const attrName = attribute.name.toLowerCase();
+        const attrValue = attribute.value || '';
+
+        if (attrName.startsWith('on')) {
+          element.removeAttribute(attribute.name);
+          return;
+        }
+
+        if ((attrName === 'href' || attrName === 'src') && /^\s*javascript:/i.test(attrValue)) {
+          element.removeAttribute(attribute.name);
+          return;
+        }
+
+        if (attrName === 'style') {
+          element.removeAttribute(attribute.name);
+        }
+      });
+
+      const tagName = element.tagName.toLowerCase();
+
+      if (tagName === 'a') {
+        element.setAttribute('target', '_blank');
+        element.setAttribute('rel', 'noopener noreferrer');
+        element.classList.add('text-orange-400', 'underline', 'decoration-orange-500/60', 'hover:text-orange-300', 'break-words', 'transition-colors');
       }
 
-      const url = match[0];
-      nodes.push(
-        <a
-          key={`${keyPrefix}-url-${linkIndex}`}
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-orange-400 underline decoration-orange-500/60 hover:text-orange-300 break-words transition-colors"
-        >
-          {url}
-        </a>
-      );
+      if (tagName === 'img') {
+        const src = element.getAttribute('src') || '';
+        if (!isTrustedNewsMediaUrl(src)) {
+          element.remove();
+          return;
+        }
 
-      lastIndex = urlRegex.lastIndex;
-      linkIndex += 1;
-    }
+        element.setAttribute('loading', 'lazy');
+        element.classList.add('rounded-lg', 'my-3', 'max-w-full', 'h-auto');
+      }
 
-    if (lastIndex < text.length) {
-      nodes.push(text.slice(lastIndex));
-    }
+      if (tagName === 'video') {
+        const src = element.getAttribute('src') || '';
+        if (!isTrustedNewsMediaUrl(src)) {
+          element.remove();
+          return;
+        }
 
-    return nodes;
-  };
+        element.setAttribute('controls', 'true');
+        element.setAttribute('playsinline', 'true');
+        element.classList.add('rounded-lg', 'my-3', 'max-w-full');
+      }
 
-  // Extract clean text from HTML (handles both escaped and unescaped)
-  const cleanText = useMemo(() => {
-    if (!htmlContent) return '';
-    
-    // Unescape if needed
-    let text = htmlContent.includes('&lt;') ? unescapeHtml(htmlContent) : htmlContent;
-    
-    // Preserve paragraph structure: convert block elements to double newlines
-    text = text.replace(/<\/p>\s*<p[^>]*>/gi, '\n\n'); // Between paragraphs
-    text = text.replace(/<p[^>]*>/gi, ''); // Opening p tags
-    text = text.replace(/<\/p>/gi, '\n\n'); // Closing p tags add newlines
-    
-    // Preserve line breaks
-    text = text.replace(/<br\s*\/?>/gi, '\n');
-    
-    // Preserve heading structure with extra spacing
-    text = text.replace(/<\/h[1-6]>/gi, '\n\n');
-    text = text.replace(/<h[1-6][^>]*>/gi, '');
-    
-    // Preserve div blocks as newlines
-    text = text.replace(/<\/div>/gi, '\n');
-    text = text.replace(/<div[^>]*>/gi, '');
-    
-    // Preserve list items with bullets
-    text = text.replace(/<li[^>]*>/gi, '\n• ');
-    text = text.replace(/<\/li>/gi, '');
-    text = text.replace(/<\/?[ou]l[^>]*>/gi, '\n');
-    
-    // Remove all remaining HTML tags
-    text = text.replace(/<[^>]*>/g, '');
-    
-    // Clean up any remaining entities
-    text = unescapeHtml(text);
-    
-    // Clean up excessive whitespace while preserving intentional line breaks
-    text = text.replace(/[ \t]+/g, ' '); // Multiple spaces/tabs to single space
-    text = text.replace(/\n\s*\n\s*\n/g, '\n\n'); // Max 2 newlines in a row
-    text = text.replace(/^\s+/, ''); // Trim leading whitespace
-    text = text.replace(/\s+$/, ''); // Trim trailing whitespace
-    
-    return text;
-  }, [htmlContent]);
+      if (element.getAttribute('data-type') === 'mention') {
+        const mentionId = element.getAttribute('data-id') || '';
+        if (mentionId) {
+          element.setAttribute('data-player-id', mentionId);
+          element.classList.add('text-blue-400', 'font-semibold', 'cursor-pointer', 'hover:text-blue-300', 'hover:underline', 'transition-colors');
+        }
+      }
+    });
 
-  // Extract mentions from original HTML
-  const mentions = useMemo(() => {
-    if (!htmlContent) return [];
-    
-    // Handle both escaped and unescaped HTML
-    const text = htmlContent.includes('&lt;') ? unescapeHtml(htmlContent) : htmlContent;
-    
-    // Match mention spans
-    const mentionRegex = /data-id="([^"]*)"[^>]*data-label="([^"]*)"/g;
-    const result: Array<{ id: string; label: string }> = [];
-    let match;
-    
-    while ((match = mentionRegex.exec(text)) !== null) {
-      result.push({
-        id: match[1],
-        label: match[2],
-      });
-    }
-    
-    return result;
+    return parsed.body.innerHTML;
   }, [htmlContent]);
 
   useEffect(() => {
@@ -168,64 +147,188 @@ export default function ArticleContent({ htmlContent, className = '' }: ArticleC
     setupMentions();
   }, [htmlContent, router]);
 
-  // Build content with mentions replaced by clickable spans
-  const renderContent = () => {
-    if (!cleanText) return null;
-
-    if (mentions.length === 0) {
-      return createLinkNodes(cleanText, 'segment-0');
-    }
-
-    const mentionByLabel = new Map<string, { id: string; label: string }>();
-    mentions.forEach((mention) => {
-      if (!mentionByLabel.has(mention.label)) {
-        mentionByLabel.set(mention.label, mention);
-      }
-    });
-
-    const labels = Array.from(mentionByLabel.keys())
-      .filter((label) => label.trim().length > 0)
-      .sort((a, b) => b.length - a.length);
-
-    if (labels.length === 0) {
-      return createLinkNodes(cleanText, 'segment-0');
-    }
-
-    const mentionRegex = new RegExp(`(${labels.map(escapeRegex).join('|')})`, 'g');
-    const segments = cleanText.split(mentionRegex);
-    const rendered: ReactNode[] = [];
-    let mentionOccurrence = 0;
-
-    segments.forEach((segment, segmentIndex) => {
-      if (!segment) return;
-
-      const mention = mentionByLabel.get(segment);
-      if (mention) {
-        rendered.push(
-          <span
-            key={`mention-${mention.id}-${segmentIndex}-${mentionOccurrence}`}
-            data-player-id={mention.id}
-            className="text-blue-400 font-semibold cursor-pointer hover:text-blue-300 hover:underline transition-colors"
-          >
-            {mention.label}
-          </span>
-        );
-        mentionOccurrence += 1;
-        return;
-      }
-
-      rendered.push(...createLinkNodes(segment, `segment-${segmentIndex}`));
-    });
-
-    return rendered;
-  };
-
   return (
     <div 
       ref={contentRef}
-      className={`${className} text-base md:text-lg leading-relaxed text-slate-200 whitespace-pre-wrap break-words`}
+      className={`${className} break-words`}
     >
-      {renderContent()}
+      {sanitizedHtml ? <div className="article-rich-content prose prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: sanitizedHtml }} /> : null}
+
+      <style jsx global>{`
+        .article-rich-content {
+          color: rgb(226 232 240);
+          font-size: 1.125rem;
+          line-height: 1.7;
+        }
+
+        .article-rich-content p {
+          margin: 0 0 1rem;
+        }
+
+        .article-rich-content h2 {
+          font-size: 1.5em;
+          line-height: 1.2;
+          font-weight: 700;
+          margin-top: 1em;
+          margin-bottom: 0.5em;
+          color: rgb(248 250 252);
+        }
+
+        .article-rich-content h3 {
+          font-size: 1.25em;
+          line-height: 1.25;
+          font-weight: 700;
+          margin-top: 0.8em;
+          margin-bottom: 0.4em;
+          color: rgb(248 250 252);
+        }
+
+        .article-rich-content ul,
+        .article-rich-content ol {
+          padding-left: 1.5em;
+          margin: 0.5em 0 1rem;
+        }
+
+        .article-rich-content strong {
+          color: rgb(248 250 252);
+          font-weight: 700;
+        }
+
+        .article-rich-content li {
+          margin: 0.25em 0;
+        }
+
+        .article-rich-content img.rt-image {
+          display: block;
+          max-width: 100%;
+          height: auto;
+          border-radius: 10px;
+          margin-top: 12px;
+          margin-bottom: 12px;
+          object-fit: cover;
+        }
+
+        .article-rich-content img.rt-image-left {
+          margin-left: 0;
+          margin-right: auto;
+        }
+
+        .article-rich-content img.rt-image-center {
+          margin-left: auto;
+          margin-right: auto;
+        }
+
+        .article-rich-content img.rt-image-right {
+          margin-left: auto;
+          margin-right: 0;
+        }
+
+        .article-rich-content img.rt-image-bottom {
+          margin-left: auto;
+          margin-right: auto;
+          margin-top: 24px;
+          clear: both;
+        }
+
+        .article-rich-content img.rt-image-wrap.rt-image-left {
+          float: left;
+          margin-right: 16px;
+          margin-bottom: 8px;
+          margin-top: 4px;
+        }
+
+        .article-rich-content img.rt-image-wrap.rt-image-right {
+          float: right;
+          margin-left: 16px;
+          margin-bottom: 8px;
+          margin-top: 4px;
+        }
+
+        .article-rich-content img.rt-image-small {
+          width: min(38%, 260px);
+        }
+
+        .article-rich-content img.rt-image-medium {
+          width: min(56%, 420px);
+        }
+
+        .article-rich-content img.rt-image-large {
+          width: min(78%, 720px);
+        }
+
+        .article-rich-content img.rt-image-full {
+          width: 100%;
+        }
+
+        .article-rich-content .rt-video {
+          display: block;
+          max-width: 100%;
+          border-radius: 10px;
+          margin: 12px auto;
+        }
+
+        .article-rich-content .rt-video-left {
+          margin-left: 0;
+          margin-right: auto;
+        }
+
+        .article-rich-content .rt-video-center {
+          margin-left: auto;
+          margin-right: auto;
+        }
+
+        .article-rich-content .rt-video-right {
+          margin-left: auto;
+          margin-right: 0;
+        }
+
+        .article-rich-content .rt-video-bottom {
+          margin-top: 24px;
+          margin-left: auto;
+          margin-right: auto;
+          clear: both;
+        }
+
+        .article-rich-content .rt-video-small {
+          width: min(42%, 320px);
+        }
+
+        .article-rich-content .rt-video-medium {
+          width: min(68%, 560px);
+        }
+
+        .article-rich-content .rt-video-large {
+          width: min(86%, 860px);
+        }
+
+        .article-rich-content .rt-video-full {
+          width: 100%;
+        }
+
+        .article-rich-content::after {
+          content: "";
+          display: block;
+          clear: both;
+        }
+
+        @media (max-width: 768px) {
+          .article-rich-content img.rt-image-small,
+          .article-rich-content img.rt-image-medium,
+          .article-rich-content img.rt-image-large,
+          .article-rich-content .rt-video-small,
+          .article-rich-content .rt-video-medium,
+          .article-rich-content .rt-video-large {
+            width: 100%;
+          }
+
+          .article-rich-content img.rt-image-wrap.rt-image-left,
+          .article-rich-content img.rt-image-wrap.rt-image-right {
+            float: none;
+            margin-left: auto;
+            margin-right: auto;
+          }
+        }
+      `}</style>
     </div>
   );
 }

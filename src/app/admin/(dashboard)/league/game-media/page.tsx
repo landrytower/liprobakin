@@ -11,12 +11,21 @@ import { deleteObject, getDownloadURL, ref as storageRef, uploadBytesResumable }
 type GameItem = {
   id: string;
   homeTeamName: string;
+  homeTeamLogo?: string;
   awayTeamName: string;
+  awayTeamLogo?: string;
   date: string;
   time?: string;
   venue?: string;
   completed?: boolean;
   status?: string;
+  homeScore?: number;
+  awayScore?: number;
+  period?: string | number;
+  quarter?: string | number;
+  gameClock?: string;
+  clock?: string;
+  timeRemaining?: string;
   gender?: string;
   highlightsVideoUrl?: string;
   highlightVideoUrl?: string;
@@ -47,8 +56,8 @@ const copy = {
     shown: "shown",
     noMatchFilter: "No games match this filter.",
     selectGame: "Select a game to manage media",
-    highlightLabel: "Highlight video URL",
-    highlightPlaceholder: "https://youtube.com/watch?v=...",
+    highlightLabel: "Live stream URL (YouTube)",
+    highlightPlaceholder: "Paste YouTube live/watch URL (e.g. https://youtube.com/watch?v=...)",
     photosLabel: "Upload Photos",
     addPhotos: "Add photos",
     selectedPhotos: "selected",
@@ -60,6 +69,23 @@ const copy = {
     existingPhotos: "Current Photos",
     noPhotos: "No photos uploaded for this game yet.",
     gameDetails: "Game Details",
+    liveScoreConsole: "Live Score Console",
+    liveModeHint: "Temporary live score controls (does not finalize the game)",
+    liveScoreStatus: "Live Status",
+    liveHomeScore: "Home Live Score",
+    liveAwayScore: "Away Live Score",
+    livePeriod: "Period",
+    liveClock: "Clock",
+    updateLiveScore: "Push Live Score",
+    liveUpdated: "Live score updated",
+    liveUpdateFailed: "Failed to update live score",
+    invalidLiveScore: "Enter valid live scores",
+    openLiveStudio: "Open full live console",
+    createYoutubeLive: "Create YouTube Live",
+    creatingYoutubeLive: "Creating YouTube live...",
+    youtubeLiveCreated: "YouTube live created and linked to this game",
+    youtubeLiveFailed: "Failed to create YouTube live",
+    openYoutubeStudio: "Open YouTube Studio",
     videoUploadLabel: "Upload Video",
     addVideo: "Add video",
     videoSelected: "video selected",
@@ -85,8 +111,8 @@ const copy = {
     shown: "affichés",
     noMatchFilter: "Aucun match ne correspond à ce filtre.",
     selectGame: "Sélectionnez un match pour gérer les médias",
-    highlightLabel: "URL vidéo highlight",
-    highlightPlaceholder: "https://youtube.com/watch?v=...",
+    highlightLabel: "URL du direct (YouTube)",
+    highlightPlaceholder: "Collez l'URL YouTube du direct / vidéo (ex: https://youtube.com/watch?v=...)",
     photosLabel: "Téléverser Photos",
     addPhotos: "Ajouter des photos",
     selectedPhotos: "sélectionnées",
@@ -98,6 +124,23 @@ const copy = {
     existingPhotos: "Photos actuelles",
     noPhotos: "Aucune photo n'a encore été ajoutée à ce match.",
     gameDetails: "Détails du match",
+    liveScoreConsole: "Console Score Live",
+    liveModeHint: "Contrôles de score temporaire en direct (ne finalise pas le match)",
+    liveScoreStatus: "Statut Live",
+    liveHomeScore: "Score Live Domicile",
+    liveAwayScore: "Score Live Visiteur",
+    livePeriod: "Période",
+    liveClock: "Chrono",
+    updateLiveScore: "Publier Score Live",
+    liveUpdated: "Score live mis à jour",
+    liveUpdateFailed: "Échec de la mise à jour du score live",
+    invalidLiveScore: "Entrez des scores live valides",
+    openLiveStudio: "Ouvrir la console live plein écran",
+    createYoutubeLive: "Créer un live YouTube",
+    creatingYoutubeLive: "Création du live YouTube...",
+    youtubeLiveCreated: "Live YouTube créé et lié à ce match",
+    youtubeLiveFailed: "Échec de la création du live YouTube",
+    openYoutubeStudio: "Ouvrir YouTube Studio",
     videoUploadLabel: "Téléverser Vidéo",
     addVideo: "Ajouter une vidéo",
     videoSelected: "vidéo sélectionnée",
@@ -119,6 +162,28 @@ function extractPhotoUrls(game: GameItem): string[] {
   return [];
 }
 
+function normalizeVideoUrlInput(input: string): string {
+  const raw = input.trim();
+  if (!raw) return "";
+
+  try {
+    const parsed = new URL(raw);
+    const host = parsed.hostname.toLowerCase();
+
+    if (host.includes("studio.youtube.com") && parsed.pathname.includes("/video/")) {
+      const studioMatch = parsed.pathname.match(/\/video\/([^/]+)/i);
+      const videoId = studioMatch?.[1] || "";
+      if (videoId) {
+        return `https://www.youtube.com/watch?v=${videoId}`;
+      }
+    }
+  } catch {
+    return raw;
+  }
+
+  return raw;
+}
+
 export default function GameMediaPage() {
   const { language, currentAdminUser } = useAdmin();
   const t = copy[language];
@@ -135,8 +200,10 @@ export default function GameMediaPage() {
   const [originalPhotos, setOriginalPhotos] = useState<string[]>([]);
   const [newPhotos, setNewPhotos] = useState<File[]>([]);
   const [saving, setSaving] = useState(false);
+  const [creatingYoutubeLive, setCreatingYoutubeLive] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [status, setStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [youtubeStudioUrl, setYoutubeStudioUrl] = useState<string>("");
 
   const canManage = currentAdminUser?.permissions?.canManageGameMedia || currentAdminUser?.roles?.includes("master");
 
@@ -266,6 +333,63 @@ export default function GameMediaPage() {
     setVideoFile(null);
   };
 
+  const handleCreateYouTubeLive = async () => {
+    if (!selectedGame) return;
+
+    setCreatingYoutubeLive(true);
+    setStatus(null);
+
+    try {
+      const response = await fetch("/api/youtube/live/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          gameId: selectedGame.id,
+          title: `${selectedGame.awayTeamName} vs ${selectedGame.homeTeamName}`,
+          description: `${selectedGame.date || ""} ${selectedGame.time || ""} ${selectedGame.venue || ""}`.trim(),
+          privacyStatus: "unlisted",
+        }),
+      });
+
+      const data = (await response.json()) as {
+        watchUrl?: string;
+        studioUrl?: string;
+        rtmpUrl?: string;
+        streamKey?: string;
+        error?: string;
+      };
+
+      if (!response.ok || !data.watchUrl) {
+        throw new Error(data.error || t.youtubeLiveFailed);
+      }
+
+      setHighlightUrl(data.watchUrl);
+      setYoutubeStudioUrl(data.studioUrl || "");
+
+      await updateDoc(doc(firebaseDB, "games", selectedGame.id), {
+        streamUrl: data.watchUrl,
+        youtubeUrl: data.watchUrl,
+        highlightsVideoUrl: data.watchUrl,
+        highlightVideoUrl: data.watchUrl,
+        status: "live",
+        completed: false,
+        youtubeStudioUrl: data.studioUrl || null,
+        youtubeIngestUrl: data.rtmpUrl || null,
+        youtubeStreamKey: data.streamKey || null,
+        updatedAt: serverTimestamp(),
+      });
+
+      setStatus({ type: "success", message: t.youtubeLiveCreated });
+    } catch (error) {
+      console.error("Error creating YouTube live:", error);
+      setStatus({ type: "error", message: t.youtubeLiveFailed });
+    } finally {
+      setCreatingYoutubeLive(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!selectedGame) return;
 
@@ -313,7 +437,7 @@ export default function GameMediaPage() {
       }
 
       const allPhotoUrls = [...existingPhotos, ...uploadedUrls];
-      let normalizedHighlight = highlightUrl.trim();
+      let normalizedHighlight = normalizeVideoUrlInput(highlightUrl);
 
       if (videoFile) {
         const videoPath = `game-media/${selectedGame.id}/videos/${Date.now()}-${videoFile.name}`;
@@ -508,6 +632,64 @@ export default function GameMediaPage() {
                 <div className="mt-2 rounded-lg border border-white/10 bg-slate-900/40 px-3 py-2 text-xs text-slate-300">
                   <p className="text-[10px] uppercase tracking-wide text-slate-500 mb-1">{t.gameDetails}</p>
                   <p>{selectedGame.venue || "—"}{selectedGame.gender ? ` • ${selectedGame.gender}` : ""}</p>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4">
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-red-200">{t.liveScoreConsole}</p>
+                    <p className="text-[11px] text-slate-300">{t.liveModeHint}</p>
+                  </div>
+                  <span className={`rounded px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${String(selectedGame.status || "").toLowerCase() === "live" ? "bg-red-500/20 text-red-200 border border-red-500/40" : "bg-slate-800 text-slate-300 border border-white/10"}`}>
+                    {t.liveScoreStatus}: {String(selectedGame.status || "scheduled").toUpperCase()}
+                  </span>
+                </div>
+                <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-slate-900/50 p-3">
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
+                    {selectedGame.awayTeamLogo ? (
+                      <Image src={selectedGame.awayTeamLogo} alt={selectedGame.awayTeamName || "Away"} width={28} height={28} className="h-7 w-7 rounded-full object-cover" unoptimized />
+                    ) : null}
+                    <span className="truncate text-sm font-semibold text-white">{selectedGame.awayTeamName}</span>
+                    <span className="ml-auto text-xl font-black tabular-nums text-white">{selectedGame.awayScore ?? 0}</span>
+                  </div>
+                  <span className="text-xs font-semibold text-slate-500">VS</span>
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
+                    <span className="text-xl font-black tabular-nums text-white">{selectedGame.homeScore ?? 0}</span>
+                    <span className="truncate text-sm font-semibold text-white">{selectedGame.homeTeamName}</span>
+                    {selectedGame.homeTeamLogo ? (
+                      <Image src={selectedGame.homeTeamLogo} alt={selectedGame.homeTeamName || "Home"} width={28} height={28} className="h-7 w-7 rounded-full object-cover" unoptimized />
+                    ) : null}
+                  </div>
+                </div>
+
+                <Link
+                  href={`/admin/league/game-media/live-console?gameId=${selectedGame.id}`}
+                  className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-red-500 to-orange-500 px-4 py-2 text-sm font-bold text-white shadow-lg shadow-red-500/20 transition hover:shadow-red-500/30"
+                >
+                  🎛️ {t.openLiveStudio}
+                </Link>
+
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleCreateYouTubeLive}
+                    disabled={creatingYoutubeLive}
+                    className="inline-flex items-center gap-2 rounded-lg border border-red-400/40 bg-red-500/20 px-4 py-2 text-sm font-bold text-red-100 hover:bg-red-500/30 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {creatingYoutubeLive ? "⏳" : "📺"} {creatingYoutubeLive ? t.creatingYoutubeLive : t.createYoutubeLive}
+                  </button>
+
+                  {youtubeStudioUrl && (
+                    <a
+                      href={youtubeStudioUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 rounded-lg border border-white/20 bg-slate-900/70 px-4 py-2 text-sm font-semibold text-slate-200 hover:border-white/30 hover:text-white"
+                    >
+                      ▶ {t.openYoutubeStudio}
+                    </a>
+                  )}
                 </div>
               </div>
 

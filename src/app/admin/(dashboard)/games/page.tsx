@@ -6,6 +6,7 @@ import { useAdmin } from "../layout";
 import { firebaseDB } from "@/lib/firebase";
 import { logAuditAction } from "@/lib/auditLog";
 import { recalculateLeagueStatsFromGames } from "@/lib/league-stats";
+import { convertLocalDateTimeToCongo } from "@/lib/congo-time";
 import jsPDF from "jspdf";
 import {
   collection,
@@ -175,6 +176,7 @@ const translations = {
     enterScore: "Enter Score",
     homeScore: "Home Score",
     awayScore: "Away Score",
+    saveLiveScore: "Update Live",
     saveScore: "Save Score",
     markComplete: "Mark Complete",
     quickActions: "Quick Actions",
@@ -261,6 +263,7 @@ const translations = {
     enterScore: "Entrer le Score",
     homeScore: "Score Local",
     awayScore: "Score Visiteur",
+    saveLiveScore: "Mettre à jour (Live)",
     saveScore: "Enregistrer",
     markComplete: "Terminer",
     quickActions: "Actions Rapides",
@@ -818,6 +821,7 @@ export default function GamesPage() {
       const homeTeam = teams.find((team) => team.id === formState.homeTeamId);
       const awayTeam = teams.find((team) => team.id === formState.awayTeamId);
       const selectedVenue = venues.find((v) => v.name === formState.venue);
+      const congoDateTime = convertLocalDateTimeToCongo(formState.date, formState.time);
 
       if (!homeTeam || !awayTeam) {
         setStatusMessage({ type: "error", message: t.errorSelectBothTeams });
@@ -834,8 +838,8 @@ export default function GamesPage() {
         awayTeamId: awayTeam.id,
         awayTeamName: awayTeam.name,
         awayTeamLogo: awayTeam.logo,
-        date: formState.date,
-        time: formState.time,
+        date: congoDateTime.date,
+        time: congoDateTime.time,
         venue: formState.venue,
         venueCity: selectedVenue?.city || "",
         referees: formState.refereeIds,
@@ -856,8 +860,8 @@ export default function GamesPage() {
           {
             homeTeam: homeTeam.name,
             awayTeam: awayTeam.name,
-            gameDate: formState.date,
-            time: formState.time,
+            gameDate: congoDateTime.date,
+            time: congoDateTime.time,
             venue: formState.venue,
             week: formState.week,
             gender: formState.gender
@@ -880,8 +884,8 @@ export default function GamesPage() {
           {
             homeTeam: homeTeam.name,
             awayTeam: awayTeam.name,
-            gameDate: formState.date,
-            time: formState.time,
+            gameDate: congoDateTime.date,
+            time: congoDateTime.time,
             venue: formState.venue,
             week: formState.week,
             gender: formState.gender
@@ -1006,6 +1010,62 @@ export default function GamesPage() {
     } catch (error) {
       console.error("Error saving score:", error);
       setStatusMessage({ type: "error", message: "Failed to save score" });
+    }
+  };
+
+  const handleSaveLiveScore = async () => {
+    if (!scoreEntryGame) return;
+
+    const homeScore = parseInt(scoreForm.homeScore);
+    const awayScore = parseInt(scoreForm.awayScore);
+
+    if (isNaN(homeScore) || isNaN(awayScore)) {
+      setStatusMessage({ type: "error", message: "Please enter valid scores" });
+      return;
+    }
+
+    try {
+      const winnerId = homeScore === awayScore
+        ? null
+        : homeScore > awayScore
+          ? scoreEntryGame.homeTeamId
+          : scoreEntryGame.awayTeamId;
+
+      await updateDoc(doc(firebaseDB, "games", scoreEntryGame.id), {
+        homeScore,
+        awayScore,
+        winnerId,
+        status: "live",
+        updatedAt: serverTimestamp(),
+      });
+
+      await logAuditAction(
+        "game_stats_updated",
+        currentAdminUser?.id || "unknown",
+        currentAdminUser?.email || "unknown",
+        "game",
+        scoreEntryGame.id,
+        `${scoreEntryGame.homeTeamName} vs ${scoreEntryGame.awayTeamName}`,
+        {
+          homeTeam: scoreEntryGame.homeTeamName,
+          awayTeam: scoreEntryGame.awayTeamName,
+          homeScore,
+          awayScore,
+          gameDate: scoreEntryGame.date,
+          status: "live",
+        }
+      );
+
+      setStatusMessage({
+        type: "success",
+        message: language === "fr" ? "Score en direct mis à jour" : "Live score updated",
+      });
+    } catch (error) {
+      console.error("Error saving live score:", error);
+      setStatusMessage({
+        type: "error",
+        message: language === "fr" ? "Impossible de mettre à jour le score en direct" : "Failed to update live score",
+      });
     }
   };
 
@@ -1929,10 +1989,16 @@ export default function GamesPage() {
               {/* Actions */}
               <div className="flex gap-3 pt-2">
                 <button
-                  onClick={handleSaveScore}
-                  className="flex-1 rounded-lg bg-gradient-to-r from-green-500 to-green-600 px-6 py-3 text-sm font-semibold text-white shadow-lg hover:shadow-xl transition"
+                  onClick={handleSaveLiveScore}
+                  className="flex-1 rounded-lg bg-gradient-to-r from-red-500 to-red-600 px-4 py-3 text-sm font-semibold text-white shadow-lg hover:shadow-xl transition"
                 >
-                  {t.saveScore}
+                  {t.saveLiveScore}
+                </button>
+                <button
+                  onClick={handleSaveScore}
+                  className="flex-1 rounded-lg bg-gradient-to-r from-green-500 to-green-600 px-4 py-3 text-sm font-semibold text-white shadow-lg hover:shadow-xl transition"
+                >
+                  {t.markComplete}
                 </button>
                 <button
                   onClick={() => {

@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { collection, getDocs, onSnapshot } from "firebase/firestore";
 import { firebaseDB } from "@/lib/firebase";
+import { normalizeTeamGender } from "@/lib/team-gender";
 import { useLanguage } from "@/contexts/LanguageContext";
 import {
   conferenceStandings,
@@ -41,11 +42,30 @@ type CurrentGame = {
   loserScore?: number;
 };
 
-const normalizeTeamName = (name: string) => name.replace(/^espoir\s+espoir\s+/i, "Espoir ").trim();
+const normalizeTeamName = (name: string) => {
+  const withFixedTypo = name.replace(/\bsepoir\b/gi, "Espoir").trim();
+  return withFixedTypo.replace(/^espoir\s+espoir\s+/i, "Espoir ").trim();
+};
 const normalizeTeamKey = (name: string) => normalizeTeamName(name).toLowerCase();
 
-const formatFranchiseName = (team: Franchise) =>
-  normalizeTeamName([team.city, team.name].filter(Boolean).join(" ").trim());
+const buildTeamDisplayName = (team: Pick<CurrentTeam, "id" | "name" | "city"> | Franchise) => {
+  const city = normalizeTeamName(team.city ?? "");
+  const name = normalizeTeamName(team.name ?? "");
+
+  if (!city) return name || ("id" in team ? team.id : "");
+  if (!name) return city;
+
+  const cityLower = city.toLowerCase();
+  const nameLower = name.toLowerCase();
+
+  if (nameLower === cityLower || nameLower.startsWith(`${cityLower} `)) {
+    return name;
+  }
+
+  return normalizeTeamName(`${city} ${name}`.trim());
+};
+
+const formatFranchiseName = (team: Franchise) => buildTeamDisplayName(team);
 
 const findFranchiseByName = (teamName: string, allTeams: Franchise[]) => {
   const normalized = normalizeTeamName(teamName).toLowerCase();
@@ -184,7 +204,7 @@ export default function ClassementPage() {
   );
 
   const standings = useMemo(() => {
-    const liveGenderTeams = currentTeams.filter((team) => (team.gender ?? "men") === gender);
+    const liveGenderTeams = currentTeams.filter((team) => normalizeTeamGender(team.gender, team.logo, "men") === gender);
 
     if (liveGenderTeams.length === 0) {
       return fallbackStandings.map((row) => ({ team: row.team }));
@@ -192,7 +212,7 @@ export default function ClassementPage() {
 
     const unique = new Map<string, { team: string }>();
     liveGenderTeams.forEach((team) => {
-      const display = normalizeTeamName([team.city, team.name].filter(Boolean).join(" ").trim() || team.id);
+      const display = buildTeamDisplayName(team) || team.id;
       unique.set(normalizeTeamKey(display), { team: display });
     });
 
@@ -200,7 +220,7 @@ export default function ClassementPage() {
   }, [currentTeams, fallbackStandings, gender]);
 
   const teams = useMemo<Franchise[]>(() => {
-    const liveGenderTeams = currentTeams.filter((team) => (team.gender ?? "men") === gender);
+    const liveGenderTeams = currentTeams.filter((team) => normalizeTeamGender(team.gender, team.logo, "men") === gender);
     if (liveGenderTeams.length === 0) {
       return gender === "men" ? franchises : franchisesWomen;
     }
@@ -536,13 +556,14 @@ export default function ClassementPage() {
                     .join("")
                     .slice(0, 2)
                     .toUpperCase();
+                  const teamHref = `/team/${encodeURIComponent(displayName)}?gender=${gender}`;
 
                   return (
                     <tr key={`${gender}-${row.team}`} className="border-b border-white/10">
                       <td className="sticky left-0 z-20 w-10 min-w-10 bg-slate-950 px-1.5 py-1.5 text-center text-slate-300 tabular-nums md:static md:w-auto md:min-w-0 md:px-2 md:py-3">{index + 1}</td>
                       <td className="sticky left-10 z-20 w-[1%] min-w-0 bg-slate-950 pl-1 pr-0 py-1.5 whitespace-nowrap md:static md:w-auto md:min-w-0 md:pr-0 md:py-3">
                         <Link
-                          href={`/team/${encodeURIComponent(displayName)}`}
+                          href={teamHref}
                           className="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-medium text-slate-100 transition-colors hover:text-white md:text-sm"
                         >
                           {teamLogo ? (

@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { collection, doc, getDoc, getDocs } from "firebase/firestore";
+import { collection, doc, getDocs, onSnapshot } from "firebase/firestore";
 import { firebaseDB } from "@/lib/firebase";
 import { useLanguage } from "@/contexts/LanguageContext";
 
@@ -16,6 +16,7 @@ type PlayerStat = {
   number: number;
   headshot?: string;
   teamId: string;
+  dnp?: boolean;
   two_pm: number;
   two_pa: number;
   three_pm: number;
@@ -52,8 +53,16 @@ type GameData = {
   winnerScore?: number;
   loserScore?: number;
   winnerTeamId?: string;
+  homeScore?: number;
+  awayScore?: number;
   loserTeamId?: string;
   completed?: boolean;
+  status?: string;
+  period?: string | number;
+  quarter?: string | number;
+  gameClock?: string;
+  clock?: string;
+  timeRemaining?: string;
   gender?: string;
   playerStats?: PlayerStat[];
   highlightsVideoUrl?: string;
@@ -66,6 +75,7 @@ type GameData = {
   photoUrls?: string[];
   gamePhotos?: string[];
   photos?: string[];
+  isHiddenFromPublic?: boolean;
 };
 
 const translations = {
@@ -107,6 +117,10 @@ const translations = {
     previous: "Previous",
     next: "Next",
     language: "Language",
+    liveNow: "Live Now",
+    watchOnSite: "Watch directly on Liprobakin",
+    enterFullscreen: "Fullscreen",
+    exitFullscreen: "Exit fullscreen",
   },
   fr: {
     loading: "Chargement...",
@@ -146,6 +160,10 @@ const translations = {
     previous: "Précédent",
     next: "Suivant",
     language: "Langue",
+    liveNow: "En Direct",
+    watchOnSite: "Regardez directement sur Liprobakin",
+    enterFullscreen: "Plein écran",
+    exitFullscreen: "Quitter plein écran",
   },
 };
 
@@ -162,20 +180,36 @@ function normalizePlayerName(value: string): string {
 function toEmbedVideoUrl(rawUrl: string): { type: "iframe" | "video"; url: string } {
   const url = rawUrl.trim();
   const lower = url.toLowerCase();
+  const buildYouTubeEmbed = (videoId: string) =>
+    `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&playsinline=1&rel=0&modestbranding=1&iv_load_policy=3&controls=1`;
 
-  if (lower.includes("youtube.com/watch") || lower.includes("youtu.be/") || lower.includes("youtube.com/shorts/")) {
+  if (lower.includes("youtube.com") || lower.includes("youtu.be/")) {
     try {
       const parsed = new URL(url);
       let videoId = "";
-      if (parsed.hostname.includes("youtu.be")) {
+
+      if (parsed.pathname.includes("/embed/")) {
+        const embeddedId = parsed.pathname.split("/embed/")[1]?.split("/")[0] || "";
+        if (embeddedId) {
+          return { type: "iframe", url: buildYouTubeEmbed(embeddedId) };
+        }
+        return { type: "iframe", url: url.replace("youtube-nocookie.com/embed/", "youtube.com/embed/") };
+      }
+
+      if (parsed.hostname.includes("studio.youtube.com") && parsed.pathname.includes("/video/")) {
+        const studioMatch = parsed.pathname.match(/\/video\/([^/]+)/i);
+        videoId = studioMatch?.[1] || "";
+      } else if (parsed.hostname.includes("youtu.be")) {
         videoId = parsed.pathname.replace("/", "").split("/")[0] || "";
+      } else if (parsed.pathname.includes("/live/")) {
+        videoId = parsed.pathname.split("/live/")[1]?.split("/")[0] || "";
       } else if (parsed.pathname.includes("/shorts/")) {
         videoId = parsed.pathname.split("/shorts/")[1]?.split("/")[0] || "";
       } else {
         videoId = parsed.searchParams.get("v") || "";
       }
       if (videoId) {
-        return { type: "iframe", url: `https://www.youtube.com/embed/${videoId}` };
+        return { type: "iframe", url: buildYouTubeEmbed(videoId) };
       }
     } catch {
       return { type: "iframe", url };
@@ -203,21 +237,34 @@ export default function GamePage() {
   const [activeTab, setActiveTab] = useState<"overview" | "boxscore" | "highlights" | "pictures">("overview");
   const [playerHeadshots, setPlayerHeadshots] = useState<Record<string, string>>({});
   const [activePhotoIndex, setActivePhotoIndex] = useState<number | null>(null);
+  const livePlayerContainerRef = useRef<HTMLDivElement | null>(null);
+  const [isLivePlayerFullscreen, setIsLivePlayerFullscreen] = useState(false);
+  const allowLocalHiddenPreview = process.env.NEXT_PUBLIC_LOCAL_LIVE_SANDBOX === "true";
+  const dnpLabel = "DNP";
 
   useEffect(() => {
-    const fetchGame = async () => {
-      try {
-        const gameDoc = await getDoc(doc(firebaseDB, "games", gameId));
-        if (gameDoc.exists()) {
-          setGame(gameDoc.data() as GameData);
+    setLanguage("fr");
+  }, [setLanguage]);
+
+  useEffect(() => {
+    const gameRef = doc(firebaseDB, "games", gameId);
+    const unsubscribe = onSnapshot(
+      gameRef,
+      (snapshot) => {
+        if (snapshot.exists()) {
+          setGame(snapshot.data() as GameData);
+        } else {
+          setGame(null);
         }
-      } catch (error) {
-        console.error("Error fetching game:", error);
-      } finally {
+        setLoading(false);
+      },
+      (error) => {
+        console.error("Error subscribing to game:", error);
         setLoading(false);
       }
-    };
-    fetchGame();
+    );
+
+    return () => unsubscribe();
   }, [gameId]);
 
   useEffect(() => {
@@ -295,6 +342,24 @@ export default function GamePage() {
     }
   }, [activePhotoIndex, gamePhotos.length]);
 
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const docWithWebkit = document as Document & {
+        webkitFullscreenElement?: Element | null;
+      };
+      const fullscreenElement = document.fullscreenElement || docWithWebkit.webkitFullscreenElement || null;
+      setIsLivePlayerFullscreen(fullscreenElement === livePlayerContainerRef.current);
+    };
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    document.addEventListener("webkitfullscreenchange", handleFullscreenChange as EventListener);
+
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      document.removeEventListener("webkitfullscreenchange", handleFullscreenChange as EventListener);
+    };
+  }, []);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-[#050816] via-[#050816] to-[#020407] flex items-center justify-center">
@@ -303,7 +368,7 @@ export default function GamePage() {
     );
   }
 
-  if (!game) {
+  if (!game || (game.isHiddenFromPublic && !allowLocalHiddenPreview && !game.completed)) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-[#050816] via-[#050816] to-[#020407] flex items-center justify-center">
         <div className="text-center">
@@ -314,13 +379,43 @@ export default function GamePage() {
     );
   }
 
-  const homeWon = game.winnerTeamId === game.homeTeamId;
-  const homeScore = homeWon ? game.winnerScore : game.loserScore;
-  const awayScore = !homeWon ? game.winnerScore : game.loserScore;
+  const hasDirectHomeAwayScores =
+    typeof game.homeScore === "number" && typeof game.awayScore === "number";
+  const hasWinnerLoserScores =
+    typeof game.winnerScore === "number" && typeof game.loserScore === "number";
+
+  const homeScore = hasDirectHomeAwayScores
+    ? game.homeScore
+    : hasWinnerLoserScores
+      ? game.winnerTeamId === game.homeTeamId
+        ? game.winnerScore
+        : game.loserScore
+      : undefined;
+
+  const awayScore = hasDirectHomeAwayScores
+    ? game.awayScore
+    : hasWinnerLoserScores
+      ? game.winnerTeamId === game.awayTeamId
+        ? game.winnerScore
+        : game.loserScore
+      : undefined;
+
+  const homeWon =
+    game.winnerTeamId === game.homeTeamId ||
+    (typeof homeScore === "number" && typeof awayScore === "number" && homeScore > awayScore);
+
+  const liveStatus = String(game.status || "").toLowerCase() === "live";
+  const livePeriod = [game.period, game.quarter]
+    .find((value) => value !== undefined && value !== null && String(value).trim() !== "")
+    ?.toString();
 
   // Get player stats
   const homeStats = game.playerStats?.filter(p => p.teamId === game.homeTeamId) || [];
   const awayStats = game.playerStats?.filter(p => p.teamId === game.awayTeamId) || [];
+  const sortByPointsDesc = (stats: PlayerStat[]) =>
+    [...stats].sort((a, b) => (b.pts || 0) - (a.pts || 0));
+  const homeStatsSorted = sortByPointsDesc(homeStats);
+  const awayStatsSorted = sortByPointsDesc(awayStats);
 
   // Find game leaders
   const allPlayers = [...homeStats, ...awayStats];
@@ -413,6 +508,33 @@ export default function GamePage() {
     return "";
   };
 
+  const getPlayerTeamName = (player: PlayerStat) => {
+    if (player.teamId && player.teamId === game.homeTeamId) return game.homeTeamName || "";
+    if (player.teamId && player.teamId === game.awayTeamId) return game.awayTeamName || "";
+    return "";
+  };
+
+  const getPlayerProfileHref = (player: PlayerStat) => {
+    const teamName = getPlayerTeamName(player);
+    const hasNumber = player.number !== undefined && player.number !== null && String(player.number).trim() !== "";
+    const routeTeamId =
+      player.teamId && (player.teamId === game.homeTeamId || player.teamId === game.awayTeamId)
+        ? player.teamId
+        : "";
+    const routeTeamToken = routeTeamId || teamName;
+    const routeGender = game.gender === "women" ? "women" : "men";
+
+    if (teamName && hasNumber) {
+      return `/player/${encodeURIComponent(teamName)}/${encodeURIComponent(String(player.number))}`;
+    }
+
+    if (routeTeamToken) {
+      return `/team/${encodeURIComponent(routeTeamToken)}?gender=${routeGender}`;
+    }
+
+    return "/";
+  };
+
   const highlightsVideoSource =
     game.highlightsVideoUrl ||
     game.highlightsUrl ||
@@ -423,7 +545,50 @@ export default function GamePage() {
     game.streamUrl ||
     "";
 
+  const liveStreamSource =
+    game.streamUrl ||
+    game.youtubeUrl ||
+    game.highlightsVideoUrl ||
+    game.highlightVideoUrl ||
+    "";
+
   const highlightEmbed = highlightsVideoSource ? toEmbedVideoUrl(highlightsVideoSource) : null;
+  const liveEmbed = liveStreamSource ? toEmbedVideoUrl(liveStreamSource) : null;
+  const shouldShowLiveEmbed = !game.completed && Boolean(liveEmbed);
+
+  const toggleLivePlayerFullscreen = async () => {
+    const container = livePlayerContainerRef.current;
+    if (!container) return;
+
+    const docWithWebkit = document as Document & {
+      webkitFullscreenElement?: Element | null;
+      webkitExitFullscreen?: () => Promise<void> | void;
+    };
+    const elementWithWebkit = container as HTMLDivElement & {
+      webkitRequestFullscreen?: () => Promise<void> | void;
+    };
+
+    const isContainerFullscreen =
+      document.fullscreenElement === container || docWithWebkit.webkitFullscreenElement === container;
+
+    try {
+      if (isContainerFullscreen) {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        } else if (docWithWebkit.webkitExitFullscreen) {
+          await docWithWebkit.webkitExitFullscreen();
+        }
+      } else {
+        if (container.requestFullscreen) {
+          await container.requestFullscreen();
+        } else if (elementWithWebkit.webkitRequestFullscreen) {
+          await elementWithWebkit.webkitRequestFullscreen();
+        }
+      }
+    } catch (error) {
+      console.error("Fullscreen toggle failed:", error);
+    }
+  };
 
   const closePhotoViewer = () => setActivePhotoIndex(null);
   const showPreviousPhoto = () => {
@@ -613,60 +778,63 @@ export default function GamePage() {
                 {pointsLeader && pointsLeader.pts > 0 && (
                   <div>
                     <h3 className="mb-4 text-base sm:text-lg font-bold uppercase tracking-wider text-slate-300">{t.gameLeaders}</h3>
-                    <div className="grid gap-3 sm:gap-4 grid-cols-3">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
                       {/* Points Leader */}
-                      <div className="rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent p-3 sm:p-4 overflow-hidden">
-                        <div className="mb-3 flex items-center justify-between">
-                          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{t.points}</p>
-                          <div className="text-xl sm:text-2xl font-black text-white/90">{pointsLeader.pts}</div>
+                      <Link
+                        href={getPlayerProfileHref(pointsLeader)}
+                        className="group min-h-[170px] rounded-2xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent p-4 sm:min-h-[190px] sm:p-5 overflow-hidden transition hover:border-white/30 hover:bg-white/[0.07]"
+                      >
+                        <div className="mb-3 flex items-center justify-between sm:mb-4">
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400 sm:text-xs sm:tracking-wider">{t.points}</p>
+                          <div className="text-2xl font-black text-white/90 sm:text-3xl">{pointsLeader.pts}</div>
                         </div>
-                        <div className="flex items-center gap-2 sm:gap-3">
-                          {getPlayerHeadshot(pointsLeader) && (
-                            <div className="w-10 h-10 sm:w-12 sm:h-12 flex-shrink-0">
-                              <Image src={getPlayerHeadshot(pointsLeader)} alt={pointsLeader.playerName} width={48} height={48} className="rounded-full object-cover w-full h-full" />
-                            </div>
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <p className="font-semibold truncate text-sm sm:text-base">{getPlayerDisplayName(pointsLeader)}</p>
+                        <div className="flex min-h-[96px] flex-col items-center justify-center gap-2 text-center sm:min-h-[108px] sm:gap-2.5">
+                          <div className="h-14 w-14 flex-shrink-0 sm:h-16 sm:w-16">
+                            <Image src={getPlayerHeadshot(pointsLeader) || "/logos/liprobakin.png"} alt={pointsLeader.playerName} width={56} height={56} className="h-full w-full rounded-full border border-white/15 object-cover" />
                           </div>
+                          <p className="max-w-full px-1 text-sm font-semibold leading-snug text-white break-words sm:text-base">
+                            {getPlayerDisplayName(pointsLeader)}
+                          </p>
                         </div>
-                      </div>
+                      </Link>
 
                       {/* Rebounds Leader */}
-                      <div className="rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent p-3 sm:p-4 overflow-hidden">
-                        <div className="mb-3 flex items-center justify-between">
-                          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{t.rebounds}</p>
-                          <div className="text-xl sm:text-2xl font-black text-white/90">{reboundsLeader.reb}</div>
+                      <Link
+                        href={getPlayerProfileHref(reboundsLeader)}
+                        className="group min-h-[170px] rounded-2xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent p-4 sm:min-h-[190px] sm:p-5 overflow-hidden transition hover:border-white/30 hover:bg-white/[0.07]"
+                      >
+                        <div className="mb-3 flex items-center justify-between sm:mb-4">
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400 sm:text-xs sm:tracking-wider">{t.rebounds}</p>
+                          <div className="text-2xl font-black text-white/90 sm:text-3xl">{reboundsLeader.reb}</div>
                         </div>
-                        <div className="flex items-center gap-2 sm:gap-3">
-                          {getPlayerHeadshot(reboundsLeader) && (
-                            <div className="w-10 h-10 sm:w-12 sm:h-12 flex-shrink-0">
-                              <Image src={getPlayerHeadshot(reboundsLeader)} alt={reboundsLeader.playerName} width={48} height={48} className="rounded-full object-cover w-full h-full" />
-                            </div>
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <p className="font-semibold truncate text-sm sm:text-base">{getPlayerDisplayName(reboundsLeader)}</p>
+                        <div className="flex min-h-[96px] flex-col items-center justify-center gap-2 text-center sm:min-h-[108px] sm:gap-2.5">
+                          <div className="h-14 w-14 flex-shrink-0 sm:h-16 sm:w-16">
+                            <Image src={getPlayerHeadshot(reboundsLeader) || "/logos/liprobakin.png"} alt={reboundsLeader.playerName} width={56} height={56} className="h-full w-full rounded-full border border-white/15 object-cover" />
                           </div>
+                          <p className="max-w-full px-1 text-sm font-semibold leading-snug text-white break-words sm:text-base">
+                            {getPlayerDisplayName(reboundsLeader)}
+                          </p>
                         </div>
-                      </div>
+                      </Link>
 
                       {/* Assists Leader */}
-                      <div className="rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent p-3 sm:p-4 overflow-hidden">
-                        <div className="mb-3 flex items-center justify-between">
-                          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{t.assists}</p>
-                          <div className="text-xl sm:text-2xl font-black text-white/90">{assistsLeader.ast}</div>
+                      <Link
+                        href={getPlayerProfileHref(assistsLeader)}
+                        className="group min-h-[170px] rounded-2xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent p-4 sm:min-h-[190px] sm:p-5 overflow-hidden transition hover:border-white/30 hover:bg-white/[0.07]"
+                      >
+                        <div className="mb-3 flex items-center justify-between sm:mb-4">
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400 sm:text-xs sm:tracking-wider">{t.assists}</p>
+                          <div className="text-2xl font-black text-white/90 sm:text-3xl">{assistsLeader.ast}</div>
                         </div>
-                        <div className="flex items-center gap-2 sm:gap-3">
-                          {getPlayerHeadshot(assistsLeader) && (
-                            <div className="w-10 h-10 sm:w-12 sm:h-12 flex-shrink-0">
-                              <Image src={getPlayerHeadshot(assistsLeader)} alt={assistsLeader.playerName} width={48} height={48} className="rounded-full object-cover w-full h-full" />
-                            </div>
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <p className="font-semibold truncate text-sm sm:text-base">{getPlayerDisplayName(assistsLeader)}</p>
+                        <div className="flex min-h-[96px] flex-col items-center justify-center gap-2 text-center sm:min-h-[108px] sm:gap-2.5">
+                          <div className="h-14 w-14 flex-shrink-0 sm:h-16 sm:w-16">
+                            <Image src={getPlayerHeadshot(assistsLeader) || "/logos/liprobakin.png"} alt={assistsLeader.playerName} width={56} height={56} className="h-full w-full rounded-full border border-white/15 object-cover" />
                           </div>
+                          <p className="max-w-full px-1 text-sm font-semibold leading-snug text-white break-words sm:text-base">
+                            {getPlayerDisplayName(assistsLeader)}
+                          </p>
                         </div>
-                      </div>
+                      </Link>
                     </div>
                   </div>
                 )}
@@ -752,7 +920,7 @@ export default function GamePage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/5">
-                        {awayStats.map((player) => (
+                        {awayStatsSorted.map((player) => (
                           <tr key={player.playerId} className="hover:bg-white/5">
                             <td className="px-1.5 py-2 sm:p-3 text-center sticky left-0 bg-slate-900 z-20 text-slate-300 tabular-nums w-[30px] sm:w-[56px]">
                               {player.number || 0}
@@ -772,7 +940,7 @@ export default function GamePage() {
                             </td>
                             {boxScoreColumns.map((column) => (
                               <td key={column.key} className={`p-2 sm:p-3 text-center text-xs sm:text-sm tabular-nums ${column.className || ""}`}>
-                                {column.value(player)}
+                                {player.dnp ? dnpLabel : column.value(player)}
                               </td>
                             ))}
                           </tr>
@@ -800,7 +968,7 @@ export default function GamePage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/5">
-                        {homeStats.map((player) => (
+                        {homeStatsSorted.map((player) => (
                           <tr key={player.playerId} className="hover:bg-white/5">
                             <td className="px-1.5 py-2 sm:p-3 text-center sticky left-0 bg-slate-900 z-20 text-slate-300 tabular-nums w-[30px] sm:w-[56px]">
                               {player.number || 0}
@@ -820,7 +988,7 @@ export default function GamePage() {
                             </td>
                             {boxScoreColumns.map((column) => (
                               <td key={column.key} className={`p-2 sm:p-3 text-center text-xs sm:text-sm tabular-nums ${column.className || ""}`}>
-                                {column.value(player)}
+                                {player.dnp ? dnpLabel : column.value(player)}
                               </td>
                             ))}
                           </tr>
@@ -908,6 +1076,106 @@ export default function GamePage() {
               </div>
             )}
           </>
+        )}
+
+        {shouldShowLiveEmbed && liveEmbed && (
+          <section className="mb-6 sm:mb-8">
+            <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 sm:p-5">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-wider text-red-300">{t.liveNow}</p>
+                  <h3 className="text-base font-bold text-white sm:text-lg">{t.watchOnSite}</h3>
+                </div>
+                <div className="inline-flex items-center gap-1 rounded-full border border-red-500/40 bg-red-500/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-red-200">
+                  <span className="h-1.5 w-1.5 rounded-full bg-red-400 animate-pulse" />
+                  LIVE
+                </div>
+              </div>
+
+              <div className="overflow-hidden rounded-xl border border-white/10 bg-black">
+                <div
+                  ref={livePlayerContainerRef}
+                  className={`relative w-full bg-black ${isLivePlayerFullscreen ? "h-full" : "aspect-video"}`}
+                >
+                  <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-16 bg-gradient-to-b from-black/90 via-black/75 to-transparent sm:h-20" />
+                  <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[15] h-8 bg-black sm:h-9" />
+
+                  <div className="absolute inset-x-0 top-0 z-20 px-2 pt-2 sm:px-3 sm:pt-3">
+                    <div className="pointer-events-auto flex items-start justify-between gap-2">
+                      <div className="inline-flex min-w-0 max-w-[72%] items-center gap-2 rounded-lg border border-white/20 bg-black/75 px-3 py-2 backdrop-blur sm:max-w-[68%] sm:gap-2.5 sm:px-3.5 sm:py-2.5">
+                        {game.homeTeamLogo ? (
+                          <Image src={game.homeTeamLogo} alt={game.homeTeamName || "Home"} width={24} height={24} className="h-6 w-6 rounded-full object-cover sm:h-7 sm:w-7" unoptimized />
+                        ) : null}
+                        <span className="truncate text-[11px] font-bold uppercase tracking-[0.16em] text-white sm:text-xs">
+                          {game.homeTeamName || "Home"} vs {game.awayTeamName || "Away"}
+                        </span>
+                        {game.awayTeamLogo ? (
+                          <Image src={game.awayTeamLogo} alt={game.awayTeamName || "Away"} width={24} height={24} className="h-6 w-6 rounded-full object-cover sm:h-7 sm:w-7" unoptimized />
+                        ) : null}
+                      </div>
+
+                      <div className="inline-flex items-center gap-2 rounded-lg border border-white/25 bg-black/85 px-2.5 py-1.5 backdrop-blur sm:px-3 sm:py-2">
+                        <Image src="/logos/liprobakin.png" alt="Liprobakin TV" width={40} height={40} className="h-9 w-9 rounded-full border border-white/30 object-cover sm:h-11 sm:w-11" />
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white sm:text-xs">LIPROBAKIN TV</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className={`pointer-events-none absolute inset-x-0 z-20 ${isLivePlayerFullscreen ? "bottom-4 px-4" : "bottom-2 px-2 sm:bottom-3 sm:px-3"}`}>
+                    <div className={`mx-auto flex w-full max-w-[98%] items-center justify-between rounded-xl border border-white/20 bg-black/80 backdrop-blur ${isLivePlayerFullscreen ? "gap-4 px-4 py-3" : "gap-2 px-2.5 py-2 sm:gap-3 sm:px-3.5 sm:py-2.5"}`}>
+                      <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
+                        {game.awayTeamLogo ? (
+                          <Image src={game.awayTeamLogo} alt={game.awayTeamName || "Away"} width={24} height={24} className={`${isLivePlayerFullscreen ? "h-8 w-8" : "h-6 w-6 sm:h-7 sm:w-7"} rounded-full object-cover`} unoptimized />
+                        ) : null}
+                        <span className={`truncate font-semibold uppercase tracking-[0.12em] text-white/90 ${isLivePlayerFullscreen ? "text-xs" : "text-[10px] sm:text-[11px]"}`}>
+                          {game.awayTeamName || "Away"}
+                        </span>
+                        <span className={`font-black tabular-nums text-white ${isLivePlayerFullscreen ? "text-2xl" : "text-lg sm:text-xl"}`}>{awayScore ?? 0}</span>
+                      </div>
+
+                      <div className="inline-flex flex-col items-center rounded-md border border-red-500/40 bg-red-500/20 px-2 py-1">
+                        <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-red-200">{liveStatus ? "LIVE" : t.liveNow.toUpperCase()}</span>
+                        {livePeriod && (
+                          <span className="text-[9px] font-semibold tracking-wide text-white/90">
+                            {livePeriod}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex min-w-0 flex-1 items-center gap-2">
+                        <span className={`font-black tabular-nums text-white ${isLivePlayerFullscreen ? "text-2xl" : "text-lg sm:text-xl"}`}>{homeScore ?? 0}</span>
+                        <span className={`truncate text-right font-semibold uppercase tracking-[0.12em] text-white/90 ${isLivePlayerFullscreen ? "text-xs" : "text-[10px] sm:text-[11px]"}`}>
+                          {game.homeTeamName || "Home"}
+                        </span>
+                        {game.homeTeamLogo ? (
+                          <Image src={game.homeTeamLogo} alt={game.homeTeamName || "Home"} width={24} height={24} className={`${isLivePlayerFullscreen ? "h-8 w-8" : "h-6 w-6 sm:h-7 sm:w-7"} rounded-full object-cover`} unoptimized />
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+
+                  {liveEmbed.type === "iframe" ? (
+                    <iframe
+                      src={liveEmbed.url}
+                      title={t.liveNow}
+                      className="absolute left-0 top-0 h-full w-full"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    />
+                  ) : (
+                    <video controls className="absolute left-0 top-0 h-full w-full" src={liveEmbed.url} />
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={toggleLivePlayerFullscreen}
+                    className={`absolute z-30 inline-flex items-center gap-1 rounded-md border border-white/30 bg-black/70 font-bold uppercase tracking-[0.14em] text-white hover:bg-black/85 ${isLivePlayerFullscreen ? "bottom-4 right-4 px-4 py-2 text-xs" : "bottom-2 right-2 px-3 py-1.5 text-xs sm:bottom-3 sm:right-3 sm:px-3.5 sm:py-2"}`}
+                  >
+                    {isLivePlayerFullscreen ? t.exitFullscreen : t.enterFullscreen}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
         )}
       </main>
 

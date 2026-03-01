@@ -4,8 +4,9 @@ import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { collection, query, orderBy, limit, getDocs, onSnapshot, where } from "firebase/firestore";
+import { addDoc, arrayRemove, arrayUnion, collection, collectionGroup, deleteDoc, doc, query, orderBy, limit, getDocs, onSnapshot, serverTimestamp, updateDoc, where } from "firebase/firestore";
 import { firebaseDB } from "@/lib/firebase";
+import { normalizeTeamGender } from "@/lib/team-gender";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import AuthModal from "@/components/AuthModal";
@@ -42,6 +43,7 @@ type EnhancedMatchup = FeaturedMatchup & {
   gender?: "men" | "women";
   referees?: MatchupReferee[];
   dateTime?: string;
+  liveStreamUrl?: string;
 };
 
 type NewsArticle = {
@@ -108,20 +110,150 @@ type NormalizedAdditionalMediaItem = {
   distanceLeft: number;
 };
 
+type ArticleComment = {
+  id: string;
+  articleId: string;
+  name: string;
+  message: string;
+  createdAt: Date | null;
+  likesCount: number;
+  likedByCurrentUser: boolean;
+  canDelete: boolean;
+};
+
+type ArticleCommentReply = {
+  id: string;
+  articleId: string;
+  commentId: string;
+  name: string;
+  message: string;
+  createdAt: Date | null;
+};
+
 const MIN_ADDITIONAL_MEDIA_HEIGHT = 160;
 const MAX_ADDITIONAL_MEDIA_HEIGHT = 640;
 const DEFAULT_ADDITIONAL_MEDIA_HEIGHT = 320;
 const MIN_ADDITIONAL_MEDIA_WIDTH = 35;
 const MAX_ADDITIONAL_MEDIA_WIDTH = 100;
 const DEFAULT_ADDITIONAL_MEDIA_WIDTH = 100;
-const MIN_ADDITIONAL_MEDIA_OFFSET_X = -200;
-const MAX_ADDITIONAL_MEDIA_OFFSET_X = 200;
-const MIN_ADDITIONAL_MEDIA_OFFSET_Y = -200;
-const MAX_ADDITIONAL_MEDIA_OFFSET_Y = 200;
-const MIN_FIXED_MEDIA_TRANSLATE_X = -1200;
-const MAX_FIXED_MEDIA_TRANSLATE_X = 1200;
-const MIN_FIXED_MEDIA_TRANSLATE_Y = -1200;
-const MAX_FIXED_MEDIA_TRANSLATE_Y = 1200;
+const MIN_ADDITIONAL_MEDIA_OFFSET_X = -5000;
+const MAX_ADDITIONAL_MEDIA_OFFSET_X = 5000;
+const MIN_ADDITIONAL_MEDIA_OFFSET_Y = -5000;
+const MAX_ADDITIONAL_MEDIA_OFFSET_Y = 5000;
+const ARTICLE_COMMENT_COOLDOWN_MS = 20_000;
+const ARTICLE_COMMENT_DAILY_LIMIT = 10;
+const ARTICLE_COMMENT_SPAM_TERMS = ["http://", "https://", "www.", "whatsapp", "telegram", "bitcoin", "casino"];
+const ARTICLE_COMMENT_CLIENT_TOKEN_KEY = "article-comment-client-token";
+const ARTICLE_COMMENT_PROFANITY_TERMS = [
+  "fuck",
+  "fucking",
+  "fucker",
+  "fuckoff",
+  "fuk",
+  "fck",
+  "shit",
+  "shitty",
+  "bullshit",
+  "dipshit",
+  "bitch",
+  "bitches",
+  "sonofabitch",
+  "sob",
+  "asshole",
+  "ass",
+  "jackass",
+  "dumbass",
+  "bastard",
+  "dick",
+  "dickhead",
+  "cock",
+  "penis",
+  "pussy",
+  "cunt",
+  "motherfucker",
+  "motherfucking",
+  "mf",
+  "whore",
+  "slut",
+  "hoe",
+  "nigger",
+  "nigga",
+  "retard",
+  "idiot",
+  "stupid",
+  "pute",
+  "putain",
+  "put1",
+  "ptn",
+  "salope",
+  "salop",
+  "salaud",
+  "salaude",
+  "enculer",
+  "connard",
+  "conasse",
+  "encule",
+  "batard",
+  "batarde",
+  "niquetamere",
+  "nique",
+  "ta mere",
+  "tamere",
+  "tg",
+  "ta gueule",
+  "tagueule",
+  "fdtg",
+  "fermetagueule",
+  "merde",
+  "merdique",
+  "bordel",
+  "sacamerde",
+  "fdp",
+  "filsdepute",
+  "filledepute",
+  "enculede",
+  "enculedetamer",
+  "pd",
+  "tapette",
+  "gouine",
+  "negro",
+  "zoba",
+  "zozo",
+  "ndoki",
+  "libolo",
+  "mbwa",
+  "nyama",
+  "ebende",
+  "voleur",
+  "mabanga",
+];
+
+const normalizeCommentModerationInput = (input: string): string =>
+  input
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/g, "");
+
+const getOrCreateArticleCommentClientToken = (): string => {
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  const existing = window.localStorage.getItem(ARTICLE_COMMENT_CLIENT_TOKEN_KEY);
+  if (existing) {
+    return existing;
+  }
+
+  const generated = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+  window.localStorage.setItem(ARTICLE_COMMENT_CLIENT_TOKEN_KEY, generated);
+  return generated;
+};
+const MAX_FIXED_MEDIA_TRANSLATE_X = 5000;
+const MAX_FIXED_MEDIA_TRANSLATE_Y = 5000;
 const MIN_MEDIA_TEXT_DISTANCE = 0;
 const MAX_MEDIA_TEXT_DISTANCE = 48;
 const DEFAULT_MEDIA_TEXT_DISTANCE = 12;
@@ -145,7 +277,8 @@ const isTrustedNewsMediaUrl = (url?: string | null) => {
 const normalizeWrapMode = (wrap?: AdditionalMediaWrap): CanonicalAdditionalMediaWrap => {
   if (wrap === "wrap") return "square";
   if (wrap === "break") return "topBottom";
-  if (wrap === "inline" || wrap === "square" || wrap === "tight" || wrap === "through" || wrap === "topBottom" || wrap === "behind" || wrap === "front") {
+  if (wrap === "behind" || wrap === "front") return "square";
+  if (wrap === "inline" || wrap === "square" || wrap === "tight" || wrap === "through" || wrap === "topBottom") {
     return wrap;
   }
   return "inline";
@@ -185,11 +318,11 @@ const normalizeAdditionalMediaItem = (
   );
   const isFixedPosition = textWrap === "behind" || textWrap === "front";
   const offsetX = Math.max(
-    isFixedPosition ? MIN_FIXED_MEDIA_TRANSLATE_X : MIN_ADDITIONAL_MEDIA_OFFSET_X,
+    isFixedPosition ? 0 : MIN_ADDITIONAL_MEDIA_OFFSET_X,
     Math.min(isFixedPosition ? MAX_FIXED_MEDIA_TRANSLATE_X : MAX_ADDITIONAL_MEDIA_OFFSET_X, Number(item.offsetX || 0))
   );
   const offsetY = Math.max(
-    isFixedPosition ? MIN_FIXED_MEDIA_TRANSLATE_Y : MIN_ADDITIONAL_MEDIA_OFFSET_Y,
+    isFixedPosition ? 0 : MIN_ADDITIONAL_MEDIA_OFFSET_Y,
     Math.min(isFixedPosition ? MAX_FIXED_MEDIA_TRANSLATE_Y : MAX_ADDITIONAL_MEDIA_OFFSET_Y, Number(item.offsetY || 0))
   );
   const distanceTop = normalizeTextDistance(item.distanceTop);
@@ -234,8 +367,8 @@ const isTextWrappingMode = (wrap: CanonicalAdditionalMediaWrap): boolean => {
 
 const getTextWrapFloatClass = (wrapMode: CanonicalAdditionalMediaWrap, wrapSide: AdditionalMediaWrapSide): string => {
   if (!isTextWrappingMode(wrapMode)) return "";
-  if (wrapSide === "leftOnly") return "sm:float-right";
-  return "sm:float-left";
+  if (wrapSide === "leftOnly") return "float-right";
+  return "float-left";
 };
 
 function AutoPlayOnVisibleVideo({ src, className, style }: { src: string; className: string; style?: CSSProperties }) {
@@ -436,11 +569,29 @@ const SectionHeader = ({ id, eyebrow, title, description, actions, titleHref, au
 
 const slug = (label: string) => label.toLowerCase();
 
-const normalizeTeamName = (name: string) =>
-  name.replace(/^espoir\s+espoir\s+/i, "Espoir ").trim();
+const normalizeTeamName = (name: string) => {
+  const withFixedTypo = name.replace(/\bsepoir\b/gi, "Espoir").trim();
+  return withFixedTypo.replace(/^espoir\s+espoir\s+/i, "Espoir ").trim();
+};
 
-const formatFranchiseName = (team: Franchise) =>
-  normalizeTeamName([team.city, team.name].filter(Boolean).join(" ").trim());
+const buildTeamDisplayName = (team: Pick<Franchise, "city" | "name">) => {
+  const city = normalizeTeamName(team.city ?? "");
+  const name = normalizeTeamName(team.name ?? "");
+
+  if (!city) return name;
+  if (!name) return city;
+
+  const cityLower = city.toLowerCase();
+  const nameLower = name.toLowerCase();
+
+  if (nameLower === cityLower || nameLower.startsWith(`${cityLower} `)) {
+    return name;
+  }
+
+  return normalizeTeamName(`${city} ${name}`.trim());
+};
+
+const formatFranchiseName = (team: Franchise) => buildTeamDisplayName(team);
 
 const formatTimeAgo = (date: Date): string => {
   const now = getDRCNow().getTime();
@@ -631,6 +782,21 @@ const translations = {
       losses: "L",
       totalPoints: "PTS",
     },
+    contact: {
+      title: "Get In Touch",
+      subtitle: "Send us a message / suggestion",
+      firstName: "First Name",
+      lastName: "Last Name",
+      emailAddress: "Email Address",
+      phoneOptional: "Phone (Optional)",
+      yourMessage: "Your Message",
+      placeholderFirstName: "John",
+      placeholderLastName: "Doe",
+      placeholderEmail: "john@example.com",
+      placeholderPhone: "+1 (555) 000-0000",
+      placeholderMessage: "Please type your message or suggestion here!",
+      sendMessage: "Send Message",
+    },
   },
   fr: {
     brand: "LIPROBAKIN",
@@ -719,6 +885,21 @@ const translations = {
       losses: "D",
       totalPoints: "PTS",
     },
+    contact: {
+      title: "Contactez-Nous",
+      subtitle: "Envoyez-nous un message / une suggestion",
+      firstName: "Prénom",
+      lastName: "Nom",
+      emailAddress: "Adresse Email",
+      phoneOptional: "Téléphone (Optionnel)",
+      yourMessage: "Votre Message",
+      placeholderFirstName: "Jean",
+      placeholderLastName: "Dupont",
+      placeholderEmail: "jean@exemple.com",
+      placeholderPhone: "+243 000 000 000",
+      placeholderMessage: "Please type your message or suggestion here!",
+      sendMessage: "Envoyer",
+    },
   },
 } as const;
 
@@ -756,7 +937,7 @@ const parseTipoffToDate = (tipoff: string) => {
   return Number.isNaN(timestamp) ? Number.MAX_SAFE_INTEGER : timestamp;
 };
 
-const LeaderRow = ({ leader, allFranchises }: { leader: FeaturedMatchup["leaders"][number]; allFranchises: Franchise[] }) => {
+const LeaderRow = ({ leader, allFranchises, gender }: { leader: FeaturedMatchup["leaders"][number]; allFranchises: Franchise[]; gender?: Gender }) => {
   const franchise = findFranchiseByName(leader.team, allFranchises);
   const headshot = leader.headshot || playerHeadshots[leader.player];
   const initials = leader.player
@@ -769,9 +950,10 @@ const LeaderRow = ({ leader, allFranchises }: { leader: FeaturedMatchup["leaders
   
   // Determine the link URL - prioritize player page if number is available
   const playerNumber = 'number' in leader ? leader.number : null;
+  const teamGender = gender === "women" ? "women" : "men";
   const linkUrl = playerNumber 
     ? `/player/${encodeURIComponent(leader.team)}/${playerNumber}`
-    : `/team/${encodeURIComponent(leader.team)}`;
+    : `/team/${encodeURIComponent(leader.team)}?gender=${teamGender}`;
 
   return (           
     <Link 
@@ -810,7 +992,7 @@ const LeaderRow = ({ leader, allFranchises }: { leader: FeaturedMatchup["leaders
   );
 };
 
-const MatchupTeam = ({ team, record, logo, allFranchises }: { team: string; record: string; logo?: string; allFranchises: Franchise[] }) => {
+const MatchupTeam = ({ team, record, logo, allFranchises, gender }: { team: string; record: string; logo?: string; allFranchises: Franchise[]; gender?: Gender }) => {
   const franchise = findFranchiseByName(team, allFranchises);
   const displayName = franchise ? formatFranchiseName(franchise) : normalizeTeamName(team);
   const colors = franchise?.colors ?? ["#1e293b", "#0f172a"];
@@ -823,6 +1005,7 @@ const MatchupTeam = ({ team, record, logo, allFranchises }: { team: string; reco
     .join("")
     .slice(0, 2)
     .toUpperCase();
+  const teamGender = gender === "women" ? "women" : "men";
 
   const handleTeamOpenAnimation = () => {
     if (typeof window === "undefined") return;
@@ -838,7 +1021,7 @@ const MatchupTeam = ({ team, record, logo, allFranchises }: { team: string; reco
 
   return (
     <Link
-      href={`/team/${encodeURIComponent(displayName)}`}
+      href={`/team/${encodeURIComponent(displayName)}?gender=${teamGender}`}
       onClick={handleTeamOpenAnimation}
       className="flex flex-col items-center gap-1 md:gap-2 text-center min-w-0 transition hover:opacity-80"
     >
@@ -977,13 +1160,14 @@ const GenderToggle = ({ value, onChange, language }: { value: Gender; onChange: 
   </div>
 );
 
-type PlayerMetric = keyof SpotlightPlayer["leaderboard"];
+type PlayerMetric = "pts" | "ast" | "reb" | "blk" | "evl";
 
 const playerMetricFilters: { key: PlayerMetric; label: string }[] = [
   { key: "pts", label: "PTS" },
   { key: "ast", label: "AST" },
   { key: "reb", label: "REB" },
   { key: "blk", label: "BLK" },
+  { key: "evl", label: "EVL" },
 ];
 
   const RosterModal = ({ teamName, onClose, allFranchises }: { teamName: string; onClose: () => void; allFranchises: Franchise[] }) => {
@@ -1334,7 +1518,7 @@ const FanFavoriteTeamCard = ({ teamId, teamName }: { teamId?: string; teamName?:
   if (loading) {
     return (
       <div className="flex justify-center items-center p-12">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-green-400"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-orange-400"></div>
       </div>
     );
   }
@@ -1353,7 +1537,7 @@ const FanFavoriteTeamCard = ({ teamId, teamName }: { teamId?: string; teamName?:
           </div>
         )}
         <div>
-          <p className="text-xs uppercase tracking-[0.4em] text-green-400 mb-1">
+          <p className="text-xs uppercase tracking-[0.4em] text-orange-300 mb-1">
             {language === 'fr' ? 'Votre Équipe Favorite' : 'Your Favorite Team'}
           </p>
           <h3 className="text-3xl font-bold text-white">{teamName}</h3>
@@ -1425,6 +1609,19 @@ export default function Home() {
   const [newsArticles, setNewsArticles] = useState<NewsArticle[]>([]);
   const [featuredArticleId, setFeaturedArticleId] = useState<string | null>(null);
   const [expandedArticleId, setExpandedArticleId] = useState<string | null>(null);
+  const [articleComments, setArticleComments] = useState<ArticleComment[]>([]);
+  const [articleCommentReplies, setArticleCommentReplies] = useState<ArticleCommentReply[]>([]);
+  const [articleCommentsVisibleCount, setArticleCommentsVisibleCount] = useState(6);
+  const [commentName, setCommentName] = useState("");
+  const [commentMessage, setCommentMessage] = useState("");
+  const [commentWebsite, setCommentWebsite] = useState("");
+  const [activeReplyCommentId, setActiveReplyCommentId] = useState<string | null>(null);
+  const [replyName, setReplyName] = useState("");
+  const [replyMessage, setReplyMessage] = useState("");
+  const [isSubmittingReply, setIsSubmittingReply] = useState(false);
+  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+  const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
+  const [commentError, setCommentError] = useState<string | null>(null);
   const [newsGridStartIndex, setNewsGridStartIndex] = useState(0);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [isFeaturedVideoMuted, setIsFeaturedVideoMuted] = useState(true);
@@ -1452,6 +1649,7 @@ export default function Home() {
   const [allScheduledGames, setAllScheduledGames] = useState<EnhancedMatchup[]>([]);
   const scheduleScrollRef = useRef<HTMLDivElement>(null);
   const finalBuzzerScrollRef = useRef<HTMLDivElement>(null);
+  const expandedArticlePanelRef = useRef<HTMLElement | null>(null);
   const teamsScrollRef = useRef<HTMLDivElement>(null);
   const standingsHistoryRef = useRef<Record<string, number>>({});
   const featuredVideoCompletionRef = useRef(false);
@@ -1480,6 +1678,42 @@ export default function Home() {
   const glowedStandingPlayerPhotoIdsRef = useRef<Set<string>>(new Set());
   const standingsShineTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [standingsAutoShine, setStandingsAutoShine] = useState(false);
+
+  // Contact form state
+  const [contactForm, setContactForm] = useState({ firstName: "", lastName: "", email: "", phone: "", message: "" });
+  const [contactSubmitting, setContactSubmitting] = useState(false);
+  const [contactSuccess, setContactSuccess] = useState(false);
+  const [contactError, setContactError] = useState<string | null>(null);
+  const [contactNotice, setContactNotice] = useState<string | null>(null);
+
+  const handleContactSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setContactSubmitting(true);
+    setContactError(null);
+    setContactNotice(null);
+    try {
+      const res = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...contactForm, language }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to send message");
+      }
+      if (data.emailDelivered === false) {
+        setContactNotice(language === "fr"
+          ? "Message enregistré, mais l'email de notification a échoué. Vérifiez la configuration Resend."
+          : "Message saved, but email notification failed. Please check Resend configuration.");
+      }
+      setContactSuccess(true);
+      setContactForm({ firstName: "", lastName: "", email: "", phone: "", message: "" });
+    } catch (err: unknown) {
+      setContactError(err instanceof Error ? err.message : "Failed to send message");
+    } finally {
+      setContactSubmitting(false);
+    }
+  };
 
   // Share player card using native share API
   const sharePlayerCard = useCallback(async (platform: 'ig' | 'fb') => {
@@ -1812,15 +2046,51 @@ export default function Home() {
   // Removed static roster - RosterModal now fetches from Firestore
   const genderPlayers = playersGender === "men" ? spotlightPlayers : spotlightPlayersWomen;
   // Always use dynamic standings calculated from games - no fallback to static data
-  const genderStandings = dynamicStandings.filter((s) => s.gender === standingsGender);
+  const genderStandings = [...dynamicStandings]
+    .filter((s) => s.gender === standingsGender)
+    .sort((a, b) => Number(a.seed) - Number(b.seed));
   const homepageStandings = genderStandings;
   const genderFranchises = franchiseGender === "men" ? menTeams : womenTeams;
   const filteredFranchises = genderFranchises.filter(team => {
-    const fullName = [team.city, team.name].filter(Boolean).join(" ").trim().toLowerCase();
+    const fullName = buildTeamDisplayName(team).toLowerCase();
     return fullName.includes(teamSearch.toLowerCase());
   });
   const visibleFranchises = filteredFranchises.slice(0, 7);
   const allFranchises = useMemo(() => [...menTeams, ...womenTeams], [menTeams, womenTeams]);
+  const rankedArticleComments = useMemo(
+    () =>
+      [...articleComments].sort((a, b) => {
+        if (b.likesCount !== a.likesCount) {
+          return b.likesCount - a.likesCount;
+        }
+
+        const timeA = a.createdAt ? a.createdAt.getTime() : 0;
+        const timeB = b.createdAt ? b.createdAt.getTime() : 0;
+        return timeB - timeA;
+      }),
+    [articleComments]
+  );
+
+  const repliesByCommentId = useMemo(() => {
+    return articleCommentReplies.reduce<Record<string, ArticleCommentReply[]>>((grouped, reply) => {
+      if (!grouped[reply.commentId]) {
+        grouped[reply.commentId] = [];
+      }
+      grouped[reply.commentId].push(reply);
+      return grouped;
+    }, {});
+  }, [articleCommentReplies]);
+
+  const sortedRepliesByCommentId = useMemo(() => {
+    return Object.entries(repliesByCommentId).reduce<Record<string, ArticleCommentReply[]>>((grouped, [commentId, replies]) => {
+      grouped[commentId] = [...replies].sort((a, b) => {
+        const timeA = a.createdAt ? a.createdAt.getTime() : 0;
+        const timeB = b.createdAt ? b.createdAt.getTime() : 0;
+        return timeA - timeB;
+      });
+      return grouped;
+    }, {});
+  }, [repliesByCommentId]);
 
   useEffect(() => {
     const cached = readHomeBootstrapCache();
@@ -1874,6 +2144,369 @@ export default function Home() {
   }, [newsArticles, featuredArticleId]);
 
   useEffect(() => {
+    if (!expandedArticleId) {
+      setArticleComments([]);
+      setArticleCommentReplies([]);
+      setArticleCommentsVisibleCount(6);
+      setCommentWebsite("");
+      setActiveReplyCommentId(null);
+      setReplyName("");
+      setReplyMessage("");
+      setCommentError(null);
+      return;
+    }
+
+    setArticleCommentsVisibleCount(6);
+    setCommentError(null);
+
+    const commentsRef = collection(firebaseDB, "news", expandedArticleId, "comments");
+    const commentsQuery = query(commentsRef, orderBy("createdAt", "desc"), limit(100));
+
+    const unsubscribe = onSnapshot(
+      commentsQuery,
+      (snapshot) => {
+        const currentClientToken = getOrCreateArticleCommentClientToken();
+        const comments = snapshot.docs
+          .map((commentDoc) => {
+            const data = commentDoc.data() as {
+              name?: string;
+              message?: string;
+              ownerToken?: string;
+              likedByTokens?: string[];
+              createdAt?: { toDate?: () => Date } | Date;
+            };
+
+            const name = String(data.name || "").trim();
+            const message = String(data.message || "").trim();
+            if (!message) {
+              return null;
+            }
+
+            const createdAt =
+              data.createdAt instanceof Date
+                ? data.createdAt
+                : data.createdAt && typeof data.createdAt.toDate === "function"
+                  ? data.createdAt.toDate()
+                  : null;
+
+            return {
+              id: commentDoc.id,
+              articleId: expandedArticleId,
+              name: name || (language === "fr" ? "Anonyme" : "Anonymous"),
+              message,
+              createdAt,
+              likesCount: Array.isArray(data.likedByTokens) ? data.likedByTokens.length : 0,
+              likedByCurrentUser: Array.isArray(data.likedByTokens) && data.likedByTokens.includes(currentClientToken),
+              canDelete: Boolean(data.ownerToken) && String(data.ownerToken) === currentClientToken,
+            };
+          })
+          .filter((comment): comment is ArticleComment => !!comment);
+
+        setArticleComments(comments);
+      },
+      (error) => {
+        console.error("Error loading article comments:", error);
+        setCommentError(language === "fr" ? "Impossible de charger les commentaires." : "Unable to load comments.");
+      }
+    );
+
+    return () => unsubscribe();
+  }, [expandedArticleId, language]);
+
+  useEffect(() => {
+    if (!expandedArticleId) {
+      setArticleCommentReplies([]);
+      return;
+    }
+
+    const repliesQuery = query(collectionGroup(firebaseDB, "replies"), limit(500));
+    const unsubscribe = onSnapshot(repliesQuery, (snapshot) => {
+      const replies = snapshot.docs
+        .map((replyDoc) => {
+          const path = replyDoc.ref.path;
+          const expectedPrefix = `news/${expandedArticleId}/comments/`;
+
+          if (!path.startsWith(expectedPrefix)) {
+            return null;
+          }
+
+          const commentId = replyDoc.ref.parent.parent?.id;
+          if (!commentId) {
+            return null;
+          }
+
+          const data = replyDoc.data() as {
+            name?: string;
+            message?: string;
+            createdAt?: { toDate?: () => Date } | Date;
+          };
+
+          const message = String(data.message || "").trim();
+          if (!message) {
+            return null;
+          }
+
+          const createdAt =
+            data.createdAt instanceof Date
+              ? data.createdAt
+              : data.createdAt && typeof data.createdAt.toDate === "function"
+                ? data.createdAt.toDate()
+                : null;
+
+          return {
+            id: replyDoc.id,
+            articleId: expandedArticleId,
+            commentId,
+            name: String(data.name || "").trim() || (language === "fr" ? "Anonyme" : "Anonymous"),
+            message,
+            createdAt,
+          } as ArticleCommentReply;
+        })
+        .filter((reply): reply is ArticleCommentReply => !!reply);
+
+      setArticleCommentReplies(replies);
+    }, (error) => {
+      console.error("Error loading comment replies:", error);
+      setCommentError(language === "fr" ? "Impossible de charger les réponses." : "Unable to load replies.");
+    });
+
+    return () => unsubscribe();
+  }, [expandedArticleId, language]);
+
+  const handleSubmitArticleComment = useCallback(async () => {
+    if (!expandedArticleId || isSubmittingComment) {
+      return;
+    }
+
+    if (commentWebsite.trim()) {
+      setCommentName("");
+      setCommentMessage("");
+      setCommentWebsite("");
+      setCommentError(null);
+      return;
+    }
+
+    const sanitizedName = commentName.trim().slice(0, 50);
+    const sanitizedMessage = commentMessage.trim().slice(0, 600);
+    const normalizedMessage = sanitizedMessage.toLowerCase();
+    const moderationMessage = normalizeCommentModerationInput(sanitizedMessage);
+
+    if (!sanitizedMessage) {
+      setCommentError(language === "fr" ? "Le commentaire est requis." : "Comment is required.");
+      return;
+    }
+
+    const hasBlockedTerm = ARTICLE_COMMENT_SPAM_TERMS.some((term) => normalizedMessage.includes(term));
+    if (hasBlockedTerm) {
+      setCommentError(
+        language === "fr"
+          ? "Votre commentaire contient un contenu non autorisé."
+          : "Your comment contains disallowed content."
+      );
+      return;
+    }
+
+    const hasProfanity = ARTICLE_COMMENT_PROFANITY_TERMS.some((term) => moderationMessage.includes(term));
+    if (hasProfanity) {
+      setCommentError(
+        language === "fr"
+          ? "Les insultes et grossièretés ne sont pas autorisées."
+          : "Curse and abusive words are not allowed."
+      );
+      return;
+    }
+
+    if (typeof window !== "undefined") {
+      const cooldownStorageKey = `article-comment-cooldown:${expandedArticleId}`;
+      const nextAllowedAtRaw = window.localStorage.getItem(cooldownStorageKey);
+      const nextAllowedAt = Number.parseInt(nextAllowedAtRaw || "0", 10);
+      const now = Date.now();
+
+      if (Number.isFinite(nextAllowedAt) && nextAllowedAt > now) {
+        const remainingSeconds = Math.ceil((nextAllowedAt - now) / 1000);
+        setCommentError(
+          language === "fr"
+            ? `Veuillez attendre ${remainingSeconds}s avant de republier.`
+            : `Please wait ${remainingSeconds}s before posting again.`
+        );
+        return;
+      }
+
+      const dailyKeyDate = new Date(now).toISOString().slice(0, 10);
+      const dailyStorageKey = `article-comment-daily:${dailyKeyDate}`;
+      const dailyCountRaw = window.localStorage.getItem(dailyStorageKey);
+      const dailyCount = Number.parseInt(dailyCountRaw || "0", 10);
+
+      if (Number.isFinite(dailyCount) && dailyCount >= ARTICLE_COMMENT_DAILY_LIMIT) {
+        setCommentError(
+          language === "fr"
+            ? `Limite atteinte: ${ARTICLE_COMMENT_DAILY_LIMIT} commentaires aujourd'hui.`
+            : `Limit reached: ${ARTICLE_COMMENT_DAILY_LIMIT} comments today.`
+        );
+        return;
+      }
+    }
+
+    setIsSubmittingComment(true);
+    setCommentError(null);
+
+    try {
+      const ownerToken = getOrCreateArticleCommentClientToken();
+      await addDoc(collection(firebaseDB, "news", expandedArticleId, "comments"), {
+        name: sanitizedName || (language === "fr" ? "Anonyme" : "Anonymous"),
+        message: sanitizedMessage,
+        ownerToken,
+        createdAt: serverTimestamp(),
+      });
+
+      setCommentName("");
+      setCommentMessage("");
+      setCommentWebsite("");
+
+      if (typeof window !== "undefined") {
+        const cooldownStorageKey = `article-comment-cooldown:${expandedArticleId}`;
+        const now = Date.now();
+        const dailyKeyDate = new Date(now).toISOString().slice(0, 10);
+        const dailyStorageKey = `article-comment-daily:${dailyKeyDate}`;
+        const currentDailyCount = Number.parseInt(window.localStorage.getItem(dailyStorageKey) || "0", 10);
+
+        window.localStorage.setItem(cooldownStorageKey, String(now + ARTICLE_COMMENT_COOLDOWN_MS));
+        window.localStorage.setItem(dailyStorageKey, String((Number.isFinite(currentDailyCount) ? currentDailyCount : 0) + 1));
+      }
+    } catch (error) {
+      console.error("Error posting comment:", error);
+      setCommentError(language === "fr" ? "Impossible d'ajouter le commentaire." : "Unable to post comment.");
+    } finally {
+      setIsSubmittingComment(false);
+    }
+  }, [commentMessage, commentName, commentWebsite, expandedArticleId, isSubmittingComment, language]);
+
+  const handleDeleteArticleComment = useCallback(
+    async (commentId: string) => {
+      if (!expandedArticleId || !commentId || deletingCommentId) {
+        return;
+      }
+
+      const commentToDelete = articleComments.find((comment) => comment.id === commentId);
+      if (!commentToDelete?.canDelete) {
+        setCommentError(
+          language === "fr"
+            ? "Vous ne pouvez supprimer que vos propres commentaires."
+            : "You can delete only your own comments."
+        );
+        return;
+      }
+
+      setDeletingCommentId(commentId);
+      setCommentError(null);
+
+      try {
+        await deleteDoc(doc(firebaseDB, "news", expandedArticleId, "comments", commentId));
+      } catch (error) {
+        console.error("Error deleting comment:", error);
+        setCommentError(
+          language === "fr"
+            ? "Impossible de supprimer le commentaire."
+            : "Unable to delete comment."
+        );
+      } finally {
+        setDeletingCommentId(null);
+      }
+    },
+    [articleComments, deletingCommentId, expandedArticleId, language]
+  );
+
+  const handleToggleCommentLike = useCallback(
+    async (commentId: string) => {
+      if (!expandedArticleId || !commentId) {
+        return;
+      }
+
+      try {
+        const currentClientToken = getOrCreateArticleCommentClientToken();
+        const targetComment = articleComments.find((comment) => comment.id === commentId);
+        if (!targetComment) {
+          return;
+        }
+
+        const commentRef = doc(firebaseDB, "news", expandedArticleId, "comments", commentId);
+        if (targetComment.likedByCurrentUser) {
+          await updateDoc(commentRef, {
+            likedByTokens: arrayRemove(currentClientToken),
+          });
+        } else {
+          await updateDoc(commentRef, {
+            likedByTokens: arrayUnion(currentClientToken),
+          });
+        }
+      } catch (error) {
+        console.error("Error toggling comment like:", error);
+        setCommentError(language === "fr" ? "Impossible de mettre à jour le like." : "Unable to update like.");
+      }
+    },
+    [articleComments, expandedArticleId, language]
+  );
+
+  const handleSubmitCommentReply = useCallback(
+    async (commentId: string) => {
+      if (!expandedArticleId || !commentId || isSubmittingReply) {
+        return;
+      }
+
+      const sanitizedName = replyName.trim().slice(0, 50);
+      const sanitizedMessage = replyMessage.trim().slice(0, 600);
+      const normalizedMessage = sanitizedMessage.toLowerCase();
+      const moderationMessage = normalizeCommentModerationInput(sanitizedMessage);
+
+      if (!sanitizedMessage) {
+        setCommentError(language === "fr" ? "La réponse est requise." : "Reply is required.");
+        return;
+      }
+
+      const hasBlockedTerm = ARTICLE_COMMENT_SPAM_TERMS.some((term) => normalizedMessage.includes(term));
+      if (hasBlockedTerm) {
+        setCommentError(
+          language === "fr"
+            ? "Votre réponse contient un contenu non autorisé."
+            : "Your reply contains disallowed content."
+        );
+        return;
+      }
+
+      const hasProfanity = ARTICLE_COMMENT_PROFANITY_TERMS.some((term) => moderationMessage.includes(term));
+      if (hasProfanity) {
+        setCommentError(
+          language === "fr"
+            ? "Les insultes et grossièretés ne sont pas autorisées."
+            : "Curse and abusive words are not allowed."
+        );
+        return;
+      }
+
+      setIsSubmittingReply(true);
+      setCommentError(null);
+
+      try {
+        await addDoc(collection(firebaseDB, "news", expandedArticleId, "comments", commentId, "replies"), {
+          name: sanitizedName || (language === "fr" ? "Anonyme" : "Anonymous"),
+          message: sanitizedMessage,
+          createdAt: serverTimestamp(),
+        });
+
+        setReplyName("");
+        setReplyMessage("");
+        setActiveReplyCommentId(null);
+      } catch (error) {
+        console.error("Error posting reply:", error);
+        setCommentError(language === "fr" ? "Impossible d'ajouter la réponse." : "Unable to post reply.");
+      } finally {
+        setIsSubmittingReply(false);
+      }
+    },
+    [expandedArticleId, isSubmittingReply, language, replyMessage, replyName]
+  );
+
+  useEffect(() => {
     if (!Array.isArray(dynamicPartners) || dynamicPartners.length === 0) {
       return;
     }
@@ -1899,11 +2532,6 @@ export default function Home() {
       behavior: "smooth",
     });
   }, []);
-
-
-  const playerLeaders = [...genderPlayers].sort(
-    (a, b) => b.leaderboard[playerMetric] - a.leaderboard[playerMetric]
-  );
   const spotlightGames = dynamicSpotlightGames;
 
   // Load gender selection from sessionStorage on mount
@@ -2073,9 +2701,23 @@ export default function Home() {
       try {
         const teamsRef = collection(firebaseDB, "teams");
         const teamsSnapshot = await getDocs(teamsRef);
-        
-        const men: Franchise[] = [];
-        const women: Franchise[] = [];
+
+        const canonicalFranchiseKey = (team: Franchise) => {
+          const fullName = buildTeamDisplayName(team);
+          return normalizeTeamName(fullName).toLowerCase().replace(/\s+/g, " ");
+        };
+
+        const scoreFranchise = (team: Franchise) => {
+          let score = 0;
+          if (team.city && team.city.trim()) score += 1;
+          if (team.logo && !team.logo.includes("/logos/liprobakin.png")) score += 2;
+          const colors = Array.isArray(team.colors) ? team.colors : [];
+          if (colors.length >= 2 && !(colors[0] === "#1e293b" && colors[1] === "#0f172a")) score += 1;
+          return score;
+        };
+
+        const menByKey = new Map<string, Franchise>();
+        const womenByKey = new Map<string, Franchise>();
         teamsSnapshot.docs.forEach((doc) => {
           const data = doc.data();
           const colors: [string, string] = Array.isArray(data.colors) && data.colors.length >= 2
@@ -2088,17 +2730,25 @@ export default function Home() {
             colors,
             logo: data.logo ?? "/logos/liprobakin.png",
           };
-          
-          if (data.gender === "women") {
-            women.push(franchise);
-          } else {
-            men.push(franchise);
+
+          const teamGender = normalizeTeamGender(data.gender, data.logo, "men");
+
+          const key = canonicalFranchiseKey(franchise);
+          const target = teamGender === "women" ? womenByKey : menByKey;
+          const existing = target.get(key);
+          if (!existing) {
+            target.set(key, franchise);
+            return;
+          }
+
+          if (scoreFranchise(franchise) > scoreFranchise(existing)) {
+            target.set(key, franchise);
           }
         });
-        
-        men.sort((a, b) => a.name.localeCompare(b.name));
-        women.sort((a, b) => a.name.localeCompare(b.name));
-        
+
+        const men = Array.from(menByKey.values()).sort((a, b) => a.name.localeCompare(b.name));
+        const women = Array.from(womenByKey.values()).sort((a, b) => a.name.localeCompare(b.name));
+
         setMenTeams(men);
         setWomenTeams(women);
       } catch (error) {
@@ -2168,8 +2818,8 @@ export default function Home() {
       
       console.log('✅ Total articles (real-time):', articles.length);
       console.log('📰 Articles:', articles.map(a => ({ id: a.id, title: a.title })));
-      // Limit to last 5 published articles
-      setNewsArticles(articles.slice(0, 5));
+      // Limit to last 7 published articles
+      setNewsArticles(articles.slice(0, 7));
       
       if (articles.length > 0 && !featuredArticleId) {
         console.log('🎯 Setting featured article to:', articles[0].id);
@@ -2530,33 +3180,57 @@ export default function Home() {
       try {
         loadStandingsHistory();
 
+        const canonicalTeamKey = (gender: string, name: string) => {
+          const canonicalName = normalizeTeamName(name).trim().toLowerCase().replace(/\s+/g, " ");
+          return `${gender}:${canonicalName}`;
+        };
+
         // First, fetch ALL teams to ensure they all show up in standings
         const teamsRef = collection(firebaseDB, "teams");
         const teamsSnapshot = await getDocs(teamsRef);
+
+        const teamIdToKey = new Map<string, string>();
+        const teamStats: Record<
+          string,
+          {
+            wins: number;
+            losses: number;
+            totalPoints: number;
+            teamName: string;
+            gender: string;
+            teamId?: string;
+          }
+        > = {};
         
-        const teamStats: Record<string, {
-          wins: number;
-          losses: number;
-          totalPoints: number;
-          teamName: string;
-          gender: string;
-        }> = {};
-        
-        // Initialize ALL teams with 0-0 records
+        // Initialize ALL teams with 0-0 records (deduped by gender + name)
         teamsSnapshot.docs.forEach((doc) => {
           const team = doc.data();
           const teamId = doc.id;
           const teamName = team.name || team.teamName || "";
-          const teamGender = team.gender || "men";
+          const teamGender = normalizeTeamGender(team.gender, team.logo, "men");
           
           if (teamName) {
-            teamStats[teamId] = {
-              wins: 0,
-              losses: 0,
-              totalPoints: 0,
-              teamName: teamName,
-              gender: teamGender
-            };
+            const key = canonicalTeamKey(teamGender, teamName);
+            teamIdToKey.set(teamId, key);
+            const existing = teamStats[key];
+            if (!existing) {
+              teamStats[key] = {
+                wins: 0,
+                losses: 0,
+                totalPoints: 0,
+                teamName,
+                gender: teamGender,
+                teamId,
+              };
+            } else {
+              // Prefer a more descriptive name; keep the first seen teamId as representative.
+              if (teamName.length > existing.teamName.length) {
+                existing.teamName = teamName;
+              }
+              if (!existing.teamId) {
+                existing.teamId = teamId;
+              }
+            }
           }
         });
         
@@ -2586,60 +3260,53 @@ export default function Home() {
             const loserScore = game.loserScore || 0;
             const homeTeamName = game.homeTeamName || "";
             const awayTeamName = game.awayTeamName || "";
-            const gameGender = game.gender || "men";
-            
-            // Determine scores for home and away teams
-            const homeScore = winnerTeam === homeTeam ? winnerScore : loserScore;
-            const awayScore = winnerTeam === awayTeam ? winnerScore : loserScore;
-            
-            // Initialize home team if not already (fallback for teams not in teams collection)
-            if (!teamStats[homeTeam] && homeTeamName) {
-              teamStats[homeTeam] = {
-                wins: 0,
-                losses: 0,
-                totalPoints: 0,
-                teamName: homeTeamName,
-                gender: gameGender
-              };
-            }
-            
-            // Initialize away team if not already (fallback)
-            if (!teamStats[awayTeam] && awayTeamName) {
-              teamStats[awayTeam] = {
-                wins: 0,
-                losses: 0,
-                totalPoints: 0,
-                teamName: awayTeamName,
-                gender: gameGender
-              };
-            }
-            
-            // Update stats
-            if (teamStats[homeTeam]) {
-              teamStats[homeTeam].totalPoints += homeScore;
-              if (winnerTeam === homeTeam) {
-                teamStats[homeTeam].wins += 1;
-              } else {
-                teamStats[homeTeam].losses += 1;
+            const gameGender = normalizeTeamGender(game.gender, undefined, "men");
+
+            const resolveTeamNameForId = (teamId?: string) => {
+              if (!teamId) return "";
+              if (teamId === homeTeam) return homeTeamName;
+              if (teamId === awayTeam) return awayTeamName;
+              return "";
+            };
+
+            const ensureTeam = (teamId: string, name: string) => {
+              const key = teamIdToKey.get(teamId) ?? canonicalTeamKey(gameGender, name || teamId);
+              if (!teamStats[key]) {
+                teamStats[key] = {
+                  wins: 0,
+                  losses: 0,
+                  totalPoints: 0,
+                  teamName: name || teamId,
+                  gender: gameGender,
+                  teamId,
+                };
               }
-            }
-            
-            if (teamStats[awayTeam]) {
-              teamStats[awayTeam].totalPoints += awayScore;
-              if (winnerTeam === awayTeam) {
-                teamStats[awayTeam].wins += 1;
-              } else {
-                teamStats[awayTeam].losses += 1;
+              // If this canonical bucket doesn't have a representative id yet, set it.
+              if (!teamStats[key].teamId) {
+                teamStats[key].teamId = teamId;
               }
-            }
+              return key;
+            };
+
+            const winnerName = resolveTeamNameForId(winnerTeam);
+            const loserName = resolveTeamNameForId(loserTeam);
+            const winnerKey = ensureTeam(winnerTeam, winnerName);
+            const loserKey = ensureTeam(loserTeam, loserName);
+
+            teamStats[winnerKey].wins += 1;
+            teamStats[loserKey].losses += 1;
+            teamStats[winnerKey].totalPoints += winnerScore;
+            teamStats[loserKey].totalPoints += loserScore;
           }
         });
         
         console.log("Final team stats:", teamStats);
         
         // Convert to array and sort
-        const standingsArray = Object.entries(teamStats).map(([teamId, stats], index) => ({
+        const standingsArray = Object.entries(teamStats).map(([teamKey, stats], index) => ({
           seed: index + 1,
+          teamKey,
+          teamId: stats.teamId,
           team: stats.teamName,
           wins: stats.wins,
           losses: stats.losses,
@@ -2663,8 +3330,8 @@ export default function Home() {
         
         const previousRanks = standingsHistoryRef.current;
         const finalStandings = [...menStandings, ...womenStandings].map((standing) => {
-          const key = `${standing.gender}:${standing.team}`.toLowerCase();
-          const previousSeed = previousRanks[key];
+          const historyKey = standing.teamKey;
+          const previousSeed = previousRanks[historyKey];
           const rankChange = typeof previousSeed === "number"
             ? standing.seed < previousSeed
               ? "up"
@@ -2681,8 +3348,7 @@ export default function Home() {
 
         const nextRanks: Record<string, number> = {};
         finalStandings.forEach((standing) => {
-          const key = `${standing.gender}:${standing.team}`.toLowerCase();
-          nextRanks[key] = standing.seed;
+          nextRanks[standing.teamKey] = standing.seed;
         });
         standingsHistoryRef.current = nextRanks;
         persistStandingsHistory(nextRanks);
@@ -2768,6 +3434,40 @@ export default function Home() {
       clearTimeout(featuredVideoRotateTimeoutRef.current);
       featuredVideoRotateTimeoutRef.current = null;
     }
+  }, [expandedArticleId]);
+
+  useEffect(() => {
+    if (!expandedArticleId) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const panel = expandedArticlePanelRef.current;
+      if (!panel) {
+        return;
+      }
+
+      const target = event.target as Node | null;
+      if (target && panel.contains(target)) {
+        return;
+      }
+
+      setExpandedArticleId(null);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setExpandedArticleId(null);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
   }, [expandedArticleId]);
 
   const rotateToNextArticle = useCallback((currentFeaturedId: string) => {
@@ -2896,10 +3596,65 @@ export default function Home() {
       try {
         const teamsRef = collection(firebaseDB, "teams");
         const teamsSnapshot = await getDocs(teamsRef);
+
+        const toNumber = (value: unknown): number => {
+          if (typeof value === "number") {
+            return Number.isFinite(value) ? value : 0;
+          }
+
+          if (typeof value === "string") {
+            const cleaned = value
+              .trim()
+              .replace(/,/g, ".")
+              .replace(/[^0-9.+\-]/g, "");
+            const parsed = Number.parseFloat(cleaned);
+            return Number.isFinite(parsed) ? parsed : 0;
+          }
+
+          return 0;
+        };
+
+        const resolveEvaluation = (statsSource: Record<string, unknown>) => {
+          const evStored = toNumber(statsSource.evl ?? statsSource.ev);
+          if (evStored !== 0) {
+            return evStored;
+          }
+
+          const pts = toNumber(statsSource.pts ?? statsSource.points);
+
+          const rebDirect = toNumber(statsSource.reb ?? statsSource.rebounds);
+          const oreb = toNumber(statsSource.oreb ?? statsSource.offensiveRebounds);
+          const dreb = toNumber(statsSource.dreb ?? statsSource.defensiveRebounds);
+          const reb = rebDirect > 0 ? rebDirect : oreb + dreb;
+
+          const ast = toNumber(statsSource.ast ?? statsSource.assists);
+          const stl = toNumber(statsSource.stl ?? statsSource.steals);
+          const blk = toNumber(statsSource.blk ?? statsSource.blocks);
+          const turnovers = toNumber(statsSource.to ?? statsSource.turnovers);
+
+          const twoPa = toNumber(statsSource.two_pa ?? statsSource.twoPointsAttempted);
+          const threePa = toNumber(statsSource.three_pa ?? statsSource.threePointsAttempted);
+          const twoPm = toNumber(statsSource.two_pm ?? statsSource.twoPointsMade);
+          const threePm = toNumber(statsSource.three_pm ?? statsSource.threePointsMade);
+
+          const fga = toNumber(statsSource.fga ?? statsSource.fieldGoalsAttempted) || (twoPa + threePa);
+          const fgm = toNumber(statsSource.fgm ?? statsSource.fieldGoalsMade) || (twoPm + threePm);
+
+          const fta = toNumber(statsSource.ft_a ?? statsSource.freeThrowsAttempted);
+          const ftm = toNumber(statsSource.ft_m ?? statsSource.freeThrowsMade);
+
+          return pts + reb + ast + stl + blk - turnovers - (fga - fgm) - (fta - ftm);
+        };
         
         // Fetch all team rosters in parallel instead of sequentially
         const rosterPromises = teamsSnapshot.docs.map(async (teamDoc) => {
           const teamData = teamDoc.data();
+          const teamName = [teamData.city, teamData.name]
+            .filter(Boolean)
+            .join(" ")
+            .trim() || "Unknown";
+          const teamLogo = teamData.logo || "/logos/liprobakin.png";
+          const teamGender = normalizeTeamGender(teamData.gender, teamData.logo, "men");
           const rosterRef = collection(firebaseDB, "teams", teamDoc.id, "roster");
           
           try {
@@ -2907,21 +3662,29 @@ export default function Home() {
             
             return rosterSnapshot.docs.map((playerDoc) => {
               const playerData = playerDoc.data();
+              const firstName = playerData.firstName || "";
+              const lastName = playerData.lastName || "";
+              const playerName = (playerData.name || `${firstName} ${lastName}`).trim();
+
+              const statsSource = playerData.stats ?? playerData.leaderboard ?? {};
+
               return {
-                id: playerDoc.id,
-                firstName: playerData.firstName || "",
-                lastName: playerData.lastName || "",
-                number: playerData.number || "00",
-                teamName: teamData.name || "Unknown",
-                teamGender: teamData.gender || "men",
-                teamLogo: teamData.logo || "/logos/liprobakin.png",
+                id: `${teamDoc.id}:${playerDoc.id}`,
+                name: playerName,
+                firstName,
+                lastName,
+                number: String(playerData.number ?? "00"),
+                teamName,
+                teamGender,
+                teamLogo,
                 headshot: playerData.headshot,
                 stats: {
-                  pts: playerData.stats?.pts || 0,
-                  reb: playerData.stats?.reb || 0,
-                  ast: playerData.stats?.ast || 0,
-                  blk: playerData.stats?.blk || 0,
-                  stl: playerData.stats?.stl || 0,
+                  pts: toNumber(statsSource.pts),
+                  reb: toNumber(statsSource.reb),
+                  ast: toNumber(statsSource.ast),
+                  blk: toNumber(statsSource.blk),
+                  stl: toNumber(statsSource.stl),
+                  evl: resolveEvaluation(statsSource),
                 },
               };
             });
@@ -2935,7 +3698,6 @@ export default function Home() {
         const allRosters = await Promise.all(rosterPromises);
         const allPlayers = allRosters.flat();
         
-        // Sort by points and set top players
         const sortedByPts = [...allPlayers].sort((a, b) => b.stats.pts - a.stats.pts);
         setLeagueTopPlayers(sortedByPts);
       } catch (error) {
@@ -2949,11 +3711,29 @@ export default function Home() {
   useEffect(() => {
     const fetchLiveGames = async () => {
       try {
+        const parseGameDateTime = (dateStr?: string, timeStr?: string) => {
+          const safeDate = (dateStr || "").trim();
+          const safeTime = (timeStr || "00:00").trim();
+          if (!safeDate) return null;
+
+          let normalizedDate = safeDate;
+          if (safeDate.includes("/")) {
+            const [a, b, c] = safeDate.split("/");
+            if (a && b && c) {
+              normalizedDate = `${c}-${a.padStart(2, "0")}-${b.padStart(2, "0")}`;
+            }
+          }
+
+          const normalizedTime = safeTime.length === 5 ? `${safeTime}:00` : safeTime;
+          const parsed = new Date(`${normalizedDate}T${normalizedTime}`);
+          return Number.isFinite(parsed.getTime()) ? parsed : null;
+        };
+
         const gamesRef = collection(firebaseDB, "games");
         const gamesQuery = query(gamesRef, orderBy("date", "asc"));
         const snapshot = await getDocs(gamesQuery);
         
-        const now = getDRCNow();
+        const now = new Date();
         const twoAndHalfHoursInMs = 2.5 * 60 * 60 * 1000; // 2 hours and 30 minutes
         
         console.log("Checking for live games at (DRC time):", now.toLocaleString());
@@ -2962,16 +3742,28 @@ export default function Home() {
         const live = snapshot.docs
           .filter((doc) => {
             const data = doc.data();
+            const status = String(data.status || "").toLowerCase();
             console.log("Checking game - ALL FIELDS:", doc.id, data);
+
+            if (data.isHiddenFromPublic === true) {
+              return false;
+            }
+
+            if (status === "live") {
+              return true;
+            }
             
-            if (data.completed === true) {
+            if (data.completed === true || status === "completed" || status === "cancelled" || status === "postponed") {
               console.log("Game is completed, skipping");
               return false;
             }
-            
+
             const dateStr = data.date || "";
             const timeStr = data.time || "00:00";
-            const gameStartTime = new Date(`${dateStr}T${timeStr}`);
+            const gameStartTime = parseGameDateTime(dateStr, timeStr);
+            if (!gameStartTime) {
+              return false;
+            }
             const timeSinceStart = now.getTime() - gameStartTime.getTime();
             
             console.log("Game start time:", gameStartTime.toLocaleString());
@@ -3001,6 +3793,15 @@ export default function Home() {
               venue: data.venue || data.location || "",
               network: "",
               broadcast: data.broadcast || "",
+              liveStreamUrl:
+                data.streamUrl ||
+                data.youtubeUrl ||
+                data.highlightsVideoUrl ||
+                data.highlightVideoUrl ||
+                data.highlightsUrl ||
+                data.highlightUrl ||
+                data.videoUrl ||
+                "",
               leaders: [],
             };
           });
@@ -3021,6 +3822,24 @@ export default function Home() {
   useEffect(() => {
     const fetchGames = async () => {
       try {
+        const parseGameDateTime = (dateStr?: string, timeStr?: string) => {
+          const safeDate = (dateStr || "").trim();
+          const safeTime = (timeStr || "00:00").trim();
+          if (!safeDate) return null;
+
+          let normalizedDate = safeDate;
+          if (safeDate.includes("/")) {
+            const [a, b, c] = safeDate.split("/");
+            if (a && b && c) {
+              normalizedDate = `${c}-${a.padStart(2, "0")}-${b.padStart(2, "0")}`;
+            }
+          }
+
+          const normalizedTime = safeTime.length === 5 ? `${safeTime}:00` : safeTime;
+          const parsed = new Date(`${normalizedDate}T${normalizedTime}`);
+          return Number.isFinite(parsed.getTime()) ? parsed : null;
+        };
+
         const gamesRef = collection(firebaseDB, "games");
         const gamesQuery = query(
           gamesRef,
@@ -3037,6 +3856,8 @@ export default function Home() {
         const teamsByName = new Map<string, { id: string; wins: number; losses: number }>();
         const normalizeTeamName = (value: string) =>
           value
+            .replace(/\bsepoir\b/gi, "espoir")
+            .replace(/^espoir\s+espoir\s+/i, "espoir ")
             .toLowerCase()
             .replace(/[^a-z0-9\s]/g, " ")
             .replace(/\s+/g, " ")
@@ -3091,7 +3912,7 @@ export default function Home() {
           });
         });
         
-        const now = getDRCNow();
+        const now = new Date();
         
         // Get the start of current week (Monday) - DRC timezone
         const currentDay = now.getDay();
@@ -3106,12 +3927,17 @@ export default function Home() {
         endOfWeek.setHours(23, 59, 59, 999);
 
         // Get all upcoming games (not completed, not started yet)
-        const upcomingGames = snapshot.docs
+        type UpcomingGameEntry = {
+          id: string;
+          data: Record<string, any>;
+          dateObj: Date;
+          completed: boolean;
+        };
+
+        const upcomingGames: UpcomingGameEntry[] = snapshot.docs
           .map((doc) => {
             const data = doc.data();
-            const dateStr = data.date || "";
-            const timeStr = data.time || "00:00";
-            const dateObj = new Date(`${dateStr}T${timeStr}`);
+            const dateObj = parseGameDateTime(data.date, data.time);
             
             return {
               id: doc.id,
@@ -3120,11 +3946,20 @@ export default function Home() {
               completed: data.completed === true,
             };
           })
-          .filter((game) => {
+          .filter((game): game is UpcomingGameEntry => {
             if (game.completed) return false;
-            // Hide game at exact start time
+
+            if (game.data?.isHiddenFromPublic === true) return false;
+
+            const status = String(game.data?.status || "").toLowerCase();
+            if (status === "cancelled" || status === "postponed" || status === "completed") return false;
+            if (!game.dateObj) return false;
+
             const gameNotStarted = now < game.dateObj;
-            return gameNotStarted;
+            const minutesSinceStart = (now.getTime() - game.dateObj.getTime()) / (1000 * 60);
+            const scheduledGraceWindow = status === "scheduled" && minutesSinceStart >= 0 && minutesSinceStart <= 45;
+
+            return gameNotStarted || scheduledGraceWindow;
           })
           .sort((a, b) => a.dateObj.getTime() - b.dateObj.getTime());
         
@@ -3207,7 +4042,36 @@ export default function Home() {
           return null;
         };
         
-        const formatGameData = async (game: typeof allGames[0]): Promise<EnhancedMatchup> => {
+        const uniqueTeamsForLeaders = new Map<string, { teamId: string; teamName: string }>();
+
+        allGames.forEach((game) => {
+          const homeTeam = resolveTeamInfo(game.data.homeTeamId, game.data.homeTeamName || game.data.homeTeam || game.data.team1);
+          const awayTeam = resolveTeamInfo(game.data.awayTeamId, game.data.awayTeamName || game.data.awayTeam || game.data.team2);
+
+          if (homeTeam.id && !uniqueTeamsForLeaders.has(homeTeam.id)) {
+            uniqueTeamsForLeaders.set(homeTeam.id, {
+              teamId: homeTeam.id,
+              teamName: game.data.homeTeamName || game.data.homeTeam || "Home",
+            });
+          }
+
+          if (awayTeam.id && !uniqueTeamsForLeaders.has(awayTeam.id)) {
+            uniqueTeamsForLeaders.set(awayTeam.id, {
+              teamId: awayTeam.id,
+              teamName: game.data.awayTeamName || game.data.awayTeam || "Away",
+            });
+          }
+        });
+
+        const teamLeaderMap = new Map<string, FeaturedMatchup["leaders"][number] | null>();
+        await Promise.all(
+          Array.from(uniqueTeamsForLeaders.values()).map(async ({ teamId, teamName }) => {
+            const leader = await getTopPlayerForTeam(teamId, teamName);
+            teamLeaderMap.set(teamId, leader);
+          })
+        );
+
+        const formatGameData = (game: typeof allGames[0]): EnhancedMatchup => {
           const formatTipoff = (dateObj: Date) => {
             const day = dateObj.getDate();
             const month = dateObj.getMonth() + 1;
@@ -3253,13 +4117,23 @@ export default function Home() {
           const leaders: FeaturedMatchup["leaders"] = [];
           
           if (homeTeam.id) {
-            const homeLeader = await getTopPlayerForTeam(homeTeam.id, game.data.homeTeamName || game.data.homeTeam || "Home");
-            if (homeLeader) leaders.push(homeLeader);
+            const homeLeader = teamLeaderMap.get(homeTeam.id);
+            if (homeLeader) {
+              leaders.push({
+                ...homeLeader,
+                team: game.data.homeTeamName || game.data.homeTeam || "Home",
+              });
+            }
           }
           
           if (awayTeam.id) {
-            const awayLeader = await getTopPlayerForTeam(awayTeam.id, game.data.awayTeamName || game.data.awayTeam || "Away");
-            if (awayLeader) leaders.push(awayLeader);
+            const awayLeader = teamLeaderMap.get(awayTeam.id);
+            if (awayLeader) {
+              leaders.push({
+                ...awayLeader,
+                team: game.data.awayTeamName || game.data.awayTeam || "Away",
+              });
+            }
           }
           
           return {
@@ -3287,20 +4161,18 @@ export default function Home() {
           };
         };
 
-        const spotlightGames = await Promise.all(spotlightGamesData.map(formatGameData));
-        // Exclude spotlight games from weekly schedule (skip first 3 games)
-        const weeklyScheduleGamesData = allGames.slice(3);
-        const allWeeklyGames = await Promise.all(weeklyScheduleGamesData.map(formatGameData));
-        
+        // Format once, then reuse slices
+        const allFormattedGames = allGames.map(formatGameData);
+        const spotlightGames = allFormattedGames.slice(0, 3);
+        const allWeeklyGames = allFormattedGames.slice(3);
+
         // Store all games for calendar filtering
-        const allFormattedGames = await Promise.all(allGames.map(formatGameData));
         setAllScheduledGames(allFormattedGames);
         
         setDynamicSpotlightGames(spotlightGames);
         setWeeklyScheduleGames(allWeeklyGames);
         
-        // Fetch completed games for Final Buzzer section
-        const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        // Fetch completed games for Final Buzzer section (rolling last 25)
         const completedGamesQuery = query(
           gamesRef,
           orderBy("date", "desc")
@@ -3330,9 +4202,7 @@ export default function Home() {
               return null;
             };
 
-            const dateObj = data.date
-              ? new Date(data.time ? `${data.date}T${data.time}` : data.date)
-              : null;
+            const dateObj = parseGameDateTime(data.date, data.time);
 
             const completedAtObj = toDateObject(data.completedAt);
             const updatedAtObj = toDateObject(data.updatedAt);
@@ -3369,14 +4239,17 @@ export default function Home() {
             };
           })
           .filter((game: any) => {
-            // Show completed games with final score from the last 7 days
-            if (!game.completedAtObj) return false;
-            if (game.completedAtObj < oneWeekAgo || game.completedAtObj > now) return false;
+            // Show completed games with final score (rolling list)
+            if (game.completedAtObj && game.completedAtObj > now) return false;
 
             return game.isCompleted && game.hasFinalScore;
           })
-          .sort((a: any, b: any) => (b.completedAtObj?.getTime() || 0) - (a.completedAtObj?.getTime() || 0))
-          .slice(0, 7);
+          .sort((a: any, b: any) => {
+            const aTime = a.completedAtObj?.getTime() || a.dateObj?.getTime() || 0;
+            const bTime = b.completedAtObj?.getTime() || b.dateObj?.getTime() || 0;
+            return bTime - aTime;
+          })
+          .slice(0, 25);
         
         setCompletedGames(completedGamesData);
         
@@ -3541,24 +4414,7 @@ export default function Home() {
                 </button>
               </div>
             ) : (
-              // LOGIN BUTTON TEMPORARILY HIDDEN - UNCOMMENT TO RESTORE
-              null
-              /*
-              <button
-                onClick={() => setAuthModalOpen(true)}
-                className="animated-send-btn !p-2.5"
-                type="button"
-                aria-label={language === 'fr' ? 'Se connecter / S\'inscrire' : 'Log In / Sign Up'}
-              >
-                <div className="svg-wrapper-1">
-                  <div className="svg-wrapper">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                    </svg>
-                  </div>
-                </div>
-              </button>
-              */
+              <div className="hidden lg:block" />
             )}
             <div className="hidden md:flex items-center gap-1.5 sm:gap-2 border-l border-white/10 pl-2 sm:pl-4">
               <button
@@ -3820,20 +4676,20 @@ export default function Home() {
               }
             };
             
-            // Facebook: App-only deep link (no web fallback)
-            const handleFacebookShare = (e: React.MouseEvent) => {
+            // Share: copy article link to clipboard
+            const handleFacebookShare = async (e: React.MouseEvent) => {
               e.preventDefault();
               e.stopPropagation();
-              
-              const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-              
-              if (isMobile) {
-                const fbAppShareUrl = `fb://facewebmodal/f?href=${encodeURIComponent(articleShareUrl)}`;
-                window.location.href = fbAppShareUrl;
-                return;
+              try {
+                await navigator.clipboard.writeText(articleShareUrl);
+              } catch {
+                // Clipboard can fail on some browsers.
               }
-              
-              alert('Please open this on mobile to share in the Facebook app.');
+              alert(
+                language === "fr"
+                  ? "Lien copie."
+                  : "Link copied."
+              );
             };
             
             // X: Enhanced handler with app deep link attempt
@@ -3962,11 +4818,15 @@ export default function Home() {
                             <button
                               type="button"
                               onClick={handleFacebookShare}
-                              aria-label={language === "fr" ? "Partager sur Facebook" : "Share on Facebook"}
+                              aria-label={language === "fr" ? "Copier le lien" : "Copy link"}
                               className="social-icon-gold inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/20 text-slate-300 transition cursor-pointer"
                             >
-                              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor" aria-hidden>
-                                <path d="M22 12a10 10 0 10-11.56 9.88v-6.99H7.9V12h2.54V9.8c0-2.5 1.49-3.88 3.77-3.88 1.09 0 2.23.2 2.23.2v2.46H15.2c-1.2 0-1.57.74-1.57 1.5V12h2.67l-.43 2.89h-2.24v6.99A10 10 0 0022 12z" />
+                              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                                <circle cx="18" cy="5" r="3" />
+                                <circle cx="6" cy="12" r="3" />
+                                <circle cx="18" cy="19" r="3" />
+                                <line x1="8.6" y1="13.5" x2="15.4" y2="17.5" />
+                                <line x1="15.4" y1="6.5" x2="8.6" y2="10.5" />
                               </svg>
                             </button>
                           </div>
@@ -4048,7 +4908,7 @@ export default function Home() {
                 className={`news-expand-panel ${isExpanded ? "is-open" : "is-closed"}`}
                 aria-hidden={!isExpanded}
               >
-                <article className="news-expand-panel-inner relative rounded-xl border border-sky-500/30 bg-[#0c1629] p-6 sm:p-8 shadow-2xl shadow-sky-900/20">
+                <article ref={expandedArticlePanelRef} className="news-expand-panel-inner relative rounded-xl border border-sky-500/30 bg-[#0c1629] p-6 sm:p-8 shadow-2xl shadow-sky-900/20">
                   <button
                     type="button"
                     onClick={() => setExpandedArticleId(null)}
@@ -4059,9 +4919,9 @@ export default function Home() {
                   </button>
                   <h2 className="news-expand-panel-title text-2xl font-bold text-white sm:text-3xl leading-tight">{getArticleTitle(featured)}</h2>
                   <p className="news-expand-panel-date mt-2 text-xs text-slate-500 tracking-wide">{formatTimeAgo(featured.createdAt || new Date())}</p>
-                  {!!(featured.additionalMedia?.length || featured.additionalImageUrls?.length) && (
-                    <div className="mt-6 space-y-4">
-                      {(featured.additionalMedia?.length
+                  <div className="relative mt-6 article-content-body space-y-4 text-base leading-relaxed text-slate-200">
+                    {!!(featured.additionalMedia?.length || featured.additionalImageUrls?.length) &&
+                      (featured.additionalMedia?.length
                         ? featured.additionalMedia
                             .map((item, index) => normalizeAdditionalMediaItem(item, index))
                             .filter((item): item is NormalizedAdditionalMediaItem => !!item)
@@ -4076,60 +4936,286 @@ export default function Home() {
                           const textWrapFloatClass = getTextWrapFloatClass(wrapMode, wrapSide);
                           const alignClass = isTextWrappingMode(wrapMode) ? "" : getAdditionalMediaAlignClass(mediaItem.align);
                           const usesTextWrap = isTextWrappingMode(wrapMode);
-                          const flowOffsetX = usesTextWrap ? Math.round(Number(mediaItem.offsetX || 0)) : 0;
-                          const flowOffsetY = usesTextWrap ? Math.round(Number(mediaItem.offsetY || 0)) : 0;
+                          const shouldClearPreviousFloats = usesTextWrap && index > 0;
+                          const offsetX = Math.round(Number(mediaItem.offsetX || 0));
+                          const offsetY = Math.round(Number(mediaItem.offsetY || 0));
+                          const widthPercent = Math.round(Number(mediaItem.widthPercent || 100));
+
+                          const isWrapLikeMode = usesTextWrap || wrapMode === "topBottom";
+                          const objectPosition = "50% 50%";
+
                           return (
-                          <div
-                            key={`${featured.id}-extra-media-${index}`}
-                            className={`${getAdditionalMediaWidthClass(mediaItem.size)} ${alignClass} relative overflow-hidden rounded-xl border border-white/10 ${wrapMode === "front" ? "z-30 -mt-10" : ""} ${wrapMode === "behind" ? "z-0 -mt-10 opacity-70" : ""} ${textWrapFloatClass} ${wrapMode === "inline" ? "inline-block" : ""} ${wrapMode === "topBottom" ? "clear-both" : ""}`}
-                            style={{
-                              height: `${Math.round(mediaItem.height)}px`,
-                              width: `${Math.round(mediaItem.widthPercent || 100)}%`,
-                              transform: wrapMode === "behind" || wrapMode === "front"
-                                ? `translate(${Math.round(Number(mediaItem.offsetX || 0))}px, ${Math.round(Number(mediaItem.offsetY || 0))}px)`
-                                : undefined,
-                              shapeOutside: wrapMode === "tight" || wrapMode === "through" ? "inset(0 round 16px)" : undefined,
-                              marginTop: wrapMode === "inline" || wrapMode === "behind" || wrapMode === "front" ? undefined : `${normalizeTextDistance(mediaItem.distanceTop) + flowOffsetY}px`,
-                              marginRight: wrapMode === "inline" || wrapMode === "behind" || wrapMode === "front" ? undefined : `${normalizeTextDistance(mediaItem.distanceRight) + Math.max(0, -flowOffsetX)}px`,
-                              marginBottom: wrapMode === "inline" || wrapMode === "behind" || wrapMode === "front" ? undefined : `${normalizeTextDistance(mediaItem.distanceBottom)}px`,
-                              marginLeft: wrapMode === "inline" || wrapMode === "behind" || wrapMode === "front" ? undefined : `${normalizeTextDistance(mediaItem.distanceLeft) + Math.max(0, flowOffsetX)}px`,
-                            }}
-                          >
-                            {mediaItem.type === "video" ? (
-                              <AutoPlayOnVisibleVideo
-                                src={mediaItem.url}
-                                className="h-full w-full object-fill"
-                                style={{
-                                  objectPosition: wrapMode === "behind" || wrapMode === "front"
-                                    ? "50% 50%"
-                                    : `${50 + Number(mediaItem.offsetX || 0)}% ${50 + Number(mediaItem.offsetY || 0)}%`,
-                                }}
-                              />
-                            ) : (
-                              <Image
-                                src={mediaItem.url}
-                                alt={`${getArticleTitle(featured)} media ${index + 1}`}
-                                fill
-                                className="object-fill"
-                                style={{
-                                  objectPosition: wrapMode === "behind" || wrapMode === "front"
-                                    ? "50% 50%"
-                                    : `${50 + Number(mediaItem.offsetX || 0)}% ${50 + Number(mediaItem.offsetY || 0)}%`,
-                                }}
-                                sizes="(max-width: 768px) 100vw, 900px"
-                                unoptimized
-                              />
-                            )}
-                          </div>
-                        );
+                            <div
+                              key={`${featured.id}-extra-media-${index}`}
+                              className={`${getAdditionalMediaWidthClass(mediaItem.size)} ${alignClass} ${wrapMode === "front" || wrapMode === "behind" ? "absolute left-0 top-0" : "relative"} overflow-hidden rounded-xl border border-white/10 ${wrapMode === "front" ? "z-30" : ""} ${wrapMode === "behind" ? "z-0 opacity-70" : ""} ${textWrapFloatClass} ${wrapMode === "inline" ? "inline-block" : ""} ${wrapMode === "topBottom" || shouldClearPreviousFloats ? "clear-both" : ""}`}
+                              style={{
+                                height: `${Math.round(mediaItem.height)}px`,
+                                width: `${widthPercent}%`,
+                                left: wrapMode === "behind" || wrapMode === "front" ? `${offsetX}px` : undefined,
+                                top: wrapMode === "behind" || wrapMode === "front" ? `${offsetY}px` : undefined,
+                                shapeOutside: wrapMode === "tight" || wrapMode === "through" ? "inset(0 round 16px)" : undefined,
+                                marginTop:
+                                  wrapMode === "inline" || wrapMode === "behind" || wrapMode === "front"
+                                    ? undefined
+                                    : `${normalizeTextDistance(mediaItem.distanceTop) + (isWrapLikeMode ? offsetY : 0)}px`,
+                                marginRight:
+                                  wrapMode === "inline" || wrapMode === "behind" || wrapMode === "front"
+                                    ? undefined
+                                    : `${normalizeTextDistance(mediaItem.distanceRight)}px`,
+                                marginBottom:
+                                  wrapMode === "inline" || wrapMode === "behind" || wrapMode === "front"
+                                    ? undefined
+                                    : `${normalizeTextDistance(mediaItem.distanceBottom)}px`,
+                                marginLeft:
+                                  wrapMode === "inline" || wrapMode === "behind" || wrapMode === "front"
+                                    ? undefined
+                                    : `${normalizeTextDistance(mediaItem.distanceLeft)}px`,
+                              }}
+                            >
+                              {mediaItem.type === "video" ? (
+                                <AutoPlayOnVisibleVideo
+                                  src={mediaItem.url}
+                                  className="h-full w-full object-cover"
+                                  style={{
+                                    objectPosition,
+                                  }}
+                                />
+                              ) : (
+                                <Image
+                                  src={mediaItem.url}
+                                  alt={`${getArticleTitle(featured)} media ${index + 1}`}
+                                  fill
+                                  className="object-cover"
+                                  style={{
+                                    objectPosition,
+                                  }}
+                                  sizes="(max-width: 768px) 100vw, 900px"
+                                  unoptimized
+                                />
+                              )}
+                            </div>
+                          );
                         })}
-                    </div>
-                  )}
-                  <div className="mt-6 article-content-body space-y-4 text-base leading-relaxed text-slate-200">
                     <ArticleContent htmlContent={getArticleSummary(featured)} className="text-base leading-relaxed text-slate-200" />
                     <div className="clear-both" />
                   </div>
                   <MentionedEntities htmlContent={getArticleSummary(featured)} language={language} />
+                  <section className="mt-8 rounded-xl border border-slate-700/70 bg-slate-950/35 p-4 sm:p-5">
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-300">
+                        {language === "fr" ? "Commentaires" : "Comments"} ({articleComments.length})
+                      </h3>
+                      {rankedArticleComments.length > articleCommentsVisibleCount && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setArticleCommentsVisibleCount((previous) => Math.min(previous + 6, rankedArticleComments.length))
+                          }
+                          className="rounded-full border border-cyan-400/50 px-3 py-1 text-xs font-semibold text-cyan-300 transition hover:border-cyan-300 hover:text-cyan-200"
+                        >
+                          + {language === "fr" ? "Voir plus" : "See more"}
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="space-y-3">
+                      {rankedArticleComments.slice(0, articleCommentsVisibleCount).map((comment, index) => {
+                        const commentReplies = sortedRepliesByCommentId[comment.id] ?? [];
+                        const isTopLikedComment = index === 0 && comment.likesCount > 0;
+                        return (
+                        <article
+                          key={comment.id}
+                          className={`rounded-lg border p-3 ${
+                            isTopLikedComment
+                              ? "border-cyan-400/50 bg-cyan-500/10 shadow-[0_0_0_1px_rgba(34,211,238,0.25)]"
+                              : "border-white/10 bg-slate-900/70"
+                          }`}
+                        >
+                          <div className="mb-1 flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              {isTopLikedComment && (
+                                <span className="rounded-full border border-cyan-300/60 bg-cyan-400/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-cyan-200">
+                                  {language === "fr" ? "🏆 Top commentaire" : "🏆 Top comment"}
+                                </span>
+                              )}
+                              <p className="text-sm font-semibold text-white">{comment.name}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <p className="text-[11px] text-slate-400">
+                                {comment.createdAt
+                                  ? formatTimeAgo(comment.createdAt)
+                                  : language === "fr"
+                                    ? "à l'instant"
+                                    : "just now"}
+                              </p>
+                              {comment.canDelete && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteArticleComment(comment.id)}
+                                  disabled={deletingCommentId === comment.id}
+                                  className="rounded border border-rose-400/50 px-2 py-0.5 text-[10px] font-semibold text-rose-300 transition hover:border-rose-300 hover:text-rose-200 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  {deletingCommentId === comment.id
+                                    ? language === "fr"
+                                      ? "Suppression..."
+                                      : "Deleting..."
+                                    : language === "fr"
+                                      ? "Supprimer"
+                                      : "Delete"}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-200">{comment.message}</p>
+
+                          <div className="mt-3 flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleCommentLike(comment.id)}
+                              className={`rounded border px-2.5 py-1 text-[11px] font-semibold transition ${
+                                comment.likedByCurrentUser
+                                  ? "border-cyan-400/60 bg-cyan-500/15 text-cyan-200"
+                                  : "border-white/20 text-slate-300 hover:border-white/40 hover:text-white"
+                              }`}
+                            >
+                              👍 {comment.likesCount}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveReplyCommentId((previous) => (previous === comment.id ? null : comment.id));
+                                setCommentError(null);
+                              }}
+                              className="rounded border border-white/20 px-2.5 py-1 text-[11px] font-semibold text-slate-300 transition hover:border-white/40 hover:text-white"
+                            >
+                              {language === "fr" ? "Répondre" : "Reply"}
+                            </button>
+                            {commentReplies.length > 0 && (
+                              <span className="text-[11px] text-slate-400">
+                                {commentReplies.length} {language === "fr" ? "réponse(s)" : "reply/replies"}
+                              </span>
+                            )}
+                          </div>
+
+                          {commentReplies.length > 0 && (
+                            <div className="mt-3 space-y-2 border-l border-white/10 pl-3">
+                              {commentReplies.map((reply) => (
+                                <div key={reply.id} className="rounded-md border border-white/10 bg-slate-900/60 p-2">
+                                  <div className="mb-1 flex items-center justify-between gap-2">
+                                    <p className="text-xs font-semibold text-white">{reply.name}</p>
+                                    <p className="text-[10px] text-slate-400">
+                                      {reply.createdAt
+                                        ? formatTimeAgo(reply.createdAt)
+                                        : language === "fr"
+                                          ? "à l'instant"
+                                          : "just now"}
+                                    </p>
+                                  </div>
+                                  <p className="whitespace-pre-wrap text-xs leading-relaxed text-slate-200">{reply.message}</p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {activeReplyCommentId === comment.id && (
+                            <div className="mt-3 space-y-2 rounded-md border border-white/10 bg-slate-900/50 p-3">
+                              <input
+                                type="text"
+                                value={replyName}
+                                onChange={(event) => setReplyName(event.target.value)}
+                                placeholder={language === "fr" ? "Votre nom (optionnel)" : "Your name (optional)"}
+                                maxLength={50}
+                                className="w-full rounded border border-white/15 bg-slate-900/80 px-2.5 py-1.5 text-xs text-white placeholder:text-slate-500 focus:border-cyan-400/70 focus:outline-none"
+                              />
+                              <textarea
+                                value={replyMessage}
+                                onChange={(event) => setReplyMessage(event.target.value)}
+                                placeholder={language === "fr" ? "Écrire une réponse..." : "Write a reply..."}
+                                maxLength={600}
+                                rows={2}
+                                className="w-full resize-y rounded border border-white/15 bg-slate-900/80 px-2.5 py-1.5 text-xs text-white placeholder:text-slate-500 focus:border-cyan-400/70 focus:outline-none"
+                              />
+                              <div className="flex justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveReplyCommentId(null)}
+                                  className="rounded border border-white/20 px-2.5 py-1 text-[11px] text-slate-300 hover:border-white/40 hover:text-white"
+                                >
+                                  {language === "fr" ? "Annuler" : "Cancel"}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleSubmitCommentReply(comment.id)}
+                                  disabled={isSubmittingReply}
+                                  className="rounded border border-cyan-400/60 bg-cyan-500/15 px-2.5 py-1 text-[11px] font-semibold text-cyan-200 transition hover:border-cyan-300 hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  {isSubmittingReply
+                                    ? language === "fr"
+                                      ? "Publication..."
+                                      : "Posting..."
+                                    : language === "fr"
+                                      ? "Répondre"
+                                      : "Reply"}
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </article>
+                        );
+                      })}
+
+                      {articleComments.length === 0 && (
+                        <p className="text-sm text-slate-400">
+                          {language === "fr" ? "Aucun commentaire pour le moment." : "No comments yet."}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="mt-4 space-y-2">
+                      <input
+                        type="text"
+                        value={commentWebsite}
+                        onChange={(event) => setCommentWebsite(event.target.value)}
+                        tabIndex={-1}
+                        autoComplete="off"
+                        className="hidden"
+                        aria-hidden="true"
+                      />
+                      <input
+                        type="text"
+                        value={commentName}
+                        onChange={(event) => setCommentName(event.target.value)}
+                        placeholder={language === "fr" ? "Votre nom (optionnel)" : "Your name (optional)"}
+                        maxLength={50}
+                        className="w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-cyan-400/70 focus:outline-none"
+                      />
+                      <textarea
+                        value={commentMessage}
+                        onChange={(event) => setCommentMessage(event.target.value)}
+                        placeholder={language === "fr" ? "Ajouter un commentaire..." : "Add a comment..."}
+                        maxLength={600}
+                        rows={3}
+                        className="w-full resize-y rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-cyan-400/70 focus:outline-none"
+                      />
+                      {commentError && <p className="text-xs text-rose-300">{commentError}</p>}
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          onClick={handleSubmitArticleComment}
+                          disabled={isSubmittingComment}
+                          className="rounded-lg border border-cyan-400/60 bg-cyan-500/15 px-4 py-2 text-sm font-semibold text-cyan-200 transition hover:border-cyan-300 hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {isSubmittingComment
+                            ? language === "fr"
+                              ? "Publication..."
+                              : "Posting..."
+                            : language === "fr"
+                              ? "Publier"
+                              : "Post comment"}
+                        </button>
+                      </div>
+                    </div>
+                  </section>
                   <div className="mt-8 flex justify-end border-t border-slate-700/50 pt-4">
                     <button
                       type="button"
@@ -4338,8 +5424,9 @@ export default function Home() {
           <div className={`flex flex-wrap gap-4 ${liveGames.length === 1 ? 'justify-center' : liveGames.length === 2 ? 'justify-center' : 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3'}`}>
             {liveGames.map((game) => {
               return (
-                <div
+                <Link
                   key={game.id}
+                  href={`/game/${encodeURIComponent(game.id)}`}
                   className={`relative overflow-hidden rounded-b-2xl border border-white/10 bg-gradient-to-br from-slate-900/80 to-slate-950/90 backdrop-blur-sm transition-all duration-300 hover:border-white/20 hover:shadow-xl ${liveGames.length < 3 ? 'w-full md:w-[calc(50%-0.5rem)] lg:w-[400px]' : ''}`}
                 >
                   <div className="flex items-center justify-between p-3">
@@ -4400,7 +5487,18 @@ export default function Home() {
                       )}
                     </div>
                   </div>
-                </div>
+
+                  <div className="border-t border-white/10 bg-black/20 px-3 py-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+                        {copy.ctaWatch}
+                      </span>
+                      <svg className="h-4 w-4 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </div>
+                  </div>
+                </Link>
               );
             })}
           </div>
@@ -4578,6 +5676,7 @@ export default function Home() {
                       record={matchup.away.record}
                       logo={"awayTeamLogo" in matchup ? matchup.awayTeamLogo : undefined}
                       allFranchises={allFranchises}
+                      gender={matchup.gender === "women" ? "women" : "men"}
                     />
                     <div className="flex flex-col items-center justify-center gap-1.5 md:gap-2 text-center min-w-0 px-1">
                       <span className="rounded-full border border-white/15 px-2 md:px-2.5 py-0.5 text-[9px] md:text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-300 whitespace-nowrap">
@@ -4611,12 +5710,18 @@ export default function Home() {
                       record={matchup.home.record}
                       logo={"homeTeamLogo" in matchup ? matchup.homeTeamLogo : undefined}
                       allFranchises={allFranchises}
+                      gender={matchup.gender === "women" ? "women" : "men"}
                     />
                   </div>
                   <div className="space-y-2 rounded-xl border border-white/5 bg-black/30 p-3 overflow-hidden flex flex-col items-center justify-center">
                     <div className="grid grid-cols-2 gap-3 min-w-0 w-full">
                       {matchup.leaders.map((leader) => (
-                        <LeaderRow key={`${matchup.id}-${leader.player}`} leader={leader} allFranchises={allFranchises} />
+                        <LeaderRow
+                          key={`${matchup.id}-${leader.player}`}
+                          leader={leader}
+                          allFranchises={allFranchises}
+                          gender={matchup.gender === "women" ? "women" : "men"}
+                        />
                       ))}
                     </div>
                   </div>
@@ -5196,24 +6301,22 @@ export default function Home() {
                     : playerMetric === "reb" ? a.stats.reb
                     : playerMetric === "ast" ? a.stats.ast
                     : playerMetric === "blk" ? a.stats.blk
-                    : a.stats.stl;
+                    : a.stats.evl;
                   const statB = playerMetric === "pts" ? b.stats.pts
                     : playerMetric === "reb" ? b.stats.reb
                     : playerMetric === "ast" ? b.stats.ast
                     : playerMetric === "blk" ? b.stats.blk
-                    : b.stats.stl;
+                    : b.stats.evl;
                   return statB - statA;
                 })
                 .slice(0, leagueLeadersExpanded ? 10 : 10)
                 .map((player, index) => {
-                const playerName = `${player.firstName} ${player.lastName}`.trim();
+                const playerName = `${player.firstName} ${player.lastName}`.trim() || player.name || "";
                 const playerImage = player.headshot || player.teamLogo || "/logos/liprobakin.png";
                 const playerPhotoGlowKey = `${playersGender}-${player.id}`;
-                const statValue = playerMetric === "pts" ? player.stats.pts
-                  : playerMetric === "reb" ? player.stats.reb
-                  : playerMetric === "ast" ? player.stats.ast
-                  : playerMetric === "blk" ? player.stats.blk
-                  : player.stats.stl;
+                const playerProfileUrl = player.number
+                  ? `/player/${encodeURIComponent(player.teamName)}/${player.number}`
+                  : `/team/${encodeURIComponent(player.teamName)}?gender=${playersGender}`;
                 return (
                   <div
                     key={`${player.id}-${playerMetric}`}
@@ -5225,7 +6328,7 @@ export default function Home() {
                       </span>
                       <Image
                         src={playerImage}
-                        alt={`${player.name} portrait`}
+                        alt={`${playerName} portrait`}
                         width={180}
                         height={180}
                         data-standing-player-photo-id={playerPhotoGlowKey}
@@ -5240,10 +6343,13 @@ export default function Home() {
                       <p className="text-xs uppercase tracking-[0.3em] text-slate-400 mb-1">
                         #{player.number} · {player.teamName}
                       </p>
-                      <p className="text-xl font-bold text-white mb-4">
+                      <Link
+                        href={playerProfileUrl}
+                        className="text-xl font-bold text-white mb-4 transition hover:text-blue-300"
+                      >
                         {playerName}
-                      </p>
-                      <div className="grid grid-cols-4 gap-3 w-full">
+                      </Link>
+                      <div className="grid grid-cols-5 gap-3 w-full">
                         <div>
                           <p className="text-[10px] uppercase text-slate-400">PTS</p>
                           <p className="text-lg font-bold text-white">{player.stats.pts}</p>
@@ -5259,6 +6365,10 @@ export default function Home() {
                         <div>
                           <p className="text-[10px] uppercase text-slate-400">BLK</p>
                           <p className="text-lg font-bold text-white">{player.stats.blk}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] uppercase text-slate-400">EVL</p>
+                          <p className="text-lg font-bold text-white">{Math.round(player.stats.evl)}</p>
                         </div>
                       </div>
                     </div>
@@ -5308,12 +6418,15 @@ export default function Home() {
                     .slice(0, 2)
                     .toUpperCase();
                   const linkTeamName = franchise ? displayName : row.team;
+                  const rowGender = row.gender === "women" ? "women" : "men";
+                  const teamRouteValue = row.teamId ? row.teamId : linkTeamName;
+                  const teamHref = `/team/${encodeURIComponent(teamRouteValue)}?gender=${rowGender}`;
 
                   return (
-                    <tr key={row.team} className="odd:bg-white/5 hover:bg-orange-500/10 cursor-pointer transition-colors">
+                    <tr key={row.teamKey ?? (row.teamId ? row.teamId : `${row.gender}:${row.team}:${index}`)} className="odd:bg-white/5 hover:bg-orange-500/10 cursor-pointer transition-colors">
                     <td className="pl-3 pr-1 py-2 text-slate-300">
                       <Link 
-                        href={`/team/${encodeURIComponent(row.team)}`}
+                        href={teamHref}
                         className="block"
                       >
                         {row.seed}
@@ -5321,7 +6434,7 @@ export default function Home() {
                     </td>
                     <td className="pl-1 pr-3 py-2 font-semibold">
                       <Link 
-                        href={`/team/${encodeURIComponent(linkTeamName)}`}
+                        href={teamHref}
                         className="flex items-center gap-3 text-white transition-colors hover:text-orange-500"
                       >
                         {teamLogo ? (
@@ -5343,7 +6456,7 @@ export default function Home() {
                     </td>
                     <td className="px-3 py-2">
                       <Link 
-                        href={`/team/${encodeURIComponent(row.team)}`}
+                        href={teamHref}
                         className="block"
                       >
                         {row.wins}
@@ -5351,7 +6464,7 @@ export default function Home() {
                     </td>
                     <td className="px-3 py-2">
                       <Link 
-                        href={`/team/${encodeURIComponent(row.team)}`}
+                        href={teamHref}
                         className="block"
                       >
                         {row.losses}
@@ -5359,7 +6472,7 @@ export default function Home() {
                     </td>
                     <td className="px-3 py-2 font-semibold text-white">
                       <Link 
-                        href={`/team/${encodeURIComponent(row.team)}`}
+                        href={teamHref}
                         className="block"
                       >
                         {row.totalPoints || getTotalPoints(row.wins, row.losses)}
@@ -5433,11 +6546,11 @@ export default function Home() {
                     <div className="marquee-content flex animate-marquee hover:animation-pause">
                       {/* First set of search results */}
                       {visibleFranchises.map((team) => {
-                        const fullName = [team.city, team.name].filter(Boolean).join(" ").trim();
+                        const fullName = buildTeamDisplayName(team);
                         return (
                           <Link
                             key={`search-first-${fullName}`}
-                            href={`/team/${encodeURIComponent(fullName)}`}
+                            href={`/team/${encodeURIComponent(fullName)}?gender=${franchiseGender}`}
                             className="logo-showcase-item flex-shrink-0 mx-4 lg:mx-6 group"
                           >
                             <div className="logo-inner relative">
@@ -5472,11 +6585,11 @@ export default function Home() {
                       })}
                       {/* Duplicate set for seamless loop */}
                       {visibleFranchises.map((team) => {
-                        const fullName = [team.city, team.name].filter(Boolean).join(" ").trim();
+                        const fullName = buildTeamDisplayName(team);
                         return (
                           <Link
                             key={`search-second-${fullName}`}
-                            href={`/team/${encodeURIComponent(fullName)}`}
+                            href={`/team/${encodeURIComponent(fullName)}?gender=${franchiseGender}`}
                             className="logo-showcase-item flex-shrink-0 mx-4 lg:mx-6 group"
                           >
                             <div className="logo-inner relative">
@@ -5522,11 +6635,11 @@ export default function Home() {
                     <div className="marquee-content flex animate-marquee hover:animation-pause">
                       {/* First set of logos */}
                       {visibleFranchises.map((team) => {
-                        const fullName = [team.city, team.name].filter(Boolean).join(" ").trim();
+                        const fullName = buildTeamDisplayName(team);
                         return (
                           <Link
                             key={`first-${fullName}`}
-                            href={`/team/${encodeURIComponent(fullName)}`}
+                            href={`/team/${encodeURIComponent(fullName)}?gender=${franchiseGender}`}
                             className="logo-showcase-item flex-shrink-0 mx-4 lg:mx-6 group"
                           >
                             <div className="logo-inner relative">
@@ -5561,11 +6674,11 @@ export default function Home() {
                       })}
                       {/* Duplicate set for seamless loop */}
                       {visibleFranchises.map((team) => {
-                        const fullName = [team.city, team.name].filter(Boolean).join(" ").trim();
+                        const fullName = buildTeamDisplayName(team);
                         return (
                           <Link
                             key={`second-${fullName}`}
-                            href={`/team/${encodeURIComponent(fullName)}`}
+                            href={`/team/${encodeURIComponent(fullName)}?gender=${franchiseGender}`}
                             className="logo-showcase-item flex-shrink-0 mx-4 lg:mx-6 group"
                           >
                             <div className="logo-inner relative">
@@ -5696,6 +6809,132 @@ export default function Home() {
         </div>
       </main>
 
+      {/* Contact section */}
+      {true && (
+      <section className="mx-auto mt-8 w-full max-w-3xl px-4 pb-8">
+        <div className="rounded-2xl border border-white/15 bg-slate-900/40 p-4 shadow-[0_18px_45px_rgba(0,0,0,0.35)] backdrop-blur-xl sm:p-6">
+          <div className="mb-5 text-center">
+            <h2 className="text-2xl font-extrabold tracking-tight text-orange-200 sm:text-3xl">{copy.contact.title}</h2>
+            <p className="mt-2 text-sm text-slate-300 sm:text-base">{copy.contact.subtitle}</p>
+          </div>
+
+          {contactSuccess ? (
+            <div className="rounded-xl border border-orange-300/30 bg-orange-500/10 p-6 text-center">
+              <p className="text-lg font-semibold text-orange-200">{language === "fr" ? "Message envoyé !" : "Message sent!"}</p>
+              <p className="mt-1 text-sm text-slate-300">{language === "fr" ? "Nous vous répondrons bientôt." : "We'll get back to you soon."}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setContactSuccess(false);
+                  setContactNotice(null);
+                }}
+                className="mt-4 text-sm text-orange-300 underline hover:text-orange-200"
+              >
+                {language === "fr" ? "Envoyer un autre message" : "Send another message"}
+              </button>
+              {contactNotice && (
+                <p className="mt-3 text-xs text-orange-200/90">{contactNotice}</p>
+              )}
+            </div>
+          ) : (
+          <form className="space-y-4" onSubmit={handleContactSubmit}>
+            {contactError && (
+              <div className="rounded-lg border border-red-400/30 bg-red-500/10 px-4 py-2 text-sm text-red-300">
+                {contactError}
+              </div>
+            )}
+            <div className="grid gap-3 md:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-[11px] font-bold uppercase tracking-[0.22em] text-orange-100" htmlFor="contact-first-name">
+                  {copy.contact.firstName}
+                </label>
+                <input
+                  id="contact-first-name"
+                  type="text"
+                  required
+                  disabled={contactSubmitting}
+                  value={contactForm.firstName}
+                  onChange={(e) => setContactForm({ ...contactForm, firstName: e.target.value })}
+                  placeholder={copy.contact.placeholderFirstName}
+                  className="h-11 w-full rounded-xl border border-white/15 bg-white/5 px-3 text-sm text-white placeholder:text-slate-400 focus:border-orange-300/60 focus:outline-none disabled:opacity-50"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] font-bold uppercase tracking-[0.22em] text-orange-100" htmlFor="contact-last-name">
+                  {copy.contact.lastName}
+                </label>
+                <input
+                  id="contact-last-name"
+                  type="text"
+                  required
+                  disabled={contactSubmitting}
+                  value={contactForm.lastName}
+                  onChange={(e) => setContactForm({ ...contactForm, lastName: e.target.value })}
+                  placeholder={copy.contact.placeholderLastName}
+                  className="h-11 w-full rounded-xl border border-white/15 bg-white/5 px-3 text-sm text-white placeholder:text-slate-400 focus:border-orange-300/60 focus:outline-none disabled:opacity-50"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] font-bold uppercase tracking-[0.22em] text-orange-100" htmlFor="contact-email">
+                  {copy.contact.emailAddress}
+                </label>
+                <input
+                  id="contact-email"
+                  type="email"
+                  required
+                  disabled={contactSubmitting}
+                  value={contactForm.email}
+                  onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })}
+                  placeholder={copy.contact.placeholderEmail}
+                  className="h-11 w-full rounded-xl border border-white/15 bg-white/5 px-3 text-sm text-white placeholder:text-slate-400 focus:border-orange-300/60 focus:outline-none disabled:opacity-50"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] font-bold uppercase tracking-[0.22em] text-orange-100" htmlFor="contact-phone">
+                  {copy.contact.phoneOptional}
+                </label>
+                <input
+                  id="contact-phone"
+                  type="tel"
+                  disabled={contactSubmitting}
+                  value={contactForm.phone}
+                  onChange={(e) => setContactForm({ ...contactForm, phone: e.target.value })}
+                  placeholder={copy.contact.placeholderPhone}
+                  className="h-11 w-full rounded-xl border border-white/15 bg-white/5 px-3 text-sm text-white placeholder:text-slate-400 focus:border-orange-300/60 focus:outline-none disabled:opacity-50"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-[11px] font-bold uppercase tracking-[0.22em] text-orange-100" htmlFor="contact-message">
+                {copy.contact.yourMessage}
+              </label>
+              <textarea
+                id="contact-message"
+                rows={4}
+                required
+                disabled={contactSubmitting}
+                value={contactForm.message}
+                onChange={(e) => setContactForm({ ...contactForm, message: e.target.value })}
+                placeholder={copy.contact.placeholderMessage}
+                className="w-full rounded-xl border border-white/15 bg-white/5 px-3 py-3 text-sm text-white placeholder:text-slate-400 focus:border-orange-300/60 focus:outline-none disabled:opacity-50"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={contactSubmitting}
+              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-orange-400 to-orange-500 px-5 py-2.5 text-xs font-extrabold uppercase tracking-[0.18em] text-slate-950 transition hover:from-orange-300 hover:to-orange-400 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {contactSubmitting ? (language === "fr" ? "Envoi..." : "Sending...") : copy.contact.sendMessage}
+              <span aria-hidden>➤</span>
+            </button>
+          </form>
+          )}
+        </div>
+      </section>
+      )}
+
       {/* Partners Strip - Before Footer */}
       {dynamicPartners.length > 0 && (
         <div className="border-t border-white/5 bg-black/30 py-7">
@@ -5767,6 +7006,34 @@ export default function Home() {
                   </button>
                 ))}
               </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <a
+                href="https://www.facebook.com/Liprobakin/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-white/5 transition hover:border-white hover:bg-white/10"
+                aria-label="Liprobakin on Facebook"
+                title="Facebook"
+              >
+                <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M13.5 22v-8.01H16l.5-3H13.5V9.5c0-.87.29-1.5 1.63-1.5H16V5.1c-.23-.03-1.02-.1-2.02-.1-2.1 0-3.48 1.28-3.48 3.67v2.32H8v3h2.5V22h3z" />
+                </svg>
+              </a>
+              <a
+                href="https://www.instagram.com/liprobakin_league/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-white/5 transition hover:border-white hover:bg-white/10"
+                aria-label="Liprobakin on Instagram"
+                title="Instagram"
+              >
+                <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <rect x="3" y="3" width="18" height="18" rx="5" ry="5" />
+                  <path d="M16 11.37a4 4 0 11-7.93 1.17 4 4 0 017.93-1.17z" />
+                  <path d="M17.5 6.5h.01" />
+                </svg>
+              </a>
             </div>
             <Link
               href="/admin"

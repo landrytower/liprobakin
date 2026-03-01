@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { firebaseDB } from '@/lib/firebase';
+import { normalizeTeamGender } from '@/lib/team-gender';
 import Image from 'next/image';
 import Link from 'next/link';
 
@@ -27,6 +28,7 @@ interface MentionedTeam {
   id: string;
   label: string;
   name?: string;
+  gender?: 'men' | 'women';
   logo?: string;
   city?: string;
   type: 'team';
@@ -136,6 +138,7 @@ export default function MentionedEntities({ htmlContent, language = 'fr' }: Ment
                 logo: typeof teamData.logo === 'string' ? teamData.logo : undefined,
                 city: typeof teamData.city === 'string' ? teamData.city : undefined,
                 type: 'team',
+                gender: normalizeTeamGender(teamData?.gender, teamData?.logo, 'men'),
               });
               return;
             }
@@ -271,7 +274,11 @@ export default function MentionedEntities({ htmlContent, language = 'fr' }: Ment
                 {teams.map((team) => (
                   <Link
                     key={team.id}
-                    href={team.name ? `/team/${encodeURIComponent(team.city ? `${team.city} ${team.name}` : team.name)}` : '#'}
+                    href={
+                      team.name
+                        ? `/team/${encodeURIComponent(team.city ? `${team.city} ${team.name}` : team.name)}?gender=${team.gender === 'women' ? 'women' : 'men'}`
+                        : '#'
+                    }
                     className="group flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 hover:border-orange-500/30 transition-all"
                   >
                     {/* Team Logo */}

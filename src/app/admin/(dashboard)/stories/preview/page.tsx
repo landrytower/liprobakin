@@ -47,7 +47,8 @@ type PreviewPayload = {
 const normalizeWrapMode = (wrap?: AdditionalMediaWrap): CanonicalAdditionalMediaWrap => {
   if (wrap === "wrap") return "square";
   if (wrap === "break") return "topBottom";
-  if (wrap === "inline" || wrap === "square" || wrap === "tight" || wrap === "through" || wrap === "topBottom" || wrap === "behind" || wrap === "front") {
+  if (wrap === "behind" || wrap === "front") return "square";
+  if (wrap === "inline" || wrap === "square" || wrap === "tight" || wrap === "through" || wrap === "topBottom") {
     return wrap;
   }
   return "inline";
@@ -58,33 +59,67 @@ const MIN_ADDITIONAL_MEDIA_HEIGHT = 160;
 const MAX_ADDITIONAL_MEDIA_HEIGHT = 640;
 const MIN_ADDITIONAL_MEDIA_WIDTH = 35;
 const MAX_ADDITIONAL_MEDIA_WIDTH = 100;
-const MIN_FIXED_MEDIA_TRANSLATE_X = -1200;
-const MAX_FIXED_MEDIA_TRANSLATE_X = 1200;
-const MIN_FIXED_MEDIA_TRANSLATE_Y = -1200;
-const MAX_FIXED_MEDIA_TRANSLATE_Y = 1200;
+const MIN_FIXED_MEDIA_TRANSLATE_X = -5000;
+const MAX_FIXED_MEDIA_TRANSLATE_X = 5000;
+const MIN_FIXED_MEDIA_TRANSLATE_Y = -5000;
+const MAX_FIXED_MEDIA_TRANSLATE_Y = 5000;
 const MIN_MEDIA_TEXT_DISTANCE = 0;
 const MAX_MEDIA_TEXT_DISTANCE = 48;
 const DEFAULT_MEDIA_TEXT_DISTANCE = 12;
 
-const WRAP_OPTIONS: { value: CanonicalAdditionalMediaWrap; label: { en: string; fr: string } }[] = [
-  { value: "inline", label: { en: "In line", fr: "En ligne" } },
-  { value: "square", label: { en: "Square", fr: "Carré" } },
-  { value: "tight", label: { en: "Tight", fr: "Rapproché" } },
-  { value: "through", label: { en: "Through", fr: "À travers" } },
-  { value: "topBottom", label: { en: "Top and Bottom", fr: "Haut et bas" } },
-  { value: "behind", label: { en: "Behind text", fr: "Derrière le texte" } },
-  { value: "front", label: { en: "In front of text", fr: "Devant le texte" } },
-];
+const MAX_RESET_WRAP_OFFSET_X = 240;
+const MAX_RESET_WRAP_OFFSET_Y = 480;
 
-const WRAP_ICONS: Record<CanonicalAdditionalMediaWrap, string> = {
-  inline: "≋",
-  square: "▤",
-  tight: "◖",
-  through: "◍",
-  topBottom: "☰",
-  behind: "▦",
-  front: "▣",
+const clampNumber = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+
+const sanitizeMediaForResetBounds = (item: PreviewMediaItem): PreviewMediaItem => {
+  const wrapMode = normalizeWrapMode(item.textWrap);
+  const usesTextWrap = wrapMode === "square" || wrapMode === "tight" || wrapMode === "through";
+  const usesWrapLayoutOffsets = usesTextWrap || wrapMode === "topBottom";
+
+  const distanceTop = normalizeTextDistance(item.distanceTop);
+  const distanceLeft = normalizeTextDistance(item.distanceLeft);
+
+  // Reset should restore the original size exactly; only clamp offsets to keep media in-bounds.
+  const widthPercent = Number.isFinite(Number(item.widthPercent)) ? Number(item.widthPercent) : 100;
+  const height = Number.isFinite(Number(item.height)) ? Number(item.height) : 320;
+
+  const rawOffsetX = Math.round(Number(item.offsetX || 0));
+  const rawOffsetY = Math.round(Number(item.offsetY || 0));
+
+  if (wrapMode === "behind" || wrapMode === "front") {
+    return {
+      ...item,
+      widthPercent,
+      height,
+      // Fixed-position media uses absolute coordinates within the article body.
+      // Keep them non-negative and within a reasonable safety range.
+      offsetX: clampNumber(rawOffsetX, 0, MAX_FIXED_MEDIA_TRANSLATE_X),
+      offsetY: clampNumber(rawOffsetY, 0, MAX_FIXED_MEDIA_TRANSLATE_Y),
+    };
+  }
+
+  if (usesWrapLayoutOffsets) {
+    return {
+      ...item,
+      widthPercent,
+      height,
+      // Prevent negative margins that can push media outside the left/top edge on reset.
+      offsetX: clampNumber(rawOffsetX, -distanceLeft, MAX_RESET_WRAP_OFFSET_X),
+      offsetY: clampNumber(rawOffsetY, -distanceTop, MAX_RESET_WRAP_OFFSET_Y),
+    };
+  }
+
+  return {
+    ...item,
+    widthPercent,
+    height,
+    offsetX: 0,
+    offsetY: 0,
+  };
 };
+
+type PlacementMenuMode = "topLeft" | "bottom" | "free";
 
 const getAdditionalMediaWidthClass = (size: AdditionalMediaSize) => {
   if (size === "half") return "w-full sm:w-2/3";
@@ -113,8 +148,8 @@ const getTextWrapFloatClass = (wrapMode: CanonicalAdditionalMediaWrap, wrapSide:
   if (!(wrapMode === "square" || wrapMode === "tight" || wrapMode === "through")) {
     return "";
   }
-  if (wrapSide === "leftOnly") return "sm:float-right";
-  return "sm:float-left";
+  if (wrapSide === "leftOnly") return "float-right";
+  return "float-left";
 };
 
 function formatTimeAgo(createdAt: Date, language: "en" | "fr") {
@@ -195,10 +230,20 @@ export default function StoriesMainPreviewPage() {
   const { language } = useAdmin();
   const initialPayload = readPreviewPayload();
   const [payload] = useState<PreviewPayload | null>(initialPayload);
-  const [mediaList, setMediaList] = useState<PreviewMediaItem[]>(() =>
+  const [initialMediaList] = useState<PreviewMediaItem[]>(() =>
     [...(initialPayload?.additionalMedia || [])]
-      .map((item) => ({ ...item, textWrap: normalizeWrapMode(item.textWrap) }))
+      .map((item) => {
+        const canonicalWrap = normalizeWrapMode(item.textWrap);
+        return {
+          ...item,
+          textWrap: canonicalWrap === "inline" ? "square" : canonicalWrap,
+          wrapSide: normalizeWrapSide(item.wrapSide),
+        };
+      })
       .sort((a, b) => a.order - b.order)
+  );
+  const [mediaList, setMediaList] = useState<PreviewMediaItem[]>(() =>
+    initialMediaList.map((item) => ({ ...item }))
   );
   const [editableSummary] = useState<string>(initialPayload?.summary || "");
   const [selectedMediaIndex, setSelectedMediaIndex] = useState<number | null>(null);
@@ -208,10 +253,14 @@ export default function StoriesMainPreviewPage() {
     x: number;
     y: number;
   } | null>(null);
+  const [placementMenuMode, setPlacementMenuMode] = useState<Record<number, PlacementMenuMode>>({});
+  const placementMenuModeRef = useRef<Record<number, PlacementMenuMode>>({});
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [mobilePreview, setMobilePreview] = useState(false);
   const articleIdRef = useRef<string | null | undefined>(initialPayload?.id);
+  const articleBodyRef = useRef<HTMLDivElement | null>(null);
   const mediaListRef = useRef<PreviewMediaItem[]>([]);
   const dragStateRef = useRef<{
     index: number;
@@ -228,6 +277,35 @@ export default function StoriesMainPreviewPage() {
   useEffect(() => {
     mediaListRef.current = mediaList;
   }, [mediaList]);
+
+  useEffect(() => {
+    placementMenuModeRef.current = placementMenuMode;
+  }, [placementMenuMode]);
+
+  useEffect(() => {
+    setMediaList((prev) => {
+      let changed = false;
+      const next = prev.map((item) => {
+        const canonicalWrap = normalizeWrapMode(item.textWrap);
+        const nextWrap: CanonicalAdditionalMediaWrap = canonicalWrap === "inline" ? "square" : canonicalWrap;
+        const nextWrapSide = normalizeWrapSide(item.wrapSide);
+        const sanitized = sanitizeMediaForResetBounds({ ...item, textWrap: nextWrap, wrapSide: nextWrapSide });
+        if (
+          nextWrap !== item.textWrap ||
+          nextWrapSide !== item.wrapSide ||
+          sanitized.offsetX !== item.offsetX ||
+          sanitized.offsetY !== item.offsetY ||
+          sanitized.widthPercent !== item.widthPercent ||
+          sanitized.height !== item.height
+        ) {
+          changed = true;
+          return sanitized;
+        }
+        return item;
+      });
+      return changed ? next : prev;
+    });
+  }, []);
 
   // Ensure articleIdRef stays in sync with sessionStorage
   useEffect(() => {
@@ -262,18 +340,46 @@ export default function StoriesMainPreviewPage() {
           const next = [...prev];
           const current = next[drag.index];
           if (!current) return prev;
-          const nextOffsetX = Math.max(
-            MIN_FIXED_MEDIA_TRANSLATE_X,
-            Math.min(MAX_FIXED_MEDIA_TRANSLATE_X, Math.round((current.offsetX || 0) + deltaX))
-          );
-          const nextOffsetY = Math.max(
-            MIN_FIXED_MEDIA_TRANSLATE_Y,
-            Math.min(MAX_FIXED_MEDIA_TRANSLATE_Y, Math.round((current.offsetY || 0) + delta))
-          );
+
+          const wrapMode = normalizeWrapMode(current.textWrap);
+          const wantsFreePlacement = placementMenuModeRef.current[drag.index] === "free";
+          const nextWrapMode: CanonicalAdditionalMediaWrap = wantsFreePlacement ? "square" : wrapMode;
+          const isFixedPosition = nextWrapMode === "behind" || nextWrapMode === "front";
+
+          const widthPercent = Math.round(Number(current.widthPercent || 100));
+          const heightPx = Math.round(Number(current.height || 320));
+
+          let nextOffsetX = Math.round((current.offsetX || 0) + deltaX);
+          let nextOffsetY = Math.round((current.offsetY || 0) + delta);
+
+          if (isFixedPosition) {
+            const container = articleBodyRef.current;
+            const rect = container?.getBoundingClientRect();
+            if (rect) {
+              const itemWidthPx = Math.max(0, Math.round((rect.width * widthPercent) / 100));
+              const maxX = Math.max(0, Math.round(rect.width - itemWidthPx));
+              const maxY = Math.max(0, Math.round(rect.height - heightPx));
+              nextOffsetX = clampNumber(nextOffsetX, 0, maxX);
+              nextOffsetY = clampNumber(nextOffsetY, 0, maxY);
+            } else {
+              nextOffsetX = clampNumber(nextOffsetX, 0, MAX_FIXED_MEDIA_TRANSLATE_X);
+              nextOffsetY = clampNumber(nextOffsetY, 0, MAX_FIXED_MEDIA_TRANSLATE_Y);
+            }
+          } else {
+            nextOffsetX = clampNumber(nextOffsetX, MIN_FIXED_MEDIA_TRANSLATE_X, MAX_FIXED_MEDIA_TRANSLATE_X);
+            nextOffsetY = clampNumber(nextOffsetY, MIN_FIXED_MEDIA_TRANSLATE_Y, MAX_FIXED_MEDIA_TRANSLATE_Y);
+          }
+
           if ((current.offsetX || 0) === nextOffsetX && (current.offsetY || 0) === nextOffsetY) {
             return prev;
           }
-          next[drag.index] = { ...current, offsetX: nextOffsetX, offsetY: nextOffsetY };
+          next[drag.index] = {
+            ...current,
+            textWrap: nextWrapMode,
+            align: isFixedPosition ? "left" : current.align,
+            offsetX: nextOffsetX,
+            offsetY: nextOffsetY,
+          };
           setDragHud({ index: drag.index, mode: "pan", x: nextOffsetX, y: nextOffsetY });
           return next;
         });
@@ -402,6 +508,19 @@ export default function StoriesMainPreviewPage() {
   const startMediaDrag = (index: number, mode: "pan" | "resize" | "resizeX" | "resizeXLeft" | "resizeY" | "resizeYBottom", event: ReactPointerEvent<HTMLElement>) => {
     const item = mediaListRef.current[index];
     setSelectedMediaIndex(index);
+    if (mode === "pan") {
+      setMediaList((prev) => {
+        const next = [...prev];
+        const current = next[index];
+        if (!current) return prev;
+        next[index] = {
+          ...current,
+          textWrap: "square",
+          wrapSide: "bothSides",
+        };
+        return next;
+      });
+    }
     dragStateRef.current = {
       index,
       lastY: event.clientY,
@@ -429,14 +548,77 @@ export default function StoriesMainPreviewPage() {
     startMediaDrag(index, "pan", event);
   };
 
-  const updateWrapMode = (index: number, mode: CanonicalAdditionalMediaWrap) => {
+  const applyPicturePlacement = (index: number, mode: PlacementMenuMode) => {
+    setPlacementMenuMode((prev) => {
+      const next = {
+        ...prev,
+        [index]: mode,
+      };
+      placementMenuModeRef.current = next;
+      return next;
+    });
+
     setMediaList((prev) => {
       const next = [...prev];
       const current = next[index];
       if (!current) return prev;
-      next[index] = { ...current, textWrap: mode };
+
+      if (mode === "topLeft") {
+        next[index] = {
+          ...current,
+          textWrap: "square",
+          wrapSide: "bothSides",
+          align: "left",
+          offsetX: 0,
+          offsetY: 0,
+        };
+        return next;
+      }
+
+      if (mode === "bottom") {
+        next[index] = {
+          ...current,
+          textWrap: "square",
+          wrapSide: "bothSides",
+          align: "left",
+          offsetX: 0,
+          offsetY: 240,
+        };
+        return next;
+      }
+
+      next[index] = {
+        ...current,
+        textWrap: "square",
+        wrapSide: "bothSides",
+        align: "left",
+        offsetX: 0,
+        offsetY: 0,
+      };
       return next;
     });
+  };
+
+  const selectAdjacentMedia = (currentIndex: number, direction: "prev" | "next") => {
+    const total = mediaListRef.current.length;
+    if (total <= 1) return;
+    const delta = direction === "next" ? 1 : -1;
+    const targetIndex = (currentIndex + delta + total) % total;
+    setSelectedMediaIndex(targetIndex);
+  };
+
+  const resetMediaToOriginal = (index: number) => {
+    setMediaList((prev) => {
+      const original = initialMediaList[index];
+      if (!original) return prev;
+      const next = [...prev];
+      next[index] = sanitizeMediaForResetBounds({ ...original });
+      return next;
+    });
+    setPlacementMenuMode((prev) => ({
+      ...prev,
+      [index]: "bottom",
+    }));
   };
 
   const handleSave = async () => {
@@ -541,90 +723,132 @@ export default function StoriesMainPreviewPage() {
   return (
     <div className="min-h-screen bg-slate-950 p-4 sm:p-6">
       <div className="mx-auto w-full max-w-6xl">
-        <article className="news-expand-panel-inner relative rounded-xl border border-sky-500/30 bg-[#0c1629] p-6 sm:p-8 shadow-2xl shadow-sky-900/20">
-          <div className="absolute right-4 top-4 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={saving}
-              className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition ${
-                saveSuccess
-                  ? "bg-green-600 text-white"
-                  : saveError
-                    ? "bg-red-600 text-white"
-                    : saving
-                      ? "bg-orange-600/50 text-white/70 cursor-wait"
-                      : "bg-orange-600 text-white hover:bg-orange-500"
+        {(() => {
+          const actionButtons = (
+            <>
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving}
+                className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition ${
+                  saveSuccess
+                    ? "bg-green-600 text-white"
+                    : saveError
+                      ? "bg-red-600 text-white"
+                      : saving
+                        ? "bg-orange-600/50 text-white/70 cursor-wait"
+                        : "bg-orange-600 text-white hover:bg-orange-500"
+                }`}
+              >
+                {saveSuccess ? (
+                  <>
+                    <span>✓</span>
+                    {language === "fr" ? "Enregistré" : "Saved"}
+                  </>
+                ) : saveError ? (
+                  <>
+                    <span>!</span>
+                    {language === "fr" ? "Erreur" : "Error"}
+                  </>
+                ) : saving ? (
+                  <>
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                    {language === "fr" ? "Enregistrement..." : "Saving..."}
+                  </>
+                ) : (
+                  language === "fr" ? "Enregistrer" : "Save"
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setMobilePreview((prev) => !prev)}
+                className={`inline-flex items-center rounded-lg border px-3 py-2 text-sm font-medium transition ${
+                  mobilePreview
+                    ? "border-sky-400/60 bg-white/10 text-white"
+                    : "border-white/10 bg-white/5 text-slate-200 hover:border-white/25 hover:bg-white/10"
+                }`}
+              >
+                {language === "fr" ? "Mobile" : "Mobile"}
+              </button>
+              <button
+                type="button"
+                onClick={() => router.push("/admin/stories")}
+                aria-label={language === "fr" ? "Fermer l'aperçu" : "Close preview"}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 text-slate-300 transition hover:border-white/30 hover:text-white"
+              >
+                <span className="text-lg leading-none">×</span>
+              </button>
+            </>
+          );
+
+          const article = (
+            <article
+              className={`news-expand-panel-inner relative rounded-xl border border-sky-500/30 bg-[#0c1629] ${
+                mobilePreview ? "p-4 shadow-none" : "p-6 sm:p-8 shadow-2xl shadow-sky-900/20"
               }`}
             >
-              {saveSuccess ? (
-                <>
-                  <span>✓</span>
-                  {language === "fr" ? "Enregistré" : "Saved"}
-                </>
-              ) : saveError ? (
-                <>
-                  <span>!</span>
-                  {language === "fr" ? "Erreur" : "Error"}
-                </>
-              ) : saving ? (
-                <>
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                  {language === "fr" ? "Enregistrement..." : "Saving..."}
-                </>
-              ) : (
-                language === "fr" ? "Enregistrer" : "Save"
+              {!mobilePreview && (
+                <div className="absolute right-4 top-4 flex items-center gap-2">{actionButtons}</div>
               )}
-            </button>
-            <button
-              type="button"
-              onClick={() => router.push("/admin/stories")}
-              aria-label={language === "fr" ? "Fermer l'aperçu" : "Close preview"}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 text-slate-300 transition hover:border-white/30 hover:text-white"
-            >
-              <span className="text-lg leading-none">×</span>
-            </button>
-          </div>
 
-          {saveError && (
-            <div className="absolute right-4 top-16 max-w-xs rounded-lg border border-red-500/50 bg-red-900/80 px-3 py-2 text-xs text-red-200 shadow-lg">
-              {saveError}
-            </div>
-          )}
+              {!mobilePreview && saveError && (
+                <div className="absolute right-4 top-16 max-w-xs rounded-lg border border-red-500/50 bg-red-900/80 px-3 py-2 text-xs text-red-200 shadow-lg">
+                  {saveError}
+                </div>
+              )}
 
-          <h2 className="news-expand-panel-title text-2xl font-bold text-white sm:text-3xl leading-tight">
-            {payload.title || (language === "fr" ? "Titre de l'article" : "Story Title")}
-          </h2>
-          <p className="news-expand-panel-date mt-2 text-xs text-slate-500 tracking-wide">
-            {formatTimeAgo(resolvedCreatedAt, language)}
-          </p>
+              <h2 className="news-expand-panel-title text-2xl font-bold text-white sm:text-3xl leading-tight">
+                {payload.title || (language === "fr" ? "Titre de l'article" : "Story Title")}
+              </h2>
+              <p className="news-expand-panel-date mt-2 text-xs text-slate-500 tracking-wide">
+                {formatTimeAgo(resolvedCreatedAt, language)}
+              </p>
 
-          {!!mediaList.length && (
-            <div className="mt-6 space-y-4">
-              {mediaList.map((mediaItem, index) => (
-                (() => {
-                  const wrapMode = normalizeWrapMode(mediaItem.textWrap);
-                  const wrapSide = normalizeWrapSide(mediaItem.wrapSide);
-                  const textWrapFloatClass = getTextWrapFloatClass(wrapMode, wrapSide);
-                  const usesTextWrap = wrapMode === "square" || wrapMode === "tight" || wrapMode === "through";
-                  const alignClass = usesTextWrap ? "" : getAdditionalMediaAlignClass(mediaItem.align);
-                  const distanceTop = normalizeTextDistance(mediaItem.distanceTop);
-                  const distanceRight = normalizeTextDistance(mediaItem.distanceRight);
-                  const distanceBottom = normalizeTextDistance(mediaItem.distanceBottom);
-                  const distanceLeft = normalizeTextDistance(mediaItem.distanceLeft);
-                  return (
+              <div ref={articleBodyRef} className="relative z-10 mt-6 article-content-body space-y-4 text-base leading-relaxed text-slate-200">
+            {mediaList.map((mediaItem, index) => {
+              const wrapMode = normalizeWrapMode(mediaItem.textWrap);
+              const wrapSide = normalizeWrapSide(mediaItem.wrapSide);
+              const textWrapFloatClass = getTextWrapFloatClass(wrapMode, wrapSide);
+              const usesTextWrap = wrapMode === "square" || wrapMode === "tight" || wrapMode === "through";
+              const shouldClearPreviousFloats = usesTextWrap && index > 0;
+              const alignClass = usesTextWrap ? "" : getAdditionalMediaAlignClass(mediaItem.align);
+              const distanceTop = normalizeTextDistance(mediaItem.distanceTop);
+              const distanceRight = normalizeTextDistance(mediaItem.distanceRight);
+              const distanceBottom = normalizeTextDistance(mediaItem.distanceBottom);
+              const distanceLeft = normalizeTextDistance(mediaItem.distanceLeft);
+              const offsetX = Math.round(Number(mediaItem.offsetX || 0));
+              const offsetY = Math.round(Number(mediaItem.offsetY || 0));
+              const widthPercent = Math.round(Number(mediaItem.widthPercent || 100));
+
+              const isWrapLikeMode = usesTextWrap || wrapMode === "topBottom";
+              const objectPosition = "50% 50%";
+
+              return (
                 <div
                   key={`preview-media-${index}`}
-                  className={`${getAdditionalMediaWidthClass(mediaItem.size)} ${alignClass} relative overflow-visible rounded-xl border ${selectedMediaIndex === index ? "border-blue-400 ring-2 ring-blue-400/70 z-40" : "border-white/10"} ${wrapMode === "front" ? "z-30 -mt-10" : ""} ${wrapMode === "behind" && selectedMediaIndex !== index ? "z-0 -mt-10 opacity-70" : ""} ${wrapMode === "behind" && selectedMediaIndex === index ? "-mt-10" : ""} ${textWrapFloatClass} ${wrapMode === "inline" ? "inline-block" : ""} ${wrapMode === "topBottom" ? "clear-both" : ""} ${dragHud?.index === index ? "opacity-80" : ""}`}
+                  className={`${getAdditionalMediaWidthClass(mediaItem.size)} ${alignClass} ${wrapMode === "front" || wrapMode === "behind" ? "absolute left-0 top-0" : "relative"} overflow-visible rounded-xl border ${selectedMediaIndex === index ? "border-blue-400 ring-2 ring-blue-400/70" : "border-white/10"} ${wrapMode === "front" ? "z-30" : ""} ${wrapMode === "behind" && selectedMediaIndex !== index ? "z-0 opacity-70" : ""} ${wrapMode === "behind" && selectedMediaIndex === index ? "z-0" : ""} ${textWrapFloatClass} ${wrapMode === "inline" ? "inline-block" : ""} ${wrapMode === "topBottom" || shouldClearPreviousFloats ? "clear-both" : ""} ${dragHud?.index === index ? "z-40 opacity-80" : ""}`}
                   style={{
                     height: `${Math.round(mediaItem.height)}px`,
-                    width: `${Math.round(Number(mediaItem.widthPercent || 100))}%`,
-                    transform: `translate(${Math.round(Number(mediaItem.offsetX || 0))}px, ${Math.round(Number(mediaItem.offsetY || 0))}px)`,
+                    width: `${widthPercent}%`,
+                    left: wrapMode === "behind" || wrapMode === "front" ? `${offsetX}px` : undefined,
+                    top: wrapMode === "behind" || wrapMode === "front" ? `${offsetY}px` : undefined,
                     shapeOutside: wrapMode === "tight" || wrapMode === "through" ? "inset(0 round 16px)" : undefined,
-                    marginTop: wrapMode === "inline" ? undefined : `${distanceTop}px`,
-                    marginRight: wrapMode === "inline" ? undefined : `${distanceRight}px`,
-                    marginBottom: wrapMode === "inline" ? undefined : `${distanceBottom}px`,
-                    marginLeft: wrapMode === "inline" ? undefined : `${distanceLeft}px`,
+                    marginTop:
+                      wrapMode === "inline" || wrapMode === "behind" || wrapMode === "front"
+                        ? undefined
+                        : `${distanceTop + (isWrapLikeMode ? offsetY : 0)}px`,
+                    marginRight:
+                      wrapMode === "inline" || wrapMode === "behind" || wrapMode === "front"
+                        ? undefined
+                        : `${distanceRight}px`,
+                    marginBottom:
+                      wrapMode === "inline" || wrapMode === "behind" || wrapMode === "front"
+                        ? undefined
+                        : `${distanceBottom}px`,
+                    marginLeft:
+                      wrapMode === "inline" || wrapMode === "behind" || wrapMode === "front"
+                        ? undefined
+                        : `${distanceLeft}px`,
                   }}
                   onClick={() => setSelectedMediaIndex(index)}
                   onPointerDown={(event) => handleMediaPointerDown(index, event)}
@@ -633,9 +857,9 @@ export default function StoriesMainPreviewPage() {
                     {mediaItem.type === "video" ? (
                       <AutoPlayOnVisibleVideo
                         src={mediaItem.url}
-                        className="h-full w-full object-fill"
+                        className="h-full w-full object-cover"
                         style={{
-                          objectPosition: "50% 50%",
+                          objectPosition,
                         }}
                       />
                     ) : (
@@ -643,10 +867,10 @@ export default function StoriesMainPreviewPage() {
                         src={mediaItem.url}
                         alt={`Preview media ${index + 1}`}
                         fill
-                        className="object-fill"
+                        className="object-cover"
                         sizes="(max-width: 768px) 100vw, 900px"
                         style={{
-                          objectPosition: "50% 50%",
+                          objectPosition,
                         }}
                         unoptimized
                       />
@@ -703,49 +927,137 @@ export default function StoriesMainPreviewPage() {
                     </div>
                   )}
                   {selectedMediaIndex === index && (
-                    <div className="absolute -bottom-14 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1 rounded-xl border border-slate-200/20 bg-white px-2 py-1 shadow-xl">
-                      {WRAP_OPTIONS.map((option) => {
-                        const active = wrapMode === option.value;
-                        return (
+                    (() => {
+                      const mode = placementMenuMode[index] || "bottom";
+                      const anchorClass = mode === "topLeft" ? "left-2 top-2" : "bottom-2 right-2";
+                      return (
+                        <div
+                          className={`absolute z-30 flex flex-col gap-1 rounded-xl border border-slate-200/20 bg-white/95 p-2 shadow-xl ${anchorClass}`}
+                        >
                           <button
-                            key={option.value}
                             type="button"
-                            title={language === "fr" ? option.label.fr : option.label.en}
-                            onClick={() => updateWrapMode(index, option.value)}
-                            className={`h-7 w-7 rounded-md text-sm font-bold ${active ? "bg-blue-600 text-white" : "bg-white text-slate-700 hover:bg-slate-100"}`}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              applyPicturePlacement(index, "topLeft");
+                            }}
+                            className={`flex h-7 items-center rounded-md px-2 text-xs font-semibold ${mode === "topLeft" ? "bg-blue-600 text-white" : "bg-white text-slate-700 hover:bg-slate-100"}`}
                           >
-                            {WRAP_ICONS[option.value]}
+                            {language === "fr" ? "Haut gauche" : "Top left"}
                           </button>
-                        );
-                      })}
-
-                    </div>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              applyPicturePlacement(index, "bottom");
+                            }}
+                            className={`flex h-7 items-center rounded-md px-2 text-xs font-semibold ${mode === "bottom" ? "bg-blue-600 text-white" : "bg-white text-slate-700 hover:bg-slate-100"}`}
+                          >
+                            {language === "fr" ? "Bas" : "Bottom"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              applyPicturePlacement(index, "free");
+                            }}
+                            className={`flex h-7 items-center rounded-md px-2 text-xs font-semibold ${mode === "free" ? "bg-blue-600 text-white" : "bg-white text-slate-700 hover:bg-slate-100"}`}
+                          >
+                            {language === "fr" ? "Libre" : "Free"}
+                          </button>
+                          <button
+                            type="button"
+                            onPointerDown={(event) => {
+                              event.stopPropagation();
+                              if (placementMenuModeRef.current[index] !== "free") {
+                                applyPicturePlacement(index, "free");
+                              }
+                              startMediaDrag(index, "pan", event);
+                            }}
+                            className="flex h-7 items-center rounded-md px-2 text-xs font-semibold bg-white text-slate-700 hover:bg-slate-100"
+                          >
+                            {language === "fr" ? "Glisser image" : "Drag picture"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              resetMediaToOriginal(index);
+                            }}
+                            className="flex h-7 items-center rounded-md px-2 text-xs font-semibold bg-white text-slate-700 hover:bg-slate-100"
+                          >
+                            {language === "fr" ? "Réinitialiser" : "Reset"}
+                          </button>
+                          {mediaList.length > 1 && (
+                            <div className="mt-1 grid grid-cols-2 gap-1">
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  selectAdjacentMedia(index, "prev");
+                                }}
+                                className="flex h-7 items-center justify-center rounded-md bg-white px-2 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                              >
+                                {language === "fr" ? "Préc." : "Prev"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  selectAdjacentMedia(index, "next");
+                                }}
+                                className="flex h-7 items-center justify-center rounded-md bg-white px-2 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                              >
+                                {language === "fr" ? "Suiv." : "Next"}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()
                   )}
                 </div>
-                  );
-                })()
-              ))}
-            </div>
-          )}
-
-          <div className="relative z-10 mt-6 article-content-body space-y-4 text-base leading-relaxed text-slate-200">
+              );
+            })}
             <ArticleContent
               htmlContent={editableSummary || `<p>${language === "fr" ? "Aucun contenu pour le moment..." : "No content yet..."}</p>`}
               className="text-base leading-relaxed text-slate-200"
             />
             <div className="clear-both" />
-          </div>
+              </div>
 
-          {!!mediaList.length && (
-            <p className="mt-3 text-xs text-slate-500">
-              {language === "fr"
-                ? "Glissez le média librement dans la page. Les poignées latérales et haut/bas redimensionnent par côté, et le coin ↘ redimensionne largeur + hauteur."
-                : "Drag media freely across the page. Side and top/bottom handles resize per edge, and the ↘ corner resizes width + height."}
-            </p>
-          )}
+              {!!mediaList.length && !mobilePreview && (
+                <p className="mt-3 text-xs text-slate-500">
+                  {language === "fr"
+                    ? "Glissez le média librement dans la page. Les poignées latérales et haut/bas redimensionnent par côté, le coin ↘ redimensionne largeur + hauteur. Les boutons Haut gauche / Bas / Libre sont des positions préréglées, et Glisser image permet un placement libre."
+                    : "Drag media freely across the page. Side and top/bottom handles resize per edge, and the ↘ corner resizes width + height. Top left / Bottom / Free are presets, and Drag picture enables free placement."}
+                </p>
+              )}
 
-          <MentionedEntities htmlContent={editableSummary || ""} language={language} />
-        </article>
+              <MentionedEntities htmlContent={editableSummary || ""} language={language} />
+            </article>
+          );
+
+          if (!mobilePreview) {
+            return article;
+          }
+
+          return (
+            <div className="mx-auto w-full max-w-sm">
+              <div className="mb-3 flex items-center justify-end gap-2">{actionButtons}</div>
+              {saveError && (
+                <div className="mb-3 rounded-lg border border-red-500/50 bg-red-900/40 px-3 py-2 text-xs text-red-200">
+                  {saveError}
+                </div>
+              )}
+              <div className="relative mx-auto aspect-[9/19.5] w-full rounded-[2.75rem] border border-white/15 bg-white/5 p-2">
+                <div className="absolute left-1/2 top-2 h-6 w-28 -translate-x-1/2 rounded-full border border-white/10 bg-slate-950/80" />
+                <div className="h-full overflow-hidden rounded-[2.3rem] border border-white/10 bg-slate-950">
+                  <div className="h-full overflow-y-auto p-3">{article}</div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );

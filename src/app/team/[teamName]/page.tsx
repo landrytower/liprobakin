@@ -1,11 +1,12 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
+import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { collection, getDocs, onSnapshot, doc, getDoc } from "firebase/firestore";
 import { firebaseDB } from "@/lib/firebase";
+import { normalizeTeamGender } from "@/lib/team-gender";
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { RosterPlayer } from "@/data/febaco";
 import { flagFromCode } from "@/data/countries";
@@ -111,6 +112,7 @@ type StaffMember = {
 };
 
 type TeamPageTransitionPayload = {
+  teamId?: string;
   teamName?: string;
   logo?: string;
   colors?: string[];
@@ -124,8 +126,12 @@ type ChatMessage = {
 
 export default function TeamPage() {
   const params = useParams();
+  const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const teamName = decodeURIComponent(params.teamName as string);
+  const genderParam = searchParams.get("gender");
+  const requestedGender = genderParam ? normalizeTeamGender(genderParam, undefined, "men") : null;
   const { language } = useLanguage();
   const t = translations[language];
   
@@ -150,6 +156,16 @@ export default function TeamPage() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const [isAiEnabled, setIsAiEnabled] = useState(true);
+
+  useEffect(() => {
+    if (genderParam) {
+      return;
+    }
+
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.set("gender", "men");
+    router.replace(`${pathname}?${nextParams.toString()}`, { scroll: false });
+  }, [genderParam, pathname, router, searchParams]);
 
   useEffect(() => {
     const settingsRef = doc(firebaseDB, "siteSettings", AI_SETTINGS_DOC);
@@ -184,7 +200,11 @@ export default function TeamPage() {
 
     try {
       const payload = JSON.parse(raw) as TeamPageTransitionPayload;
-      const payloadTeam = payload.teamName ? normalize(payload.teamName) : "";
+      const payloadTeam = payload.teamId
+        ? normalize(payload.teamId)
+        : payload.teamName
+          ? normalize(payload.teamName)
+          : "";
       const currentTeam = normalize(teamName);
 
       if (payloadTeam && payloadTeam === currentTeam) {
@@ -237,13 +257,37 @@ export default function TeamPage() {
         
         setAllTeams(allTeamsList);
         
-        // Find team by ID first, then by name (ID has priority for unique matching)
-        const teamDoc = teamsSnapshot.docs.find((doc) => doc.id === teamName) 
-          || teamsSnapshot.docs.find((doc) => {
-            const data = doc.data();
-            const fullName = [data.city, data.name].filter(Boolean).join(" ").trim();
-            return fullName === teamName || data.name === teamName;
-          });
+        // Find team by ID first, then by name. If multiple teams share a name, use requested gender when provided.
+        const teamDocById = teamsSnapshot.docs.find((doc) => doc.id === teamName);
+        const matchingByName = teamsSnapshot.docs.filter((doc) => {
+          const data = doc.data();
+          const fullName = [data.city, data.name].filter(Boolean).join(" ").trim();
+          return fullName === teamName || data.name === teamName;
+        });
+
+        let teamDoc = teamDocById ?? null;
+
+        if (!teamDoc) {
+          if (matchingByName.length === 1) {
+            teamDoc = matchingByName[0];
+          } else if (matchingByName.length > 1) {
+            if (requestedGender) {
+              teamDoc =
+                matchingByName.find((doc) => {
+                  const data = doc.data();
+                  return normalizeTeamGender(data?.gender, data?.logo, "men") === requestedGender;
+                }) ?? null;
+            }
+
+            if (!teamDoc) {
+              teamDoc =
+                matchingByName.find((doc) => {
+                  const data = doc.data();
+                  return normalizeTeamGender(data?.gender, data?.logo, "men") === "men";
+                }) ?? matchingByName[0];
+            }
+          }
+        }
         
         if (!teamDoc) {
           setLoading(false);
@@ -420,7 +464,7 @@ export default function TeamPage() {
     if (teamName) {
       fetchTeamData();
     }
-  }, [teamName]);
+  }, [teamName, requestedGender]);
 
   const introInitials = teamName
     .split(" ")

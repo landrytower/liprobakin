@@ -416,6 +416,8 @@ function AutoPlayOnVisibleVideo({ src, className, style }: { src: string; classN
 const NEWS_ARTICLE_SWITCH_MS = 15000;
 const HOME_BOOTSTRAP_CACHE_KEY = "febaco:home:bootstrap:v1";
 const HOME_BOOTSTRAP_CACHE_TTL_MS = 1000 * 60 * 10;
+const HOME_STANDINGS_CACHE_KEY = "febaco:home:standings:v1";
+const HOME_STANDINGS_CACHE_TTL_MS = 1000 * 60 * 5;
 
 type CachedNewsArticle = Omit<NewsArticle, "createdAt"> & { createdAt: string | null };
 
@@ -1590,9 +1592,7 @@ const FanFavoriteTeamCard = ({ teamId, teamName }: { teamId?: string; teamName?:
 export default function Home() {
   const { user, userProfile, isAdmin, signOut: handleSignOut } = useAuth();
   const { language, setLanguage } = useLanguage();
-  
-  console.log('Current language:', language);
-  
+
   const [selectedTeam, setSelectedTeam] = useState<SelectedTeamState>(null);
   const [selectedPlayer, setSelectedPlayer] = useState<SpotlightPlayer | null>(null);
   const [playerMetric, setPlayerMetric] = useState<PlayerMetric>("pts");
@@ -2094,30 +2094,32 @@ export default function Home() {
 
   useEffect(() => {
     const cached = readHomeBootstrapCache();
-    if (!cached) {
-      return;
-    }
-
-    if (cached.menTeams.length > 0) {
-      setMenTeams(cached.menTeams);
-    }
-
-    if (cached.womenTeams.length > 0) {
-      setWomenTeams(cached.womenTeams);
-    }
-
-    if (cached.newsArticles.length > 0) {
-      const hydratedNews = cached.newsArticles.map(fromCachedNewsArticle);
-      setNewsArticles(hydratedNews);
-      if (cached.featuredArticleId) {
-        setFeaturedArticleId(cached.featuredArticleId);
-      } else {
-        setFeaturedArticleId(hydratedNews[0]?.id ?? null);
+    if (cached) {
+      if (cached.menTeams.length > 0) setMenTeams(cached.menTeams);
+      if (cached.womenTeams.length > 0) setWomenTeams(cached.womenTeams);
+      if (cached.newsArticles.length > 0) {
+        const hydratedNews = cached.newsArticles.map(fromCachedNewsArticle);
+        setNewsArticles(hydratedNews);
+        setFeaturedArticleId(cached.featuredArticleId ?? hydratedNews[0]?.id ?? null);
       }
+      if (cached.partners.length > 0) setDynamicPartners(cached.partners);
     }
 
-    if (cached.partners.length > 0) {
-      setDynamicPartners(cached.partners);
+    // Pre-populate standings from cache so the section shows instantly
+    if (typeof window !== "undefined") {
+      const rawStandings = window.localStorage.getItem(HOME_STANDINGS_CACHE_KEY);
+      if (rawStandings) {
+        try {
+          const parsed = JSON.parse(rawStandings) as { data: typeof dynamicStandings; savedAt: number };
+          if (parsed && typeof parsed.savedAt === "number" && Date.now() - parsed.savedAt < HOME_STANDINGS_CACHE_TTL_MS) {
+            setDynamicStandings(parsed.data);
+          } else {
+            window.localStorage.removeItem(HOME_STANDINGS_CACHE_KEY);
+          }
+        } catch {
+          // Ignore malformed cache
+        }
+      }
     }
   }, []);
 
@@ -2767,16 +2769,6 @@ export default function Home() {
     const unsubscribe = onSnapshot(newsQuery, (snapshot) => {
       const articles: NewsArticle[] = snapshot.docs.map((doc) => {
         const data = doc.data();
-        console.log('News article data:', { 
-          id: doc.id, 
-          title: data.title, 
-          title_en: data.title_en,
-          headline: data.headline,
-          headline_en: data.headline_en,
-          author: data.author,
-          isPaused: data.isPaused
-        });
-        
         return {
           id: doc.id,
           title: data.title || "",
@@ -2815,14 +2807,9 @@ export default function Home() {
           isPaused: data.isPaused || false,
         };
       }).filter(article => !article.isPaused); // Filter out paused articles
-      
-      console.log('✅ Total articles (real-time):', articles.length);
-      console.log('📰 Articles:', articles.map(a => ({ id: a.id, title: a.title })));
       // Limit to last 7 published articles
       setNewsArticles(articles.slice(0, 7));
-      
       if (articles.length > 0 && !featuredArticleId) {
-        console.log('🎯 Setting featured article to:', articles[0].id);
         setFeaturedArticleId(articles[0].id);
       }
     }, (error) => {
@@ -3234,13 +3221,9 @@ export default function Home() {
           }
         });
         
-        console.log("All teams initialized:", Object.keys(teamStats).length);
-        
         // Then fetch games and update records
         const gamesRef = collection(firebaseDB, "games");
         const gamesSnapshot = await getDocs(gamesRef);
-        
-        console.log("Total games found:", gamesSnapshot.size);
         
         gamesSnapshot.docs.forEach((doc) => {
           const game = doc.data();
@@ -3300,7 +3283,7 @@ export default function Home() {
           }
         });
         
-        console.log("Final team stats:", teamStats);
+
         
         // Convert to array and sort
         const standingsArray = Object.entries(teamStats).map(([teamKey, stats], index) => ({
@@ -3353,9 +3336,13 @@ export default function Home() {
         standingsHistoryRef.current = nextRanks;
         persistStandingsHistory(nextRanks);
 
-        console.log("Final standings:", finalStandings);
-        
         setDynamicStandings(finalStandings);
+        // Persist to localStorage so standings appear instantly on next visit
+        if (typeof window !== "undefined") {
+          try {
+            window.localStorage.setItem(HOME_STANDINGS_CACHE_KEY, JSON.stringify({ data: finalStandings, savedAt: Date.now() }));
+          } catch { /* ignore quota errors */ }
+        }
       } catch (error) {
         console.error("Error calculating standings:", error);
       }
@@ -3736,15 +3723,12 @@ export default function Home() {
         const now = new Date();
         const twoAndHalfHoursInMs = 2.5 * 60 * 60 * 1000; // 2 hours and 30 minutes
         
-        console.log("Checking for live games at (DRC time):", now.toLocaleString());
-        console.log("Total games found:", snapshot.docs.length);
+
         
         const live = snapshot.docs
           .filter((doc) => {
             const data = doc.data();
             const status = String(data.status || "").toLowerCase();
-            console.log("Checking game - ALL FIELDS:", doc.id, data);
-
             if (data.isHiddenFromPublic === true) {
               return false;
             }
@@ -3754,7 +3738,6 @@ export default function Home() {
             }
             
             if (data.completed === true || status === "completed" || status === "cancelled" || status === "postponed") {
-              console.log("Game is completed, skipping");
               return false;
             }
 
@@ -3766,13 +3749,8 @@ export default function Home() {
             }
             const timeSinceStart = now.getTime() - gameStartTime.getTime();
             
-            console.log("Game start time:", gameStartTime.toLocaleString());
-            console.log("Time since start (ms):", timeSinceStart);
-            console.log("Time since start (hours):", timeSinceStart / (1000 * 60 * 60));
-            
             // Show if game has started and less than 2.5 hours have passed
             const shouldShow = timeSinceStart >= 0 && timeSinceStart < twoAndHalfHoursInMs;
-            console.log("Should show as live:", shouldShow);
             return shouldShow;
           })
           .map((doc) => {

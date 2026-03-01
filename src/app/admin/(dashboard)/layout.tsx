@@ -38,6 +38,7 @@ type NavItem = {
 };
 
 const navItems: NavItem[] = [
+  { key: "pulse", label: { en: "League Pulse", fr: "Pouls Ligue" }, href: "/admin/pulse", icon: "⚡" },
   { key: "stories", label: { en: "Stories", fr: "Histoires" }, href: "/admin/stories", icon: "📰", requiredPermission: "canManageNews" },
   { key: "teams", label: { en: "Teams", fr: "Équipes" }, href: "/admin/teams", icon: "🏀", requiredPermission: "canManageTeams" },
   { key: "accounts", label: { en: "Accounts", fr: "Accounts" }, href: "/admin/accounts", icon: "👥", requiredPermission: "canManageUsers" },

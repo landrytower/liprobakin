@@ -9,6 +9,7 @@ import {
   getDocs,
 } from "firebase/firestore";
 import { useAdmin } from "../layout";
+import "./pulse.css";
 
 /* ─────────────────────── TYPES ─────────────────────── */
 
@@ -332,10 +333,11 @@ function MiniSparkline({
   const max = Math.max(...data, 1);
   const min = Math.min(...data, 0);
   const range = max - min || 1;
+  const divisor = data.length > 1 ? data.length - 1 : 1;
   const points = data
     .map(
       (v, i) =>
-        `${(i / (data.length - 1)) * width},${height - ((v - min) / range) * height}`
+        `${(i / divisor) * width},${height - ((v - min) / range) * height}`
     )
     .join(" ");
 
@@ -609,27 +611,28 @@ export default function LeaguePulseDashboard() {
 
   /* ── recent win sparklines per team ── */
   const teamSparklines = useMemo(() => {
-    const map: Record<string, number[]> = {};
+    const raw: Record<string, number[]> = {};
     completedGames.slice(0, 30).forEach((g) => {
       if (g.winnerTeamId) {
-        // Winner gets 1, loser gets 0
         [g.homeTeamId, g.awayTeamId].forEach((tid) => {
           if (tid) {
-            if (!map[tid]) map[tid] = [];
-            map[tid].push(tid === g.winnerTeamId ? 1 : 0);
+            if (!raw[tid]) raw[tid] = [];
+            raw[tid].push(tid === g.winnerTeamId ? 1 : 0);
           }
         });
       }
     });
-    // Make them cumulative wins
-    Object.keys(map).forEach((tid) => {
-      let sum = 0;
-      map[tid] = map[tid].reverse().map((v) => {
-        sum += v;
-        return sum;
+    // Make cumulative wins (immutable scan)
+    const result: Record<string, number[]> = {};
+    Object.keys(raw).forEach((tid) => {
+      const reversed = [...raw[tid]].reverse();
+      const cumulative: number[] = [];
+      reversed.forEach((v, idx) => {
+        cumulative.push((idx > 0 ? cumulative[idx - 1] : 0) + v);
       });
+      result[tid] = cumulative;
     });
-    return map;
+    return result;
   }, [completedGames]);
 
   /* ── league health metrics ── */
@@ -718,79 +721,7 @@ export default function LeaguePulseDashboard() {
   }
 
   return (
-    <>
-      {/* ── CSS ANIMATIONS ── */}
-      <style>{`
-        @keyframes pulse-fire {
-          0% { transform: translateY(0) scale(1); opacity: 0.9; }
-          50% { opacity: 1; }
-          100% { transform: translateY(-120px) scale(0); opacity: 0; }
-        }
-        .pulse-fire-particle {
-          animation: pulse-fire linear infinite;
-        }
-        @keyframes float-gentle {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-6px); }
-        }
-        @keyframes gradient-shift {
-          0% { background-position: 0% 50%; }
-          50% { background-position: 100% 50%; }
-          100% { background-position: 0% 50%; }
-        }
-        @keyframes shimmer {
-          0% { background-position: -200% 0; }
-          100% { background-position: 200% 0; }
-        }
-        @keyframes fade-slide-up {
-          from { opacity: 0; transform: translateY(24px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes glow-pulse {
-          0%, 100% { box-shadow: 0 0 20px rgba(249,115,22,0.1); }
-          50% { box-shadow: 0 0 40px rgba(249,115,22,0.3); }
-        }
-        @keyframes live-pulse {
-          0% { transform: scale(1); opacity: 1; }
-          50% { transform: scale(1.6); opacity: 0.4; }
-          100% { transform: scale(1); opacity: 1; }
-        }
-        @keyframes heat-bar {
-          from { width: 0%; }
-        }
-        @keyframes ticker-scroll {
-          0% { transform: translateX(0); }
-          100% { transform: translateX(-50%); }
-        }
-        @keyframes orbit {
-          from { transform: rotate(0deg) translateX(40px) rotate(0deg); }
-          to { transform: rotate(360deg) translateX(40px) rotate(-360deg); }
-        }
-        @keyframes count-flash {
-          0% { color: #f97316; text-shadow: 0 0 20px rgba(249,115,22,0.5); }
-          100% { color: white; text-shadow: none; }
-        }
-        .card-entrance {
-          animation: fade-slide-up 0.7s cubic-bezier(.4,0,.2,1) both;
-        }
-        .glow-card {
-          animation: glow-pulse 3s ease-in-out infinite;
-        }
-        .gradient-border {
-          background: linear-gradient(135deg, #f97316, #ec4899, #8b5cf6, #06b6d4, #f97316);
-          background-size: 400% 400%;
-          animation: gradient-shift 6s ease infinite;
-        }
-        .shimmer-text {
-          background: linear-gradient(90deg, #f97316, #fbbf24, #f97316);
-          background-size: 200% 100%;
-          animation: shimmer 2s linear infinite;
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          background-clip: text;
-        }
-      `}</style>
-
+    <div>
       <div className="max-w-[1800px] mx-auto px-4 sm:px-6 py-6 space-y-6">
         {/* ═══════ HEADER ═══════ */}
         <div
@@ -801,8 +732,7 @@ export default function LeaguePulseDashboard() {
             <div className="relative">
               <span className="text-4xl">⚡</span>
               <span
-                className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full"
-                style={{ animation: "live-pulse 2s ease-in-out infinite" }}
+                className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full live-pulse-dot"
               />
             </div>
             <div>
@@ -1057,7 +987,7 @@ export default function LeaguePulseDashboard() {
 
             <div className="relative z-10 p-6">
               <div className="flex items-center gap-3 mb-6">
-                <span className="text-3xl" style={{ animation: "float-gentle 2s ease-in-out infinite" }}>
+                <span className="text-3xl float-gentle">
                   🔥
                 </span>
                 <div>
@@ -1569,7 +1499,7 @@ export default function LeaguePulseDashboard() {
           {t.footer} · {t.lastRefresh} {now.toLocaleTimeString()}
         </div>
       </div>
-    </>
+    </div>
   );
 }
 

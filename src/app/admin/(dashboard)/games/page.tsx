@@ -719,8 +719,56 @@ export default function GamesPage() {
     if (!window.confirm("Are you sure you want to delete this matchday?")) return;
 
     try {
+      const gamesSnapshot = await getDocs(collection(firebaseDB, "games"));
+      const gamesToDelete = gamesSnapshot.docs.filter((gameDoc) => {
+        const game = gameDoc.data() as Partial<Game>;
+        const isSameSeason = game.seasonId === matchday.seasonId;
+        const isSameWeek = game.week === matchday.week;
+        const isSameGender =
+          matchday.gender === "all" || game.gender === matchday.gender;
+        return isSameSeason && isSameWeek && isSameGender;
+      });
+
+      for (const gameDoc of gamesToDelete) {
+        const playerGameStatsSnapshot = await getDocs(
+          query(collection(firebaseDB, "playerGameStats"), where("gameId", "==", gameDoc.id))
+        );
+
+        if (!playerGameStatsSnapshot.empty) {
+          const statsDeleteBatch = writeBatch(firebaseDB);
+          playerGameStatsSnapshot.docs.forEach((statDoc) => {
+            statsDeleteBatch.delete(statDoc.ref);
+          });
+          await statsDeleteBatch.commit();
+        }
+
+        await deleteDoc(gameDoc.ref);
+      }
+
       await deleteDoc(doc(firebaseDB, "matchdays", matchday.id));
-      setStatusMessage({ type: "success", message: "Matchday deleted successfully" });
+      await recalculateLeagueStatsFromGames();
+
+      await logAuditAction(
+        "game_deleted",
+        currentAdminUser?.id || "unknown",
+        currentAdminUser?.email || "unknown",
+        "game",
+        matchday.id,
+        `Week ${matchday.week}`,
+        {
+          operation: "matchday_cascade_delete",
+          week: matchday.week,
+          seasonId: matchday.seasonId,
+          gender: matchday.gender,
+          deletedGamesCount: gamesToDelete.length,
+        }
+      );
+
+      setStatusMessage({
+        type: "success",
+        message: `Matchday deleted successfully. ${gamesToDelete.length} game(s) removed.`,
+      });
+
       if (selectedMatchday?.id === matchday.id) {
         setSelectedMatchday(null);
       }

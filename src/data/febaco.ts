@@ -843,6 +843,7 @@ export type RosterPlayer = {
   draftPick?: string;
   college?: string;
   experience?: string;
+  isImport?: boolean;
   stats: {
     pts: string;
     reb: string;

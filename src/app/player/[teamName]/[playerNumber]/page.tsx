@@ -485,6 +485,13 @@ export default function PlayerProfilePage() {
                     </p>
                     <p className="text-xs uppercase tracking-wider text-blue-300">#{player.number}</p>
                   </div>
+                  {/* Import Tag */}
+                  {player.isImport && (
+                    <div className="ml-auto sm:ml-0 sm:absolute sm:top-6 sm:right-6 lg:top-12 lg:right-12 flex items-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5">
+                      <span className="text-emerald-400">★</span>
+                      <span className="text-slate-300 italic font-medium text-sm">import</span>
+                    </div>
+                  )}
                 </div>
                 
                 <h1 className="mb-4 text-4xl font-bold text-white sm:mb-6 sm:text-5xl lg:text-6xl xl:text-7xl">

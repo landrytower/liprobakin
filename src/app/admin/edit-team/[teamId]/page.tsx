@@ -28,6 +28,7 @@ type Player = {
   nationality2?: string;
   playerLicense?: string;
   headshot: string;
+  isImport?: boolean;
   stats: {
     pts: string;
     ast: string;
@@ -137,6 +138,7 @@ export default function EditTeamPage() {
     nationality2: "",
     playerLicense: "",
     headshot: "",
+    isImport: false,
   });
 
   const [heightCm, setHeightCm] = useState(185); // Default height in cm
@@ -454,6 +456,7 @@ export default function EditTeamPage() {
         nationality2: newPlayerForm.nationality2 || null,
         playerLicense: newPlayerForm.playerLicense || null,
         headshot: headshotUrl,
+        isImport: newPlayerForm.isImport || false,
         stats: {
           pts: 0,
           ast: 0,
@@ -484,6 +487,7 @@ export default function EditTeamPage() {
         nationality2: "",
         playerLicense: "",
         headshot: "",
+        isImport: false,
       });
       setPlayerHeadshotFile(null);
       setAddingPlayer(false);
@@ -1228,6 +1232,7 @@ export default function EditTeamPage() {
                       nationality2: "",
                       playerLicense: "",
                       headshot: "",
+                      isImport: false,
                     });
                     setPlayerHeadshotFile(null);
                     setNationalitySearch("");
@@ -1436,19 +1441,39 @@ export default function EditTeamPage() {
                   </div>
                 </div>
                 {!showSecondNationality ? (
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowSecondNationality(true)}
-                      className="w-5 h-5 rounded border-2 border-white/20 bg-white/5 hover:border-white/40 hover:bg-white/10 transition-colors flex items-center justify-center"
-                    >
-                      <span className="text-xs text-slate-400">+</span>
-                    </button>
-                    <label className="text-xs text-slate-400 cursor-pointer" onClick={() => setShowSecondNationality(true)}>
-                      Second Nationality
-                    </label>
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowSecondNationality(true)}
+                        className="w-5 h-5 rounded border-2 border-white/20 bg-white/5 hover:border-white/40 hover:bg-white/10 transition-colors flex items-center justify-center"
+                      >
+                        <span className="text-xs text-slate-400">+</span>
+                      </button>
+                      <label className="text-xs text-slate-400 cursor-pointer" onClick={() => setShowSecondNationality(true)}>
+                        Second Nationality
+                      </label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setNewPlayerForm({ ...newPlayerForm, isImport: !newPlayerForm.isImport })}
+                        className={`w-5 h-5 rounded border-2 transition-colors flex items-center justify-center ${
+                          newPlayerForm.isImport
+                            ? 'border-red-500 bg-red-500/20'
+                            : 'border-white/20 bg-white/5 hover:border-white/40 hover:bg-white/10'
+                        }`}
+                      >
+                        {newPlayerForm.isImport && <span className="text-red-400 text-xs">✓</span>}
+                      </button>
+                      <label className="text-xs cursor-pointer flex items-center gap-1" onClick={() => setNewPlayerForm({ ...newPlayerForm, isImport: !newPlayerForm.isImport })}>
+                        <span className="text-yellow-400">★</span>
+                        <span className="text-red-400 italic font-medium">import</span>
+                      </label>
+                    </div>
                   </div>
                 ) : (
+                  <>
                   <div className="relative">
                     <label className="block text-xs text-slate-300 mb-1">Second Nationality</label>
                     <div className="relative">
@@ -1514,6 +1539,25 @@ export default function EditTeamPage() {
                       )}
                     </div>
                   </div>
+                  {/* Import toggle when Second Nationality is shown */}
+                  <div className="flex items-center gap-2 mt-2">
+                    <button
+                      type="button"
+                      onClick={() => setNewPlayerForm({ ...newPlayerForm, isImport: !newPlayerForm.isImport })}
+                      className={`w-5 h-5 rounded border-2 transition-colors flex items-center justify-center ${
+                        newPlayerForm.isImport
+                          ? 'border-red-500 bg-red-500/20'
+                          : 'border-white/20 bg-white/5 hover:border-white/40 hover:bg-white/10'
+                      }`}
+                    >
+                      {newPlayerForm.isImport && <span className="text-red-400 text-xs">✓</span>}
+                    </button>
+                    <label className="text-xs cursor-pointer flex items-center gap-1" onClick={() => setNewPlayerForm({ ...newPlayerForm, isImport: !newPlayerForm.isImport })}>
+                      <span className="text-yellow-400">★</span>
+                      <span className="text-red-400 italic font-medium">import</span>
+                    </label>
+                  </div>
+                  </>
                 )}
                 <div>
                   <label className="block text-xs text-slate-300 mb-1">Player License</label>
@@ -1582,6 +1626,7 @@ export default function EditTeamPage() {
                       nationality2: "",
                       playerLicense: "",
                       headshot: "",
+                      isImport: false,
                     });
                     setPlayerHeadshotFile(null);
                     setNationalitySearch("");
@@ -2286,19 +2331,39 @@ function PlayerEditForm({
           </div>
         </div>
         {!showEditSecondNationality ? (
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setShowEditSecondNationality(true)}
-              className="w-5 h-5 rounded border-2 border-white/20 bg-white/5 hover:border-white/40 hover:bg-white/10 transition-colors flex items-center justify-center"
-            >
-              <span className="text-xs text-slate-400">+</span>
-            </button>
-            <label className="text-xs text-slate-400 cursor-pointer" onClick={() => setShowEditSecondNationality(true)}>
-              Second Nationality?
-            </label>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowEditSecondNationality(true)}
+                className="w-5 h-5 rounded border-2 border-white/20 bg-white/5 hover:border-white/40 hover:bg-white/10 transition-colors flex items-center justify-center"
+              >
+                <span className="text-xs text-slate-400">+</span>
+              </button>
+              <label className="text-xs text-slate-400 cursor-pointer" onClick={() => setShowEditSecondNationality(true)}>
+                Second Nationality?
+              </label>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setForm({ ...form, isImport: !form.isImport })}
+                className={`w-5 h-5 rounded border-2 transition-colors flex items-center justify-center ${
+                  form.isImport
+                    ? 'border-red-500 bg-red-500/20'
+                    : 'border-white/20 bg-white/5 hover:border-white/40 hover:bg-white/10'
+                }`}
+              >
+                {form.isImport && <span className="text-red-400 text-xs">✓</span>}
+              </button>
+              <label className="text-xs cursor-pointer flex items-center gap-1" onClick={() => setForm({ ...form, isImport: !form.isImport })}>
+                <span className="text-yellow-400">★</span>
+                <span className="text-red-400 italic font-medium">import</span>
+              </label>
+            </div>
           </div>
         ) : (
+          <>
           <div className="relative">
             <label className="block text-xs text-slate-400 mb-1">Second Nationality</label>
             <div className="relative">
@@ -2383,6 +2448,25 @@ function PlayerEditForm({
               )}
             </div>
           </div>
+          {/* Import toggle when Second Nationality is shown */}
+          <div className="flex items-center gap-2 mt-2">
+            <button
+              type="button"
+              onClick={() => setForm({ ...form, isImport: !form.isImport })}
+              className={`w-5 h-5 rounded border-2 transition-colors flex items-center justify-center ${
+                form.isImport
+                  ? 'border-red-500 bg-red-500/20'
+                  : 'border-white/20 bg-white/5 hover:border-white/40 hover:bg-white/10'
+              }`}
+            >
+              {form.isImport && <span className="text-red-400 text-xs">✓</span>}
+            </button>
+            <label className="text-xs cursor-pointer flex items-center gap-1" onClick={() => setForm({ ...form, isImport: !form.isImport })}>
+              <span className="text-yellow-400">★</span>
+              <span className="text-red-400 italic font-medium">import</span>
+            </label>
+          </div>
+          </>
         )}
       </div>
 

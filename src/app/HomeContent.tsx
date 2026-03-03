@@ -3741,6 +3741,7 @@ export default function Home() {
                 teamGender,
                 teamLogo,
                 headshot: playerData.headshot,
+                isImport: playerData.isImport || false,
                 stats: {
                   pts: toNumber(statsSource.pts),
                   reb: toNumber(statsSource.reb),
@@ -6742,6 +6743,12 @@ export default function Home() {
                           <p className="text-lg font-bold text-white">{Math.round(player.stats.evl)}</p>
                         </div>
                       </div>
+                      {player.isImport && (
+                        <div className="mt-3 flex items-center justify-center gap-1">
+                          <span className="text-yellow-400">★</span>
+                          <span className="text-red-400 italic font-medium">import</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );

@@ -3796,6 +3796,9 @@ export default function Home() {
             if (data.isHiddenFromPublic === true) {
               return false;
             }
+            if (data.completed === true) {
+              return false;
+            }
 
             return status === "live";
           })

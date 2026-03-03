@@ -479,7 +479,6 @@ export default function GamePage() {
   const [isLivePlayerFullscreen, setIsLivePlayerFullscreen] = useState(false);
   const [overviewAnimationProgress, setOverviewAnimationProgress] = useState(0);
   const allowLocalHiddenPreview = process.env.NEXT_PUBLIC_LOCAL_LIVE_SANDBOX === "true";
-  const dnpLabel = "DNP";
 
   useEffect(() => {
     const gameRef = doc(firebaseDB, "games", gameId);
@@ -755,8 +754,9 @@ export default function GamePage() {
   const awayStats = game.playerStats?.filter(p => p.teamId === game.awayTeamId) || [];
   const sortByPointsDesc = (stats: PlayerStat[]) =>
     [...stats].sort((a, b) => (b.pts || 0) - (a.pts || 0));
-  const homeStatsSorted = sortByPointsDesc(homeStats);
-  const awayStatsSorted = sortByPointsDesc(awayStats);
+  // Filter out DNP players from box score display
+  const homeStatsSorted = sortByPointsDesc(homeStats).filter(p => !p.dnp);
+  const awayStatsSorted = sortByPointsDesc(awayStats).filter(p => !p.dnp);
 
   // Find game leaders
   const allPlayers = [...homeStats, ...awayStats];
@@ -1638,7 +1638,7 @@ export default function GamePage() {
                             </td>
                             {boxScoreColumns.map((column) => (
                               <td key={column.key} className={`p-2 sm:p-3 text-center text-xs sm:text-sm tabular-nums ${column.className || ""}`}>
-                                {player.dnp ? dnpLabel : column.value(player)}
+                                {column.value(player)}
                               </td>
                             ))}
                           </tr>
@@ -1708,7 +1708,7 @@ export default function GamePage() {
                             </td>
                             {boxScoreColumns.map((column) => (
                               <td key={column.key} className={`p-2 sm:p-3 text-center text-xs sm:text-sm tabular-nums ${column.className || ""}`}>
-                                {player.dnp ? dnpLabel : column.value(player)}
+                                {column.value(player)}
                               </td>
                             ))}
                           </tr>

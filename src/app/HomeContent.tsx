@@ -3712,10 +3712,12 @@ export default function Home() {
         // Fetch all team rosters in parallel instead of sequentially
         const rosterPromises = teamsSnapshot.docs.map(async (teamDoc) => {
           const teamData = teamDoc.data();
-          const teamName = [teamData.city, teamData.name]
+          const rawTeamName = [teamData.city, teamData.name]
             .filter(Boolean)
             .join(" ")
             .trim() || "Unknown";
+          // Fix duplicate "Espoir Espoir" pattern
+          const teamName = rawTeamName.replace(/^espoir\s+espoir\s+/i, "Espoir ");
           const teamLogo = teamData.logo || "/logos/liprobakin.png";
           const teamGender = normalizeTeamGender(teamData.gender, teamData.logo, "men");
           const rosterRef = collection(firebaseDB, "teams", teamDoc.id, "roster");

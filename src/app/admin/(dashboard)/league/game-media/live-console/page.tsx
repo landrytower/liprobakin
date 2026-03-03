@@ -137,6 +137,7 @@ export default function LiveConsolePage() {
       ...patch,
       status: "live",
       completed: false,
+      isHiddenFromPublic: false,
     };
 
     setGames((prev) => prev.map((game) => (game.id === selectedGame.id ? { ...game, ...optimistic } : game)));
@@ -337,16 +338,34 @@ export default function LiveConsolePage() {
             >
               ⚪ {t.endLive}
             </button>
-            <button
-              type="button"
-              onClick={() => togglePublicVisibility(!Boolean(selectedGame.isHiddenFromPublic))}
-              className="min-h-11 rounded-lg border border-amber-500/40 bg-amber-500/15 px-3 py-2 text-xs font-bold uppercase tracking-wide text-amber-200 hover:bg-amber-500/25 active:scale-95"
-            >
-              {selectedGame.isHiddenFromPublic ? t.showPublic : t.hidePublic}
-            </button>
-            <span className={`rounded-lg border px-3 py-2 text-xs font-semibold ${selectedGame.isHiddenFromPublic ? "border-amber-500/30 bg-amber-500/10 text-amber-200" : "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"}`}>
-              {selectedGame.isHiddenFromPublic ? t.hiddenOn : t.hiddenOff}
-            </span>
+            {String(selectedGame.status || "").toLowerCase() !== "live" && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => togglePublicVisibility(!Boolean(selectedGame.isHiddenFromPublic))}
+                  className="min-h-11 rounded-lg border border-amber-500/40 bg-amber-500/15 px-3 py-2 text-xs font-bold uppercase tracking-wide text-amber-200 hover:bg-amber-500/25 active:scale-95"
+                >
+                  {selectedGame.isHiddenFromPublic ? t.showPublic : t.hidePublic}
+                </button>
+                <span className={`rounded-lg border px-3 py-2 text-xs font-semibold ${selectedGame.isHiddenFromPublic ? "border-amber-500/30 bg-amber-500/10 text-amber-200" : "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"}`}>
+                  {selectedGame.isHiddenFromPublic ? t.hiddenOn : t.hiddenOff}
+                </span>
+              </>
+            )}
+            {String(selectedGame.status || "").toLowerCase() === "live" && !selectedGame.isHiddenFromPublic && (
+              <span className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-200">
+                ✓ {t.hiddenOff}
+              </span>
+            )}
+            {String(selectedGame.status || "").toLowerCase() === "live" && selectedGame.isHiddenFromPublic && (
+              <button
+                type="button"
+                onClick={() => togglePublicVisibility(false)}
+                className="min-h-11 animate-pulse rounded-lg border border-red-500/60 bg-red-500/25 px-3 py-2 text-xs font-bold uppercase tracking-wide text-red-100 hover:bg-red-500/40 active:scale-95"
+              >
+                ⚠️ {t.showPublic}
+              </button>
+            )}
           </div>
 
           <p className="mb-3 text-center text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">{t.editHint}</p>

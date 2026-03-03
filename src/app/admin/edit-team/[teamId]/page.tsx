@@ -1460,15 +1460,15 @@ export default function EditTeamPage() {
                         onClick={() => setNewPlayerForm({ ...newPlayerForm, isImport: !newPlayerForm.isImport })}
                         className={`w-5 h-5 rounded border-2 transition-colors flex items-center justify-center ${
                           newPlayerForm.isImport
-                            ? 'border-red-500 bg-red-500/20'
+                            ? 'border-emerald-500 bg-emerald-500/20'
                             : 'border-white/20 bg-white/5 hover:border-white/40 hover:bg-white/10'
                         }`}
                       >
-                        {newPlayerForm.isImport && <span className="text-red-400 text-xs">✓</span>}
+                        {newPlayerForm.isImport && <span className="text-emerald-400 text-xs">✓</span>}
                       </button>
                       <label className="text-xs cursor-pointer flex items-center gap-1" onClick={() => setNewPlayerForm({ ...newPlayerForm, isImport: !newPlayerForm.isImport })}>
-                        <span className="text-yellow-400">★</span>
-                        <span className="text-red-400 italic font-medium">import</span>
+                        <span className="text-emerald-400">★</span>
+                        <span className="text-slate-300 italic font-medium">import</span>
                       </label>
                     </div>
                   </div>
@@ -1546,15 +1546,15 @@ export default function EditTeamPage() {
                       onClick={() => setNewPlayerForm({ ...newPlayerForm, isImport: !newPlayerForm.isImport })}
                       className={`w-5 h-5 rounded border-2 transition-colors flex items-center justify-center ${
                         newPlayerForm.isImport
-                          ? 'border-red-500 bg-red-500/20'
+                          ? 'border-emerald-500 bg-emerald-500/20'
                           : 'border-white/20 bg-white/5 hover:border-white/40 hover:bg-white/10'
                       }`}
                     >
-                      {newPlayerForm.isImport && <span className="text-red-400 text-xs">✓</span>}
+                      {newPlayerForm.isImport && <span className="text-emerald-400 text-xs">✓</span>}
                     </button>
                     <label className="text-xs cursor-pointer flex items-center gap-1" onClick={() => setNewPlayerForm({ ...newPlayerForm, isImport: !newPlayerForm.isImport })}>
-                      <span className="text-yellow-400">★</span>
-                      <span className="text-red-400 italic font-medium">import</span>
+                      <span className="text-emerald-400">★</span>
+                      <span className="text-slate-300 italic font-medium">import</span>
                     </label>
                   </div>
                   </>
@@ -2350,15 +2350,15 @@ function PlayerEditForm({
                 onClick={() => setForm({ ...form, isImport: !form.isImport })}
                 className={`w-5 h-5 rounded border-2 transition-colors flex items-center justify-center ${
                   form.isImport
-                    ? 'border-red-500 bg-red-500/20'
+                    ? 'border-emerald-500 bg-emerald-500/20'
                     : 'border-white/20 bg-white/5 hover:border-white/40 hover:bg-white/10'
                 }`}
               >
-                {form.isImport && <span className="text-red-400 text-xs">✓</span>}
+                {form.isImport && <span className="text-emerald-400 text-xs">✓</span>}
               </button>
               <label className="text-xs cursor-pointer flex items-center gap-1" onClick={() => setForm({ ...form, isImport: !form.isImport })}>
-                <span className="text-yellow-400">★</span>
-                <span className="text-red-400 italic font-medium">import</span>
+                <span className="text-emerald-400">★</span>
+                <span className="text-slate-300 italic font-medium">import</span>
               </label>
             </div>
           </div>
@@ -2455,15 +2455,15 @@ function PlayerEditForm({
               onClick={() => setForm({ ...form, isImport: !form.isImport })}
               className={`w-5 h-5 rounded border-2 transition-colors flex items-center justify-center ${
                 form.isImport
-                  ? 'border-red-500 bg-red-500/20'
+                  ? 'border-emerald-500 bg-emerald-500/20'
                   : 'border-white/20 bg-white/5 hover:border-white/40 hover:bg-white/10'
               }`}
             >
-              {form.isImport && <span className="text-red-400 text-xs">✓</span>}
+              {form.isImport && <span className="text-emerald-400 text-xs">✓</span>}
             </button>
             <label className="text-xs cursor-pointer flex items-center gap-1" onClick={() => setForm({ ...form, isImport: !form.isImport })}>
-              <span className="text-yellow-400">★</span>
-              <span className="text-red-400 italic font-medium">import</span>
+              <span className="text-emerald-400">★</span>
+              <span className="text-slate-300 italic font-medium">import</span>
             </label>
           </div>
           </>

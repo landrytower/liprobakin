@@ -6745,8 +6745,8 @@ export default function Home() {
                       </div>
                       {player.isImport && (
                         <div className="mt-3 flex items-center justify-center gap-1">
-                          <span className="text-yellow-400">★</span>
-                          <span className="text-red-400 italic font-medium">import</span>
+                          <span className="text-emerald-400">★</span>
+                          <span className="text-slate-300 italic font-medium">import</span>
                         </div>
                       )}
                     </div>

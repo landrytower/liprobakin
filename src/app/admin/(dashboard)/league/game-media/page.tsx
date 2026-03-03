@@ -204,7 +204,7 @@ export default function GameMediaPage() {
   const [loading, setLoading] = useState(true);
   const [selectedGameId, setSelectedGameId] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "upcoming" | "completed">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "upcoming" | "completed">("upcoming");
   const [highlightUrl, setHighlightUrl] = useState("");
   const [originalHighlightUrl, setOriginalHighlightUrl] = useState("");
   const [videoFile, setVideoFile] = useState<File | null>(null);
@@ -557,6 +557,26 @@ export default function GameMediaPage() {
       )}
 
       <div className="rounded-2xl border border-white/10 bg-slate-800/30 p-4 sm:p-5">
+        {/* Filter pills */}
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          {(["upcoming", "completed"] as const).map((f) => (
+            <button
+              key={f}
+              type="button"
+              onClick={() => setStatusFilter(f)}
+              className={`min-h-10 rounded-lg border px-4 py-2 text-xs font-bold uppercase tracking-wide transition-all active:scale-95 ${
+                statusFilter === f
+                  ? f === "upcoming"
+                    ? "border-sky-500/50 bg-sky-500/20 text-sky-200"
+                    : "border-emerald-500/50 bg-emerald-500/20 text-emerald-200"
+                  : "border-white/15 bg-slate-900/60 text-slate-300 hover:border-white/30"
+              }`}
+            >
+              {f === "upcoming" ? t.upcomingGames : t.completedGames}
+            </button>
+          ))}
+        </div>
+
         <div className="mb-4 flex items-center justify-between gap-2">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{t.gameList}</p>
           <span className="text-[11px] text-slate-500">{filteredGames.length}/{games.length} {t.shown}</span>

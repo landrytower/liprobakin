@@ -39,9 +39,11 @@ const copy = {
     live: "LIVE",
     status: "Status",
     period: "Period",
-    editHint: "Double-click score to edit",
+    editHint: "Tap Edit to set exact score",
     home: "Home",
     away: "Away",
+    edit: "Edit",
+    minusOne: "-1",
     undoLast: "Undo Last",
     scoreUpdated: "Live score updated",
     undoUpdated: "Last score action undone",
@@ -66,9 +68,11 @@ const copy = {
     live: "LIVE",
     status: "Statut",
     period: "Période",
-    editHint: "Double-cliquez sur le score pour modifier",
+    editHint: "Touchez Modifier pour entrer le score exact",
     home: "Domicile",
     away: "Visiteur",
+    edit: "Modifier",
+    minusOne: "-1",
     undoLast: "Annuler dernier",
     scoreUpdated: "Score live mis à jour",
     undoUpdated: "Dernière action score annulée",
@@ -272,7 +276,7 @@ export default function LiveConsolePage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 pb-24 sm:pb-0">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">{t.title}</h1>
@@ -299,7 +303,7 @@ export default function LiveConsolePage() {
             setScoreDraft("");
             setSelectedGameId(event.target.value);
           }}
-          className="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-white focus:border-orange-500/40 focus:outline-none"
+          className="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-3 text-base text-white focus:border-orange-500/40 focus:outline-none"
         >
           {games.map((game) => (
             <option key={game.id} value={game.id}>
@@ -310,8 +314,8 @@ export default function LiveConsolePage() {
       </div>
 
       {selectedGame && (
-        <section className="rounded-3xl border border-red-500/30 bg-gradient-to-br from-red-500/10 via-slate-900/70 to-slate-900/70 p-4 sm:p-6">
-          <div className="mb-5 flex items-center justify-between">
+        <section className="rounded-3xl border border-red-500/30 bg-gradient-to-br from-red-500/10 via-slate-900/70 to-slate-900/70 p-3 sm:p-6">
+          <div className="mb-4 flex items-center justify-between sticky top-2 z-10 rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 backdrop-blur">
             <span className="rounded-full border border-red-500/40 bg-red-500/20 px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-red-200">{t.live}</span>
             <span className="text-xs uppercase tracking-wide text-slate-300">{t.status}: {String(selectedGame.status || "live").toUpperCase()}</span>
           </div>
@@ -321,7 +325,7 @@ export default function LiveConsolePage() {
               type="button"
               onClick={() => toggleLiveStatus(true)}
               disabled={String(selectedGame.status || "").toLowerCase() === "live"}
-              className="rounded-lg border border-red-400/40 bg-red-500/15 px-3 py-2 text-xs font-bold uppercase tracking-wide text-red-200 hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-60"
+              className="min-h-11 rounded-lg border border-red-400/40 bg-red-500/15 px-3 py-2 text-xs font-bold uppercase tracking-wide text-red-200 hover:bg-red-500/25 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
             >
               🔴 {t.goLive}
             </button>
@@ -329,26 +333,26 @@ export default function LiveConsolePage() {
               type="button"
               onClick={() => toggleLiveStatus(false)}
               disabled={String(selectedGame.status || "").toLowerCase() !== "live"}
-              className="rounded-lg border border-white/20 bg-slate-900/70 px-3 py-2 text-xs font-bold uppercase tracking-wide text-slate-200 hover:border-white/30 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+              className="min-h-11 rounded-lg border border-white/20 bg-slate-900/70 px-3 py-2 text-xs font-bold uppercase tracking-wide text-slate-200 hover:border-white/30 hover:text-white active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
             >
               ⚪ {t.endLive}
             </button>
             <button
               type="button"
-              onClick={() => togglePublicVisibility(true)}
-              className="rounded-lg border border-amber-500/40 bg-amber-500/15 px-3 py-2 text-xs font-bold uppercase tracking-wide text-amber-200 hover:bg-amber-500/25"
+              onClick={() => togglePublicVisibility(!Boolean(selectedGame.isHiddenFromPublic))}
+              className="min-h-11 rounded-lg border border-amber-500/40 bg-amber-500/15 px-3 py-2 text-xs font-bold uppercase tracking-wide text-amber-200 hover:bg-amber-500/25 active:scale-95"
             >
-              {t.hidePublic}
+              {selectedGame.isHiddenFromPublic ? t.showPublic : t.hidePublic}
             </button>
             <span className={`rounded-lg border px-3 py-2 text-xs font-semibold ${selectedGame.isHiddenFromPublic ? "border-amber-500/30 bg-amber-500/10 text-amber-200" : "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"}`}>
               {selectedGame.isHiddenFromPublic ? t.hiddenOn : t.hiddenOff}
             </span>
           </div>
 
-          <p className="mb-4 text-center text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">{t.editHint}</p>
+          <p className="mb-3 text-center text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">{t.editHint}</p>
 
-          <div className="grid gap-4 md:grid-cols-[1fr_auto_1fr] md:items-center">
-            <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4 sm:p-6">
+          <div className="grid gap-3 md:gap-4 md:grid-cols-[1fr_auto_1fr] md:items-center">
+            <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-3 sm:p-6">
               <div className="mb-3 flex items-center gap-3">
                 {selectedGame.awayTeamLogo ? <Image src={selectedGame.awayTeamLogo} alt={selectedGame.awayTeamName || "Away"} width={44} height={44} className="h-11 w-11 rounded-full object-cover" unoptimized /> : null}
                 <p className="truncate text-lg font-semibold text-white">{selectedGame.awayTeamName}</p>
@@ -372,25 +376,31 @@ export default function LiveConsolePage() {
                       setScoreDraft("");
                     }
                   }}
-                  className="mx-auto block w-32 rounded-lg border border-white/20 bg-slate-800/80 px-3 py-2 text-center text-5xl font-black tabular-nums text-white focus:border-orange-500/50 focus:outline-none"
+                  className="mx-auto block w-36 rounded-lg border border-white/20 bg-slate-800/80 px-3 py-3 text-center text-5xl font-black tabular-nums text-white focus:border-orange-500/50 focus:outline-none"
                 />
               ) : (
-                <button
-                  type="button"
-                  onDoubleClick={() => beginManualEdit("away")}
-                  className="mx-auto block rounded-lg px-4 text-center text-6xl font-black tabular-nums text-white sm:text-7xl"
-                >
-                  {selectedGame.awayScore ?? 0}
-                </button>
+                <div className="space-y-2">
+                  <div className="mx-auto block rounded-lg px-4 text-center text-6xl font-black tabular-nums text-white sm:text-7xl">
+                    {selectedGame.awayScore ?? 0}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => beginManualEdit("away")}
+                    className="mx-auto block min-h-10 rounded-lg border border-white/20 bg-slate-800/80 px-4 text-sm font-semibold text-slate-100 hover:bg-slate-700 active:scale-95"
+                  >
+                    {t.edit}
+                  </button>
+                </div>
               )}
-              <div className="mt-4 grid grid-cols-3 gap-3">
-                <button onClick={() => adjustScore("away", 1)} className="rounded-xl border border-orange-500/40 bg-orange-500/20 px-4 py-3 text-2xl font-black text-white hover:bg-orange-500/30">1</button>
-                <button onClick={() => adjustScore("away", 2)} className="rounded-xl border border-orange-500/40 bg-orange-500/20 px-4 py-3 text-2xl font-black text-white hover:bg-orange-500/30">2</button>
-                <button onClick={() => adjustScore("away", 3)} className="rounded-xl bg-gradient-to-r from-orange-500 to-red-500 px-4 py-3 text-2xl font-black text-white">3</button>
+              <div className="mt-4 grid grid-cols-4 gap-2 sm:gap-3">
+                <button onClick={() => adjustScore("away", -1)} className="min-h-14 rounded-xl border border-white/25 bg-slate-800/90 px-2 py-3 text-xl font-black text-white hover:bg-slate-700 active:scale-95">{t.minusOne}</button>
+                <button onClick={() => adjustScore("away", 1)} className="min-h-14 rounded-xl border border-orange-500/40 bg-orange-500/20 px-2 py-3 text-2xl font-black text-white hover:bg-orange-500/30 active:scale-95">+1</button>
+                <button onClick={() => adjustScore("away", 2)} className="min-h-14 rounded-xl border border-orange-500/40 bg-orange-500/20 px-2 py-3 text-2xl font-black text-white hover:bg-orange-500/30 active:scale-95">+2</button>
+                <button onClick={() => adjustScore("away", 3)} className="min-h-14 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 px-2 py-3 text-2xl font-black text-white active:scale-95">+3</button>
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4 text-center">
+            <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4 text-center sticky bottom-2 md:static z-20">
               <p className="text-xs uppercase tracking-[0.14em] text-slate-400">{t.period}</p>
               <div className="mt-2 grid grid-cols-3 gap-2">
                 {(["Q1", "Q2", "Q3", "Q4", "OT", language === "fr" ? "MT" : "HT"] as const).map((quarter) => {
@@ -415,13 +425,13 @@ export default function LiveConsolePage() {
                 type="button"
                 onClick={undoLastScoreAction}
                 disabled={!lastScoreSnapshot}
-                className="mt-3 w-full rounded-xl border border-white/20 bg-slate-800/80 px-3 py-2 text-sm font-bold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="mt-3 min-h-12 w-full rounded-xl border border-white/20 bg-slate-800/80 px-3 py-2 text-sm font-bold text-white hover:bg-slate-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 ↩ {t.undoLast}
               </button>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4 sm:p-6">
+            <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-3 sm:p-6">
               <div className="mb-3 flex items-center gap-3">
                 {selectedGame.homeTeamLogo ? <Image src={selectedGame.homeTeamLogo} alt={selectedGame.homeTeamName || "Home"} width={44} height={44} className="h-11 w-11 rounded-full object-cover" unoptimized /> : null}
                 <p className="truncate text-lg font-semibold text-white">{selectedGame.homeTeamName}</p>
@@ -445,21 +455,27 @@ export default function LiveConsolePage() {
                       setScoreDraft("");
                     }
                   }}
-                  className="mx-auto block w-32 rounded-lg border border-white/20 bg-slate-800/80 px-3 py-2 text-center text-5xl font-black tabular-nums text-white focus:border-orange-500/50 focus:outline-none"
+                  className="mx-auto block w-36 rounded-lg border border-white/20 bg-slate-800/80 px-3 py-3 text-center text-5xl font-black tabular-nums text-white focus:border-orange-500/50 focus:outline-none"
                 />
               ) : (
-                <button
-                  type="button"
-                  onDoubleClick={() => beginManualEdit("home")}
-                  className="mx-auto block rounded-lg px-4 text-center text-6xl font-black tabular-nums text-white sm:text-7xl"
-                >
-                  {selectedGame.homeScore ?? 0}
-                </button>
+                <div className="space-y-2">
+                  <div className="mx-auto block rounded-lg px-4 text-center text-6xl font-black tabular-nums text-white sm:text-7xl">
+                    {selectedGame.homeScore ?? 0}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => beginManualEdit("home")}
+                    className="mx-auto block min-h-10 rounded-lg border border-white/20 bg-slate-800/80 px-4 text-sm font-semibold text-slate-100 hover:bg-slate-700 active:scale-95"
+                  >
+                    {t.edit}
+                  </button>
+                </div>
               )}
-              <div className="mt-4 grid grid-cols-3 gap-3">
-                <button onClick={() => adjustScore("home", 1)} className="rounded-xl border border-orange-500/40 bg-orange-500/20 px-4 py-3 text-2xl font-black text-white hover:bg-orange-500/30">1</button>
-                <button onClick={() => adjustScore("home", 2)} className="rounded-xl border border-orange-500/40 bg-orange-500/20 px-4 py-3 text-2xl font-black text-white hover:bg-orange-500/30">2</button>
-                <button onClick={() => adjustScore("home", 3)} className="rounded-xl bg-gradient-to-r from-orange-500 to-red-500 px-4 py-3 text-2xl font-black text-white">3</button>
+              <div className="mt-4 grid grid-cols-4 gap-2 sm:gap-3">
+                <button onClick={() => adjustScore("home", -1)} className="min-h-14 rounded-xl border border-white/25 bg-slate-800/90 px-2 py-3 text-xl font-black text-white hover:bg-slate-700 active:scale-95">{t.minusOne}</button>
+                <button onClick={() => adjustScore("home", 1)} className="min-h-14 rounded-xl border border-orange-500/40 bg-orange-500/20 px-2 py-3 text-2xl font-black text-white hover:bg-orange-500/30 active:scale-95">+1</button>
+                <button onClick={() => adjustScore("home", 2)} className="min-h-14 rounded-xl border border-orange-500/40 bg-orange-500/20 px-2 py-3 text-2xl font-black text-white hover:bg-orange-500/30 active:scale-95">+2</button>
+                <button onClick={() => adjustScore("home", 3)} className="min-h-14 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 px-2 py-3 text-2xl font-black text-white active:scale-95">+3</button>
               </div>
             </div>
           </div>

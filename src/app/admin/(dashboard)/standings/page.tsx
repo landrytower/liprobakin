@@ -13,8 +13,6 @@ import {
   query,
   where,
   orderBy,
-  getDocs,
-  Timestamp,
 } from "firebase/firestore";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -59,7 +57,6 @@ export default function StandingsPage() {
   const [standings, setStandings] = useState<StandingsEntry[]>([]);
   const [teams, setTeams] = useState<Map<string, Team>>(new Map());
   const [loading, setLoading] = useState(true);
-  const [genderFilter, setGenderFilter] = useState<"all" | "men" | "women">("all");
 
   // ─── Load Seasons ──────────────────────────────────────────────────────────
 
@@ -86,6 +83,7 @@ export default function StandingsPage() {
     });
 
     return () => unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ─── Load Teams ────────────────────────────────────────────────────────────

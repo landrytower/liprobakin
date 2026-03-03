@@ -4,7 +4,8 @@ import React, { useEffect, useState, useCallback, useMemo, useRef } from "react"
 import Image from "next/image";
 import { useAdmin } from "../layout";
 import { firebaseDB } from "@/lib/firebase";
-import { collection, getDocs, query, orderBy, doc, updateDoc, serverTimestamp, writeBatch } from "firebase/firestore";
+import { formatTeamDisplayName } from "@/lib/team-name";
+import { collection, getDocs, query, orderBy, doc, updateDoc, serverTimestamp, writeBatch, deleteDoc, where } from "firebase/firestore";
 import { logAuditAction } from "@/lib/auditLog";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -94,6 +95,10 @@ const t = {
     gamesNote: "Games appear 45 minutes after start time",
     homeTeam: "Home", awayTeam: "Away",
     collectStats: "Collect", editStats: "Edit",
+    deleteGame: "Delete",
+    deleteGameConfirm: "Are you sure you want to delete this game? This will remove game stats and cannot be undone.",
+    deleteGameSuccess: "Game deleted successfully.",
+    deleteGameError: "Failed to delete game.",
     selectWinner: "Tap the winning team",
     winner: "WINNER",
     loser: "LOSER",
@@ -130,6 +135,10 @@ const t = {
     gamesNote: "Les matchs apparaissent 45 minutes après le début",
     homeTeam: "Domicile", awayTeam: "Extérieur",
     collectStats: "Collecter", editStats: "Modifier",
+    deleteGame: "Supprimer",
+    deleteGameConfirm: "Voulez-vous vraiment supprimer ce match ? Les statistiques seront supprimées et cette action est irréversible.",
+    deleteGameSuccess: "Match supprimé avec succès.",
+    deleteGameError: "Échec de la suppression du match.",
     selectWinner: "Cliquez sur l'équipe gagnante",
     winner: "GAGNANT",
     loser: "PERDANT",
@@ -319,6 +328,7 @@ export default function StatsPage() {
   const [awayScore, setAwayScore] = useState("");
   const [homeScore, setHomeScore] = useState("");
   const [saving, setSaving] = useState(false);
+  const [deletingGameId, setDeletingGameId] = useState<string | null>(null);
   
   // Player stats state
   const [homePlayers, setHomePlayers] = useState<Player[]>([]);
@@ -448,7 +458,7 @@ export default function StatsPage() {
         const data = teamDoc.data() as { name?: string; city?: string };
         const name = (data.name || "").trim();
         const city = (data.city || "").trim();
-        const fullName = city ? `${city} ${name}`.trim() : name;
+        const fullName = formatTeamDisplayName(city, name);
         return {
           id: teamDoc.id,
           name,
@@ -633,7 +643,7 @@ export default function StatsPage() {
     } finally {
       setLoadingPlayers(false);
     }
-  }, []);
+  }, [normalizeDerivedStats]);
 
   const expandGame = useCallback((game: Game) => {
     if (expandedGameId === game.id) {
@@ -666,7 +676,7 @@ export default function StatsPage() {
     setImportMessage(null);
     
     fetchRosters(game);
-  }, [expandedGameId, fetchRosters, normalizeDerivedStats]);
+  }, [expandedGameId, fetchRosters]);
 
   const handleSelectWinner = (teamId: string) => {
     setWinnerId(teamId);
@@ -1400,6 +1410,67 @@ export default function StatsPage() {
     }
   };
 
+  const handleDeleteGame = async (game: Game) => {
+    if (!currentAdminUser?.permissions?.canManageGames) return;
+    if (!window.confirm(copy.deleteGameConfirm)) return;
+
+    setDeletingGameId(game.id);
+    try {
+      const nestedPlayerStatsSnap = await getDocs(collection(firebaseDB, `games/${game.id}/playerStats`));
+      if (!nestedPlayerStatsSnap.empty) {
+        const nestedBatch = writeBatch(firebaseDB);
+        nestedPlayerStatsSnap.docs.forEach((statDoc) => nestedBatch.delete(statDoc.ref));
+        await nestedBatch.commit();
+      }
+
+      const sharedPlayerStatsSnap = await getDocs(
+        query(collection(firebaseDB, "playerGameStats"), where("gameId", "==", game.id))
+      );
+      if (!sharedPlayerStatsSnap.empty) {
+        const sharedBatch = writeBatch(firebaseDB);
+        sharedPlayerStatsSnap.docs.forEach((statDoc) => sharedBatch.delete(statDoc.ref));
+        await sharedBatch.commit();
+      }
+
+      await deleteDoc(doc(firebaseDB, "games", game.id));
+
+      await Promise.all([
+        recalculateTeamRosterStats(game.homeTeamId),
+        recalculateTeamRosterStats(game.awayTeamId),
+        recalculateTeamRecords([game.homeTeamId, game.awayTeamId]),
+      ]);
+
+      await logAuditAction(
+        "game_deleted",
+        currentAdminUser.id,
+        currentAdminUser.email || "unknown",
+        "game",
+        game.id,
+        `${game.awayTeamName} @ ${game.homeTeamName}`,
+        {
+          operation: "stats_page_delete",
+          homeTeam: game.homeTeamName,
+          awayTeam: game.awayTeamName,
+          gameDate: game.date,
+          venue: game.venue,
+        }
+      );
+
+      if (expandedGameId === game.id) {
+        setExpandedGameId(null);
+        setResolvedTeamIds(null);
+      }
+
+      await fetchGames();
+      window.alert(copy.deleteGameSuccess);
+    } catch (error) {
+      console.error("Error deleting game:", error);
+      window.alert(copy.deleteGameError);
+    } finally {
+      setDeletingGameId(null);
+    }
+  };
+
   const canManageStats = currentAdminUser?.permissions?.canManageGames;
 
   // Memoize expanded game
@@ -1448,17 +1519,33 @@ export default function StatsPage() {
                     : "border-blue-500/30 bg-blue-500/5"
                 }`}>
                   {/* Game Header - Clickable */}
-                  <button
-                    type="button"
+                  <div
+                    role="button"
+                    tabIndex={canManageStats ? 0 : -1}
                     onClick={() => canManageStats && expandGame(game)}
-                    disabled={!canManageStats}
-                    className="w-full text-left p-5 hover:bg-white/5 transition disabled:opacity-50"
+                    onKeyDown={(event) => {
+                      if (!canManageStats) return;
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        expandGame(game);
+                      }
+                    }}
+                    className={`w-full text-left p-5 transition ${canManageStats ? "hover:bg-white/5 cursor-pointer" : "opacity-50 cursor-not-allowed"}`}
                   >
                     <div className="flex items-center gap-4">
                       {/* Away Team */}
                       <div className="flex-1 flex items-center gap-3">
                         {game.awayTeamLogo && (
-                          <Image src={game.awayTeamLogo} alt={game.awayTeamName} width={48} height={48} className="rounded-xl ring-2 ring-white/10" unoptimized />
+                          <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-white/15 bg-slate-900 p-1 ring-2 ring-white/10">
+                            <Image
+                              src={game.awayTeamLogo}
+                              alt={game.awayTeamName}
+                              width={48}
+                              height={48}
+                              className="h-full w-full object-contain"
+                              unoptimized
+                            />
+                          </div>
                         )}
                         <div>
                           <div className="font-bold text-white">{game.awayTeamName}</div>
@@ -1497,7 +1584,16 @@ export default function StatsPage() {
                       {/* Home Team */}
                       <div className="flex-1 flex items-center gap-3 flex-row-reverse">
                         {game.homeTeamLogo && (
-                          <Image src={game.homeTeamLogo} alt={game.homeTeamName} width={48} height={48} className="rounded-xl ring-2 ring-white/10" unoptimized />
+                          <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-white/15 bg-slate-900 p-1 ring-2 ring-white/10">
+                            <Image
+                              src={game.homeTeamLogo}
+                              alt={game.homeTeamName}
+                              width={48}
+                              height={48}
+                              className="h-full w-full object-contain"
+                              unoptimized
+                            />
+                          </div>
                         )}
                         <div className="text-right">
                           <div className="font-bold text-white">{game.homeTeamName}</div>
@@ -1522,9 +1618,24 @@ export default function StatsPage() {
                         }`}>
                           {isDone ? copy.done : isExpanded ? "▲" : game.completed ? copy.editStats : copy.collectStats}
                         </div>
+                        {canManageStats && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteGame(game);
+                            }}
+                            disabled={deletingGameId === game.id}
+                            className="rounded-xl px-3 py-2 text-xs font-bold border border-red-500/40 bg-red-500/10 text-red-300 hover:bg-red-500/20 disabled:opacity-60 disabled:cursor-not-allowed"
+                            aria-label={copy.deleteGame}
+                            title={copy.deleteGame}
+                          >
+                            {deletingGameId === game.id ? "..." : copy.deleteGame}
+                          </button>
+                        )}
                       </div>
                     </div>
-                  </button>
+                  </div>
 
                   {/* Expanded Inline Stats Collection */}
                   {isExpanded && expandedGame && (

@@ -9,12 +9,12 @@ export async function GET(request: NextRequest) {
   const firstIp = forwarded.split(',')[0]?.trim();
   const cfIp = request.headers.get('cf-connecting-ip');
   const realIp = request.headers.get('x-real-ip');
-  const nextIp = (request as any).ip;
+  const nextIp = (request as unknown as { ip?: string }).ip;
 
   let country = 'Unknown';
   let city = 'Unknown';
   let region = 'Unknown';
-  let ip = firstIp || cfIp || realIp || nextIp || 'Unknown';
+  const ip = firstIp || cfIp || realIp || nextIp || 'Unknown';
 
   // If on Vercel, use their geo headers
   if (vercelCountry) {

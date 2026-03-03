@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { firebaseDB } from "@/lib/firebase";
+import { formatTeamDisplayName } from "@/lib/team-name";
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { RosterPlayer } from "@/data/febaco";
 import { franchises, franchisesWomen } from "@/data/febaco";
@@ -197,7 +198,7 @@ export default function PlayerProfilePage() {
 
   const allFranchises = [...franchises, ...franchisesWomen];
   const franchise = allFranchises.find((f) => {
-    const franchiseName = f.city ? `${f.city} ${f.name}` : f.name;
+    const franchiseName = formatTeamDisplayName(f.city, f.name);
     return franchiseName === teamName;
   });
 
@@ -220,7 +221,7 @@ export default function PlayerProfilePage() {
           const teamData = teamDoc.data();
           const teamDocName = teamData.name ?? "";
           const teamDocCity = teamData.city ?? "";
-          const fullTeamName = teamDocCity ? `${teamDocCity} ${teamDocName}` : teamDocName;
+          const fullTeamName = formatTeamDisplayName(teamDocCity, teamDocName);
           
           const candidates = [
             teamDocName,

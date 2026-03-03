@@ -9,7 +9,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "sandbox:hello": "node scripts/vercel-sandbox-hello.mjs",
+    "sandbox:check-env": "node scripts/check-sandbox-env.mjs",
+    "sandbox:seed-data": "node scripts/import-sandbox-from-exports.mjs",
+    "sandbox:sync-from-main": "node scripts/sync-main-to-sandbox.mjs",
+    "sandbox:sync-all-from-main": "node scripts/sync-all-main-to-sandbox.mjs"
   },
   "dependencies": {
     "@ai-sdk/groq": "^3.0.24",
@@ -60,6 +65,7 @@
     "baseline-browser-mapping": "^2.9.5",
     "eslint": "^9",
     "eslint-config-next": "16.0.5",
+    "eslint-plugin-react-compiler": "^19.1.0-rc.2",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

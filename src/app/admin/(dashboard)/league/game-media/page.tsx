@@ -47,6 +47,8 @@ const copy = {
     noAccess: "You don't have permission to manage game media.",
     loading: "Loading games...",
     gameList: "Games",
+    openGamePage: "Open game page",
+    manageMedia: "Manage media",
     search: "Search game",
     searchPlaceholder: "Team, date, venue...",
     filter: "Filter",
@@ -72,6 +74,10 @@ const copy = {
     liveScoreConsole: "Live Score Console",
     liveModeHint: "Temporary live score controls (does not finalize the game)",
     liveScoreStatus: "Live Status",
+    goLive: "Set Live",
+    endLive: "Remove from Live",
+    liveNow: "Live now",
+    notLive: "Not live",
     liveHomeScore: "Home Live Score",
     liveAwayScore: "Away Live Score",
     livePeriod: "Period",
@@ -102,6 +108,8 @@ const copy = {
     noAccess: "Vous n'avez pas la permission de gérer les médias des matchs.",
     loading: "Chargement des matchs...",
     gameList: "Matchs",
+    openGamePage: "Ouvrir la page du match",
+    manageMedia: "Gérer les médias",
     search: "Rechercher un match",
     searchPlaceholder: "Équipe, date, site...",
     filter: "Filtre",
@@ -127,6 +135,10 @@ const copy = {
     liveScoreConsole: "Console Score Live",
     liveModeHint: "Contrôles de score temporaire en direct (ne finalise pas le match)",
     liveScoreStatus: "Statut Live",
+    goLive: "Passer en direct",
+    endLive: "Retirer du direct",
+    liveNow: "En direct",
+    notLive: "Hors direct",
     liveHomeScore: "Score Live Domicile",
     liveAwayScore: "Score Live Visiteur",
     livePeriod: "Période",
@@ -136,7 +148,7 @@ const copy = {
     liveUpdateFailed: "Échec de la mise à jour du score live",
     invalidLiveScore: "Entrez des scores live valides",
     openLiveStudio: "Ouvrir la console live plein écran",
-    createYoutubeLive: "Créer un live YouTube",
+    createYoutubeLive: "creer live video",
     creatingYoutubeLive: "Création du live YouTube...",
     youtubeLiveCreated: "Live YouTube créé et lié à ce match",
     youtubeLiveFailed: "Échec de la création du live YouTube",
@@ -207,8 +219,27 @@ export default function GameMediaPage() {
 
   const canManage = currentAdminUser?.permissions?.canManageGameMedia || currentAdminUser?.roles?.includes("master");
 
+  const parseGameDateTime = (game: GameItem) => {
+    const safeDate = (game.date || "").trim();
+    const safeTime = (game.time || "00:00").trim();
+    if (!safeDate) return Number.POSITIVE_INFINITY;
+
+    let normalizedDate = safeDate;
+    if (safeDate.includes("/")) {
+      const [a, b, c] = safeDate.split("/");
+      if (a && b && c) {
+        normalizedDate = `${c}-${a.padStart(2, "0")}-${b.padStart(2, "0")}`;
+      }
+    }
+
+    const normalizedTime = safeTime.length === 5 ? `${safeTime}:00` : safeTime;
+    const parsed = new Date(`${normalizedDate}T${normalizedTime}`);
+    const time = parsed.getTime();
+    return Number.isFinite(time) ? time : Number.POSITIVE_INFINITY;
+  };
+
   useEffect(() => {
-    const gamesQuery = query(collection(firebaseDB, "games"), orderBy("date", "desc"));
+    const gamesQuery = query(collection(firebaseDB, "games"), orderBy("date", "asc"));
     const unsubscribe = onSnapshot(
       gamesQuery,
       (snapshot) => {
@@ -218,9 +249,6 @@ export default function GameMediaPage() {
         }));
 
         setGames(next);
-        if (!selectedGameId && next.length > 0) {
-          setSelectedGameId(next[0].id);
-        }
         setLoading(false);
       },
       (error) => {
@@ -237,14 +265,12 @@ export default function GameMediaPage() {
     [games, selectedGameId]
   );
 
-  const hasExistingMedia = originalPhotos.length > 0 || Boolean(originalHighlightUrl);
-
   const filteredGames = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const query = searchQuery.trim().toLowerCase();
 
-    return games.filter((game) => {
+    const nextGames = games.filter((game) => {
       const isCompleted = game.completed === true || game.status === "completed";
 
       if (statusFilter === "completed" && !isCompleted) return false;
@@ -271,16 +297,9 @@ export default function GameMediaPage() {
 
       return searchable.includes(query);
     });
-  }, [games, searchQuery, statusFilter]);
 
-  useEffect(() => {
-    if (!selectedGameId || filteredGames.some((g) => g.id === selectedGameId)) {
-      return;
-    }
-    if (filteredGames.length > 0) {
-      setSelectedGameId(filteredGames[0].id);
-    }
-  }, [filteredGames, selectedGameId]);
+    return nextGames.sort((a, b) => parseGameDateTime(a) - parseGameDateTime(b));
+  }, [games, searchQuery, statusFilter]);
 
   useEffect(() => {
     if (!selectedGame) {
@@ -537,278 +556,250 @@ export default function GameMediaPage() {
         </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-[340px,1fr]">
-        <div className="rounded-2xl border border-white/10 bg-slate-800/30 p-4">
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t.gameList}</p>
-            <span className="text-[11px] text-slate-500">{filteredGames.length}/{games.length} {t.shown}</span>
-          </div>
-
-          <div className="space-y-2 mb-3">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder={t.searchPlaceholder}
-              className="w-full rounded-lg border border-white/10 bg-slate-900/70 px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:border-orange-500/40 focus:outline-none"
-              aria-label={t.search}
-            />
-            <div className="grid grid-cols-3 gap-1">
-              <button
-                type="button"
-                onClick={() => setStatusFilter("all")}
-                className={`rounded-md px-2 py-1.5 text-[11px] font-semibold transition ${statusFilter === "all" ? "bg-orange-500/20 text-orange-300 border border-orange-500/40" : "bg-slate-900/70 text-slate-300 border border-white/10 hover:border-white/20"}`}
-              >
-                {t.allGames}
-              </button>
-              <button
-                type="button"
-                onClick={() => setStatusFilter("upcoming")}
-                className={`rounded-md px-2 py-1.5 text-[11px] font-semibold transition ${statusFilter === "upcoming" ? "bg-sky-500/20 text-sky-300 border border-sky-500/40" : "bg-slate-900/70 text-slate-300 border border-white/10 hover:border-white/20"}`}
-              >
-                {t.upcomingGames}
-              </button>
-              <button
-                type="button"
-                onClick={() => setStatusFilter("completed")}
-                className={`rounded-md px-2 py-1.5 text-[11px] font-semibold transition ${statusFilter === "completed" ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40" : "bg-slate-900/70 text-slate-300 border border-white/10 hover:border-white/20"}`}
-              >
-                {t.completedGames}
-              </button>
-            </div>
-          </div>
-
-          <div className="max-h-[65vh] space-y-2 overflow-y-auto pr-1">
-            {filteredGames.length === 0 && (
-              <p className="rounded-lg border border-white/10 bg-slate-900/40 px-3 py-3 text-xs text-slate-400">{t.noMatchFilter}</p>
-            )}
-
-            {filteredGames.map((game) => {
-              const selected = game.id === selectedGameId;
-              const photoCount = extractPhotoUrls(game).length;
-              const hasHighlight = Boolean(
-                game.highlightsVideoUrl ||
-                game.highlightVideoUrl ||
-                game.highlightsUrl ||
-                game.highlightUrl ||
-                game.videoUrl ||
-                game.youtubeUrl ||
-                game.streamUrl
-              );
-              const isCompleted = game.completed === true || game.status === "completed";
-              return (
-                <button
-                  key={game.id}
-                  type="button"
-                  onClick={() => setSelectedGameId(game.id)}
-                  className={`w-full rounded-xl border p-3 text-left transition ${selected ? "border-orange-500/40 bg-orange-500/10" : "border-white/10 bg-slate-900/40 hover:border-white/20"}`}
-                >
-                  <p className="text-sm font-semibold text-white truncate">{gameLabel(game)}</p>
-                  <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-400">
-                    <span>{game.date || "—"}{game.time ? ` • ${game.time}` : ""}</span>
-                    <span className={`rounded px-1.5 py-0.5 ${isCompleted ? "bg-emerald-500/15 text-emerald-300" : "bg-sky-500/15 text-sky-300"}`}>
-                      {isCompleted ? t.completedGames : t.upcomingGames}
-                    </span>
-                  </div>
-                  <div className="mt-1 flex items-center gap-3 text-[11px] text-slate-500">
-                    <span>{hasHighlight ? "🎬 1" : "🎬 0"}</span>
-                    <span>📷 {photoCount}</span>
-                    {game.venue && <span className="truncate">📍 {game.venue}</span>}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+      <div className="rounded-2xl border border-white/10 bg-slate-800/30 p-4 sm:p-5">
+        <div className="mb-4 flex items-center justify-between gap-2">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{t.gameList}</p>
+          <span className="text-[11px] text-slate-500">{filteredGames.length}/{games.length} {t.shown}</span>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-slate-800/30 p-4 sm:p-5">
-          {!selectedGame ? (
-            <p className="text-slate-400">{t.selectGame}</p>
-          ) : (
-            <div className="space-y-5">
-              <div>
-                <h2 className="text-lg font-bold text-white">{gameLabel(selectedGame)}</h2>
-                <p className="text-xs text-slate-400">{selectedGame.date || "—"}{selectedGame.time ? ` • ${selectedGame.time}` : ""}</p>
-                <div className="mt-2 rounded-lg border border-white/10 bg-slate-900/40 px-3 py-2 text-xs text-slate-300">
-                  <p className="text-[10px] uppercase tracking-wide text-slate-500 mb-1">{t.gameDetails}</p>
-                  <p>{selectedGame.venue || "—"}{selectedGame.gender ? ` • ${selectedGame.gender}` : ""}</p>
-                </div>
-              </div>
+        <div className="max-h-[72vh] space-y-3 overflow-y-auto pr-1">
+          {filteredGames.length === 0 && (
+            <p className="rounded-lg border border-white/10 bg-slate-900/40 px-3 py-3 text-xs text-slate-400">{t.noMatchFilter}</p>
+          )}
 
-              <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4">
-                <div className="mb-3 flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-red-200">{t.liveScoreConsole}</p>
-                    <p className="text-[11px] text-slate-300">{t.liveModeHint}</p>
-                  </div>
-                  <span className={`rounded px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${String(selectedGame.status || "").toLowerCase() === "live" ? "bg-red-500/20 text-red-200 border border-red-500/40" : "bg-slate-800 text-slate-300 border border-white/10"}`}>
-                    {t.liveScoreStatus}: {String(selectedGame.status || "scheduled").toUpperCase()}
-                  </span>
-                </div>
-                <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-slate-900/50 p-3">
-                  <div className="flex min-w-0 flex-1 items-center gap-2">
-                    {selectedGame.awayTeamLogo ? (
-                      <Image src={selectedGame.awayTeamLogo} alt={selectedGame.awayTeamName || "Away"} width={28} height={28} className="h-7 w-7 rounded-full object-cover" unoptimized />
-                    ) : null}
-                    <span className="truncate text-sm font-semibold text-white">{selectedGame.awayTeamName}</span>
-                    <span className="ml-auto text-xl font-black tabular-nums text-white">{selectedGame.awayScore ?? 0}</span>
-                  </div>
-                  <span className="text-xs font-semibold text-slate-500">VS</span>
-                  <div className="flex min-w-0 flex-1 items-center gap-2">
-                    <span className="text-xl font-black tabular-nums text-white">{selectedGame.homeScore ?? 0}</span>
-                    <span className="truncate text-sm font-semibold text-white">{selectedGame.homeTeamName}</span>
-                    {selectedGame.homeTeamLogo ? (
-                      <Image src={selectedGame.homeTeamLogo} alt={selectedGame.homeTeamName || "Home"} width={28} height={28} className="h-7 w-7 rounded-full object-cover" unoptimized />
-                    ) : null}
-                  </div>
-                </div>
+          {filteredGames.map((game) => {
+            const expanded = game.id === selectedGameId;
+            const isLive = String(game.status || "").toLowerCase() === "live";
+            const isCompleted = game.completed === true || game.status === "completed";
 
-                <Link
-                  href={`/admin/league/game-media/live-console?gameId=${selectedGame.id}`}
-                  className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-red-500 to-orange-500 px-4 py-2 text-sm font-bold text-white shadow-lg shadow-red-500/20 transition hover:shadow-red-500/30"
+            return (
+              <div
+                key={game.id}
+                className={`overflow-hidden rounded-2xl border backdrop-blur-sm transition-all duration-300 ${expanded ? "border-orange-400/45 bg-gradient-to-r from-orange-500/12 to-red-500/8 shadow-lg shadow-orange-900/20" : "border-white/10 bg-slate-900/40 hover:border-white/25"}`}
+              >
+                <button
+                  type="button"
+                  onClick={() => setSelectedGameId((prev) => (prev === game.id ? "" : game.id))}
+                  className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left sm:px-5"
                 >
-                  🎛️ {t.openLiveStudio}
-                </Link>
-
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleCreateYouTubeLive}
-                    disabled={creatingYoutubeLive}
-                    className="inline-flex items-center gap-2 rounded-lg border border-red-400/40 bg-red-500/20 px-4 py-2 text-sm font-bold text-red-100 hover:bg-red-500/30 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {creatingYoutubeLive ? "⏳" : "📺"} {creatingYoutubeLive ? t.creatingYoutubeLive : t.createYoutubeLive}
-                  </button>
-
-                  {youtubeStudioUrl && (
-                    <a
-                      href={youtubeStudioUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 rounded-lg border border-white/20 bg-slate-900/70 px-4 py-2 text-sm font-semibold text-slate-200 hover:border-white/30 hover:text-white"
-                    >
-                      ▶ {t.openYoutubeStudio}
-                    </a>
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-400">{t.highlightLabel}</label>
-                <input
-                  type="url"
-                  value={highlightUrl}
-                  onChange={(event) => setHighlightUrl(event.target.value)}
-                  placeholder={t.highlightPlaceholder}
-                  className="w-full rounded-xl border border-white/10 bg-slate-900/60 px-4 py-2.5 text-sm text-white placeholder:text-slate-500 focus:border-orange-500/40 focus:outline-none"
-                />
-                <div className="mt-2 rounded-lg border border-white/10 bg-slate-900/40 p-3">
-                  <p className="mb-2 text-[11px] text-slate-500 uppercase tracking-wide">{t.currentVideo}</p>
-                  {highlightUrl ? (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <a
-                        href={highlightUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="max-w-full truncate text-xs text-sky-300 hover:text-sky-200"
-                      >
-                        {highlightUrl}
-                      </a>
-                      <button
-                        type="button"
-                        onClick={removeVideo}
-                        className="rounded border border-red-500/40 bg-red-500/10 px-2 py-1 text-[11px] font-semibold text-red-300 hover:bg-red-500/20"
-                      >
-                        {t.removeVideo}
-                      </button>
+                  <div className="min-w-0 flex flex-1 items-center gap-3">
+                    <div className="h-9 w-9 shrink-0 overflow-hidden rounded-lg border border-white/15 bg-slate-900 p-1 ring-1 ring-white/10">
+                      {game.awayTeamLogo ? (
+                        <Image
+                          src={game.awayTeamLogo}
+                          alt={game.awayTeamName || "Away"}
+                          width={36}
+                          height={36}
+                          className="h-full w-full object-contain"
+                          unoptimized
+                        />
+                      ) : null}
                     </div>
-                  ) : (
-                    <p className="text-xs text-slate-500">{t.noVideo}</p>
-                  )}
-                </div>
-              </div>
 
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-400">{t.videoUploadLabel}</label>
-                <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-white/15 px-4 py-2 text-sm text-slate-300 transition hover:border-white/30 hover:text-white">
-                  <span>🎥</span>
-                  {t.addVideo}
-                  <input
-                    type="file"
-                    accept="video/*"
-                    className="hidden"
-                    onChange={(event) => setVideoFile(event.target.files?.[0] || null)}
-                  />
-                </label>
-                {videoFile && (
-                  <div className="mt-2 flex items-center justify-between rounded-lg border border-white/10 bg-slate-900/40 px-3 py-2 text-xs text-slate-300">
-                    <span className="truncate">{videoFile.name}</span>
-                    <button type="button" onClick={() => setVideoFile(null)} className="ml-3 text-red-300 hover:text-red-200">✕</button>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-white sm:text-[15px]">{gameLabel(game)}</p>
+                      <p className="mt-1 text-xs text-slate-300">{game.date || "—"}{game.time ? ` • ${game.time}` : ""}</p>
+                    </div>
+
+                    <div className="h-9 w-9 shrink-0 overflow-hidden rounded-lg border border-white/15 bg-slate-900 p-1 ring-1 ring-white/10">
+                      {game.homeTeamLogo ? (
+                        <Image
+                          src={game.homeTeamLogo}
+                          alt={game.homeTeamName || "Home"}
+                          width={36}
+                          height={36}
+                          className="h-full w-full object-contain"
+                          unoptimized
+                        />
+                      ) : null}
+                    </div>
                   </div>
-                )}
-              </div>
 
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-400">{t.photosLabel}</label>
-                <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-white/15 px-4 py-2 text-sm text-slate-300 transition hover:border-white/30 hover:text-white">
-                  <span>📷</span>
-                  {t.addPhotos}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    className="hidden"
-                    onChange={(event) => handleAddPhotos(event.target.files)}
-                  />
-                </label>
-              </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${isLive ? "border-red-400/40 bg-red-500/20 text-red-100" : "border-white/15 bg-slate-700/60 text-slate-200"}`}>
+                      <span className={`h-1.5 w-1.5 rounded-full ${isLive ? "animate-pulse bg-red-300" : "bg-slate-400"}`} />
+                      {isLive ? t.liveNow : t.notLive}
+                    </span>
+                    <span
+                      aria-hidden="true"
+                      className={`text-sm text-slate-300 transition-transform duration-300 ${expanded ? "rotate-180" : "rotate-0"}`}
+                    >
+                      ▾
+                    </span>
+                  </div>
+                </button>
 
-              {newPhotos.length > 0 && (
-                <div className="rounded-xl border border-white/10 bg-slate-900/40 p-3">
-                  <p className="mb-2 text-xs text-slate-400">{newPhotos.length} {t.selectedPhotos}</p>
-                  <div className="space-y-1.5">
-                    {newPhotos.map((file, index) => (
-                      <div key={`${file.name}-${index}`} className="flex items-center justify-between text-xs text-slate-300">
-                        <span className="truncate">{file.name}</span>
-                        <button type="button" onClick={() => removeNewPhoto(index)} className="ml-3 text-red-300 hover:text-red-200">✕</button>
+                <div
+                  className={`overflow-hidden border-t border-white/10 px-4 sm:px-5 transition-all duration-300 ease-out ${expanded ? "max-h-[2200px] py-4 opacity-100" : "max-h-0 py-0 opacity-0"}`}
+                >
+                  <div className="mb-3 grid grid-cols-1 gap-2 text-xs text-slate-300 sm:grid-cols-3">
+                    <div className="rounded-lg border border-white/10 bg-slate-900/45 px-3 py-2">{game.date || "—"}{game.time ? ` • ${game.time}` : ""}</div>
+                    <div className="rounded-lg border border-white/10 bg-slate-900/45 px-3 py-2">{game.venue || "—"}</div>
+                    <div className={`rounded-lg border px-3 py-2 ${isCompleted ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-200" : "border-sky-500/25 bg-sky-500/10 text-sky-200"}`}>
+                      {isCompleted ? t.completedGames : t.upcomingGames}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Link
+                      href={`/game/${game.id}`}
+                      className="inline-flex items-center gap-2 rounded-lg border border-white/20 bg-slate-900/70 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:border-white/30 hover:text-white"
+                    >
+                      ↗ {t.openGamePage}
+                    </Link>
+                    <Link
+                      href={`/admin/league/game-media/live-console?gameId=${game.id}`}
+                      className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-red-500 to-orange-500 px-3 py-2 text-xs font-bold text-white shadow-md shadow-red-500/25 transition hover:shadow-red-500/35"
+                    >
+                      🎛️ {t.openLiveStudio}
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedGameId(game.id);
+                        void handleCreateYouTubeLive();
+                      }}
+                      disabled={creatingYoutubeLive}
+                      className="inline-flex items-center gap-2 rounded-lg border border-red-400/40 bg-red-500/15 px-3 py-2 text-xs font-semibold text-red-100 transition hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {creatingYoutubeLive ? "⏳" : "📺"} {creatingYoutubeLive ? t.creatingYoutubeLive : t.createYoutubeLive}
+                    </button>
+                  </div>
+
+                  {expanded && selectedGame && selectedGame.id === game.id && (
+                    <div className="mt-4 space-y-4 rounded-xl border border-white/10 bg-slate-950/45 p-4">
+                      <div className="grid gap-4 lg:grid-cols-2">
+                        <div>
+                          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Highlight</p>
+                          <p className="mb-2 text-xs text-slate-500">
+                            {language === "fr"
+                              ? "Téléversez la vidéo depuis votre appareil puis enregistrez."
+                              : "Upload the video from your device, then save to publish."}
+                          </p>
+
+                          <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-white/15 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-white/30 hover:text-white">
+                            <span>🎥</span>
+                            {t.addVideo}
+                            <input
+                              type="file"
+                              accept="video/*"
+                              className="hidden"
+                              onChange={(event) => setVideoFile(event.target.files?.[0] || null)}
+                            />
+                          </label>
+
+                          {videoFile && (
+                            <div className="mt-2 flex items-center justify-between rounded-lg border border-white/10 bg-slate-900/40 px-3 py-2 text-xs text-slate-300">
+                              <span className="truncate">{videoFile.name}</span>
+                              <button type="button" onClick={() => setVideoFile(null)} className="ml-3 text-red-300 hover:text-red-200">✕</button>
+                            </div>
+                          )}
+
+                          <div className="mt-2 rounded-lg border border-white/10 bg-slate-900/40 p-3">
+                            <p className="mb-2 text-[11px] uppercase tracking-wide text-slate-500">{t.currentVideo}</p>
+                            {highlightUrl ? (
+                              <div className="flex flex-wrap items-center gap-2">
+                                <a
+                                  href={highlightUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="max-w-full truncate text-xs text-sky-300 hover:text-sky-200"
+                                >
+                                  {highlightUrl}
+                                </a>
+                                <button
+                                  type="button"
+                                  onClick={removeVideo}
+                                  className="rounded border border-red-500/40 bg-red-500/10 px-2 py-1 text-[11px] font-semibold text-red-300 hover:bg-red-500/20"
+                                >
+                                  {t.removeVideo}
+                                </button>
+                              </div>
+                            ) : (
+                              <p className="text-xs text-slate-500">{t.noVideo}</p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div>
+                          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Photos</p>
+                          <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-white/15 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-white/30 hover:text-white">
+                            <span>📷</span>
+                            {t.addPhotos}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              multiple
+                              className="hidden"
+                              onChange={(event) => handleAddPhotos(event.target.files)}
+                            />
+                          </label>
+
+                          {newPhotos.length > 0 && (
+                            <div className="mt-2 rounded-lg border border-white/10 bg-slate-900/40 p-3">
+                              <p className="mb-2 text-xs text-slate-400">{newPhotos.length} {t.selectedPhotos}</p>
+                              <div className="space-y-1.5">
+                                {newPhotos.map((file, index) => (
+                                  <div key={`${file.name}-${index}`} className="flex items-center justify-between text-xs text-slate-300">
+                                    <span className="truncate">{file.name}</span>
+                                    <button type="button" onClick={() => removeNewPhoto(index)} className="ml-3 text-red-300 hover:text-red-200">✕</button>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="mt-2">
+                            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{t.existingPhotos}</p>
+                            {existingPhotos.length === 0 ? (
+                              <p className="text-xs text-slate-500">{t.noPhotos}</p>
+                            ) : (
+                              <div className="grid grid-cols-2 gap-2">
+                                {existingPhotos.map((photoUrl, index) => (
+                                  <div key={`${photoUrl}-${index}`} className="relative overflow-hidden rounded-lg border border-white/10 bg-black/20">
+                                    <Image src={photoUrl} alt={`Game photo ${index + 1}`} width={220} height={160} className="h-20 w-full object-cover" unoptimized />
+                                    <button
+                                      type="button"
+                                      onClick={() => removeExistingPhoto(index)}
+                                      className="absolute right-1 top-1 rounded-full bg-black/70 px-1.5 py-0.5 text-[10px] text-red-300 hover:text-red-200"
+                                    >
+                                      ✕
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                </div>
-              )}
 
-              <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{t.existingPhotos}</p>
-                {existingPhotos.length === 0 ? (
-                  <p className="text-sm text-slate-500">{t.noPhotos}</p>
-                ) : (
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                    {existingPhotos.map((photoUrl, index) => (
-                      <div key={`${photoUrl}-${index}`} className="relative overflow-hidden rounded-xl border border-white/10 bg-black/20">
-                        <Image src={photoUrl} alt={`Game photo ${index + 1}`} width={320} height={220} className="h-28 w-full object-cover" unoptimized />
+                      <div className="flex flex-wrap items-center gap-2">
                         <button
                           type="button"
-                          onClick={() => removeExistingPhoto(index)}
-                          className="absolute right-1.5 top-1.5 rounded-full bg-black/70 px-2 py-0.5 text-xs text-red-300 hover:text-red-200"
+                          onClick={handleSave}
+                          disabled={saving}
+                          className="rounded-lg bg-gradient-to-r from-orange-500 to-amber-500 px-4 py-2 text-xs font-bold text-white shadow-md shadow-orange-500/20 transition hover:shadow-orange-500/30 disabled:opacity-60"
                         >
-                          ✕
+                          {saving ? `${t.uploading} ${uploadProgress ?? 0}%` : t.save}
                         </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
 
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={saving}
-                className="rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-orange-500/20 transition hover:shadow-orange-500/30 disabled:opacity-60"
-              >
-                {saving ? `${t.uploading} ${uploadProgress ?? 0}%` : hasExistingMedia ? t.modify : t.save}
-              </button>
-            </div>
-          )}
+                        {youtubeStudioUrl && (
+                          <a
+                            href={youtubeStudioUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 rounded-lg border border-white/20 bg-slate-900/70 px-3 py-2 text-xs font-semibold text-slate-200 hover:border-white/30 hover:text-white"
+                          >
+                            ▶ {t.openYoutubeStudio}
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

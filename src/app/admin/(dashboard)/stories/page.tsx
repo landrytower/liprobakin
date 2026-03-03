@@ -1255,6 +1255,7 @@ export default function StoriesPage() {
                   <input
                     type="file"
                     accept="image/*"
+                    title="Upload cover photo"
                     onChange={handleImageChange}
                     disabled={hasCoverVideoSelected}
                     className="w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-orange-500 file:text-white file:cursor-pointer hover:file:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1307,6 +1308,7 @@ export default function StoriesPage() {
                   <input
                     type="file"
                     accept="video/*"
+                    title="Upload cover video"
                     onChange={handleVideoChange}
                     disabled={hasCoverImageSelected}
                     className="w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-orange-500 file:text-white file:cursor-pointer hover:file:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1348,6 +1350,7 @@ export default function StoriesPage() {
                         <input
                           type="file"
                           accept="image/*,video/*"
+                          title={`Upload additional media ${index + 1}`}
                           onChange={(event) => handleAdditionalMediaChange(index, event)}
                           className="w-full text-xs text-slate-400 file:mr-2 file:rounded file:border-0 file:bg-orange-500 file:px-2 file:py-1 file:text-xs file:text-white hover:file:bg-orange-600"
                         />
@@ -1484,6 +1487,7 @@ export default function StoriesPage() {
                             min={0}
                             max={videoDuration}
                             step={0.1}
+                            title="Trim start"
                             value={Math.min(Number(form.videoTrimStart || 0), Math.max(0, Number(form.videoTrimEnd || videoDuration) - 0.1))}
                             onChange={(event) => {
                               const value = Number(event.target.value);
@@ -1507,6 +1511,7 @@ export default function StoriesPage() {
                             min={0}
                             max={videoDuration}
                             step={0.1}
+                            title="Trim end"
                             value={Math.max(Number(form.videoTrimEnd || videoDuration), Number(form.videoTrimStart || 0) + 0.1)}
                             onChange={(event) => {
                               const value = Number(event.target.value);
@@ -1532,6 +1537,7 @@ export default function StoriesPage() {
                             min={-30}
                             max={30}
                             step={1}
+                            title="Move left/right"
                             value={Number(form.videoOffsetX || 0)}
                             onChange={(event) => setForm((prev) => ({ ...prev, videoOffsetX: Number(event.target.value) }))}
                             className="w-full accent-orange-500"
@@ -1547,6 +1553,7 @@ export default function StoriesPage() {
                             min={-30}
                             max={30}
                             step={1}
+                            title="Move up/down"
                             value={Number(form.videoOffsetY || 0)}
                             onChange={(event) => setForm((prev) => ({ ...prev, videoOffsetY: Number(event.target.value) }))}
                             className="w-full accent-orange-500"
@@ -1562,6 +1569,7 @@ export default function StoriesPage() {
                         </div>
                         <input
                           type="range"
+                          title="Frame time"
                           min={Math.max(0, Number(form.videoTrimStart || 0))}
                           max={Math.max(Math.max(0, Number(form.videoTrimStart || 0)) + 0.1, Number(form.videoTrimEnd || videoDuration))}
                           step={0.1}
@@ -1733,6 +1741,7 @@ export default function StoriesPage() {
                 <span className="text-xs text-slate-500">{copy.top}</span>
                 <input
                   type="range"
+                  title="Vertical position"
                   min="0"
                   max="100"
                   value={imagePositionY}

@@ -7,6 +7,7 @@ import { firebaseDB } from "@/lib/firebase";
 import { logAuditAction } from "@/lib/auditLog";
 import { recalculateLeagueStatsFromGames } from "@/lib/league-stats";
 import { convertLocalDateTimeToCongo } from "@/lib/congo-time";
+import { normalizeTeamGender } from "@/lib/team-gender";
 import jsPDF from "jspdf";
 import {
   collection,
@@ -32,7 +33,7 @@ type GenderKey = "men" | "women";
 type Team = {
   id: string;
   name: string;
-  gender: GenderKey;
+  gender: string;
   logo: string;
   wins: number;
   losses: number;
@@ -115,7 +116,6 @@ type MatchdayFormState = {
 
 type ViewMode = "schedule" | "archive" | "matchday" | "calendar";
 type FilterGender = "all" | "men" | "women";
-type CalendarViewType = "list" | "calendar";
 
 // ============================================================================
 // TRANSLATIONS
@@ -208,6 +208,13 @@ const translations = {
     dateRangeRequired: "No date range is set for this matchday. Please create or edit the matchday dates first.",
     dateOutsideMatchday: "Selected date is outside this matchday range. Please pick a date between {start} and {end}, or update the matchday dates.",
     allowedDateRange: "Allowed range: {start} to {end}",
+    cleanupOrphans: "Cleanup Orphan Games",
+    cleanupOrphansDesc: "Delete games that are no longer linked to any existing matchday.",
+    cleanupOrphansConfirm: "This will permanently delete orphan games and their player game stats. Continue?",
+    cleaningUp: "Cleaning...",
+    cleanupCompleted: "Orphan cleanup completed: {games} game(s) and {stats} player stat row(s) deleted.",
+    cleanupNoOrphans: "No orphan games found.",
+    cleanupFailed: "Failed to cleanup orphan games",
   },
   fr: {
     title: "Gestion des Matchs",
@@ -295,6 +302,13 @@ const translations = {
     dateRangeRequired: "Aucune période n'est définie pour cette journée. Veuillez d'abord créer ou modifier les dates de la journée.",
     dateOutsideMatchday: "La date choisie est hors de la période de cette journée. Choisissez une date entre {start} et {end}, ou modifiez les dates de la journée.",
     allowedDateRange: "Période autorisée : {start} à {end}",
+    cleanupOrphans: "Nettoyer les matchs orphelins",
+    cleanupOrphansDesc: "Supprime les matchs qui ne sont plus liés à aucune journée existante.",
+    cleanupOrphansConfirm: "Cette action supprimera définitivement les matchs orphelins et leurs statistiques joueurs. Continuer ?",
+    cleaningUp: "Nettoyage...",
+    cleanupCompleted: "Nettoyage terminé : {games} match(s) et {stats} statistique(s) joueur supprimés.",
+    cleanupNoOrphans: "Aucun match orphelin trouvé.",
+    cleanupFailed: "Échec du nettoyage des matchs orphelins",
   },
 };
 
@@ -326,9 +340,8 @@ export default function GamesPage() {
 
   // View state
   const [viewMode, setViewMode] = useState<ViewMode>("matchday");
-  const [calendarViewType, setCalendarViewType] = useState<CalendarViewType>("calendar");
   const [filterGender, setFilterGender] = useState<FilterGender>("all");
-  const [selectedWeek, setSelectedWeek] = useState<number>(1);
+  const [selectedWeek, ] = useState<number>(1);
   const [selectedMatchday, setSelectedMatchday] = useState<Matchday | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -349,6 +362,7 @@ export default function GamesPage() {
   const [matchdayFormState, setMatchdayFormState] = useState<MatchdayFormState>(initialMatchdayFormState);
   const [submitting, setSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
+  const [cleanupSubmitting, setCleanupSubmitting] = useState(false);
   const gameFormPanelRef = useRef<HTMLDivElement | null>(null);
 
   // Score entry state
@@ -452,7 +466,7 @@ export default function GamesPage() {
         snapshot.docs.map((docSnap) => ({
           id: docSnap.id,
           name: docSnap.data().name,
-          gender: docSnap.data().gender || "men",
+          gender: docSnap.data().gender || "",
           logo: docSnap.data().logo || "",
           wins: docSnap.data().wins || 0,
           losses: docSnap.data().losses || 0,
@@ -512,9 +526,20 @@ export default function GamesPage() {
   // COMPUTED DATA
   // ============================================================================
 
-  // Filter teams by selected gender
+  // Filter teams by selected gender and deduplicate by name
   const filteredTeams = useMemo(() => {
-    return teams.filter((team) => team.gender === formState.gender);
+    const genderFiltered = teams.filter(
+      (team) =>
+        normalizeTeamGender(team.gender, team.logo, formState.gender) === formState.gender
+    );
+    // Deduplicate by team name (keep first occurrence)
+    const seen = new Map<string, boolean>();
+    return genderFiltered.filter((team) => {
+      const key = team.name.trim().toLowerCase();
+      if (seen.has(key)) return false;
+      seen.set(key, true);
+      return true;
+    });
   }, [teams, formState.gender]);
 
   const selectedHomeTeam = useMemo(
@@ -550,9 +575,67 @@ export default function GamesPage() {
     );
   }, [formState.gender, formState.week, matchdays]);
 
+  const gamesLinkedToMatchdays = useMemo(() => {
+    if (matchdays.length === 0) {
+      return [];
+    }
+
+    const normalizeWeek = (value: unknown): number | null => {
+      if (typeof value === "number" && Number.isFinite(value)) {
+        return value;
+      }
+      if (typeof value === "string") {
+        const parsed = parseInt(value, 10);
+        return Number.isFinite(parsed) ? parsed : null;
+      }
+      return null;
+    };
+
+    const normalizeSeasonId = (value: unknown): string => {
+      if (typeof value === "string" && value.trim()) {
+        return value.trim();
+      }
+      return currentSeasonId;
+    };
+
+    return games.filter((game) => {
+      const gameWeek = normalizeWeek(game.week);
+      if (gameWeek === null) {
+        return false;
+      }
+
+      const gameSeasonId = normalizeSeasonId(game.seasonId);
+
+      return matchdays.some((matchday) => {
+        const matchdayWeek = normalizeWeek(matchday.week);
+        if (matchdayWeek === null || gameWeek !== matchdayWeek) {
+          return false;
+        }
+
+        if (gameSeasonId !== normalizeSeasonId(matchday.seasonId)) {
+          return false;
+        }
+
+        if (matchday.gender !== "all" && game.gender !== matchday.gender) {
+          return false;
+        }
+
+        if (matchday.startDate && game.date < matchday.startDate) {
+          return false;
+        }
+
+        if (matchday.endDate && game.date > matchday.endDate) {
+          return false;
+        }
+
+        return true;
+      });
+    });
+  }, [games, matchdays]);
+
   // Filter games based on current view and filters
   const filteredGames = useMemo(() => {
-    let result = games;
+    let result = gamesLinkedToMatchdays;
 
     // Filter by gender
     if (filterGender !== "all") {
@@ -576,7 +659,7 @@ export default function GamesPage() {
     }
 
     return result;
-  }, [games, filterGender, viewMode, selectedWeek, selectedMatchday]);
+  }, [gamesLinkedToMatchdays, filterGender, viewMode, selectedWeek, selectedMatchday]);
 
   // Group games by date (for schedule view)
   const gamesByDate = useMemo(() => {
@@ -604,11 +687,11 @@ export default function GamesPage() {
 
   // Stats
   const stats = useMemo(() => {
-    const total = games.length;
-    const completed = games.filter((g) => g.status === "completed").length;
-    const upcoming = games.filter((g) => g.status === "scheduled").length;
+    const total = gamesLinkedToMatchdays.length;
+    const completed = gamesLinkedToMatchdays.filter((g) => g.status === "completed").length;
+    const upcoming = gamesLinkedToMatchdays.filter((g) => g.status === "scheduled").length;
     return { total, completed, upcoming };
-  }, [games]);
+  }, [gamesLinkedToMatchdays]);
 
   // ============================================================================
   // HANDLERS
@@ -720,13 +803,54 @@ export default function GamesPage() {
 
     try {
       const gamesSnapshot = await getDocs(collection(firebaseDB, "games"));
+
+      const normalizeWeek = (value: unknown): number | null => {
+        if (typeof value === "number" && Number.isFinite(value)) {
+          return value;
+        }
+        if (typeof value === "string") {
+          const parsed = parseInt(value, 10);
+          return Number.isFinite(parsed) ? parsed : null;
+        }
+        return null;
+      };
+
+      const normalizeSeasonId = (value: unknown): string => {
+        if (typeof value === "string" && value.trim()) {
+          return value.trim();
+        }
+        return currentSeasonId;
+      };
+
+      const targetWeek = normalizeWeek(matchday.week);
+      const targetSeasonId = normalizeSeasonId(matchday.seasonId);
+
       const gamesToDelete = gamesSnapshot.docs.filter((gameDoc) => {
-        const game = gameDoc.data() as Partial<Game>;
-        const isSameSeason = game.seasonId === matchday.seasonId;
-        const isSameWeek = game.week === matchday.week;
-        const isSameGender =
-          matchday.gender === "all" || game.gender === matchday.gender;
-        return isSameSeason && isSameWeek && isSameGender;
+        const game = gameDoc.data() as Record<string, unknown>;
+        const gameWeek = normalizeWeek(game.week);
+
+        if (targetWeek === null || gameWeek === null || gameWeek !== targetWeek) {
+          return false;
+        }
+
+        if (normalizeSeasonId(game.seasonId) !== targetSeasonId) {
+          return false;
+        }
+
+        const gameGender = game.gender === "women" ? "women" : "men";
+        if (matchday.gender !== "all" && gameGender !== matchday.gender) {
+          return false;
+        }
+
+        const gameDate = typeof game.date === "string" ? game.date : "";
+        if (matchday.startDate && gameDate && gameDate < matchday.startDate) {
+          return false;
+        }
+        if (matchday.endDate && gameDate && gameDate > matchday.endDate) {
+          return false;
+        }
+
+        return true;
       });
 
       for (const gameDoc of gamesToDelete) {
@@ -775,6 +899,140 @@ export default function GamesPage() {
     } catch (error) {
       console.error("Error deleting matchday:", error);
       setStatusMessage({ type: "error", message: "Failed to delete matchday" });
+    }
+  };
+
+  const handleCleanupOrphanGames = async () => {
+    if (!currentAdminUser) return;
+
+    if (!window.confirm(t.cleanupOrphansConfirm)) {
+      return;
+    }
+
+    setCleanupSubmitting(true);
+
+    try {
+      const normalizeWeek = (value: unknown): number | null => {
+        if (typeof value === "number" && Number.isFinite(value)) {
+          return value;
+        }
+        if (typeof value === "string") {
+          const parsed = parseInt(value, 10);
+          return Number.isFinite(parsed) ? parsed : null;
+        }
+        return null;
+      };
+
+      const normalizeSeasonId = (value: unknown): string => {
+        if (typeof value === "string" && value.trim()) {
+          return value.trim();
+        }
+        return currentSeasonId;
+      };
+
+      const matchdaysSnapshot = await getDocs(collection(firebaseDB, "matchdays"));
+      const gamesSnapshot = await getDocs(collection(firebaseDB, "games"));
+
+      const matchdayRules = matchdaysSnapshot.docs.map((matchdayDoc) => {
+        const raw = matchdayDoc.data() as Record<string, unknown>;
+        return {
+          week: normalizeWeek(raw.week),
+          seasonId: normalizeSeasonId(raw.seasonId),
+          gender: raw.gender === "women" ? "women" : raw.gender === "men" ? "men" : "all",
+          startDate: typeof raw.startDate === "string" ? raw.startDate : "",
+          endDate: typeof raw.endDate === "string" ? raw.endDate : "",
+        };
+      });
+
+      const orphanGames = gamesSnapshot.docs.filter((gameDoc) => {
+        const raw = gameDoc.data() as Record<string, unknown>;
+        const gameWeek = normalizeWeek(raw.week);
+
+        if (gameWeek === null) {
+          return true;
+        }
+
+        const gameSeasonId = normalizeSeasonId(raw.seasonId);
+        const gameGender = raw.gender === "women" ? "women" : "men";
+        const gameDate = typeof raw.date === "string" ? raw.date : "";
+
+        const linkedMatchday = matchdayRules.some((rule) => {
+          if (rule.week === null || rule.week !== gameWeek) {
+            return false;
+          }
+
+          if (rule.seasonId !== gameSeasonId) {
+            return false;
+          }
+
+          if (rule.gender !== "all" && rule.gender !== gameGender) {
+            return false;
+          }
+
+          if (rule.startDate && gameDate && gameDate < rule.startDate) {
+            return false;
+          }
+
+          if (rule.endDate && gameDate && gameDate > rule.endDate) {
+            return false;
+          }
+
+          return true;
+        });
+
+        return !linkedMatchday;
+      });
+
+      if (orphanGames.length === 0) {
+        setStatusMessage({ type: "info", message: t.cleanupNoOrphans });
+        return;
+      }
+
+      let deletedStatsCount = 0;
+      for (const gameDoc of orphanGames) {
+        const playerGameStatsSnapshot = await getDocs(
+          query(collection(firebaseDB, "playerGameStats"), where("gameId", "==", gameDoc.id))
+        );
+
+        if (!playerGameStatsSnapshot.empty) {
+          const statsDeleteBatch = writeBatch(firebaseDB);
+          playerGameStatsSnapshot.docs.forEach((statDoc) => {
+            statsDeleteBatch.delete(statDoc.ref);
+          });
+          await statsDeleteBatch.commit();
+          deletedStatsCount += playerGameStatsSnapshot.size;
+        }
+
+        await deleteDoc(gameDoc.ref);
+      }
+
+      await recalculateLeagueStatsFromGames();
+
+      await logAuditAction(
+        "game_deleted",
+        currentAdminUser.id,
+        currentAdminUser.email || "unknown",
+        "game",
+        "orphan-cleanup",
+        "Orphan Games Cleanup",
+        {
+          operation: "orphan_games_cleanup",
+          deletedGamesCount: orphanGames.length,
+          deletedPlayerGameStatsCount: deletedStatsCount,
+        }
+      );
+
+      setStatusMessage({
+        type: "success",
+        message: t.cleanupCompleted
+          .replace("{games}", String(orphanGames.length))
+          .replace("{stats}", String(deletedStatsCount)),
+      });
+    } catch (error) {
+      console.error("Error cleaning orphan games:", error);
+      setStatusMessage({ type: "error", message: t.cleanupFailed });
+    } finally {
+      setCleanupSubmitting(false);
     }
   };
 
@@ -1472,6 +1730,22 @@ export default function GamesPage() {
         </div>
       )}
 
+      <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 sm:p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-amber-300">{t.cleanupOrphans}</h3>
+            <p className="mt-1 text-sm text-amber-100/80">{t.cleanupOrphansDesc}</p>
+          </div>
+          <button
+            onClick={handleCleanupOrphanGames}
+            disabled={cleanupSubmitting}
+            className="rounded-xl border border-amber-500/40 px-4 py-2 text-sm font-semibold text-amber-300 transition hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {cleanupSubmitting ? t.cleaningUp : t.cleanupOrphans}
+          </button>
+        </div>
+      </div>
+
       {/* View Mode & Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
         {/* View Mode Tabs */}
@@ -2092,10 +2366,12 @@ export default function GamesPage() {
                     .sort((a, b) => a.week - b.week)
                     .map((matchday) => {
                       // Count games in this matchday
-                      const matchdayGames = games.filter((g) => {
+                      const matchdayGames = gamesLinkedToMatchdays.filter((g) => {
                         if (!matchday.startDate || !matchday.endDate) return false;
                         const gameDate = g.date;
-                        return gameDate >= matchday.startDate && gameDate <= matchday.endDate;
+                        const isWithinDateRange = gameDate >= matchday.startDate && gameDate <= matchday.endDate;
+                        const isMatchingGender = matchday.gender === "all" || g.gender === matchday.gender;
+                        return isWithinDateRange && isMatchingGender;
                       });
                       const startFormatted = matchday.startDate ? new Date(matchday.startDate + "T00:00:00").toLocaleDateString(language === "fr" ? "fr-FR" : "en-US", { month: "short", day: "numeric" }) : "";
                       const endFormatted = matchday.endDate ? new Date(matchday.endDate + "T00:00:00").toLocaleDateString(language === "fr" ? "fr-FR" : "en-US", { month: "short", day: "numeric" }) : "";
@@ -2414,7 +2690,7 @@ export default function GamesPage() {
                       }
 
                       const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-                      const dayGames = games.filter((g) => g.date === dateStr);
+                      const dayGames = gamesLinkedToMatchdays.filter((g) => g.date === dateStr);
                       const isSelected = selectedDate === dateStr;
 
                       return (
@@ -2457,7 +2733,7 @@ export default function GamesPage() {
                   </div>
 
                   {(() => {
-                    const dateGames = games.filter((g) => g.date === selectedDate);
+                    const dateGames = gamesLinkedToMatchdays.filter((g) => g.date === selectedDate);
                     return dateGames.length === 0 ? (
                       <div className="rounded-lg border border-white/10 bg-slate-800/40 p-8 text-center">
                         <p className="text-slate-400">{t.noGamesForDate}</p>
@@ -2526,6 +2802,8 @@ type GameCardProps = {
 
 function GameCard({ game, t, formatDate, getStatusBadge, onEdit, onDelete, onEnterScore, compact }: GameCardProps) {
   const isCompleted = game.status === "completed";
+  const logoSizeClass = compact ? "h-7 w-7" : "h-9 w-9";
+  const logoImageSize = compact ? 28 : 36;
 
   return (
     <div
@@ -2548,9 +2826,20 @@ function GameCard({ game, t, formatDate, getStatusBadge, onEdit, onDelete, onEnt
 
           {/* Away Team */}
           <div className="flex items-center gap-2 min-w-0 flex-1">
-            {game.awayTeamLogo && (
-              <Image src={game.awayTeamLogo} alt="" width={compact ? 28 : 36} height={compact ? 28 : 36} className="rounded-full flex-shrink-0" unoptimized />
-            )}
+            <div className={`${logoSizeClass} rounded-full border border-white/15 bg-white/90 overflow-hidden flex-shrink-0 flex items-center justify-center`}>
+              {game.awayTeamLogo ? (
+                <Image
+                  src={game.awayTeamLogo}
+                  alt={game.awayTeamName}
+                  width={logoImageSize}
+                  height={logoImageSize}
+                  className="h-full w-full object-contain p-0.5"
+                  unoptimized
+                />
+              ) : (
+                <span className="text-[10px] font-semibold text-slate-700">{game.awayTeamName?.[0] ?? "?"}</span>
+              )}
+            </div>
             <div className="min-w-0">
               <p className={`font-semibold text-white truncate ${compact ? "text-sm" : ""}`}>{game.awayTeamName}</p>
               {!compact && <p className="text-[10px] text-slate-500 uppercase">{t.awayTeam}</p>}
@@ -2582,9 +2871,20 @@ function GameCard({ game, t, formatDate, getStatusBadge, onEdit, onDelete, onEnt
               <p className={`font-semibold text-white truncate ${compact ? "text-sm" : ""}`}>{game.homeTeamName}</p>
               {!compact && <p className="text-[10px] text-slate-500 uppercase">{t.homeTeam}</p>}
             </div>
-            {game.homeTeamLogo && (
-              <Image src={game.homeTeamLogo} alt="" width={compact ? 28 : 36} height={compact ? 28 : 36} className="rounded-full flex-shrink-0" unoptimized />
-            )}
+            <div className={`${logoSizeClass} rounded-full border border-white/15 bg-white/90 overflow-hidden flex-shrink-0 flex items-center justify-center`}>
+              {game.homeTeamLogo ? (
+                <Image
+                  src={game.homeTeamLogo}
+                  alt={game.homeTeamName}
+                  width={logoImageSize}
+                  height={logoImageSize}
+                  className="h-full w-full object-contain p-0.5"
+                  unoptimized
+                />
+              ) : (
+                <span className="text-[10px] font-semibold text-slate-700">{game.homeTeamName?.[0] ?? "?"}</span>
+              )}
+            </div>
           </div>
         </div>
 

@@ -1,6 +1,7 @@
 import { createGroq } from "@ai-sdk/groq";
 import { streamText } from "ai";
 import { getAdminFirestore } from "@/lib/firebaseAdmin";
+import { formatTeamDisplayName } from "@/lib/team-name";
 
 // Types for Firestore data
 type FirestoreGame = {
@@ -206,7 +207,7 @@ async function buildCurrentLeagueContext(): Promise<string> {
     }> = new Map();
 
     const teamDetailsEntries = await Promise.all(teams.map(async (team) => {
-      const teamName = team.city ? `${team.city} ${team.name}` : team.name;
+      const teamName = formatTeamDisplayName(team.city, team.name);
 
       const [coachStaffSnapshot, rosterSnapshot] = await Promise.all([
         db.collection("teams").doc(team.id).collection("coachStaff").get(),
@@ -230,7 +231,7 @@ async function buildCurrentLeagueContext(): Promise<string> {
       .sort((a, b) => ((b.wins ?? 0) - (b.losses ?? 0)) - ((a.wins ?? 0) - (a.losses ?? 0)));
     if (menStandings.length > 0) {
       menStandings.forEach((team, idx) => {
-        const fullName = team.city ? `${team.city} ${team.name}` : team.name;
+        const fullName = formatTeamDisplayName(team.city, team.name);
         pushLine(`${idx + 1}. ${fullName} (${team.wins ?? 0}-${team.losses ?? 0})`);
       });
     } else {
@@ -243,7 +244,7 @@ async function buildCurrentLeagueContext(): Promise<string> {
       .sort((a, b) => ((b.wins ?? 0) - (b.losses ?? 0)) - ((a.wins ?? 0) - (a.losses ?? 0)));
     if (womenStandings.length > 0) {
       womenStandings.forEach((team, idx) => {
-        const fullName = team.city ? `${team.city} ${team.name}` : team.name;
+        const fullName = formatTeamDisplayName(team.city, team.name);
         pushLine(`${idx + 1}. ${fullName} (${team.wins ?? 0}-${team.losses ?? 0})`);
       });
     } else {
@@ -412,7 +413,7 @@ async function buildCurrentLeagueContext(): Promise<string> {
     const teamNameToId = new Map<string, string>();
 
     teams.forEach((team) => {
-      const fullName = team.city ? `${team.city} ${team.name}` : team.name;
+      const fullName = formatTeamDisplayName(team.city, team.name);
       teamNameToId.set(fullName.toLowerCase().trim(), team.id);
       teamNameToId.set(team.name.toLowerCase().trim(), team.id);
       teamAggMap.set(team.id, {
@@ -612,7 +613,7 @@ async function buildCurrentLeagueContext(): Promise<string> {
     // Men's Teams with Coaches and Players
     pushLine("=== MEN'S TEAMS WITH STAFF & ROSTER ===");
     for (const team of menTeams) {
-      const fullName = team.city ? `${team.city} ${team.name}` : team.name;
+      const fullName = formatTeamDisplayName(team.city, team.name);
       const details = teamDetails.get(team.id);
       
       pushLine(`\n--- ${fullName} ---`);
@@ -666,7 +667,7 @@ async function buildCurrentLeagueContext(): Promise<string> {
     // Women's Teams with Coaches and Players
     pushLine("=== WOMEN'S TEAMS WITH STAFF & ROSTER ===");
     for (const team of womenTeams) {
-      const fullName = team.city ? `${team.city} ${team.name}` : team.name;
+      const fullName = formatTeamDisplayName(team.city, team.name);
       const details = teamDetails.get(team.id);
       
       pushLine(`\n--- ${fullName} ---`);

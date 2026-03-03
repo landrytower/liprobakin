@@ -20,6 +20,7 @@ import {
   type GameResult,
   type ScheduleEntry,
 } from "@/data/febaco";
+import { formatTeamDisplayName } from "@/lib/team-name";
 
 import gamesRaw from "@/data/exports/games.json";
 
@@ -269,12 +270,12 @@ export function buildAIContext(): string {
   // Teams
   context.push("\n=== MEN'S TEAMS ===");
   franchises.forEach((team) => {
-    context.push(`- ${team.city ? team.city + " " : ""}${team.name}`);
+    context.push(`- ${formatTeamDisplayName(team.city, team.name)}`);
   });
 
   context.push("\n=== WOMEN'S TEAMS ===");
   franchisesWomen.forEach((team) => {
-    context.push(`- ${team.city ? team.city + " " : ""}${team.name}`);
+    context.push(`- ${formatTeamDisplayName(team.city, team.name)}`);
   });
 
   // Partners
@@ -350,14 +351,14 @@ export function getTeamInfo(teamName: string): string {
   const menTeam = franchises.find(
     (t) =>
       normalize(t.name) === normalize(teamName) ||
-      normalize(`${t.city} ${t.name}`.trim()) === normalize(teamName)
+      normalize(formatTeamDisplayName(t.city, t.name)) === normalize(teamName)
   );
 
   // Search in women's teams
   const womenTeam = franchisesWomen.find(
     (t) =>
       normalize(t.name) === normalize(teamName) ||
-      normalize(`${t.city} ${t.name}`.trim()) === normalize(teamName)
+      normalize(formatTeamDisplayName(t.city, t.name)) === normalize(teamName)
   );
 
   // Get standings
@@ -376,7 +377,7 @@ export function getTeamInfo(teamName: string): string {
   }
 
   return JSON.stringify({
-    name: team ? `${team.city ? team.city + " " : ""}${team.name}` : standing?.team,
+    name: team ? formatTeamDisplayName(team.city, team.name) : standing?.team,
     division: menTeam || menStanding ? "Men's" : "Women's",
     record: standing ? `${standing.wins}-${standing.losses}` : "No games played",
     ranking: standing ? standing.seed : null,

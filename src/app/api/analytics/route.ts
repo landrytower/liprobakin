@@ -35,7 +35,8 @@ function getClientIp(req: NextRequest): string | null {
   if (cf) return cf;
   const real = req.headers.get('x-real-ip');
   if (real) return real;
-  if ((req as any).ip) return (req as any).ip as string;
+  const reqIp = (req as unknown as { ip?: string }).ip;
+  if (reqIp) return reqIp;
   return null;
 }
 
@@ -100,7 +101,7 @@ async function updateFirestoreMetrics(updates: {
     const db = getAdminFirestore();
     const metricsRef = db.collection(ANALYTICS_COLLECTION).doc(METRICS_DOC_ID);
     
-    const batch: Record<string, any> = {
+    const batch: Record<string, unknown> = {
       last_updated: FieldValue.serverTimestamp()
     };
     
@@ -174,6 +175,7 @@ async function getFirestoreMetrics() {
       const rawData = doc.data() || {};
       
       // Reconstruct nested objects from flat keys (e.g., "pageViewsByCountry.US" -> pageViewsByCountry: {US: ...})
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic nested object reconstruction requires any
       const data: Record<string, any> = {};
       for (const [key, value] of Object.entries(rawData)) {
         if (key.includes('.')) {

@@ -67,6 +67,8 @@ type Team = {
   losses: number;
   totalPoints: number;
   venue?: string;
+  teamPhoto?: string;
+  teamPhotoPosition?: number;
 };
 
 export default function EditTeamPage() {
@@ -233,7 +235,7 @@ export default function EditTeamPage() {
           setPhotoPositionY(JSON.parse(savedForm).teamPhotoPosition || 50);
         } else {
           // Load fresh data from database
-          const photoPos = (teamData as any).teamPhotoPosition || 50;
+          const photoPos = teamData.teamPhotoPosition || 50;
           setTeamForm({
             name: teamData.name || "",
             city: teamData.city || "",
@@ -242,7 +244,7 @@ export default function EditTeamPage() {
             color2: teamData.colors?.[1] || "",
             logo: teamData.logo || "",
             venue: teamData.venue || "",
-            teamPhoto: (teamData as any).teamPhoto || "",
+            teamPhoto: teamData.teamPhoto || "",
             teamPhotoPosition: photoPos,
           });
           setPhotoPositionY(photoPos);
@@ -291,7 +293,7 @@ export default function EditTeamPage() {
     // Clear saved form state and restore original data
     const savedFormKey = `teamForm_${team.id}`;
     sessionStorage.removeItem(savedFormKey);
-    const photoPos = (team as any).teamPhotoPosition || 50;
+    const photoPos = team.teamPhotoPosition || 50;
     setTeamForm({
       name: team.name || "",
       city: team.city || "",
@@ -300,7 +302,7 @@ export default function EditTeamPage() {
       color2: team.colors?.[1] || "",
       logo: team.logo || "",
       venue: team.venue || "",
-      teamPhoto: (team as any).teamPhoto || "",
+      teamPhoto: team.teamPhoto || "",
       teamPhotoPosition: photoPos,
     });
     setPhotoPositionY(photoPos);
@@ -901,6 +903,7 @@ export default function EditTeamPage() {
                 <label className="block text-sm font-medium text-slate-300 mb-2">Team Name</label>
                 <input
                   type="text"
+                  title="Team name"
                   value={teamForm.name}
                   onChange={(e) => setTeamForm({ ...teamForm, name: e.target.value })}
                   className="w-full rounded-lg border border-white/20 bg-white/5 px-4 py-2 text-white"
@@ -1080,6 +1083,7 @@ export default function EditTeamPage() {
                     </p>
                     <input
                       type="color"
+                      title="Primary color"
                       value={teamForm.color1}
                       onChange={(e) => setTeamForm({ ...teamForm, color1: e.target.value })}
                       className="w-full h-20 rounded-lg border border-white/20 bg-white/5 cursor-pointer"
@@ -1091,6 +1095,7 @@ export default function EditTeamPage() {
                     </p>
                     <input
                       type="color"
+                      title="Secondary color"
                       value={teamForm.color2}
                       onChange={(e) => setTeamForm({ ...teamForm, color2: e.target.value })}
                       className="w-full h-20 rounded-lg border border-white/20 bg-white/5 cursor-pointer"
@@ -1241,6 +1246,7 @@ export default function EditTeamPage() {
                   <label className="block text-xs text-slate-300 mb-1">First Name *</label>
                   <input
                     type="text"
+                    title="First name"
                     value={newPlayerForm.firstName}
                     onChange={(e) => setNewPlayerForm({ ...newPlayerForm, firstName: e.target.value })}
                     className="w-full rounded border border-white/20 bg-white/5 px-3 py-2 text-white text-sm"
@@ -1251,6 +1257,7 @@ export default function EditTeamPage() {
                   <label className="block text-xs text-slate-300 mb-1">Last Name *</label>
                   <input
                     type="text"
+                    title="Last name"
                     value={newPlayerForm.lastName}
                     onChange={(e) => setNewPlayerForm({ ...newPlayerForm, lastName: e.target.value })}
                     className="w-full rounded border border-white/20 bg-white/5 px-3 py-2 text-white text-sm"
@@ -1261,6 +1268,7 @@ export default function EditTeamPage() {
                   <label className="block text-xs text-slate-300 mb-1">Jersey # *</label>
                   <input
                     type="text"
+                    title="Jersey number"
                     value={newPlayerForm.number}
                     onChange={(e) => {
                       const nextValue = e.target.value;
@@ -1363,6 +1371,7 @@ export default function EditTeamPage() {
                   <label className="block text-xs text-slate-300 mb-1">Date of Birth</label>
                   <input
                     type="date"
+                    title="Date of birth"
                     value={newPlayerForm.dateOfBirth}
                     onChange={(e) => setNewPlayerForm({ ...newPlayerForm, dateOfBirth: e.target.value })}
                     className="w-full rounded border border-white/20 bg-white/5 px-3 py-2 text-white text-sm"
@@ -1801,6 +1810,7 @@ export default function EditTeamPage() {
                     <input
                       type="file"
                       accept="image/*"
+                      title="Upload headshot"
                       onChange={handleCoachHeadshotChange}
                       className="w-full text-xs text-slate-300"
                     />

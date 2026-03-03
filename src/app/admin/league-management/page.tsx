@@ -215,7 +215,7 @@ export default function LeagueManagementPage() {
         headshotUrl = await getDownloadURL(fileRef);
       }
 
-      const refereeData: any = {
+      const refereeData: Record<string, unknown> = {
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         phone: normalizedPhone || null,
@@ -324,7 +324,7 @@ export default function LeagueManagementPage() {
     setVenueStatus({ type: "info", message: "Saving venue..." });
 
     try {
-      const venueData: any = {
+      const venueData: Record<string, unknown> = {
         name: name.trim(),
         address: address.trim() || null,
         city: city.trim() || null,

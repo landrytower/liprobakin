@@ -1,5 +1,4 @@
 "use client";
-/* eslint-disable react-compiler/react-compiler */
 "use no memo";
 
 import React, { useEffect, useState, useMemo, useCallback, useRef, Component } from "react";
@@ -160,6 +159,12 @@ interface DonutSlice {
   value: number;
   color: string;
 }
+
+type ModalState =
+  | { type: "team"; id: string }
+  | { type: "player"; id: string }
+  | { type: "game"; id: string }
+  | null;
 
 /* ──────────────────── ANIMATED COUNTER ──────────────────── */
 
@@ -424,6 +429,7 @@ function LeaguePulseDashboard() {
   const [loading, setLoading] = useState(true);
   const [genderFilter, setGenderFilter] = useState<"all" | "men" | "women">("all");
   const [now] = useState(() => new Date());
+  const [activeModal, setActiveModal] = useState<ModalState>(null);
 
   /* ── real-time data ── */
   useEffect(() => {
@@ -742,6 +748,28 @@ function LeaguePulseDashboard() {
     return { days, hours, mins, game: next };
   }, [upcomingGames, now]);
 
+  /* ── crm insights ── */
+  const crmInsights = useMemo(() => {
+    let missingHeadshots = 0;
+    filteredPlayers.forEach((p) => {
+      if (!p.headshot || p.headshot.includes("default")) missingHeadshots++;
+    });
+
+    const shortRosters = filteredTeams.filter((t) => {
+      const rosterCount = filteredPlayers.filter((p) => p.teamId === t.id).length;
+      return rosterCount > 0 && rosterCount < 5; // Has some players but less than 5
+    }).length;
+
+    const inactiveTeams = filteredTeams.filter((t) => {
+      const hasGames = filteredGames.some((g) => g.homeTeamId === t.id || g.awayTeamId === t.id);
+      return !hasGames;
+    }).length;
+
+    const noStatsGames = completedGames.filter((g) => !g.playerStats || g.playerStats.length === 0).length;
+
+    return { missingHeadshots, shortRosters, inactiveTeams, noStatsGames };
+  }, [filteredPlayers, filteredTeams, filteredGames, completedGames]);
+
   /* ── helpers ── */
   const teamLogo = useCallback(
     (logo?: string) => {
@@ -919,7 +947,8 @@ function LeaguePulseDashboard() {
                   return (
                     <div
                       key={team.id}
-                      className="card-entrance group flex items-center gap-3"
+                      onClick={() => setActiveModal({ type: "team", id: team.id })}
+                      className="card-entrance group flex items-center gap-3 cursor-pointer hover:bg-white/5 p-2 -mx-2 rounded-xl transition-colors"
                       style={{ animationDelay: `${500 + i * 60}ms` }}
                     >
                       {/* Rank */}
@@ -1057,7 +1086,8 @@ function LeaguePulseDashboard() {
                   return (
                     <div
                       key={player.id}
-                      className={`card-entrance relative group rounded-xl border overflow-hidden transition-all duration-300 hover:scale-[1.03] ${
+                      onClick={() => setActiveModal({ type: "player", id: player.id })}
+                      className={`card-entrance relative group rounded-xl border overflow-hidden transition-all duration-300 hover:scale-[1.03] cursor-pointer ${
                         isTop
                           ? "border-orange-500/40 bg-gradient-to-b from-orange-500/10 to-slate-900/90"
                           : "border-white/5 bg-slate-900/80"
@@ -1201,7 +1231,8 @@ function LeaguePulseDashboard() {
                   return (
                     <div
                       key={p.id}
-                      className="card-entrance group"
+                      onClick={() => setActiveModal({ type: "player", id: p.id })}
+                      className="card-entrance group cursor-pointer hover:bg-white/5 p-2 -mx-2 rounded-xl transition-colors"
                       style={{ animationDelay: `${900 + i * 50}ms` }}
                     >
                       <div className="flex items-center justify-between mb-1">
@@ -1274,7 +1305,8 @@ function LeaguePulseDashboard() {
                   return (
                     <div
                       key={g.id}
-                      className="card-entrance bg-slate-800/40 rounded-xl p-3 border border-white/5 hover:border-orange-500/20 transition-all group"
+                      onClick={() => setActiveModal({ type: "game", id: g.id })}
+                      className="card-entrance bg-slate-800/40 rounded-xl p-3 border border-white/5 hover:border-orange-500/20 transition-all group cursor-pointer"
                       style={{ animationDelay: `${950 + i * 60}ms` }}
                     >
                       {/* Date */}
@@ -1415,7 +1447,8 @@ function LeaguePulseDashboard() {
                   {upcomingGames.slice(0, 5).map((g, i) => (
                     <div
                       key={g.id}
-                      className="card-entrance flex items-center justify-between bg-slate-800/30 rounded-lg px-3 py-2.5 border border-white/5 hover:border-orange-500/20 transition-all"
+                      onClick={() => setActiveModal({ type: "game", id: g.id })}
+                      className="card-entrance flex items-center justify-between bg-slate-800/30 rounded-lg px-3 py-2.5 border border-white/5 hover:border-orange-500/20 transition-all cursor-pointer"
                       style={{ animationDelay: `${1000 + i * 50}ms` }}
                     >
                       <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -1546,12 +1579,361 @@ function LeaguePulseDashboard() {
           ))}
         </div>
 
+        {/* ═══════ CRM DATA ═══════ */}
+        <div
+          className="card-entrance bg-slate-900/80 border border-indigo-500/20 rounded-2xl p-6 glow-card"
+          style={{ animationDelay: "1100ms" }}
+        >
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="text-lg font-bold flex items-center gap-2">
+              <span className="text-indigo-400">🛡️</span> {t.crmInsights}
+            </h2>
+            <span className="text-[10px] text-indigo-400 uppercase tracking-widest font-bold bg-indigo-500/10 px-2 py-1 rounded">
+              Admin Only
+            </span>
+          </div>
+          
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[
+              {
+                icon: "📸",
+                label: t.missingHeadshots,
+                value: crmInsights.missingHeadshots,
+                color: crmInsights.missingHeadshots > 0 ? "text-amber-400" : "text-emerald-400",
+                desc: t.missingHeadshotsDesc,
+              },
+              {
+                icon: "⚠️",
+                label: t.shortRosters,
+                value: crmInsights.shortRosters,
+                color: crmInsights.shortRosters > 0 ? "text-red-400" : "text-emerald-400",
+                desc: t.shortRostersDesc,
+              },
+              {
+                icon: "💤",
+                label: t.inactiveTeams,
+                value: crmInsights.inactiveTeams,
+                color: crmInsights.inactiveTeams > 0 ? "text-amber-400" : "text-emerald-400",
+                desc: t.inactiveTeamsDesc,
+              },
+              {
+                icon: "📉",
+                label: t.noStatsGames,
+                value: crmInsights.noStatsGames,
+                color: crmInsights.noStatsGames > 0 ? "text-red-400" : "text-emerald-400",
+                desc: t.noStatsGamesDesc,
+              },
+            ].map((crm, idx) => (
+              <div key={idx} className="bg-slate-800/40 border border-white/5 rounded-xl p-4 flex flex-col justify-between hover:border-indigo-500/30 transition-colors">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-lg">{crm.icon}</span>
+                  <span className={`text-xl font-black ${crm.color}`}>
+                    <AnimatedCounter value={crm.value} duration={1200} />
+                  </span>
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold text-slate-300 mb-0.5">{crm.label}</h3>
+                  <p className="text-[10px] text-slate-500 leading-tight">{crm.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* ═══════ FOOTER ═══════ */}
         <div className="text-center text-[10px] text-slate-600 py-4">
           {t.footer} · {t.lastRefresh} {now.toLocaleTimeString()}
         </div>
       </div>
+
+      {/* ═══════ DETAIL MODAL ═══════ */}
+      {activeModal && (
+        <DetailModal
+          state={activeModal}
+          onClose={() => setActiveModal(null)}
+          teams={teams}
+          players={allPlayers}
+          games={games}
+          t={t}
+        />
+      )}
     </div>
+  );
+}
+
+/* ──────────────────── MODAL COMPONENT ──────────────────── */
+
+function DetailModal({
+  state,
+  onClose,
+  teams,
+  players,
+  games,
+  t,
+}: {
+  state: ModalState;
+  onClose: () => void;
+  teams: DashTeam[];
+  players: DashPlayer[];
+  games: DashGame[];
+  t: typeof EN;
+}) {
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    // trigger animation
+    const raf = requestAnimationFrame(() => setIsVisible(true));
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  const close = () => {
+    setIsVisible(false);
+    setTimeout(onClose, 300);
+  };
+
+  if (!state) return null;
+
+  let content: ReactNode = null;
+
+  if (state.type === "team") {
+    const team = teams.find((t) => t.id === state.id);
+    if (team) {
+      const roster = players.filter((p) => p.teamId === team.id);
+      const teamGames = games.filter((g) => g.homeTeamId === team.id || g.awayTeamId === team.id);
+      const winPct = team.wins + team.losses > 0 ? (team.wins / (team.wins + team.losses) * 100).toFixed(1) : "0.0";
+      
+      const missingHeadshots = roster.filter(p => !p.headshot || p.headshot.includes("default")).length;
+
+      content = (
+        <div className="space-y-6">
+          {/* Header */}
+          <div className="flex items-center gap-4 border-b border-indigo-500/20 pb-4">
+            <div className="w-16 h-16 rounded-full overflow-hidden bg-slate-800 border-2" style={{ borderColor: team.colors?.[0] || "#f97316" }}>
+              {team.logo ? (
+                <Image src={team.logo.startsWith("http") || team.logo.startsWith("/") ? team.logo : `/${team.logo}`} alt={team.name} width={64} height={64} className="w-full h-full object-cover" />
+              ) : (
+                <span className="w-full h-full flex items-center justify-center text-2xl">🏀</span>
+              )}
+            </div>
+            <div>
+              <h2 className="text-2xl font-black">{team.name}</h2>
+              <p className="text-sm text-slate-400">{team.city || "Unknown City"} · {team.gender === "women" ? t.women : t.men}</p>
+            </div>
+          </div>
+
+          {/* CRM Stats Grid */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-slate-900/50 rounded-xl p-3 border border-white/5">
+              <p className="text-[10px] text-slate-500 uppercase tracking-widest">{t.record || "Record"}</p>
+              <p className="text-xl font-bold">{team.wins} - {team.losses}</p>
+            </div>
+            <div className="bg-slate-900/50 rounded-xl p-3 border border-white/5">
+              <p className="text-[10px] text-slate-500 uppercase tracking-widest">{t.winPct || "Win %"}</p>
+              <p className="text-xl font-bold">{winPct}%</p>
+            </div>
+            <div className="bg-slate-900/50 rounded-xl p-3 border border-white/5">
+              <p className="text-[10px] text-slate-500 uppercase tracking-widest">{t.totalPoints || "Total Pts"}</p>
+              <p className="text-xl font-bold">{team.totalPoints || 0}</p>
+            </div>
+          </div>
+
+          {/* CRM specific insights */}
+          <div>
+            <h3 className="text-xs font-bold text-indigo-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+              <span>🛡️</span> CRM Intelligence
+            </h3>
+            <div className="bg-slate-900/50 border border-indigo-500/20 rounded-xl p-4 space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-slate-300">Registered Roster Size</span>
+                <span className="text-sm font-bold">{roster.length} Players</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-slate-300">Missing Headshots</span>
+                <span className={`text-sm font-bold ${missingHeadshots > 0 ? "text-amber-400" : "text-emerald-400"}`}>{missingHeadshots}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-slate-300">Total Games Scheduled</span>
+                <span className="text-sm font-bold">{teamGames.length}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Roster preview */}
+          <div>
+            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">{t.roster || "Roster Preview"}</h3>
+            <div className="max-h-40 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+              {roster.map(p => (
+                <div key={p.id} className="flex items-center gap-3 bg-slate-800/30 p-2 rounded-lg border border-white/5">
+                  <div className="w-8 h-8 rounded-full bg-slate-700 overflow-hidden flex-shrink-0">
+                    {p.headshot ? <Image src={p.headshot.startsWith("http") || p.headshot.startsWith("/") ? p.headshot : `/${p.headshot}`} alt="" width={32} height={32} className="w-full h-full object-cover"/> : <span className="w-full h-full flex items-center justify-center text-xs">👤</span>}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold truncate">{p.firstName} {p.lastName}</p>
+                    <p className="text-[10px] text-slate-400">#{p.number || "--"} · {p.position || "Unknown"}</p>
+                  </div>
+                </div>
+              ))}
+              {roster.length === 0 && <p className="text-xs text-slate-500 italic">No players registered.</p>}
+            </div>
+          </div>
+        </div>
+      );
+    }
+  } else if (state.type === "player") {
+    // Some players exist as strings in hotPlayers without real DashPlayer records if they weren't in `allPlayers`.
+    // Let's try finding them.
+    const player = players.find((p) => p.id === state.id || `${p.firstName} ${p.lastName}` === state.id);
+    
+    if (player) {
+      const stats = player.stats || {};
+      const gamesPlayed = player.gamesPlayed || 1;
+      
+      content = (
+        <div className="space-y-6">
+          <div className="flex items-center gap-4 border-b border-indigo-500/20 pb-4">
+            <div className="w-16 h-16 rounded-full overflow-hidden bg-slate-800 border-2" style={{ borderColor: player.teamColors?.[0] || "#f97316" }}>
+              {player.headshot ? (
+                <Image src={player.headshot.startsWith("http") || player.headshot.startsWith("/") ? player.headshot : `/${player.headshot}`} alt="" width={64} height={64} className="w-full h-full object-cover" />
+              ) : (
+                <span className="w-full h-full flex items-center justify-center text-2xl">👤</span>
+              )}
+            </div>
+            <div>
+              <h2 className="text-2xl font-black">{player.firstName} {player.lastName}</h2>
+              <p className="text-sm text-slate-400">{player.teamName} · #{player.number || "--"} · {player.position || "POS"}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-4 gap-2">
+            {[
+              { l: "PTS", v: stats.pts },
+              { l: "REB", v: stats.reb },
+              { l: "AST", v: stats.ast },
+              { l: "STL", v: stats.stl },
+              { l: "BLK", v: stats.blk },
+              { l: "TO", v: stats.to },
+            ].map(s => (
+              <div key={s.l} className="bg-slate-900/50 rounded-lg p-2 text-center border border-white/5">
+                <div className="text-[10px] text-slate-500">{s.l}</div>
+                <div className="text-lg font-bold text-white">{s.v || 0}</div>
+                <div className="text-[8px] text-slate-600">Total</div>
+              </div>
+            ))}
+          </div>
+
+          <div>
+             <h3 className="text-xs font-bold text-indigo-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+              <span>🛡️</span> Player CRM Data
+            </h3>
+            <div className="bg-slate-900/50 border border-indigo-500/20 rounded-xl p-4 space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-slate-300">Games Played</span>
+                <span className="text-sm font-bold">{gamesPlayed}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-slate-300">Headshot Status</span>
+                <span className={`text-sm font-bold ${!player.headshot || player.headshot.includes("default") ? "text-amber-400" : "text-emerald-400"}`}>
+                  {!player.headshot || player.headshot.includes("default") ? "Missing" : "Uploaded"}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-slate-300">Avg PPG</span>
+                <span className="text-sm font-bold text-orange-400">{((stats.pts || 0) / gamesPlayed).toFixed(1)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    } else {
+      content = <div className="p-8 text-center text-slate-500">Player record not fully indexed yet. Data streamed from match stats.</div>
+    }
+  } else if (state.type === "game") {
+    const game = games.find(g => g.id === state.id);
+    if (game) {
+      content = (
+        <div className="space-y-6 text-center">
+          <p className="text-[10px] text-slate-400 uppercase tracking-widest">{game.date} · {game.venue || "TBD"} · {game.gender === "women" ? t.women : t.men}</p>
+          
+          <div className="flex items-center justify-center gap-6">
+            <div className="flex flex-col items-center gap-2">
+              <div className="w-16 h-16 rounded-full bg-slate-800 border border-white/10 overflow-hidden flex-shrink-0">
+                {game.homeTeamLogo ? <Image src={game.homeTeamLogo.startsWith("http") || game.homeTeamLogo.startsWith("/") ? game.homeTeamLogo : `/${game.homeTeamLogo}`} alt="" width={64} height={64} className="w-full h-full object-cover"/> : <span className="w-full h-full flex items-center justify-center">🏀</span>}
+              </div>
+              <span className="text-xs font-bold w-24 truncate">{game.homeTeamName}</span>
+            </div>
+
+            <div className="text-3xl font-black px-4 py-2 bg-slate-900 rounded-xl border border-white/5">
+              {game.completed ? (
+                <>
+                  <span className={game.homeTeamId === game.winnerTeamId ? "text-orange-400" : "text-slate-500"}>{game.homeTeamId === game.winnerTeamId ? game.winnerScore : game.loserScore}</span>
+                  <span className="text-slate-700 mx-2">-</span>
+                  <span className={game.awayTeamId === game.winnerTeamId ? "text-orange-400" : "text-slate-500"}>{game.awayTeamId === game.winnerTeamId ? game.winnerScore : game.loserScore}</span>
+                </>
+              ) : (
+                <span className="text-slate-500 text-lg">{game.time || "TBD"}</span>
+              )}
+            </div>
+
+            <div className="flex flex-col items-center gap-2">
+              <div className="w-16 h-16 rounded-full bg-slate-800 border border-white/10 overflow-hidden flex-shrink-0">
+                {game.awayTeamLogo ? <Image src={game.awayTeamLogo.startsWith("http") || game.awayTeamLogo.startsWith("/") ? game.awayTeamLogo : `/${game.awayTeamLogo}`} alt="" width={64} height={64} className="w-full h-full object-cover"/> : <span className="w-full h-full flex items-center justify-center">🏀</span>}
+              </div>
+              <span className="text-xs font-bold w-24 truncate">{game.awayTeamName}</span>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-xs font-bold text-indigo-400 uppercase tracking-widest mb-3 flex items-center gap-2 justify-center">
+              <span>🛡️</span> Game CRM Audit
+            </h3>
+            <div className="bg-slate-900/50 border border-indigo-500/20 rounded-xl p-4 space-y-3 text-left">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-slate-300">Status</span>
+                <span className={`text-sm font-bold px-2 py-0.5 rounded ${game.completed ? "bg-emerald-500/20 text-emerald-400" : "bg-blue-500/20 text-blue-400"}`}>
+                  {game.completed ? "Completed & Locked" : "Scheduled"}
+                </span>
+              </div>
+              {game.completed && (
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-slate-300">Stats Logged</span>
+                  <span className={`text-sm font-bold ${game.playerStats && game.playerStats.length > 0 ? "text-emerald-400" : "text-red-400"}`}>
+                    {game.playerStats && game.playerStats.length > 0 ? "Yes" : "Missing Data"}
+                  </span>
+                </div>
+              )}
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-slate-300">System ID</span>
+                <span className="text-[10px] font-mono text-slate-500">{game.id}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+  }
+
+  return (
+    <>
+      <div 
+        className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-50 transition-opacity duration-300 ${isVisible ? "opacity-100" : "opacity-0"}`} 
+        onClick={close}
+      />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+        <div 
+          className={`bg-slate-950 border border-white/10 shadow-2xl shadow-indigo-500/10 rounded-2xl w-full max-w-md pointer-events-auto overflow-hidden transition-all duration-300 transform ${isVisible ? "scale-100 translate-y-0 opacity-100" : "scale-95 translate-y-8 opacity-0"}`}
+        >
+          <div className="relative p-6">
+            <button 
+              onClick={close}
+              className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center bg-slate-800 hover:bg-slate-700 rounded-full text-slate-400 hover:text-white transition-colors"
+            >
+              ✕
+            </button>
+            {content || <div className="text-center py-8 text-slate-500">Record missing or deleted.</div>}
+          </div>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -1611,6 +1993,19 @@ const EN = {
   total3PMDesc: "Three-pointers made across all games",
   highestScore: "Top Score",
   highestScoreDesc: "Highest individual game score this season",
+  crmInsights: "League Operations CRM",
+  missingHeadshots: "Missing Headshots",
+  missingHeadshotsDesc: "Players lacking profile photos",
+  shortRosters: "Short Rosters",
+  shortRostersDesc: "Teams with less than 5 players",
+  inactiveTeams: "Inactive Teams",
+  inactiveTeamsDesc: "Teams with 0 games scheduled",
+  noStatsGames: "Missing Match Stats",
+  noStatsGamesDesc: "Completed games with no stats attached",
+  record: "Record",
+  winPct: "Win %",
+  totalPoints: "Total Pts",
+  roster: "Roster Preview",
   footer: "League Pulse Dashboard — FEBACO Admin CRM",
   lastRefresh: "Last refresh:",
 };
@@ -1652,6 +2047,19 @@ const FR: typeof EN = {
   total3PMDesc: "Trois-points marqués dans tous les matchs",
   highestScore: "Meilleur Score",
   highestScoreDesc: "Plus haut score individuel de la saison",
+  crmInsights: "Opérations Ligue CRM",
+  missingHeadshots: "Photos Manquantes",
+  missingHeadshotsDesc: "Joueurs sans photo de profil",
+  shortRosters: "Effectifs Réduits",
+  shortRostersDesc: "Équipes avec moins de 5 joueurs",
+  inactiveTeams: "Équipes Inactives",
+  inactiveTeamsDesc: "Équipes sans match programmé",
+  noStatsGames: "Stats Manquantes",
+  noStatsGamesDesc: "Matchs terminés sans statistiques",
+  record: "Bilan",
+  winPct: "% Vict.",
+  totalPoints: "Pts Totaux",
+  roster: "Aperçu de l'Effectif",
   footer: "Tableau de Bord Pouls de la Ligue — FEBACO Admin CRM",
   lastRefresh: "Dernière mise à jour :",
 };

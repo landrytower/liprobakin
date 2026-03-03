@@ -94,6 +94,8 @@ export default function AdminLoginPage() {
       const code = (err as { code?: string }).code ?? "";
       if (code === "auth/user-not-found" || code === "auth/wrong-password" || code === "auth/invalid-credential") {
         setError("Invalid email or password.");
+      } else if (code === "auth/configuration-not-found" || code === "auth/operation-not-allowed") {
+        setError("Firebase Authentication is not configured for this project. Enable Authentication and Email/Password provider in Firebase Console.");
       } else if (code === "auth/too-many-requests") {
         setError("Too many failed attempts. Please wait a moment and try again.");
       } else {

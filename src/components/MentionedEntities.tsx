@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { firebaseDB } from '@/lib/firebase';
 import { normalizeTeamGender } from '@/lib/team-gender';
+import { formatTeamDisplayName } from '@/lib/team-name';
 import Image from 'next/image';
 import Link from 'next/link';
 
@@ -115,7 +116,7 @@ export default function MentionedEntities({ htmlContent, language = 'fr' }: Ment
         rosterSnapshots.forEach(({ snapshot, teamData }) => {
           const city = typeof teamData.city === 'string' ? teamData.city : '';
           const name = typeof teamData.name === 'string' ? teamData.name : '';
-          const teamName = city ? `${city} ${name}`.trim() : name;
+          const teamName = formatTeamDisplayName(city, name);
 
           snapshot.docs.forEach((playerDoc) => {
             if (!playerById.has(playerDoc.id)) {
@@ -276,7 +277,7 @@ export default function MentionedEntities({ htmlContent, language = 'fr' }: Ment
                     key={team.id}
                     href={
                       team.name
-                        ? `/team/${encodeURIComponent(team.city ? `${team.city} ${team.name}` : team.name)}?gender=${team.gender === 'women' ? 'women' : 'men'}`
+                        ? `/team/${encodeURIComponent(formatTeamDisplayName(team.city, team.name))}?gender=${team.gender === 'women' ? 'women' : 'men'}`
                         : '#'
                     }
                     className="group flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 hover:border-orange-500/30 transition-all"
@@ -300,9 +301,9 @@ export default function MentionedEntities({ htmlContent, language = 'fr' }: Ment
                     {/* Team Info */}
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-white group-hover:text-orange-400 transition-colors truncate">
-                        {team.city && team.name 
-                          ? `${team.city} ${team.name}`
-                          : team.name || team.label}
+                        {team.name
+                          ? formatTeamDisplayName(team.city, team.name)
+                          : team.label}
                       </p>
                     </div>
                   </Link>

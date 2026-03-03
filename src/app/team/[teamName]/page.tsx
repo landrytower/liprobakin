@@ -7,6 +7,7 @@ import Link from "next/link";
 import { collection, getDocs, onSnapshot, doc, getDoc } from "firebase/firestore";
 import { firebaseDB } from "@/lib/firebase";
 import { normalizeTeamGender } from "@/lib/team-gender";
+import { formatTeamDisplayName } from "@/lib/team-name";
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { RosterPlayer } from "@/data/febaco";
 import { flagFromCode } from "@/data/countries";
@@ -251,7 +252,7 @@ export default function TeamPage() {
         // Get all teams for navigation - include ID for uniqueness when names are duplicated
         const allTeamsList = teamsSnapshot.docs.map((doc) => {
           const data = doc.data();
-          const fullName = [data.city, data.name].filter(Boolean).join(" ").trim();
+          const fullName = formatTeamDisplayName(data.city, data.name);
           return { id: doc.id, name: data.name, fullName };
         }).sort((a, b) => a.fullName.localeCompare(b.fullName) || a.id.localeCompare(b.id));
         
@@ -261,7 +262,7 @@ export default function TeamPage() {
         const teamDocById = teamsSnapshot.docs.find((doc) => doc.id === teamName);
         const matchingByName = teamsSnapshot.docs.filter((doc) => {
           const data = doc.data();
-          const fullName = [data.city, data.name].filter(Boolean).join(" ").trim();
+          const fullName = formatTeamDisplayName(data.city, data.name);
           return fullName === teamName || data.name === teamName;
         });
 
@@ -296,7 +297,7 @@ export default function TeamPage() {
         
         // Find current team index and next team - use ID for exact match
         const currentTeamData = teamDoc.data();
-        const currentFullName = [currentTeamData.city, currentTeamData.name].filter(Boolean).join(" ").trim();
+        const currentFullName = formatTeamDisplayName(currentTeamData.city, currentTeamData.name);
         const currentTeamId = teamDoc.id;
         const currentIndex = allTeamsList.findIndex(t => t.id === currentTeamId);
         
@@ -513,7 +514,7 @@ export default function TeamPage() {
     </div>
   );
 
-  const fullTeamName = teamData ? [teamData.city, teamData.name].filter(Boolean).join(" ").trim() : teamName;
+  const fullTeamName = teamData ? formatTeamDisplayName(teamData.city, teamData.name, teamName) : teamName;
   const record = teamData ? `${teamData.wins}-${teamData.losses}` : "0-0";
 
   // Chat messages initialization - MUST be before early returns

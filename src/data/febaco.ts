@@ -6,6 +6,8 @@ import committeeRaw from "./exports/committee.json";
 import teamTrafficRaw from "./exports/teamTraffic.json";
 import teamsRaw from "./exports/teams.json";
 import { CONGO_TIMEZONE, parseCongoDateTime } from "@/lib/congo-time";
+import { formatTeamDisplayName } from "@/lib/team-name";
+import { normalizeTeamGender } from "@/lib/team-gender";
 
 type FirestoreTimestamp = {
   _seconds: number;
@@ -175,10 +177,7 @@ const teamById = new Map<string, FirestoreTeamDoc>(
 const getTeamDisplayName = (teamId?: string, fallback?: string) => {
   if (teamId && teamById.has(teamId)) {
     const team = teamById.get(teamId);
-    if (team?.city) {
-      return team.city ? `${team.city} ${team.name ?? ""}`.trim() : team.name ?? fallback ?? "TBD";
-    }
-    return team?.name ?? fallback ?? "TBD";
+    return formatTeamDisplayName(team?.city, team?.name, fallback ?? "TBD");
   }
   return fallback ?? "TBD";
 };
@@ -408,6 +407,7 @@ const normalizeTeamKey = (city?: string, name?: string) =>
   [city, name].filter(Boolean).join(" ").trim().toLowerCase();
 
 const teamLogoOverrides: Record<string, string> = {
+  "espoir fukas": "/logos/Males/Espoir Fukash.png",
   "espoir fukash": "/logos/Males/Espoir Fukash.png",
   "city kauka": "/logos/Males/city kauka.jpg",
   "binza city": "/logos/Males/binza_city.jpg",
@@ -471,17 +471,31 @@ const mapTeamToFranchise = (team: FirestoreTeamDoc): Franchise => {
   };
 };
 
-const menFranchises = firestoreTeams
-  .filter((team) => (team.gender ?? "men") === "men")
-  .map(mapTeamToFranchise)
-  .sort((a, b) => a.name.localeCompare(b.name));
+const deduplicateFranchises = (franchises: Franchise[]) => {
+  const seen = new Map<string, boolean>();
+  return franchises.filter((f) => {
+    const key = f.name.trim().toLowerCase();
+    if (seen.has(key)) return false;
+    seen.set(key, true);
+    return true;
+  });
+};
+
+const menFranchises = deduplicateFranchises(
+  firestoreTeams
+    .filter((team) => normalizeTeamGender(team.gender, team.logo, "men") === "men")
+    .map(mapTeamToFranchise)
+    .sort((a, b) => a.name.localeCompare(b.name))
+);
 
 // Generate standings for all teams by combining explicit standings + teams without standings
 
-const womenFranchises = firestoreTeams
-  .filter((team) => (team.gender ?? "women") === "women")
-  .map(mapTeamToFranchise)
-  .sort((a, b) => a.name.localeCompare(b.name));
+const womenFranchises = deduplicateFranchises(
+  firestoreTeams
+    .filter((team) => normalizeTeamGender(team.gender, team.logo, "women") === "women")
+    .map(mapTeamToFranchise)
+    .sort((a, b) => a.name.localeCompare(b.name))
+);
 
 const newsArticles = firestoreNews
   .slice()

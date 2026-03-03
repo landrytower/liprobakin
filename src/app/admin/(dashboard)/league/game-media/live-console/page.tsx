@@ -51,6 +51,9 @@ const copy = {
     hiddenOn: "This game is hidden from public",
     hiddenOff: "This game is visible to public",
     hiddenUpdated: "Public visibility updated",
+    goLive: "Set Live",
+    endLive: "Remove from Live",
+    liveStatusUpdated: "Live status updated",
     updateFailed: "Failed to update live data",
   },
   fr: {
@@ -75,6 +78,9 @@ const copy = {
     hiddenOn: "Ce match est masqué au public",
     hiddenOff: "Ce match est visible au public",
     hiddenUpdated: "Visibilité publique mise à jour",
+    goLive: "Passer en direct",
+    endLive: "Retirer du direct",
+    liveStatusUpdated: "Statut live mis à jour",
     updateFailed: "Échec de la mise à jour live",
   },
 } as const;
@@ -177,7 +183,7 @@ export default function LiveConsolePage() {
     setLastScoreSnapshot(null);
   };
 
-  const setQuarter = async (quarterValue: "Q1" | "Q2" | "Q3" | "Q4" | "OT") => {
+  const setQuarter = async (quarterValue: "Q1" | "Q2" | "Q3" | "Q4" | "OT" | "HT" | "MT") => {
     await updateLive(
       {
         period: quarterValue,
@@ -194,6 +200,29 @@ export default function LiveConsolePage() {
       },
       t.hiddenUpdated
     );
+  };
+
+  const toggleLiveStatus = async (nextLive: boolean) => {
+    if (!selectedGame) return;
+
+    const optimistic = {
+      status: nextLive ? "live" : "scheduled",
+      completed: false,
+      ...(nextLive ? { isHiddenFromPublic: false } : {}),
+    };
+
+    setGames((prev) => prev.map((game) => (game.id === selectedGame.id ? { ...game, ...optimistic } : game)));
+
+    try {
+      await updateDoc(doc(firebaseDB, "games", selectedGame.id), {
+        ...optimistic,
+        updatedAt: serverTimestamp(),
+      });
+      setStatus({ type: "success", message: t.liveStatusUpdated });
+    } catch (error) {
+      console.error("Live status update failed:", error);
+      setStatus({ type: "error", message: t.updateFailed });
+    }
   };
 
   const beginManualEdit = (side: "home" | "away") => {
@@ -290,17 +319,26 @@ export default function LiveConsolePage() {
           <div className="mb-4 flex flex-wrap items-center gap-2">
             <button
               type="button"
+              onClick={() => toggleLiveStatus(true)}
+              disabled={String(selectedGame.status || "").toLowerCase() === "live"}
+              className="rounded-lg border border-red-400/40 bg-red-500/15 px-3 py-2 text-xs font-bold uppercase tracking-wide text-red-200 hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              🔴 {t.goLive}
+            </button>
+            <button
+              type="button"
+              onClick={() => toggleLiveStatus(false)}
+              disabled={String(selectedGame.status || "").toLowerCase() !== "live"}
+              className="rounded-lg border border-white/20 bg-slate-900/70 px-3 py-2 text-xs font-bold uppercase tracking-wide text-slate-200 hover:border-white/30 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              ⚪ {t.endLive}
+            </button>
+            <button
+              type="button"
               onClick={() => togglePublicVisibility(true)}
               className="rounded-lg border border-amber-500/40 bg-amber-500/15 px-3 py-2 text-xs font-bold uppercase tracking-wide text-amber-200 hover:bg-amber-500/25"
             >
               {t.hidePublic}
-            </button>
-            <button
-              type="button"
-              onClick={() => togglePublicVisibility(false)}
-              className="rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-2 text-xs font-bold uppercase tracking-wide text-emerald-200 hover:bg-emerald-500/25"
-            >
-              {t.showPublic}
             </button>
             <span className={`rounded-lg border px-3 py-2 text-xs font-semibold ${selectedGame.isHiddenFromPublic ? "border-amber-500/30 bg-amber-500/10 text-amber-200" : "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"}`}>
               {selectedGame.isHiddenFromPublic ? t.hiddenOn : t.hiddenOff}
@@ -355,13 +393,17 @@ export default function LiveConsolePage() {
             <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4 text-center">
               <p className="text-xs uppercase tracking-[0.14em] text-slate-400">{t.period}</p>
               <div className="mt-2 grid grid-cols-3 gap-2">
-                {(["Q1", "Q2", "Q3", "Q4", "OT"] as const).map((quarter) => {
-                  const active = String(selectedGame.period ?? selectedGame.quarter ?? "").toUpperCase() === quarter;
+                {(["Q1", "Q2", "Q3", "Q4", "OT", language === "fr" ? "MT" : "HT"] as const).map((quarter) => {
+                  const selectedPeriod = String(selectedGame.period ?? selectedGame.quarter ?? "").toUpperCase();
+                  const active =
+                    selectedPeriod === quarter ||
+                    (quarter === "HT" && selectedPeriod === "MT") ||
+                    (quarter === "MT" && selectedPeriod === "HT");
                   return (
                     <button
                       key={quarter}
                       type="button"
-                      onClick={() => setQuarter(quarter)}
+                      onClick={() => setQuarter(quarter === "MT" ? "MT" : quarter)}
                       className={`rounded-lg px-3 py-2 text-sm font-bold ${active ? "bg-orange-500 text-white" : "border border-white/20 bg-slate-800/80 text-white hover:bg-slate-700"}`}
                     >
                       {quarter}

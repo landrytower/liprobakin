@@ -132,6 +132,13 @@ export default function RootLayout({
 
   return (
     <html lang="en">
+      <head>
+        {/* Preconnect to Firebase/Firestore to reduce initial connection latency */}
+        <link rel="preconnect" href="https://firestore.googleapis.com" />
+        <link rel="preconnect" href="https://www.googleapis.com" />
+        <link rel="preconnect" href="https://firebase.googleapis.com" />
+        <link rel="preconnect" href="https://firebasestorage.googleapis.com" />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-transparent`}
       >

@@ -379,22 +379,6 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
     setProfileImagePreview("");
   };
 
-  const markPhotoReminderSeen = async () => {
-    if (!currentAdminUser || currentAdminUser.profilePicturePrompted) return;
-    try {
-      await updateDoc(doc(firebaseDB, "adminUsers", currentAdminUser.id), {
-        profilePicturePrompted: true,
-        updatedAt: serverTimestamp(),
-      });
-      setCurrentAdminUser({
-        ...currentAdminUser,
-        profilePicturePrompted: true,
-      });
-    } catch (error) {
-      console.error("Error marking photo reminder as seen:", error);
-    }
-  };
-
   useEffect(() => {
     if (!currentAdminUser?.isFirstLogin) return;
     setFirstLoginName("");
@@ -412,6 +396,21 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
     const shouldShowReminder = !currentAdminUser.photo && !currentAdminUser.profilePicturePrompted;
     setShowPhotoReminder(shouldShowReminder);
     if (shouldShowReminder) {
+      const markPhotoReminderSeen = async () => {
+        if (currentAdminUser.profilePicturePrompted) return;
+        try {
+          await updateDoc(doc(firebaseDB, "adminUsers", currentAdminUser.id), {
+            profilePicturePrompted: true,
+            updatedAt: serverTimestamp(),
+          });
+          setCurrentAdminUser({
+            ...currentAdminUser,
+            profilePicturePrompted: true,
+          });
+        } catch (error) {
+          console.error("Error marking photo reminder as seen:", error);
+        }
+      };
       void markPhotoReminderSeen();
     }
   }, [currentAdminUser]);
@@ -828,23 +827,6 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
             </nav>
           </div>
         </header>
-
-        {/* Database Reset Warning Banner */}
-        {permissions.canManageAdmins && (
-          <div className="max-w-[1800px] mx-auto px-4 sm:px-6 pt-6">
-            <div className="rounded-2xl border border-yellow-500/30 bg-yellow-500/10 p-4 flex items-center justify-between">
-              <div>
-                <p className="text-yellow-400 font-semibold flex items-center gap-2">
-                  <span>⚠️</span> {t.resetDatabase}
-                </p>
-                <p className="text-sm text-slate-400 mt-1">{t.resetDatabaseDesc}</p>
-              </div>
-              <button className="px-4 py-2 text-sm font-semibold uppercase tracking-wider text-orange-400 border border-orange-500/50 rounded-xl hover:bg-orange-500/10 transition-colors">
-                {t.resetAllStats}
-              </button>
-            </div>
-          </div>
-        )}
 
         {/* Main content with page transition */}
         <main className="max-w-[1800px] mx-auto px-4 sm:px-6 py-6">

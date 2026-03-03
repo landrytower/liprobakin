@@ -1,42 +1,52 @@
 'use client';
 
 import { useState } from 'react';
-import { firebaseAuth, firebaseDB } from '@/lib/firebase';
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 export default function SetupAdminPage() {
   const [email, setEmail] = useState('bobiyatch@gmail.com');
   const [password, setPassword] = useState('');
   const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showAuthHelp, setShowAuthHelp] = useState(false);
+
+  const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+  const authConsoleUrl = projectId
+    ? `https://console.firebase.google.com/project/${projectId}/authentication/providers`
+    : 'https://console.firebase.google.com';
 
   const handleSetup = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setStatus('');
+    setShowAuthHelp(false);
 
     try {
-      // Sign in with the email/password
-      const userCredential = await signInWithEmailAndPassword(firebaseAuth, email, password);
-      const user = userCredential.user;
-
-      // Create the admin user document in Firestore
-      await setDoc(doc(firebaseDB, 'adminUsers', user.uid), {
-        uid: user.uid,
-        email: user.email,
-        displayName: user.displayName || email.split('@')[0],
-        roles: ['master'],
-        isActive: true,
-        isFirstLogin: false,
-        createdAt: serverTimestamp(),
-        lastLoginAt: serverTimestamp()
+      const response = await fetch('/api/setup-admin/bootstrap', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          password,
+          displayName: email.split('@')[0],
+        }),
       });
 
+      const result = (await response.json()) as { success?: boolean; error?: string };
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Failed to bootstrap admin account.');
+      }
+
       setStatus('✅ Master admin created successfully! You can now go to /admin');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Setup error:', error);
-      setStatus(`❌ Error: ${error.message}`);
+      const firebaseCode = (error as { code?: string })?.code;
+
+      if (firebaseCode === 'auth/configuration-not-found' || firebaseCode === 'auth/operation-not-allowed') {
+        setShowAuthHelp(true);
+        setStatus('❌ Firebase Authentication is not configured for this project yet.');
+      } else {
+        setStatus(`❌ Error: ${(error as Error).message}`);
+      }
     } finally {
       setLoading(false);
     }
@@ -91,6 +101,22 @@ export default function SetupAdminPage() {
             <p className={`text-sm ${status.startsWith('✅') ? 'text-green-400' : 'text-red-400'}`}>
               {status}
             </p>
+          )}
+
+          {showAuthHelp && (
+            <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-3 text-xs text-amber-200 space-y-2">
+              <p>
+                Go to Firebase Console → Authentication → Get started, then enable Email/Password provider.
+              </p>
+              <a
+                href={authConsoleUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex rounded-lg border border-amber-300/40 px-3 py-1.5 text-amber-100 hover:bg-amber-300/10"
+              >
+                Open Authentication Settings
+              </a>
+            </div>
           )}
         </form>
 

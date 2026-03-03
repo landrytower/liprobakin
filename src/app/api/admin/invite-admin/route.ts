@@ -71,8 +71,8 @@ export async function POST(request: NextRequest) {
         { success: false, error: 'An admin with this email already exists' },
         { status: 409 }
       );
-    } catch (lookupError: any) {
-      if (lookupError?.code !== 'auth/user-not-found') {
+    } catch (lookupError: unknown) {
+      if ((lookupError as { code?: string })?.code !== 'auth/user-not-found') {
         throw lookupError;
       }
     }
@@ -141,10 +141,10 @@ export async function POST(request: NextRequest) {
       userId: userRecord.uid,
       message: `Admin account created successfully for ${email}.`,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error inviting admin:', error);
     return NextResponse.json(
-      { success: false, error: error?.message || 'Failed to invite admin' },
+      { success: false, error: (error as Error)?.message || 'Failed to invite admin' },
       { status: 500 }
     );
   }

@@ -5,13 +5,10 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import React, { useEffect, useState, useCallback } from "react";
-import Image from "next/image";
 import { firebaseDB } from "@/lib/firebase";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import {
   collection,
-  doc,
-  getDoc,
   getDocs,
   onSnapshot,
   query,

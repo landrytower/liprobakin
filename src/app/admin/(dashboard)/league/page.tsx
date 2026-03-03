@@ -297,7 +297,7 @@ export default function LeaguePage() {
         await uploadBytes(storageReference, committeePhoto);
         photoUrl = await getDownloadURL(storageReference);
       }
-      const data: any = { 
+      const data: Record<string, unknown> = { 
         firstName: committeeForm.firstName.trim(), 
         lastName: committeeForm.lastName.trim(), 
         role: committeeForm.role.trim(), 
@@ -502,9 +502,10 @@ export default function LeaguePage() {
       
       setResetPassword("");
       setTimeout(() => setShowPasswordModal(false), 3000);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error resetting stats:", error);
-      if (error.code === "auth/wrong-password" || error.code === "auth/invalid-credential") {
+      const errCode = (error as { code?: string })?.code;
+      if (errCode === "auth/wrong-password" || errCode === "auth/invalid-credential") {
         setResetError(language === "fr" ? "Mot de passe incorrect" : "Incorrect password");
       } else {
         setResetError(language === "fr" ? "Erreur lors de la réinitialisation" : "Reset failed");

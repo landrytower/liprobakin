@@ -298,7 +298,7 @@ export default function AdminsPage() {
 
   // Edit modal
   const [editingAdmin, setEditingAdmin] = useState<AdminUserData | null>(null);
-  const [editRoles, setEditRoles] = useState<AdminRole[]>([]);
+  const [, setEditRoles] = useState<AdminRole[]>([]);
   const [editPermissions, setEditPermissions] = useState<Partial<AdminPermissions>>({});
   const [editSaving, setEditSaving] = useState(false);
 
@@ -393,7 +393,7 @@ export default function AdminsPage() {
       } else {
         setNotification({ type: "error", message: data.error || t.inviteFailed });
       }
-    } catch (error) {
+    } catch {
       setNotification({ type: "error", message: t.inviteFailed });
     } finally {
       setInviteSubmitting(false);

@@ -43,7 +43,10 @@ type CurrentGame = {
 };
 
 const normalizeTeamName = (name: string) => {
-  const withFixedTypo = name.replace(/\bsepoir\b/gi, "Espoir").trim();
+  const withFixedTypo = name
+    .replace(/\bsepoir\b/gi, "Espoir")
+    .replace(/\bfukas\b|\bfukash\b/gi, "Fukash")
+    .trim();
   return withFixedTypo.replace(/^espoir\s+espoir\s+/i, "Espoir ").trim();
 };
 const normalizeTeamKey = (name: string) => normalizeTeamName(name).toLowerCase();
@@ -388,14 +391,6 @@ export default function ClassementPage() {
                 {t.nav[section.toLowerCase() as keyof typeof t.nav] ?? section}
               </Link>
             ))}
-            <Link
-              href="/d2"
-              className="group relative px-2 py-1.5 text-[13px] font-bold uppercase tracking-[0.28em] text-amber-200/90 transition-colors duration-300 hover:text-amber-100"
-            >
-              <span className="bg-gradient-to-r from-amber-300 via-yellow-200 to-amber-300 bg-clip-text text-transparent">
-                EUBAKIN
-              </span>
-            </Link>
           </div>
         </div>
 
@@ -412,13 +407,6 @@ export default function ClassementPage() {
                   {t.nav[section.toLowerCase() as keyof typeof t.nav] ?? section}
                 </Link>
               ))}
-              <Link
-                href="/d2"
-                onClick={() => setMobileNavOpen(false)}
-                className="rounded-md px-2 py-2 text-amber-200 transition hover:bg-white/10"
-              >
-                EUBAKIN
-              </Link>
             </div>
           </div>
         ) : null}

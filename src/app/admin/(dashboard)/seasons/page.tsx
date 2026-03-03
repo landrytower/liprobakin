@@ -4,7 +4,7 @@
 // SEASON MANAGEMENT ADMIN PAGE
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState } from "react";
 import { firebaseDB } from "@/lib/firebase";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import {

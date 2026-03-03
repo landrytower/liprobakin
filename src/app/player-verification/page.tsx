@@ -9,6 +9,7 @@ import { collection, getDocs, addDoc, serverTimestamp, query, where } from "fire
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { firebaseDB, firebaseStorage } from "@/lib/firebase";
 import { normalizeTeamGender } from "@/lib/team-gender";
+import { formatTeamDisplayName } from "@/lib/team-name";
 import { countries, codeForCountryName, flagFromCode, nameForCountryCode } from "@/data/countries";
 
 type Player = {
@@ -200,7 +201,7 @@ export default function PlayerVerificationPage() {
             lastName: data.lastName || "",
             number: data.number || 0,
             teamId: team.id,
-            teamName: team.city ? `${team.city} ${team.name}` : team.name,
+            teamName: formatTeamDisplayName(team.city, team.name),
             teamGender: team.gender,
             headshot: data.headshot,
             position: data.position,
@@ -318,7 +319,7 @@ export default function PlayerVerificationPage() {
         requestType: "create_new",
         role: "player",
         teamId: selectedTeamId,
-        teamName: selectedTeam.city ? `${selectedTeam.city} ${selectedTeam.name}` : selectedTeam.name,
+        teamName: formatTeamDisplayName(selectedTeam.city, selectedTeam.name),
         teamGender: selectedTeam.gender,
         newPlayerData: {
           firstName: newPlayerForm.firstName,
@@ -437,7 +438,7 @@ export default function PlayerVerificationPage() {
                         .filter((t) => t.gender === selectedGender)
                         .map((team) => (
                           <option key={team.id} value={team.id}>
-                            {team.city ? `${team.city} ${team.name}` : team.name}
+                            {formatTeamDisplayName(team.city, team.name)}
                           </option>
                         ))}
                     </select>
@@ -597,7 +598,7 @@ export default function PlayerVerificationPage() {
                       .filter((t) => t.gender === selectedGender)
                       .map((team) => (
                         <option key={team.id} value={team.id}>
-                          {team.city ? `${team.city} ${team.name}` : team.name}
+                          {formatTeamDisplayName(team.city, team.name)}
                         </option>
                       ))}
                   </select>

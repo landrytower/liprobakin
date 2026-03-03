@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { useAdmin } from "../layout";
-import { useRouter } from "next/navigation";
-import { collection, query, orderBy, limit, onSnapshot, getDocs, deleteDoc, doc, writeBatch } from "firebase/firestore";
+
+import { collection, query, orderBy, limit, onSnapshot, getDocs, writeBatch } from "firebase/firestore";
 import { firebaseDB } from "@/lib/firebase";
 import type { AuditLog } from "@/types/auditLog";
 import { formatAuditLogDisplay } from "@/lib/auditLog";
@@ -64,7 +64,8 @@ const translations = {
 };
 
 // Format details object into readable text
-function formatDetails(log: AuditLog, language: "en" | "fr"): string[] {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function formatDetails(log: AuditLog, _language: "en" | "fr"): string[] {
   const details: string[] = [];
   const d = log.details || {};
   
@@ -143,7 +144,6 @@ function formatDetails(log: AuditLog, language: "en" | "fr"): string[] {
 
 export default function ActivityLogPage() {
   const { currentAdminUser, language } = useAdmin();
-  const router = useRouter();
   const t = translations[language];
   
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);

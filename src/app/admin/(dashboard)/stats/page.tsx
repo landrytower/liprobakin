@@ -633,6 +633,10 @@ export default function StatsPage() {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (updatedStat as any)[field] = getStoredStatValue(statEntry, statAliasMap[field]);
         });
+        // Read DNP flag separately (boolean, not numeric)
+        if (statEntry.dnp === true) {
+          updatedStat.dnp = true;
+        }
         targetStats[targetPlayerId] = normalizeDerivedStats(updatedStat);
       });
       
@@ -936,6 +940,7 @@ export default function StatsPage() {
       teamId,
       teamName,
       gameId,
+      dnp: stat.dnp || false,
       number: Number(stat.jerseyNumber || 0),
       jerseyNumber: Number(stat.jerseyNumber || 0),
       points: stat.points,

@@ -758,8 +758,8 @@ export default function GamePage() {
   const homeStatsSorted = sortByPointsDesc(homeStats).filter(p => !p.dnp);
   const awayStatsSorted = sortByPointsDesc(awayStats).filter(p => !p.dnp);
 
-  // Find game leaders
-  const allPlayers = [...homeStats, ...awayStats];
+  // Find game leaders (exclude DNP players)
+  const allPlayers = [...homeStats, ...awayStats].filter(p => !p.dnp);
   const pointsLeader = allPlayers.reduce((max, p) => p.pts > max.pts ? p : max, allPlayers[0] || { pts: 0 } as PlayerStat);
   const reboundsLeader = allPlayers.reduce((max, p) => p.reb > max.reb ? p : max, allPlayers[0] || { reb: 0 } as PlayerStat);
   const assistsLeader = allPlayers.reduce((max, p) => p.ast > max.ast ? p : max, allPlayers[0] || { ast: 0 } as PlayerStat);

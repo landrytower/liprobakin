@@ -1044,22 +1044,16 @@ const CountdownTimer = ({ dateTime, language }: { dateTime?: string; language: L
   const formatNum = (n: number) => n.toString().padStart(2, '0');
 
   return (
-    <div className="flex items-center justify-center gap-1.5 mt-2">
-      <span className="text-[10px] md:text-xs text-orange-400 font-medium uppercase tracking-wide">
-        {language === 'fr' ? 'Début dans:' : 'Starting in:'}
+    <div className="mt-2 flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
+      <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[9px] md:text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-300 whitespace-nowrap">
+        {language === 'fr' ? 'Début dans' : 'Starting in'}
       </span>
-      <div className="flex items-center gap-0.5 font-mono">
-        <span className="bg-orange-500/20 text-orange-400 px-1.5 py-0.5 rounded text-xs md:text-sm font-bold">
-          {formatNum(timeLeft.hours)}
-        </span>
-        <span className="text-orange-400 text-xs">:</span>
-        <span className="bg-orange-500/20 text-orange-400 px-1.5 py-0.5 rounded text-xs md:text-sm font-bold">
-          {formatNum(timeLeft.minutes)}
-        </span>
-        <span className="text-orange-400 text-xs">:</span>
-        <span className="bg-orange-500/20 text-orange-400 px-1.5 py-0.5 rounded text-xs md:text-sm font-bold animate-pulse">
-          {formatNum(timeLeft.seconds)}
-        </span>
+      <div className="inline-flex items-center rounded-full border border-white/10 bg-black/20 px-2 py-0.5 text-xs md:text-sm font-semibold text-white tabular-nums">
+        <span>{formatNum(timeLeft.hours)}</span>
+        <span className="mx-1 text-white/40">:</span>
+        <span>{formatNum(timeLeft.minutes)}</span>
+        <span className="mx-1 text-white/40">:</span>
+        <span className="animate-pulse">{formatNum(timeLeft.seconds)}</span>
       </div>
     </div>
   );

@@ -1007,7 +1007,7 @@ const LeaderRow = ({ leader, allFranchises, gender }: { leader: FeaturedMatchup[
 
 // Countdown timer component for upcoming games
 const CountdownTimer = ({ dateTime, language }: { dateTime?: string; language: Locale }) => {
-  const [timeLeft, setTimeLeft] = useState<{ hours: number; minutes: number; seconds: number } | null>(null);
+  const [timeLeft, setTimeLeft] = useState<{ hours: number; minutes: number; seconds: number; totalSeconds: number } | null>(null);
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
@@ -1028,10 +1028,11 @@ const CountdownTimer = ({ dateTime, language }: { dateTime?: string; language: L
       }
       
       setIsVisible(true);
+      const totalSeconds = Math.floor(diff / 1000);
       const hours = Math.floor(diff / (1000 * 60 * 60));
       const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
       const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-      setTimeLeft({ hours, minutes, seconds });
+      setTimeLeft({ hours, minutes, seconds, totalSeconds });
     };
 
     calculateTimeLeft();
@@ -1043,17 +1044,69 @@ const CountdownTimer = ({ dateTime, language }: { dateTime?: string; language: L
 
   const formatNum = (n: number) => n.toString().padStart(2, '0');
 
+  const urgency: "normal" | "low" | "medium" | "high" | "critical" = (() => {
+    const s = timeLeft.totalSeconds;
+    if (s <= 5 * 60) return "critical";
+    if (s <= 15 * 60) return "high";
+    if (s <= 60 * 60) return "medium";
+    if (s <= 6 * 60 * 60) return "low";
+    return "normal";
+  })();
+
+  const labelClass =
+    urgency === "critical"
+      ? "border-red-500/25 bg-red-500/10 text-red-200"
+      : urgency === "high"
+        ? "border-orange-500/25 bg-orange-500/10 text-orange-200"
+        : urgency === "medium"
+          ? "border-amber-500/25 bg-amber-500/10 text-amber-200"
+          : urgency === "low"
+            ? "border-amber-500/20 bg-amber-500/5 text-amber-100"
+            : "border-white/10 bg-white/5 text-slate-300";
+
+  const timerShellClass =
+    urgency === "critical"
+      ? "border-red-500/25 bg-gradient-to-r from-red-500/10 via-orange-500/10 to-red-500/10 shadow-lg shadow-red-500/10"
+      : urgency === "high"
+        ? "border-orange-500/25 bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-red-500/10 shadow-lg shadow-orange-500/10"
+        : urgency === "medium"
+          ? "border-amber-500/20 bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-amber-500/10 shadow-md shadow-amber-500/10"
+          : urgency === "low"
+            ? "border-white/15 bg-black/25"
+            : "border-white/10 bg-black/20";
+
+  const glowClass =
+    urgency === "critical"
+      ? "from-red-500/35 via-orange-500/25 to-red-500/35 animate-[pulse_0.7s_ease-in-out_infinite]"
+      : urgency === "high"
+        ? "from-amber-500/25 via-orange-500/20 to-red-500/25 animate-pulse"
+        : urgency === "medium"
+          ? "from-amber-500/15 via-orange-500/10 to-amber-500/15 animate-pulse"
+          : "from-transparent via-transparent to-transparent";
+
+  const secondsClass =
+    urgency === "critical"
+      ? "text-red-100 animate-[pulse_0.7s_ease-in-out_infinite]"
+      : urgency === "high"
+        ? "text-orange-100 animate-pulse"
+        : urgency === "medium"
+          ? "text-amber-100"
+          : "text-white";
+
   return (
     <div className="mt-2 flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
-      <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[9px] md:text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-300 whitespace-nowrap">
+      <span className={`rounded-full border px-2 py-0.5 text-[9px] md:text-[10px] font-semibold uppercase tracking-[0.2em] whitespace-nowrap transition-colors ${labelClass}`}>
         {language === 'fr' ? 'Début dans' : 'Starting in'}
       </span>
-      <div className="inline-flex items-center rounded-full border border-white/10 bg-black/20 px-2 py-0.5 text-xs md:text-sm font-semibold text-white tabular-nums">
+      <div className={`relative inline-flex items-center rounded-full border px-2 py-0.5 text-xs md:text-sm font-semibold text-white tabular-nums overflow-hidden ${timerShellClass}`}>
+        <div className={`pointer-events-none absolute inset-0 rounded-full blur-xl bg-gradient-to-r ${glowClass}`} />
+        <div className="relative inline-flex items-center">
         <span>{formatNum(timeLeft.hours)}</span>
         <span className="mx-1 text-white/40">:</span>
         <span>{formatNum(timeLeft.minutes)}</span>
         <span className="mx-1 text-white/40">:</span>
-        <span className="animate-pulse">{formatNum(timeLeft.seconds)}</span>
+        <span className={secondsClass}>{formatNum(timeLeft.seconds)}</span>
+        </div>
       </div>
     </div>
   );

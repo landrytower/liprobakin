@@ -1005,6 +1005,66 @@ const LeaderRow = ({ leader, allFranchises, gender }: { leader: FeaturedMatchup[
   );
 };
 
+// Countdown timer component for upcoming games
+const CountdownTimer = ({ dateTime, language }: { dateTime?: string; language: Locale }) => {
+  const [timeLeft, setTimeLeft] = useState<{ hours: number; minutes: number; seconds: number } | null>(null);
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    if (!dateTime) return;
+    
+    const targetDate = new Date(dateTime);
+    if (isNaN(targetDate.getTime())) return;
+
+    const calculateTimeLeft = () => {
+      const now = new Date();
+      const diff = targetDate.getTime() - now.getTime();
+      
+      // Only show if within 24 hours and game hasn't started
+      const twentyFourHours = 24 * 60 * 60 * 1000;
+      if (diff <= 0 || diff > twentyFourHours) {
+        setIsVisible(false);
+        return;
+      }
+      
+      setIsVisible(true);
+      const hours = Math.floor(diff / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+      setTimeLeft({ hours, minutes, seconds });
+    };
+
+    calculateTimeLeft();
+    const interval = setInterval(calculateTimeLeft, 1000);
+    return () => clearInterval(interval);
+  }, [dateTime]);
+
+  if (!isVisible || !timeLeft) return null;
+
+  const formatNum = (n: number) => n.toString().padStart(2, '0');
+
+  return (
+    <div className="flex items-center justify-center gap-1.5 mt-2">
+      <span className="text-[10px] md:text-xs text-orange-400 font-medium uppercase tracking-wide">
+        {language === 'fr' ? 'Début dans:' : 'Starting in:'}
+      </span>
+      <div className="flex items-center gap-0.5 font-mono">
+        <span className="bg-orange-500/20 text-orange-400 px-1.5 py-0.5 rounded text-xs md:text-sm font-bold">
+          {formatNum(timeLeft.hours)}
+        </span>
+        <span className="text-orange-400 text-xs">:</span>
+        <span className="bg-orange-500/20 text-orange-400 px-1.5 py-0.5 rounded text-xs md:text-sm font-bold">
+          {formatNum(timeLeft.minutes)}
+        </span>
+        <span className="text-orange-400 text-xs">:</span>
+        <span className="bg-orange-500/20 text-orange-400 px-1.5 py-0.5 rounded text-xs md:text-sm font-bold animate-pulse">
+          {formatNum(timeLeft.seconds)}
+        </span>
+      </div>
+    </div>
+  );
+};
+
 const MatchupTeam = ({ team, record, logo, allFranchises, gender }: { team: string; record: string; logo?: string; allFranchises: Franchise[]; gender?: Gender }) => {
   const franchise = findFranchiseByName(team, allFranchises);
   const displayName = franchise ? formatFranchiseName(franchise) : normalizeTeamName(team);
@@ -6041,7 +6101,7 @@ export default function Home() {
                 <p className="mt-2 text-sm text-slate-500">{language === 'fr' ? "Revenez bientôt pour découvrir les prochaines rencontres !" : "Check back soon for the latest matchups!"}</p>
               </div>
             ) : (
-              spotlightGames.map((matchup) => (
+              spotlightGames.map((matchup, gameIndex) => (
                 <article
                   key={matchup.id}
                   className="grid gap-4 rounded-2xl border border-white/5 bg-slate-900/70 p-3 md:p-4 shadow-lg shadow-black/30 lg:grid-cols-[2fr_1fr] overflow-hidden"
@@ -6078,6 +6138,9 @@ export default function Home() {
                               </span>
                             ))}
                           </p>
+                        )}
+                        {gameIndex === 0 && (
+                          <CountdownTimer dateTime={matchup.dateTime} language={language} />
                         )}
                       </div>
                     </div>

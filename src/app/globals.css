@@ -16,11 +16,6 @@ html[data-live-pin="1"] {
   --live-pin-height: 44px;
 }
 
-/* Push entire page content below the fixed pinned bar */
-html[data-live-pin="1"] body {
-  padding-top: var(--live-pin-height);
-}
-
 /* Offset ONLY top page headers/navbars when the live pin bar is present */
 html[data-live-pin="1"] .live-pin-offset {
   top: var(--live-pin-height) !important;

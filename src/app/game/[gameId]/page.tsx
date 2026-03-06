@@ -15,7 +15,7 @@ import {
   readPinnedLiveGameId,
   writePinnedLiveGameId,
 } from "@/lib/live-pin";
-import { useDocumentPiP, renderScoreToPiP } from "@/hooks/useDocumentPiP";
+import { useLiveScorePiP } from "@/hooks/useLiveScorePiP";
 
 type PlayerStat = {
   playerId: string;
@@ -507,7 +507,7 @@ export default function GamePage() {
   const [game, setGame] = useState<GameData | null>(null);
   const [loading, setLoading] = useState(true);
   const [isLivePinned, setIsLivePinned] = useState(false);
-  const { isPiPSupported, isPiPOpen, openPiP, closePiP, pipWindow } = useDocumentPiP({ width: 340, height: 160 });
+  const liveScorePiP = useLiveScorePiP({ width: 340, height: 160 });
   const [activeTab, setActiveTab] = useState<"overview" | "boxscore" | "highlights" | "pictures">("overview");
   const [playerHeadshots, setPlayerHeadshots] = useState<Record<string, string>>({});
   const [activePhotoIndex, setActivePhotoIndex] = useState<number | null>(null);
@@ -707,11 +707,11 @@ export default function GamePage() {
 
   // Update PiP window when game data changes
   useEffect(() => {
-    if (!isPiPOpen || !pipWindow || !game) return;
+    if (!liveScorePiP.isOpen || !game) return;
 
     const liveStatusPiP = String(game.status || "").toLowerCase() === "live";
     if (!liveStatusPiP) {
-      closePiP();
+      liveScorePiP.close();
       return;
     }
 
@@ -720,46 +720,39 @@ export default function GamePage() {
     const periodPiP = game.period || game.quarter || "";
     const clockPiP = game.gameClock || game.clock || game.timeRemaining || "";
 
-    renderScoreToPiP(
-      pipWindow,
-      {
-        homeTeam: game.homeTeamName || "Home",
-        awayTeam: game.awayTeamName || "Away",
-        homeScore: typeof homeScorePiP === "number" ? homeScorePiP : Number(homeScorePiP) || 0,
-        awayScore: typeof awayScorePiP === "number" ? awayScorePiP : Number(awayScorePiP) || 0,
-        period: String(periodPiP),
-        clock: String(clockPiP),
-      },
-      closePiP
-    );
-  }, [isPiPOpen, pipWindow, game, closePiP]);
+    liveScorePiP.render({
+      homeTeam: game.homeTeamName || "Home",
+      awayTeam: game.awayTeamName || "Away",
+      homeScore: typeof homeScorePiP === "number" ? homeScorePiP : Number(homeScorePiP) || 0,
+      awayScore: typeof awayScorePiP === "number" ? awayScorePiP : Number(awayScorePiP) || 0,
+      period: String(periodPiP),
+      clock: String(clockPiP),
+    });
+  }, [liveScorePiP, game]);
 
   // Handle PiP button click
   const handleTogglePiP = async () => {
-    if (isPiPOpen) {
-      closePiP();
-    } else {
-      const opened = await openPiP();
-      if (opened && pipWindow && game) {
-        const homeScorePiP = game.homeScore ?? game.winnerScore ?? 0;
-        const awayScorePiP = game.awayScore ?? game.loserScore ?? 0;
-        const periodPiP = game.period || game.quarter || "";
-        const clockPiP = game.gameClock || game.clock || game.timeRemaining || "";
-
-        renderScoreToPiP(
-          pipWindow,
-          {
-            homeTeam: game.homeTeamName || "Home",
-            awayTeam: game.awayTeamName || "Away",
-            homeScore: typeof homeScorePiP === "number" ? homeScorePiP : Number(homeScorePiP) || 0,
-            awayScore: typeof awayScorePiP === "number" ? awayScorePiP : Number(awayScorePiP) || 0,
-            period: String(periodPiP),
-            clock: String(clockPiP),
-          },
-          closePiP
-        );
-      }
+    if (liveScorePiP.isOpen) {
+      liveScorePiP.close();
+      return;
     }
+
+    const opened = await liveScorePiP.open();
+    if (!opened || !game) return;
+
+    const homeScorePiP = game.homeScore ?? game.winnerScore ?? 0;
+    const awayScorePiP = game.awayScore ?? game.loserScore ?? 0;
+    const periodPiP = game.period || game.quarter || "";
+    const clockPiP = game.gameClock || game.clock || game.timeRemaining || "";
+
+    liveScorePiP.render({
+      homeTeam: game.homeTeamName || "Home",
+      awayTeam: game.awayTeamName || "Away",
+      homeScore: typeof homeScorePiP === "number" ? homeScorePiP : Number(homeScorePiP) || 0,
+      awayScore: typeof awayScorePiP === "number" ? awayScorePiP : Number(awayScorePiP) || 0,
+      period: String(periodPiP),
+      clock: String(clockPiP),
+    });
   };
 
   if (loading) {
@@ -1307,21 +1300,21 @@ export default function GamePage() {
                   ) : null}
                 </button>
               )}
-              {liveStatus && isPiPSupported && (
+              {liveStatus && liveScorePiP.isSupported && (
                 <button
                   type="button"
                   onClick={handleTogglePiP}
                   className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-wider transition-colors ${
-                    isPiPOpen
+                    liveScorePiP.isOpen
                       ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/20"
                       : "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
                   }`}
-                  title={isPiPOpen ? t.closePiP : t.openPiP}
+                  title={liveScorePiP.isOpen ? t.closePiP : t.openPiP}
                 >
                   <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                   </svg>
-                  {isPiPOpen ? t.pipActive : t.openPiP}
+                  {liveScorePiP.isOpen ? t.pipActive : t.openPiP}
                 </button>
               )}
               {isFinishedGame && game.winByForfeit === true && (

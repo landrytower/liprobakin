@@ -206,15 +206,18 @@ export default function LivePinnedScore() {
         className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2 md:px-8"
         aria-label={language === "fr" ? "Voir le match en direct" : "View live game"}
       >
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="inline-flex items-center gap-1 rounded-full border border-red-500/40 bg-red-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-red-200">
+        <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2">
+          <span className="inline-flex flex-shrink-0 items-center gap-1 rounded-full border border-red-500/40 bg-red-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-red-200">
             <span className="relative inline-flex h-2 w-2">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" />
               <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
             </span>
             Live
           </span>
-          <span className="truncate text-xs font-semibold text-white">
+          <span className="min-w-0 truncate text-xs font-semibold text-white sm:hidden">
+            {visibleGame.awayTeam.split(" ").pop()} {visibleGame.awayScore} – {visibleGame.homeScore} {visibleGame.homeTeam.split(" ").pop()}
+          </span>
+          <span className="hidden min-w-0 truncate text-xs font-semibold text-white sm:inline">
             {visibleGame.awayTeam} {visibleGame.awayScore} – {visibleGame.homeScore} {visibleGame.homeTeam}
           </span>
         </div>

@@ -5,6 +5,7 @@ import React, { useEffect, useState, useMemo, useCallback, useRef, Component } f
 import type { ReactNode, ErrorInfo } from "react";
 import Image from "next/image";
 import { firebaseDB } from "@/lib/firebase";
+import { parseCongoDateTime } from "@/lib/congo-time";
 import {
   collection,
   onSnapshot,
@@ -739,7 +740,7 @@ function LeaguePulseDashboard() {
     if (!upcomingGames.length) return null;
     const next = upcomingGames[0];
     if (!next.date) return null;
-    const gameDate = new Date(`${next.date}T${next.time || "00:00"}`);
+    const gameDate = parseCongoDateTime(next.date, next.time || "00:00") || new Date(`${next.date}T${next.time || "00:00"}`);
     const diff = gameDate.getTime() - now.getTime();
     if (diff <= 0) return null;
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
@@ -1494,10 +1495,10 @@ function LeaguePulseDashboard() {
                       </div>
                       <div className="text-right flex-shrink-0 ml-2">
                         <div className="text-[10px] text-slate-400 font-medium">
-                          {g.date}
+                          {(() => { const d = parseCongoDateTime(g.date, g.time); return d ? d.toLocaleDateString() : g.date; })()}
                         </div>
                         <div className="text-[10px] text-slate-500">
-                          {g.time}
+                          {(() => { const d = parseCongoDateTime(g.date, g.time); return d ? d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : g.time; })()}
                         </div>
                       </div>
                     </div>
@@ -1852,7 +1853,7 @@ function DetailModal({
     if (game) {
       content = (
         <div className="space-y-6 text-center">
-          <p className="text-[10px] text-slate-400 uppercase tracking-widest">{game.date} · {game.venue || "TBD"} · {game.gender === "women" ? t.women : t.men}</p>
+          <p className="text-[10px] text-slate-400 uppercase tracking-widest">{(() => { const d = parseCongoDateTime(game.date, game.time); return d ? d.toLocaleDateString() : game.date; })()} · {game.venue || "TBD"} · {game.gender === "women" ? t.women : t.men}</p>
           
           <div className="flex items-center justify-center gap-6">
             <div className="flex flex-col items-center gap-2">
@@ -1870,7 +1871,7 @@ function DetailModal({
                   <span className={game.awayTeamId === game.winnerTeamId ? "text-orange-400" : "text-slate-500"}>{game.awayTeamId === game.winnerTeamId ? game.winnerScore : game.loserScore}</span>
                 </>
               ) : (
-                <span className="text-slate-500 text-lg">{game.time || "TBD"}</span>
+                <span className="text-slate-500 text-lg">{(() => { const d = parseCongoDateTime(game.date, game.time); return d ? d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : (game.time || "TBD"); })()}</span>
               )}
             </div>
 

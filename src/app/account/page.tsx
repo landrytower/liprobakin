@@ -518,7 +518,7 @@ export default function AccountPage() {
       <div className="pointer-events-none absolute inset-x-0 top-[-200px] h-[500px] bg-[radial-gradient(circle,_rgba(56,189,248,0.35),_transparent_60%)] blur-3xl" aria-hidden />
       
       {/* Header */}
-      <nav className="sticky top-0 z-50 border-b border-white/10 bg-black/30 backdrop-blur-xl">
+      <nav className="sticky top-0 live-pin-offset z-50 border-b border-white/10 bg-black/30 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 sm:gap-8 px-4 sm:px-6 py-4 sm:py-5 md:px-12">
           <Link href="/" className="flex items-center gap-2 sm:gap-3 text-sm sm:text-xl font-semibold tracking-[0.2em] sm:tracking-[0.3em] text-white hover:text-blue-400 transition">
             ← {t.backToHome}

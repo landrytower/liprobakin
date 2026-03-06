@@ -1,12 +1,20 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { collection, doc, getDocs, onSnapshot } from "firebase/firestore";
 import { firebaseDB } from "@/lib/firebase";
+import { parseCongoDateTime } from "@/lib/congo-time";
 import { useLanguage } from "@/contexts/LanguageContext";
+import {
+  LIVE_PIN_CHANGED_EVENT,
+  clearPinnedLiveGameId,
+  emitLivePinChanged,
+  readPinnedLiveGameId,
+  writePinnedLiveGameId,
+} from "@/lib/live-pin";
 
 type PlayerStat = {
   playerId: string;
@@ -17,6 +25,7 @@ type PlayerStat = {
   headshot?: string;
   teamId: string;
   dnp?: boolean;
+  started?: boolean;
   two_pm: number;
   two_pa: number;
   three_pm: number;
@@ -86,6 +95,13 @@ type GameData = {
   homeLargestLead?: number;
   awayLargestLead?: number;
   isHiddenFromPublic?: boolean;
+  winByForfeit?: boolean;
+  forfeitCaptainId?: string;
+  forfeitCaptainName?: string;
+  activeTimeout?: {
+    side?: "home" | "away";
+    startedAt?: unknown;
+  } | null;
 };
 
 type NormalizedPlayEvent = {
@@ -159,6 +175,11 @@ const translations = {
     noEventFeed: "Waiting for detailed score events from live console.",
     scoreFlow: "Score Flow",
     lastScore: "Last score",
+    winPerForfeit: "Win per forfeit",
+    timeout: "Timeout",
+    pinLiveScore: "Pin live score",
+    unpinLiveScore: "Unpin live score",
+    pinnedLiveScore: "Pinned",
   },
   fr: {
     loading: "Chargement...",
@@ -213,6 +234,11 @@ const translations = {
     noEventFeed: "En attente des actions détaillées depuis la console live.",
     scoreFlow: "Flux du score",
     lastScore: "Dernier score",
+    winPerForfeit: "Victoire par forfait",
+    timeout: "Temps mort",
+    pinLiveScore: "\u00c9pingler le score",
+    unpinLiveScore: "D\u00e9s\u00e9pingler",
+    pinnedLiveScore: "\u00c9pingl\u00e9",
   },
 };
 
@@ -471,6 +497,7 @@ export default function GamePage() {
   const t: TranslationCopy = translations[language as "fr" | "en"] ?? translations.fr;
   const [game, setGame] = useState<GameData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isLivePinned, setIsLivePinned] = useState(false);
   const [activeTab, setActiveTab] = useState<"overview" | "boxscore" | "highlights" | "pictures">("overview");
   const [playerHeadshots, setPlayerHeadshots] = useState<Record<string, string>>({});
   const [activePhotoIndex, setActivePhotoIndex] = useState<number | null>(null);
@@ -499,6 +526,17 @@ export default function GamePage() {
     );
 
     return () => unsubscribe();
+  }, [gameId]);
+
+  useEffect(() => {
+    const syncPinned = () => setIsLivePinned(readPinnedLiveGameId() === gameId);
+    syncPinned();
+    window.addEventListener(LIVE_PIN_CHANGED_EVENT, syncPinned);
+    window.addEventListener("storage", syncPinned);
+    return () => {
+      window.removeEventListener(LIVE_PIN_CHANGED_EVENT, syncPinned);
+      window.removeEventListener("storage", syncPinned);
+    };
   }, [gameId]);
 
   useEffect(() => {
@@ -743,6 +781,38 @@ export default function GamePage() {
   const liveClockDisplay =
     game.gameClock || game.clock || game.timeRemaining || "";
 
+  const activeTimeoutSide =
+    game.activeTimeout && typeof game.activeTimeout === "object"
+      ? (game.activeTimeout as { side?: "home" | "away" }).side
+      : undefined;
+
+  const activeTimeoutTeamName =
+    activeTimeoutSide === "home"
+      ? game.homeTeamName || t.home
+      : activeTimeoutSide === "away"
+        ? game.awayTeamName || t.away
+        : "";
+
+  const pinButtonLabel = useMemo(() => {
+    if (isLivePinned) return t.unpinLiveScore;
+    return t.pinLiveScore;
+  }, [isLivePinned, t.pinLiveScore, t.unpinLiveScore]);
+
+  const pinBadgeLabel = useMemo(() => {
+    if (!isLivePinned) return "";
+    return t.pinnedLiveScore;
+  }, [isLivePinned, t.pinnedLiveScore]);
+
+  const togglePinnedLiveScore = () => {
+    if (isLivePinned) {
+      clearPinnedLiveGameId();
+    } else {
+      writePinnedLiveGameId(gameId);
+    }
+    emitLivePinChanged();
+    setIsLivePinned(!isLivePinned);
+  };
+
   const rawPlayByPlay = ([game.playByPlay, game.livePlays, game.scoreEvents, game.events, game.timeline].find(Array.isArray) as unknown[] | undefined) || [];
   const normalizedPlayByPlay = rawPlayByPlay
     .map((entry, index) => normalizePlayEvent(entry, index, game.homeTeamName || "", game.awayTeamName || "", game.homeTeamId, game.awayTeamId))
@@ -964,15 +1034,23 @@ export default function GamePage() {
     { key: "plus_minus", label: "+/-", value: (player) => (player.plus_minus ?? player.plusMinus ?? 0) },
   ];
 
-  // Format date in the appropriate language
-  const formattedDate = game.date 
-    ? new Date(game.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { 
+  // Format date in the appropriate language — convert from Congo TZ to user's local TZ
+  const gameDateObj = parseCongoDateTime(game.date, game.time);
+  const formattedDate = gameDateObj
+    ? gameDateObj.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { 
         weekday: 'short', 
         month: 'short', 
         day: 'numeric', 
         year: 'numeric' 
       })
     : '';
+  const formattedTime = gameDateObj
+    ? gameDateObj.toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: language !== 'fr',
+      })
+    : (game.time || '');
 
   const getPlayerDisplayName = (player: PlayerStat) => {
     const fullName = `${player.firstName || ""} ${player.lastName || ""}`.trim();
@@ -1098,7 +1176,7 @@ export default function GamePage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#050816] via-[#050816] to-[#020407] text-white overflow-x-hidden">
       {/* Header */}
-      <header className="sticky top-0 z-50 border-b border-white/10 bg-black/50 backdrop-blur-xl">
+      <header className="sticky top-0 live-pin-offset z-50 border-b border-white/10 bg-black/50 backdrop-blur-xl">
         <div className="mx-auto max-w-7xl px-3 py-3 sm:px-4 sm:py-4">
           <div className="flex items-center justify-between gap-2">
             <Link href="/" className="flex items-center gap-2 sm:gap-3">
@@ -1151,6 +1229,34 @@ export default function GamePage() {
               }`}>
                 {isFinishedGame ? t.final : liveStatus ? t.liveNow : t.scheduled}
               </span>
+              {liveStatus && (
+                <button
+                  type="button"
+                  onClick={togglePinnedLiveScore}
+                  className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-wider transition-colors ${
+                    isLivePinned
+                      ? "border-white/20 bg-white/10 text-white hover:bg-white/15"
+                      : "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
+                  }`}
+                >
+                  {pinButtonLabel}
+                  {pinBadgeLabel ? (
+                    <span className="rounded-full border border-white/10 bg-black/30 px-2 py-0.5 text-[10px] font-black tracking-widest text-slate-100">
+                      {pinBadgeLabel}
+                    </span>
+                  ) : null}
+                </button>
+              )}
+              {isFinishedGame && game.winByForfeit === true && (
+                <span className="rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider bg-orange-500/15 text-orange-200 border border-orange-500/30">
+                  {t.winPerForfeit}
+                </span>
+              )}
+              {liveStatus && activeTimeoutSide && (
+                <span className="rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider bg-amber-500/15 text-amber-200 border border-amber-500/30">
+                  {t.timeout} {activeTimeoutTeamName}
+                </span>
+              )}
               {game.date && (
                 <span className="text-xs sm:text-sm text-slate-400">
                   {formattedDate}
@@ -1165,7 +1271,7 @@ export default function GamePage() {
                     <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    {game.time}
+                    {formattedTime}
                   </div>
                 )}
                 {game.venue && (
@@ -1591,7 +1697,10 @@ export default function GamePage() {
                         <div key={player.playerId} className="rounded-lg border border-white/10 bg-slate-900/60 p-2.5">
                           <div className="mb-2 flex items-center justify-between gap-2">
                             <div className="min-w-0">
-                              <p className="truncate text-xs font-semibold text-white">#{player.number || 0} {getPlayerDisplayName(player)}</p>
+                              <p className="truncate text-xs font-semibold text-white">
+                                #{player.number || 0} {getPlayerDisplayName(player)}
+                                {player.started ? <span className="ml-1 text-orange-300" title="Starter">★</span> : null}
+                              </p>
                             </div>
                             <span className="rounded-md bg-white/10 px-2 py-0.5 text-[10px] font-bold text-white">{t.pts}: {player.pts}</span>
                           </div>
@@ -1631,8 +1740,14 @@ export default function GamePage() {
                                   </div>
                                 )}
                                 <div className="min-w-0">
-                                  <p className="font-medium text-[11px] sm:text-sm sm:hidden">{getPlayerLastName(player)}</p>
-                                  <p className="font-medium text-xs sm:text-sm hidden sm:block">{getPlayerDisplayName(player)}</p>
+                                  <p className="font-medium text-[11px] sm:text-sm sm:hidden">
+                                    {getPlayerLastName(player)}
+                                    {player.started ? <span className="ml-1 text-orange-300" title="Starter">★</span> : null}
+                                  </p>
+                                  <p className="font-medium text-xs sm:text-sm hidden sm:block">
+                                    {getPlayerDisplayName(player)}
+                                    {player.started ? <span className="ml-1 text-orange-300" title="Starter">★</span> : null}
+                                  </p>
                                 </div>
                               </div>
                             </td>
@@ -1661,7 +1776,10 @@ export default function GamePage() {
                         <div key={player.playerId} className="rounded-lg border border-white/10 bg-slate-900/60 p-2.5">
                           <div className="mb-2 flex items-center justify-between gap-2">
                             <div className="min-w-0">
-                              <p className="truncate text-xs font-semibold text-white">#{player.number || 0} {getPlayerDisplayName(player)}</p>
+                              <p className="truncate text-xs font-semibold text-white">
+                                #{player.number || 0} {getPlayerDisplayName(player)}
+                                {player.started ? <span className="ml-1 text-orange-300" title="Starter">★</span> : null}
+                              </p>
                             </div>
                             <span className="rounded-md bg-white/10 px-2 py-0.5 text-[10px] font-bold text-white">{t.pts}: {player.pts}</span>
                           </div>
@@ -1701,8 +1819,14 @@ export default function GamePage() {
                                   </div>
                                 )}
                                 <div className="min-w-0">
-                                  <p className="font-medium text-[11px] sm:text-sm sm:hidden">{getPlayerLastName(player)}</p>
-                                  <p className="font-medium text-xs sm:text-sm hidden sm:block">{getPlayerDisplayName(player)}</p>
+                                  <p className="font-medium text-[11px] sm:text-sm sm:hidden">
+                                    {getPlayerLastName(player)}
+                                    {player.started ? <span className="ml-1 text-orange-300" title="Starter">★</span> : null}
+                                  </p>
+                                  <p className="font-medium text-xs sm:text-sm hidden sm:block">
+                                    {getPlayerDisplayName(player)}
+                                    {player.started ? <span className="ml-1 text-orange-300" title="Starter">★</span> : null}
+                                  </p>
                                 </div>
                               </div>
                             </td>

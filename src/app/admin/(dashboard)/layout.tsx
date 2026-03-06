@@ -577,7 +577,7 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
     <AdminContext.Provider value={{ currentAdminUser, language, setLanguage, permissions }}>
       <div className="min-h-screen bg-slate-950 text-white">
         {/* Header */}
-        <header className="sticky top-0 z-50 bg-slate-900/95 backdrop-blur-sm border-b border-white/10">
+        <header className="sticky top-0 live-pin-offset z-50 bg-slate-900/95 backdrop-blur-sm border-b border-white/10">
           <div className="max-w-[1800px] mx-auto px-4 sm:px-6 py-4">
             <div className="flex items-center justify-between flex-wrap gap-4">
               <div className="flex items-center gap-3">

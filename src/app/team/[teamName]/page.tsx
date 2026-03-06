@@ -729,7 +729,7 @@ export default function TeamPage() {
       )}
 
       {/* Header */}
-      <header className="sticky top-0 z-50 border-b border-white/10 bg-slate-950/80 backdrop-blur-md">
+      <header className="sticky top-0 live-pin-offset z-50 border-b border-white/10 bg-slate-950/80 backdrop-blur-md">
         <div className="mx-auto max-w-7xl px-3 py-3 sm:px-6 sm:py-4 lg:px-8">
           <div className="flex items-center justify-between gap-2">
             {/* Logo - hidden on very small screens, shown on sm+ */}

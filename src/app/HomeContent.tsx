@@ -7,6 +7,7 @@ import Link from "next/link";
 import { addDoc, arrayRemove, arrayUnion, collection, collectionGroup, deleteDoc, doc, query, orderBy, limit, getDocs, onSnapshot, serverTimestamp, updateDoc, where } from "firebase/firestore";
 import { firebaseDB } from "@/lib/firebase";
 import { normalizeTeamGender } from "@/lib/team-gender";
+import { parseCongoDateTime, CONGO_TIMEZONE } from "@/lib/congo-time";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import AuthModal from "@/components/AuthModal";
@@ -50,6 +51,11 @@ type EnhancedMatchup = FeaturedMatchup & {
   referees?: MatchupReferee[];
   dateTime?: string;
   liveStreamUrl?: string;
+  isStartingSoon?: boolean;
+  activeTimeout?: {
+    side: "home" | "away";
+    startedAt?: unknown;
+  } | null;
 };
 
 type NewsArticle = {
@@ -264,8 +270,8 @@ const MIN_MEDIA_TEXT_DISTANCE = 0;
 const MAX_MEDIA_TEXT_DISTANCE = 48;
 const DEFAULT_MEDIA_TEXT_DISTANCE = 12;
 
-// DRC (Kinshasa) timezone - UTC+1
-const DRC_TIMEZONE = 'Africa/Kinshasa';
+// DRC (Kinshasa) timezone - UTC+1 (re-use the constant from congo-time)
+const DRC_TIMEZONE = CONGO_TIMEZONE;
 
 // Helper to get current time in DRC timezone
 const getDRCNow = (): Date => {
@@ -422,8 +428,6 @@ function AutoPlayOnVisibleVideo({ src, className, style }: { src: string; classN
 const NEWS_ARTICLE_SWITCH_MS = 15000;
 const HOME_BOOTSTRAP_CACHE_KEY = "febaco:home:bootstrap:v1";
 const HOME_BOOTSTRAP_CACHE_TTL_MS = 1000 * 60 * 10;
-const HOME_STANDINGS_CACHE_KEY = "febaco:home:standings:v1";
-const HOME_STANDINGS_CACHE_TTL_MS = 1000 * 60 * 5;
 
 type CachedNewsArticle = Omit<NewsArticle, "createdAt"> & { createdAt: string | null };
 
@@ -1760,14 +1764,7 @@ export default function Home() {
   const [touchEndX, setTouchEndX] = useState(0);
   const [isSwiping, setIsSwiping] = useState(false);
   const [isArticleChanging, setIsArticleChanging] = useState(false);
-  const [dynamicStandings, setDynamicStandings] = useState<any[]>(() => {
-    // Use SSR standings as initial paint — combine men + women
-    const ssrStandings: any[] = [
-      ...conferenceStandings.map((s) => ({ ...s, gender: "men" })),
-      ...conferenceStandingsWomen.map((s) => ({ ...s, gender: "women" })),
-    ];
-    return ssrStandings;
-  });
+  const [dynamicStandings, setDynamicStandings] = useState<any[] | null>(null);
   const [currentPartnerIndex, setCurrentPartnerIndex] = useState(0);
   const [currentCommitteeIndex, setCurrentCommitteeIndex] = useState(0);
   const [dynamicPartners, setDynamicPartners] = useState<any[]>(leaguePartners);
@@ -2183,10 +2180,13 @@ export default function Home() {
 
   // Removed static roster - RosterModal now fetches from Firestore
   const genderPlayers = playersGender === "men" ? spotlightPlayers : spotlightPlayersWomen;
-  // Always use dynamic standings calculated from games - no fallback to static data
-  const genderStandings = [...dynamicStandings]
-    .filter((s) => s.gender === standingsGender)
-    .sort((a, b) => Number(a.seed) - Number(b.seed));
+  // Standings should not flash placeholder data; only render once computed standings arrive.
+  const genderStandings = useMemo(() => {
+    const standings = Array.isArray(dynamicStandings) ? dynamicStandings : [];
+    return [...standings]
+      .filter((s) => s.gender === standingsGender)
+      .sort((a, b) => Number(a.seed) - Number(b.seed));
+  }, [dynamicStandings, standingsGender]);
   const homepageStandings = genderStandings;
   const genderFranchises = franchiseGender === "men" ? menTeams : womenTeams;
   const filteredFranchises = genderFranchises.filter(team => {
@@ -2230,6 +2230,25 @@ export default function Home() {
     }, {});
   }, [repliesByCommentId]);
 
+  const completedGamesSorted = useMemo(() => {
+    const toSortTime = (game: any) =>
+      game?.completedAtObj?.getTime?.() || game?.dateObj?.getTime?.() || 0;
+    return [...completedGames].sort((a, b) => toSortTime(b) - toSortTime(a));
+  }, [completedGames]);
+
+  useEffect(() => {
+    const container = finalBuzzerScrollRef.current;
+    if (!container) {
+      return;
+    }
+
+    // Keep newest games visible on the left.
+    // Some browsers restore horizontal scroll position; force it back to the start.
+    requestAnimationFrame(() => {
+      container.scrollTo({ left: 0, behavior: "auto" });
+    });
+  }, [completedGamesSorted.length]);
+
   useEffect(() => {
     const cached = readHomeBootstrapCache();
     if (cached) {
@@ -2243,22 +2262,8 @@ export default function Home() {
       if (cached.partners.length > 0) setDynamicPartners(cached.partners);
     }
 
-    // Pre-populate standings from cache so the section shows instantly
-    if (typeof window !== "undefined") {
-      const rawStandings = window.localStorage.getItem(HOME_STANDINGS_CACHE_KEY);
-      if (rawStandings) {
-        try {
-          const parsed = JSON.parse(rawStandings) as { data: typeof dynamicStandings; savedAt: number };
-          if (parsed && typeof parsed.savedAt === "number" && Date.now() - parsed.savedAt < HOME_STANDINGS_CACHE_TTL_MS) {
-            setDynamicStandings(parsed.data);
-          } else {
-            window.localStorage.removeItem(HOME_STANDINGS_CACHE_KEY);
-          }
-        } catch {
-          // Ignore malformed cache
-        }
-      }
-    }
+    // NOTE: Do not pre-populate standings from cache/SSR.
+    // On slow loads this can flash incorrect standings before real standings are computed.
   }, []);
 
   useEffect(() => {
@@ -3507,12 +3512,8 @@ export default function Home() {
         standingsHistoryRef.current = nextRanks;
         persistStandingsHistory(nextRanks);
 
-        setDynamicStandings(finalStandings);
-        // Persist to localStorage so standings appear instantly on next visit
-        if (typeof window !== "undefined") {
-          try {
-            window.localStorage.setItem(HOME_STANDINGS_CACHE_KEY, JSON.stringify({ data: finalStandings, savedAt: Date.now() }));
-          } catch { /* ignore quota errors */ }
+        if (finalStandings.length > 0) {
+          setDynamicStandings(finalStandings);
         }
       } catch (error) {
         console.error("Error calculating standings:", error);
@@ -3962,6 +3963,7 @@ export default function Home() {
               venue: data.venue || data.location || "",
               network: "",
               broadcast: data.broadcast || "",
+              activeTimeout: (data.activeTimeout as EnhancedMatchup["activeTimeout"]) ?? null,
               liveStreamUrl:
                 data.streamUrl ||
                 data.youtubeUrl ||
@@ -3988,22 +3990,11 @@ export default function Home() {
   useEffect(() => {
     const fetchGames = async () => {
       try {
-        const parseGameDateTime = (dateStr?: string, timeStr?: string) => {
-          const safeDate = (dateStr || "").trim();
-          const safeTime = (timeStr || "00:00").trim();
-          if (!safeDate) return null;
-
-          let normalizedDate = safeDate;
-          if (safeDate.includes("/")) {
-            const [a, b, c] = safeDate.split("/");
-            if (a && b && c) {
-              normalizedDate = `${c}-${a.padStart(2, "0")}-${b.padStart(2, "0")}`;
-            }
-          }
-
-          const normalizedTime = safeTime.length === 5 ? `${safeTime}:00` : safeTime;
-          const parsed = new Date(`${normalizedDate}T${normalizedTime}`);
-          return Number.isFinite(parsed.getTime()) ? parsed : null;
+        // Parse stored date+time as Congo/Kinshasa timezone → proper UTC Date.
+        // This ensures that when the browser formats the Date using local methods
+        // (getHours, toLocaleString, etc.) the user sees their own local time.
+        const parseGameDateTime = (dateStr?: string, timeStr?: string): Date | null => {
+          return parseCongoDateTime(dateStr, timeStr) ?? null;
         };
 
         // Fetch games, teams, and referees in PARALLEL instead of sequentially
@@ -4270,6 +4261,9 @@ export default function Home() {
             
             return `${dateStr} · ${timeStr}`;
           };
+
+          const minutesSinceStart = (now.getTime() - game.dateObj.getTime()) / (1000 * 60);
+          const isStartingSoon = minutesSinceStart >= 0 && minutesSinceStart <= 30;
           
           const homeTeam = resolveTeamInfo(game.data.homeTeamId, game.data.homeTeamName || game.data.homeTeam || game.data.team1);
           const awayTeam = resolveTeamInfo(game.data.awayTeamId, game.data.awayTeamName || game.data.awayTeam || game.data.team2);
@@ -4330,6 +4324,7 @@ export default function Home() {
             awayTeamLogo: game.data.awayTeamLogo,
             gender: game.data.gender,
             dateTime: game.dateObj ? game.dateObj.toISOString() : "",
+            isStartingSoon,
             referees: refereeAssignments,
             leaders,
           };
@@ -4472,7 +4467,7 @@ export default function Home() {
         aria-hidden
       />
 
-      <nav className="sticky top-0 z-50 border-b border-white/10 bg-black/30 backdrop-blur-xl">
+      <nav className="sticky top-0 live-pin-offset z-50 border-b border-white/10 bg-black/30 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 sm:gap-4 md:gap-8 px-3 sm:px-6 py-4 sm:py-5 md:px-12 md:pl-16">
           <Link href="/" className="flex items-center gap-2 sm:gap-3 text-base sm:text-xl font-semibold tracking-[0.2em] sm:tracking-[0.3em]">
             <Image
@@ -5887,6 +5882,8 @@ export default function Home() {
               const hasLiveStream = Boolean((game.liveStreamUrl || "").trim());
               const homeScoreDisplay = typeof game.homeScore === "number" ? game.homeScore : 0;
               const awayScoreDisplay = typeof game.awayScore === "number" ? game.awayScore : 0;
+              const activeTimeoutSide = game.activeTimeout?.side ?? null;
+              const timeoutVerb = language === "fr" ? "Temps mort" : "Timeout";
               const periodDisplay = String(game.livePeriod || "").trim();
               const normalizedPeriodDisplay = periodDisplay
                 ? /^(ht|mt|half|halftime|mi[-\s]?temps|pause|break)$/i.test(periodDisplay)
@@ -5898,90 +5895,97 @@ export default function Home() {
                     : `Q${periodDisplay}`
                 : "";
               const clockDisplay = String(game.liveClock || "").trim();
+              const wrapperWidthClass = liveGames.length < 3 ? 'w-full md:w-[calc(50%-0.5rem)] lg:w-[400px]' : 'w-full';
               return (
-                <Link
-                  key={game.id}
-                  href={`/game/${encodeURIComponent(game.id)}`}
-                  className={`relative overflow-hidden rounded-b-2xl border border-white/10 bg-gradient-to-br from-slate-900/80 to-slate-950/90 backdrop-blur-sm transition-all duration-300 hover:border-white/20 hover:shadow-xl ${liveGames.length < 3 ? 'w-full md:w-[calc(50%-0.5rem)] lg:w-[400px]' : ''}`}
-                >
-                  <div className="flex items-center justify-between p-3">
-                    {/* Home Team */}
-                    <div className="flex flex-1 items-center gap-2">
-                      {game.homeTeamLogo && (
-                        <div className="relative h-10 w-10 flex-shrink-0 rounded-full overflow-hidden bg-slate-800">
-                          <Image
-                            src={game.homeTeamLogo}
-                            alt={game.homeTeam || "Home Team"}
-                            fill
-                            className="object-contain"
-                            unoptimized
-                          />
+                <div key={game.id} className={wrapperWidthClass}>
+                  <Link
+                    href={`/game/${encodeURIComponent(game.id)}`}
+                    className="relative block w-full overflow-hidden rounded-b-2xl border border-white/10 bg-gradient-to-br from-slate-900/80 to-slate-950/90 backdrop-blur-sm transition-all duration-300 hover:border-white/20 hover:shadow-xl"
+                  >
+                    <div className="flex items-center justify-between p-3">
+                      {/* Home Team */}
+                      <div className="flex flex-1 items-center gap-2">
+                        {game.homeTeamLogo && (
+                          <div className="relative h-10 w-10 flex-shrink-0 rounded-full overflow-hidden bg-slate-800">
+                            <Image
+                              src={game.homeTeamLogo}
+                              alt={game.homeTeam || "Home Team"}
+                              fill
+                              className="object-contain"
+                              unoptimized
+                            />
+                          </div>
+                        )}
+                        <div className="flex-1">
+                          <h3 className="text-sm font-bold text-white">{game.homeTeam}</h3>
                         </div>
-                      )}
-                      <div className="flex-1">
-                        <h3 className="text-sm font-bold text-white">{game.homeTeam}</h3>
+                      </div>
+
+                      {/* Live Indicator */}
+                      <div className="flex flex-col items-center gap-1 px-4">
+                        <div className="relative flex items-center gap-1">
+                          <div className="relative">
+                            <div className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+                            <div className="absolute inset-0 h-2 w-2 rounded-full bg-red-500 animate-ping" />
+                          </div>
+                          <span className="text-xs font-bold uppercase tracking-wider text-red-500 animate-pulse">
+                            LIVE
+                          </span>
+                        </div>
+                        <span className="text-sm font-black tabular-nums text-white">
+                          {homeScoreDisplay} - {awayScoreDisplay}
+                        </span>
+                        {activeTimeoutSide && (
+                          <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-200 text-center">
+                            {timeoutVerb} {activeTimeoutSide === "home" ? (game.homeTeam || "Team A") : (game.awayTeam || "Team B")}
+                          </span>
+                        )}
+                        {(periodDisplay || clockDisplay) && (
+                          <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-300 text-center">
+                            {normalizedPeriodDisplay}{normalizedPeriodDisplay && clockDisplay ? " • " : ""}{clockDisplay}
+                          </span>
+                        )}
+                        <span className="text-[10px] uppercase tracking-wider text-slate-400">
+                          {game.gender === "men" ? "MEN" : "WOMEN"}
+                        </span>
+                        {game.venue && (
+                          <span className="text-[10px] text-slate-500 text-center">
+                            {game.venue}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Away Team */}
+                      <div className="flex flex-1 items-center justify-end gap-2">
+                        <div className="flex-1 text-right">
+                          <h3 className="text-sm font-bold text-white">{game.awayTeam}</h3>
+                        </div>
+                        {game.awayTeamLogo && (
+                          <div className="relative h-10 w-10 flex-shrink-0 rounded-full overflow-hidden bg-slate-800">
+                            <Image
+                              src={game.awayTeamLogo}
+                              alt={game.awayTeam || "Away Team"}
+                              fill
+                              className="object-contain"
+                              unoptimized
+                            />
+                          </div>
+                        )}
                       </div>
                     </div>
 
-                    {/* Live Indicator */}
-                    <div className="flex flex-col items-center gap-1 px-4">
-                      <div className="relative flex items-center gap-1">
-                        <div className="relative">
-                          <div className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
-                          <div className="absolute inset-0 h-2 w-2 rounded-full bg-red-500 animate-ping" />
-                        </div>
-                        <span className="text-xs font-bold uppercase tracking-wider text-red-500 animate-pulse">
-                          LIVE
+                    <div className="border-t border-white/10 bg-black/20 px-3 py-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+                          {hasLiveStream ? copy.ctaWatch : copy.ctaLiveScore}
                         </span>
+                        <svg className="h-4 w-4 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
                       </div>
-                      <span className="text-sm font-black tabular-nums text-white">
-                        {homeScoreDisplay} - {awayScoreDisplay}
-                      </span>
-                      {(periodDisplay || clockDisplay) && (
-                        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-300 text-center">
-                          {normalizedPeriodDisplay}{normalizedPeriodDisplay && clockDisplay ? " • " : ""}{clockDisplay}
-                        </span>
-                      )}
-                      <span className="text-[10px] uppercase tracking-wider text-slate-400">
-                        {game.gender === "men" ? "MEN" : "WOMEN"}
-                      </span>
-                      {game.venue && (
-                        <span className="text-[10px] text-slate-500 text-center">
-                          {game.venue}
-                        </span>
-                      )}
                     </div>
-
-                    {/* Away Team */}
-                    <div className="flex flex-1 items-center justify-end gap-2">
-                      <div className="flex-1 text-right">
-                        <h3 className="text-sm font-bold text-white">{game.awayTeam}</h3>
-                      </div>
-                      {game.awayTeamLogo && (
-                        <div className="relative h-10 w-10 flex-shrink-0 rounded-full overflow-hidden bg-slate-800">
-                          <Image
-                            src={game.awayTeamLogo}
-                            alt={game.awayTeam || "Away Team"}
-                            fill
-                            className="object-contain"
-                            unoptimized
-                          />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="border-t border-white/10 bg-black/20 px-3 py-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">
-                        {hasLiveStream ? copy.ctaWatch : copy.ctaLiveScore}
-                      </span>
-                      <svg className="h-4 w-4 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </div>
-                  </div>
-                </Link>
+                  </Link>
+                </div>
               );
             })}
           </div>
@@ -6168,6 +6172,13 @@ export default function Home() {
                       <div className="min-w-0 w-full">
                         <p className="text-xs md:text-sm font-semibold text-white truncate">{formatGameDateTime(matchup.tipoff, language)}</p>
                         <p className="text-[10px] md:text-xs text-slate-300 truncate">{matchup.venue}</p>
+                        {matchup.isStartingSoon && (
+                          <div className="mt-1 flex justify-center">
+                            <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[9px] md:text-[10px] font-semibold uppercase tracking-[0.2em] text-amber-200 whitespace-nowrap">
+                              {language === "fr" ? "Débute bientôt" : "Starting soon"}
+                            </span>
+                          </div>
+                        )}
                         {matchup.referees && matchup.referees.length > 0 && (
                           <p className="mt-0.5 md:mt-1 text-[10px] md:text-xs text-white truncate">
                             <span className="text-white/70 mr-1">Ref:</span>
@@ -6552,7 +6563,7 @@ export default function Home() {
             title={sectionCopy.games.title}
           />
           <div className="space-y-4">
-            {completedGames.length === 0 ? (
+            {completedGamesSorted.length === 0 ? (
               <div className="rounded-3xl border border-white/5 bg-slate-900/70 p-12 text-center">
                 <p className="text-lg text-slate-400">No completed games yet.</p>
                 <p className="mt-2 text-sm text-slate-500">Check back after games are finished!</p>
@@ -6574,7 +6585,7 @@ export default function Home() {
                   ref={finalBuzzerScrollRef}
                   className="flex gap-3 overflow-x-auto pb-2 scroll-smooth snap-x snap-mandatory"
                 >
-                {completedGames.map((game) => {
+                {completedGamesSorted.map((game) => {
                   const hasWinnerLoserScores =
                     typeof game.winnerScore === "number" && typeof game.loserScore === "number";
                   const hasHomeAwayScores =
@@ -6614,7 +6625,7 @@ export default function Home() {
                     ? new Intl.DateTimeFormat(language === "fr" ? "fr-FR" : "en-US", {
                         hour: "2-digit",
                         minute: "2-digit",
-                        hour12: false,
+                        hour12: language !== "fr",
                       }).format(game.dateObj)
                     : "";
 
@@ -6674,6 +6685,11 @@ export default function Home() {
                     >
                       <div className="mb-2 flex items-center justify-between text-[11px] sm:text-xs text-slate-400">
                         <span className="font-medium tracking-wide">{gameDate}{gameTime ? `  ${gameTime}` : ""}</span>
+                        {game.winByForfeit === true && (
+                          <span className="rounded-full border border-orange-500/30 bg-orange-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-orange-200">
+                            {language === "fr" ? "Victoire par forfait" : "Win per forfeit"}
+                          </span>
+                        )}
                       </div>
 
                       <div className="mb-2 flex items-center gap-3 text-[10px] sm:text-[11px] uppercase tracking-[0.18em] text-slate-500">
@@ -6869,122 +6885,118 @@ export default function Home() {
           </div>
         </section>
 
-        <section id="standings" className="space-y-8">
-          <SectionHeader
-            id="standings"
-            eyebrow={sectionCopy.standings.eyebrow}
-            title={sectionCopy.standings.title}
-            titleHref="/classement"
-            autoShine={standingsAutoShine}
-            shineMode="twice"
-            actions={<GenderToggle value={standingsGender} onChange={setStandingsGender} language={language} />}
-          />
-          <div className="overflow-hidden rounded-2xl border border-white/5">
-            <div className="max-sm:overflow-x-auto max-h-[320px] overflow-y-auto">
-            <table className="w-full border-collapse text-left text-sm">
-              <thead className="sticky top-0 bg-slate-950 text-sm uppercase tracking-[0.3em] text-slate-300 border-b border-white/5">
-                <tr>
-                  <th className="pl-3 pr-1 py-2">N°</th>
-                  <th className="pl-1 pr-3 py-2">{copy.standingsTable.team}</th>
-                  <th className="px-3 py-2">{copy.standingsTable.wins}</th>
-                  <th className="px-3 py-2">{copy.standingsTable.losses}</th>
-                  <th className="px-3 py-2">{copy.standingsTable.totalPoints}</th>
-                  <th className="px-2 py-2"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {homepageStandings.map((row, index) => {
-                  const franchise = findFranchiseByName(row.team, allFranchises);
-                  const displayName = franchise ? formatFranchiseName(franchise) : normalizeTeamName(row.team);
-                  const normalizedName = displayName.replace(/^espoir\s+espoir\s+/i, "Espoir ");
-                  const truncatedName = normalizedName.length > 15
-                    ? `${normalizedName.slice(0, 12)}...`
-                    : normalizedName;
-                  const teamLogo = franchise?.logo;
-                  const initials = normalizedName
-                    .split(" ")
-                    .map((word) => word[0])
-                    .join("")
-                    .slice(0, 2)
-                    .toUpperCase();
-                  const linkTeamName = franchise ? displayName : row.team;
-                  const rowGender = row.gender === "women" ? "women" : "men";
-                  const teamRouteValue = row.teamId ? row.teamId : linkTeamName;
-                  const teamHref = `/team/${encodeURIComponent(teamRouteValue)}?gender=${rowGender}`;
-
-                  return (
-                    <tr key={row.teamKey ?? (row.teamId ? row.teamId : `${row.gender}:${row.team}:${index}`)} className="odd:bg-white/5 hover:bg-orange-500/10 cursor-pointer transition-colors">
-                    <td className="pl-3 pr-1 py-2 text-slate-300">
-                      <Link 
-                        href={teamHref}
-                        className="block"
-                      >
-                        {row.seed}
-                      </Link>
-                    </td>
-                    <td className="pl-1 pr-3 py-2 font-semibold">
-                      <Link 
-                        href={teamHref}
-                        className="flex items-center gap-3 text-white transition-colors hover:text-orange-500"
-                      >
-                        {teamLogo ? (
-                          <Image
-                            src={teamLogo}
-                            alt={`${displayName} logo`}
-                            width={28}
-                            height={28}
-                            className="h-7 w-7 rounded-full border border-white/10 bg-white/5 object-cover"
-                          />
-                        ) : (
-                          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-[10px] font-semibold">
-                            {initials}
-                          </span>
-                        )}
-                        <span className="truncate md:hidden" title={normalizedName}>{truncatedName}</span>
-                        <span className="hidden md:inline truncate" title={normalizedName}>{normalizedName}</span>
-                      </Link>
-                    </td>
-                    <td className="px-3 py-2">
-                      <Link 
-                        href={teamHref}
-                        className="block"
-                      >
-                        {row.wins}
-                      </Link>
-                    </td>
-                    <td className="px-3 py-2">
-                      <Link 
-                        href={teamHref}
-                        className="block"
-                      >
-                        {row.losses}
-                      </Link>
-                    </td>
-                    <td className="px-3 py-2 font-semibold text-white">
-                      <Link 
-                        href={teamHref}
-                        className="block"
-                      >
-                        {row.totalPoints || getTotalPoints(row.wins, row.losses)}
-                      </Link>
-                    </td>
-                    <td className="px-2 py-2">
-                      {row.rankChange === "up" ? (
-                        <span className="text-emerald-400">▲</span>
-                      ) : row.rankChange === "down" ? (
-                        <span className="text-red-400">▼</span>
-                      ) : (
-                        <span className="text-slate-500">-</span>
-                      )}
-                    </td>
+        {homepageStandings.length > 0 ? (
+          <section id="standings" className="space-y-8">
+            <SectionHeader
+              id="standings"
+              eyebrow={sectionCopy.standings.eyebrow}
+              title={sectionCopy.standings.title}
+              titleHref="/classement"
+              autoShine={standingsAutoShine}
+              shineMode="twice"
+              actions={<GenderToggle value={standingsGender} onChange={setStandingsGender} language={language} />}
+            />
+            <div className="overflow-hidden rounded-2xl border border-white/5">
+              <div className="max-sm:overflow-x-auto max-h-[320px] overflow-y-auto">
+                <table className="w-full border-collapse text-left text-sm">
+                  <thead className="sticky top-0 z-20 bg-slate-950/70 backdrop-blur-xl text-sm uppercase tracking-[0.3em] text-slate-300 border-b border-white/10">
+                    <tr>
+                      <th className="pl-3 pr-1 py-2">N°</th>
+                      <th className="pl-1 pr-3 py-2">{copy.standingsTable.team}</th>
+                      <th className="px-3 py-2">{copy.standingsTable.wins}</th>
+                      <th className="px-3 py-2">{copy.standingsTable.losses}</th>
+                      <th className="px-3 py-2">{copy.standingsTable.totalPoints}</th>
+                      <th className="px-2 py-2"></th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                  </thead>
+                  <tbody>
+                    {homepageStandings.map((row, index) => {
+                      const franchise = findFranchiseByName(row.team, allFranchises);
+                      const displayName = franchise ? formatFranchiseName(franchise) : normalizeTeamName(row.team);
+                      const normalizedName = displayName.replace(/^espoir\s+espoir\s+/i, "Espoir ");
+                      const truncatedName =
+                        normalizedName.length > 15 ? `${normalizedName.slice(0, 12)}...` : normalizedName;
+                      const teamLogo = franchise?.logo;
+                      const initials = normalizedName
+                        .split(" ")
+                        .map((word) => word[0])
+                        .join("")
+                        .slice(0, 2)
+                        .toUpperCase();
+                      const linkTeamName = franchise ? displayName : row.team;
+                      const rowGender = row.gender === "women" ? "women" : "men";
+                      const teamRouteValue = row.teamId ? row.teamId : linkTeamName;
+                      const teamHref = `/team/${encodeURIComponent(teamRouteValue)}?gender=${rowGender}`;
+
+                      return (
+                        <tr
+                          key={row.teamKey ?? (row.teamId ? row.teamId : `${row.gender}:${row.team}:${index}`)}
+                          className="odd:bg-white/5 hover:bg-orange-500/10 cursor-pointer transition-colors"
+                        >
+                          <td className="pl-3 pr-1 py-2 text-slate-300">
+                            <Link href={teamHref} className="block">
+                              {row.seed}
+                            </Link>
+                          </td>
+                          <td className="pl-1 pr-3 py-2 font-semibold">
+                            <Link
+                              href={teamHref}
+                              className="flex items-center gap-3 text-white transition-colors hover:text-orange-500"
+                            >
+                              {teamLogo ? (
+                                <Image
+                                  src={teamLogo}
+                                  alt={`${displayName} logo`}
+                                  width={28}
+                                  height={28}
+                                  className="h-7 w-7 rounded-full border border-white/10 bg-white/5 object-cover"
+                                />
+                              ) : (
+                                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-[10px] font-semibold">
+                                  {initials}
+                                </span>
+                              )}
+                              <span className="truncate md:hidden" title={normalizedName}>
+                                {truncatedName}
+                              </span>
+                              <span className="hidden md:inline truncate" title={normalizedName}>
+                                {normalizedName}
+                              </span>
+                            </Link>
+                          </td>
+                          <td className="px-3 py-2">
+                            <Link href={teamHref} className="block">
+                              {row.wins}
+                            </Link>
+                          </td>
+                          <td className="px-3 py-2">
+                            <Link href={teamHref} className="block">
+                              {row.losses}
+                            </Link>
+                          </td>
+                          <td className="px-3 py-2 font-semibold text-white">
+                            <Link href={teamHref} className="block">
+                              {row.totalPoints || getTotalPoints(row.wins, row.losses)}
+                            </Link>
+                          </td>
+                          <td className="px-2 py-2">
+                            {row.rankChange === "up" ? (
+                              <span className="text-emerald-400">▲</span>
+                            ) : row.rankChange === "down" ? (
+                              <span className="text-red-400">▼</span>
+                            ) : (
+                              <span className="text-slate-500">-</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+        ) : null}
 
         <section id="teams" className="space-y-0">
           <SectionHeader

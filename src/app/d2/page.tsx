@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { firebaseDB } from "@/lib/firebase";
+import { parseCongoDateTime } from "@/lib/congo-time";
 import { collection, getDocs, orderBy, query } from "firebase/firestore";
 
 type EubakinTeam = {
@@ -195,7 +196,7 @@ export default function D2Page() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950">
-      <nav className="sticky top-0 z-50 border-b border-cyan-900/40 bg-[#020715]/95 backdrop-blur-xl">
+      <nav className="sticky top-0 live-pin-offset z-50 border-b border-cyan-900/40 bg-[#020715]/95 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2 max-[360px]:gap-1.5 px-3 max-[360px]:px-2.5 py-3 max-[360px]:py-2.5 sm:px-4 md:px-8">
           <Link href="/" className="flex items-center gap-2 sm:gap-3 text-base sm:text-xl font-semibold tracking-[0.22em] sm:tracking-[0.3em] text-white">
             <Image
@@ -324,13 +325,22 @@ export default function D2Page() {
           </div>
         ) : (
           <div className="space-y-3">
-            {visibleGames.map((game) => (
+            {visibleGames.map((game) => {
+              // Convert stored Congo TZ date/time to user's local timezone
+              const localDateObj = parseCongoDateTime(game.gameDate, game.gameTime);
+              const localDate = localDateObj
+                ? localDateObj.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+                : (game.gameDate || "-");
+              const localTime = localDateObj
+                ? localDateObj.toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', { hour: 'numeric', minute: '2-digit', hour12: language !== 'fr' })
+                : (game.gameTime || t.timeOfGame);
+              return (
               <article key={game.id} className="rounded-xl border border-white/10 bg-slate-900/70 px-4 py-3">
                 <div className="sm:hidden space-y-2">
-                  <p className="text-xs text-slate-300">{game.gameDate || "-"}</p>
+                  <p className="text-xs text-slate-300">{localDate}</p>
                   <p className="text-sm font-semibold text-white">{game.homeTeamName} vs {game.awayTeamName}</p>
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-300">{game.gameTime || t.timeOfGame}</span>
+                    <span className="text-slate-300">{localTime}</span>
                     <span className="text-slate-200 font-medium">
                       {typeof game.homeScore === "number" && typeof game.awayScore === "number"
                         ? `${game.homeScore}-${game.awayScore}`
@@ -339,9 +349,9 @@ export default function D2Page() {
                   </div>
                 </div>
                 <div className="hidden sm:grid sm:grid-cols-[180px_1fr_220px_160px] sm:items-center sm:gap-3">
-                  <p className="text-sm text-slate-300">{game.gameDate || "-"}</p>
+                  <p className="text-sm text-slate-300">{localDate}</p>
                   <p className="text-base font-semibold text-white text-center">{game.homeTeamName} vs {game.awayTeamName}</p>
-                  <p className="text-sm text-slate-300 text-center">{game.gameTime || t.timeOfGame}</p>
+                  <p className="text-sm text-slate-300 text-center">{localTime}</p>
                   <p className="text-sm text-slate-200 text-right font-medium">
                     {typeof game.homeScore === "number" && typeof game.awayScore === "number"
                       ? `${game.homeScore}-${game.awayScore}`
@@ -349,7 +359,8 @@ export default function D2Page() {
                   </p>
                 </div>
               </article>
-            ))}
+              );
+            })}
           </div>
         )}
 

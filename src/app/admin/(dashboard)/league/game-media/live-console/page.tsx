@@ -26,6 +26,10 @@ type GameItem = {
   clock?: string;
   timeRemaining?: string;
   isHiddenFromPublic?: boolean;
+  activeTimeout?: {
+    side?: "home" | "away";
+    startedAt?: unknown;
+  } | null;
 };
 
 const copy = {
@@ -56,6 +60,8 @@ const copy = {
     goLive: "Set Live",
     endLive: "Remove from Live",
     liveStatusUpdated: "Live status updated",
+    timeout: "Timeout",
+    timeoutUpdated: "Timeout updated",
     updateFailed: "Failed to update live data",
   },
   fr: {
@@ -85,6 +91,8 @@ const copy = {
     goLive: "Passer en direct",
     endLive: "Retirer du direct",
     liveStatusUpdated: "Statut live mis à jour",
+    timeout: "Temps mort",
+    timeoutUpdated: "Temps mort mis à jour",
     updateFailed: "Échec de la mise à jour live",
   },
 } as const;
@@ -150,6 +158,28 @@ export default function LiveConsolePage() {
       setStatus({ type: "success", message: successMessage });
     } catch (error) {
       console.error("Live update failed:", error);
+      setStatus({ type: "error", message: t.updateFailed });
+    }
+  };
+
+  const toggleTimeout = async (side: "home" | "away") => {
+    if (!selectedGame) return;
+
+    const currentSide = selectedGame.activeTimeout?.side ?? null;
+    const nextValue = currentSide === side ? null : { side, startedAt: serverTimestamp() };
+
+    setGames((prev) =>
+      prev.map((game) => (game.id === selectedGame.id ? { ...game, activeTimeout: nextValue } : game))
+    );
+
+    try {
+      await updateDoc(doc(firebaseDB, "games", selectedGame.id), {
+        activeTimeout: nextValue,
+        updatedAt: serverTimestamp(),
+      });
+      setStatus({ type: "success", message: t.timeoutUpdated });
+    } catch (error) {
+      console.error("Timeout update failed:", error);
       setStatus({ type: "error", message: t.updateFailed });
     }
   };
@@ -420,6 +450,46 @@ export default function LiveConsolePage() {
             </div>
 
             <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4 text-center sticky bottom-2 md:static z-20">
+              {(() => {
+                const activeSide = selectedGame.activeTimeout?.side ?? null;
+                const timeoutLabel = t.timeout;
+
+                return (
+                  <>
+                    {activeSide && (
+                      <div className="mb-3">
+                        <span className="inline-flex items-center justify-center rounded-full border border-amber-500/35 bg-amber-500/15 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-amber-200">
+                          {timeoutLabel} {activeSide === "home" ? selectedGame.homeTeamName : selectedGame.awayTeamName}
+                        </span>
+                      </div>
+                    )}
+                    <div className="mb-3 grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => toggleTimeout("away")}
+                        className={`min-h-11 rounded-xl border px-3 py-2 text-[11px] font-bold uppercase tracking-wider transition-colors ${
+                          activeSide === "away"
+                            ? "border-amber-500/40 bg-amber-500/15 text-amber-200"
+                            : "border-white/15 bg-white/5 text-slate-200 hover:bg-white/10 hover:border-white/25"
+                        }`}
+                      >
+                        {timeoutLabel} {selectedGame.awayTeamName}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => toggleTimeout("home")}
+                        className={`min-h-11 rounded-xl border px-3 py-2 text-[11px] font-bold uppercase tracking-wider transition-colors ${
+                          activeSide === "home"
+                            ? "border-amber-500/40 bg-amber-500/15 text-amber-200"
+                            : "border-white/15 bg-white/5 text-slate-200 hover:bg-white/10 hover:border-white/25"
+                        }`}
+                      >
+                        {timeoutLabel} {selectedGame.homeTeamName}
+                      </button>
+                    </div>
+                  </>
+                );
+              })()}
               <p className="text-xs uppercase tracking-[0.14em] text-slate-400">{t.period}</p>
               <div className="mt-2 grid grid-cols-3 gap-2">
                 {(["Q1", "Q2", "Q3", "Q4", "OT", language === "fr" ? "MT" : "HT"] as const).map((quarter) => {

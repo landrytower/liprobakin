@@ -223,7 +223,7 @@ export default function StaffDetailPage() {
       </div>
 
       {/* Navigation */}
-      <nav className="sticky top-0 z-50 border-b border-white/5 bg-black/60 backdrop-blur-xl">
+      <nav className="sticky top-0 live-pin-offset z-50 border-b border-white/5 bg-black/60 backdrop-blur-xl">
         <div className="mx-auto max-w-6xl px-3 py-3 sm:px-6 sm:py-4 lg:px-8">
           <div className="flex items-center justify-between gap-2">
             <button

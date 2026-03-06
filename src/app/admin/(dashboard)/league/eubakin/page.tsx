@@ -16,6 +16,7 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { logAuditAction } from "@/lib/auditLog";
+import { convertLocalDateTimeToCongo } from "@/lib/congo-time";
 
 type EubakinConference = "west" | "east";
 type EubakinGender = "men" | "women";
@@ -341,11 +342,13 @@ export default function EubakinLeaguePage() {
     setStatus({ type: "info", message: t.saving });
 
     try {
+      // Convert admin's local date/time to Congo/Kinshasa timezone before saving
+      const congoDateTime = convertLocalDateTimeToCongo(gameForm.gameDate, gameForm.gameTime);
       const created = await addDoc(collection(firebaseDB, "eubakinGames"), {
         conference: gameForm.conference,
         gender: gameForm.gender,
-        gameDate: gameForm.gameDate,
-        gameTime: gameForm.gameTime,
+        gameDate: congoDateTime.date,
+        gameTime: congoDateTime.time,
         homeTeamId: homeTeam.id,
         homeTeamName: homeTeam.name,
         awayTeamId: awayTeam.id,

@@ -7,6 +7,7 @@ import { firebaseDB } from "@/lib/firebase";
 import { formatTeamDisplayName } from "@/lib/team-name";
 import { collection, getDocs, query, orderBy, doc, updateDoc, serverTimestamp, writeBatch, deleteDoc, where } from "firebase/firestore";
 import { logAuditAction } from "@/lib/auditLog";
+import { parseCongoDateTime } from "@/lib/congo-time";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -20,6 +21,8 @@ type Game = {
   fibaLiveStatsUrl?: string;
   playerStats?: Array<Record<string, unknown>>;
   completed?: boolean; winnerTeamId?: string; winnerScore?: number; loserScore?: number;
+  winByForfeit?: boolean;
+  forfeitCaptainId?: string;
 };
 
 type Player = {
@@ -38,6 +41,7 @@ type PlayerStat = {
   name: string;
   jerseyNumber?: string;
   dnp: boolean;  // Did Not Play
+  started: boolean;
   points: number;
   minutes: string;  // Format: "MM:SS"
   rebounds: number;
@@ -61,13 +65,15 @@ type PlayerStat = {
   plusMinus: number;
 };
 
-type StatField = Exclude<keyof PlayerStat, "playerId" | "name" | "jerseyNumber" | "dnp">;
+type StatField = Exclude<keyof PlayerStat, "playerId" | "name" | "jerseyNumber" | "dnp" | "started">;
 
 type ImportedPlayerStat = {
   team: "home" | "away";
   jerseyNumber?: string;
   playerName: string;
   stats: Record<StatField, number>;
+  dnp?: boolean;
+  started?: boolean;
 };
 
 type NormalizedFibaImport = {
@@ -105,6 +111,9 @@ const t = {
     finalScore: "Final Score",
     save: "Save Game Stats", cancel: "Cancel",
     done: "Done",
+    startersRequired: "Select exactly 5 starters for each team.",
+    starterLimitReached: "You can only select 5 starters.",
+    starterTooltip: "Starter (max 5 per team)",
     complete: "Complete",
     points: "PTS", rebounds: "REB", assists: "AST", steals: "STL", blocks: "BLK", fouls: "PF", minutes: "MIN",
     offensiveRebounds: "OREB", defensiveRebounds: "DREB", turnovers: "TOV", foulsDrawn: "FD",
@@ -117,14 +126,38 @@ const t = {
     step2: "2. Enter Score",
     step3: "3. Player Stats",
     option1: "Option 1: Auto Pull (FIBA Live Stats)",
+    option3: "Option 3: Import from Photo (Stats Sheet)",
     option2: "Option 2: Manual Entry",
     sourceUrl: "Source URL",
     pullNow: "Pull Now",
     pulling: "Pulling...",
     pullSuccess: "Live stats imported. Review and save.",
     pullError: "Unable to import from source.",
+    photoPick: "Choose photo",
+    photoImport: "Import Photo",
+    photoImporting: "Reading...",
+    photoHelp: "Upload a clear photo/screenshot of the printed stats sheet.",
+    pdfPick: "Choose PDF",
+    pdfImport: "Import PDF",
+    pdfHelp: "Or upload a PDF of the printed stats sheet (page 1 will be read).",
+    pdfMissing: "Please choose a stats-sheet PDF.",
+    photoMissing: "Please choose a stats-sheet photo.",
+    photoNoRoster: "Load the game rosters first.",
+    photoParsed: "Imported. Review the stats then save.",
+    photoParsedWithUnmatched: "Imported stats, but some players were not matched.",
+    photoError: "Unable to import from this file. If it looks clear, the layout may not match the expected stats-sheet format.",
+    sheetNoRows: "We found text but couldn't detect player rows. Make sure the sheet includes MIN (mm:ss) and shooting columns like 3/8.",
+    sheetNoMatches: "We detected rows, but none matched your rosters. Check player names/jersey numbers and make sure rosters are loaded.",
     awayScore: "Away Score",
     homeScore: "Home Score",
+    forfeitWin: "Win by Forfeit",
+    forfeitTitle: "Win by forfeit",
+    forfeitPickWinner: "Select winning team",
+    forfeitPickCaptain: "Select captain",
+    forfeitCaptain: "Captain",
+    forfeitConfirm: "Confirm Forfeit Result",
+    forfeitNote: "Final score will be set to 20–0. Captain receives all 20 points.",
+    forfeitMissing: "Select winner team and captain.",
   },
   fr: {
     title: "Statistiques des Matchs",
@@ -145,6 +178,9 @@ const t = {
     finalScore: "Score Final",
     save: "Enregistrer", cancel: "Annuler",
     done: "Terminé",
+    startersRequired: "Sélectionnez exactement 5 titulaires pour chaque équipe.",
+    starterLimitReached: "Vous ne pouvez sélectionner que 5 titulaires.",
+    starterTooltip: "Titulaire (max 5 par équipe)",
     complete: "Terminé",
     // Column labels matching FIBA stats sheet
     minutes: "MIN",
@@ -167,15 +203,335 @@ const t = {
     step2: "2. Entrez le Score",
     step3: "3. Stats des Joueurs",
     option1: "Option 1 : Import Auto (FIBA Live Stats)",
+    option3: "Option 3 : Importer une photo (Feuille de stats)",
     option2: "Option 2 : Saisie Manuelle",
     sourceUrl: "URL source",
     pullNow: "Importer",
     pulling: "Importation...",
     pullSuccess: "Stats importées. Vérifiez puis enregistrez.",
     pullError: "Impossible d'importer depuis la source.",
+    photoPick: "Choisir une photo",
+    photoImport: "Importer la photo",
+    photoImporting: "Lecture...",
+    photoHelp: "Ajoutez une photo/screenshot claire de la feuille de stats imprimée.",
+    pdfPick: "Choisir un PDF",
+    pdfImport: "Importer le PDF",
+    pdfHelp: "Ou ajoutez un PDF de la feuille de stats imprimée (page 1 sera lue).",
+    pdfMissing: "Veuillez choisir un PDF de la feuille de stats.",
+    photoMissing: "Veuillez choisir une photo de la feuille de stats.",
+    photoNoRoster: "Chargez d'abord les rosters du match.",
+    photoParsed: "Importé. Vérifiez puis enregistrez.",
+    photoParsedWithUnmatched: "Stats importées, mais certains joueurs n'ont pas été reconnus.",
+    photoError: "Impossible d'importer ce fichier. S'il est clair, la mise en page ne correspond peut-être pas au format attendu.",
+    sheetNoRows: "Texte trouvé, mais aucune ligne joueur détectée. Assurez-vous que la feuille contient MIN (mm:ss) et des colonnes de tirs comme 3/8.",
+    sheetNoMatches: "Lignes détectées, mais aucun joueur n'a été associé aux rosters. Vérifiez les noms/numéros et chargez les rosters.",
     awayScore: "Score Visiteur",
     homeScore: "Score Domicile",
+    forfeitWin: "Victoire par forfait",
+    forfeitTitle: "Victoire par forfait",
+    forfeitPickWinner: "Sélectionnez l'équipe gagnante",
+    forfeitPickCaptain: "Sélectionnez la capitaine",
+    forfeitCaptain: "Capitaine",
+    forfeitConfirm: "Confirmer le forfait",
+    forfeitNote: "Le score final sera 20–0. La capitaine reçoit les 20 points.",
+    forfeitMissing: "Sélectionnez l'équipe gagnante et la capitaine.",
   },
+};
+
+type ParsedSheetRow = {
+  rawLine: string;
+  playerName: string;
+  stats: Partial<Record<StatField, number>>;
+  dnp?: boolean;
+  started?: boolean;
+};
+
+const stripDiacritics = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}+/gu, "")
+    .toLowerCase();
+
+const safeNumber = (value: string): number | null => {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (!/^[-+]?\d+$/.test(trimmed)) return null;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const parseSlashStat = (token: string): { made: number; att: number } | null => {
+  const match = token.trim().match(/^(\d+)\/(\d+)$/);
+  if (!match) return null;
+  const made = Number(match[1]);
+  const att = Number(match[2]);
+  if (!Number.isFinite(made) || !Number.isFinite(att)) return null;
+  return { made, att };
+};
+
+// Jaro-Winkler for fuzzy player-name matching.
+const jaroWinkler = (a: string, b: string): number => {
+  if (a === b) return 1;
+  const len1 = a.length;
+  const len2 = b.length;
+  if (!len1 || !len2) return 0;
+
+  const matchDistance = Math.floor(Math.max(len1, len2) / 2) - 1;
+  const s1Matches = new Array<boolean>(len1).fill(false);
+  const s2Matches = new Array<boolean>(len2).fill(false);
+
+  let matches = 0;
+  for (let i = 0; i < len1; i++) {
+    const start = Math.max(0, i - matchDistance);
+    const end = Math.min(i + matchDistance + 1, len2);
+    for (let j = start; j < end; j++) {
+      if (s2Matches[j]) continue;
+      if (a[i] !== b[j]) continue;
+      s1Matches[i] = true;
+      s2Matches[j] = true;
+      matches++;
+      break;
+    }
+  }
+
+  if (!matches) return 0;
+
+  let t = 0;
+  let k = 0;
+  for (let i = 0; i < len1; i++) {
+    if (!s1Matches[i]) continue;
+    while (!s2Matches[k]) k++;
+    if (a[i] !== b[k]) t++;
+    k++;
+  }
+  const transpositions = t / 2;
+
+  const m = matches;
+  const jaro = (m / len1 + m / len2 + (m - transpositions) / m) / 3;
+
+  let prefix = 0;
+  const maxPrefix = 4;
+  for (let i = 0; i < Math.min(maxPrefix, len1, len2); i++) {
+    if (a[i] === b[i]) prefix++;
+    else break;
+  }
+  return jaro + prefix * 0.1 * (1 - jaro);
+};
+
+const parseStatsSheetText = (rawText: string): ParsedSheetRow[] => {
+  const lines = rawText
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+
+  const rows: ParsedSheetRow[] = [];
+
+  for (const line of lines) {
+    const isDnpLine = /\b(NPJ|DNP)\b/i.test(line);
+    if (!isDnpLine && (!/\b\d{1,2}:\d{2}\b/.test(line) || !/\b\d+\/\d+\b/.test(line))) {
+      continue;
+    }
+
+    const tokens = line.split(" ").map((token) => token.trim()).filter(Boolean);
+    const dnpIndex = tokens.findIndex((token) => /^(NPJ|DNP)\b/i.test(token));
+    const minuteIndex = tokens.findIndex((token) => /^\d{1,2}:\d{2}$/.test(token));
+
+    const isStarterLine = /[★]/.test(line) || tokens.some((t) => t === "*" || /^\*\d*$/.test(t));
+
+    if (isDnpLine && minuteIndex < 0) {
+      const before = tokens.slice(0, dnpIndex >= 0 ? dnpIndex : tokens.length);
+      const nameTokens = before.filter((token, index) => {
+        if (index === 0 && /^#?\d+$/.test(token)) return false;
+        return !/^\d+$/.test(token);
+      });
+      const cleaned = nameTokens
+        .map((t) => t.replace(/[★]/g, "").replace(/^\*/, ""))
+        .map((t) => t.trim())
+        .filter(Boolean)
+        .filter((t) => !/^\d+$/.test(t));
+      const playerName = cleaned.join(" ").trim();
+      if (!playerName) continue;
+
+      const stats: Partial<Record<StatField, number>> = {
+        minutes: 0,
+        fieldGoalsMade: 0,
+        fieldGoalsAttempted: 0,
+        twoPointsMade: 0,
+        twoPointsAttempted: 0,
+        threePointsMade: 0,
+        threePointsAttempted: 0,
+        freeThrowsMade: 0,
+        freeThrowsAttempted: 0,
+        offensiveRebounds: 0,
+        defensiveRebounds: 0,
+        rebounds: 0,
+        assists: 0,
+        turnovers: 0,
+        steals: 0,
+        blocks: 0,
+        blockedAgainst: 0,
+        fouls: 0,
+        foulsDrawn: 0,
+        plusMinus: 0,
+        points: 0,
+      };
+
+      rows.push({ rawLine: line, playerName, stats, dnp: true, started: isStarterLine ? true : undefined });
+      continue;
+    }
+
+    if (minuteIndex <= 0) continue;
+
+    const before = tokens.slice(0, minuteIndex);
+    const after = tokens.slice(minuteIndex + 1);
+
+    const nameTokens = before.filter((token, index) => {
+      if (index === 0 && /^#?\d+$/.test(token)) return false;
+      return !/^\d+$/.test(token);
+    });
+    const cleaned = nameTokens
+      .map((t) => t.replace(/[★]/g, "").replace(/^\*/, ""))
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .filter((t) => !/^\d+$/.test(t));
+    const playerName = cleaned.join(" ").trim();
+    if (!playerName) continue;
+
+    const [minPart] = tokens[minuteIndex].split(":");
+    const [mmPart, ssPart] = tokens[minuteIndex].split(":");
+    const minutesPart = safeNumber(mmPart || "") ?? 0;
+    const secondsPart = safeNumber(ssPart || "") ?? 0;
+    const totalSeconds = Math.max(minutesPart, 0) * 60 + Math.min(Math.max(secondsPart, 0), 59);
+    const isZeroTime = /^0{1,2}:0{2}$/.test(tokens[minuteIndex]);
+
+    const slashTokens: Array<{ value: { made: number; att: number }; index: number }> = [];
+    after.forEach((token, idx) => {
+      const parsed = parseSlashStat(token);
+      if (parsed) {
+        slashTokens.push({ value: parsed, index: idx });
+      }
+    });
+    if (slashTokens.length < 3) {
+      if (isDnpLine) {
+        const stats: Partial<Record<StatField, number>> = {
+          minutes: 0,
+          fieldGoalsMade: 0,
+          fieldGoalsAttempted: 0,
+          twoPointsMade: 0,
+          twoPointsAttempted: 0,
+          threePointsMade: 0,
+          threePointsAttempted: 0,
+          freeThrowsMade: 0,
+          freeThrowsAttempted: 0,
+          offensiveRebounds: 0,
+          defensiveRebounds: 0,
+          rebounds: 0,
+          assists: 0,
+          turnovers: 0,
+          steals: 0,
+          blocks: 0,
+          blockedAgainst: 0,
+          fouls: 0,
+          foulsDrawn: 0,
+          plusMinus: 0,
+          points: 0,
+        };
+
+        rows.push({ rawLine: line, playerName, stats, dnp: true, started: isStarterLine ? true : undefined });
+      }
+      continue;
+    }
+
+    const usedSlash = slashTokens.slice(0, Math.min(4, slashTokens.length));
+    const lastSlashIndex = usedSlash[usedSlash.length - 1].index;
+    const tailTokens = after.slice(lastSlashIndex + 1);
+
+    const numbers = tailTokens
+      .map((token) => token.replace(/%$/, ""))
+      .map((token) => safeNumber(token))
+      .filter((value): value is number => value !== null);
+
+    if (numbers.length < 11) continue;
+
+    const stats: Partial<Record<StatField, number>> = {
+      // Store time as total seconds so we can faithfully round-trip to MM:SS.
+      minutes: totalSeconds,
+      offensiveRebounds: numbers[0] ?? 0,
+      defensiveRebounds: numbers[1] ?? 0,
+      rebounds: numbers[2] ?? 0,
+      assists: numbers[3] ?? 0,
+      turnovers: numbers[4] ?? 0,
+      steals: numbers[5] ?? 0,
+      blocks: numbers[6] ?? 0,
+      blockedAgainst: numbers[7] ?? 0,
+      fouls: numbers[8] ?? 0,
+      foulsDrawn: numbers[9] ?? 0,
+      plusMinus: numbers[10] ?? 0,
+      points: numbers[numbers.length - 1] ?? 0,
+    };
+
+    const totalFg = usedSlash[0]?.value;
+    const maybeTwoPt = usedSlash.length === 4 ? usedSlash[1].value : null;
+    const threePt = usedSlash.length === 4 ? usedSlash[2].value : usedSlash[1].value;
+    const ft = usedSlash.length === 4 ? usedSlash[3].value : usedSlash[2].value;
+
+    stats.fieldGoalsMade = totalFg?.made ?? 0;
+    stats.fieldGoalsAttempted = totalFg?.att ?? 0;
+    stats.threePointsMade = threePt?.made ?? 0;
+    stats.threePointsAttempted = threePt?.att ?? 0;
+    stats.freeThrowsMade = ft?.made ?? 0;
+    stats.freeThrowsAttempted = ft?.att ?? 0;
+
+    if (maybeTwoPt) {
+      stats.twoPointsMade = maybeTwoPt.made;
+      stats.twoPointsAttempted = maybeTwoPt.att;
+    } else {
+      stats.twoPointsMade = Math.max((stats.fieldGoalsMade ?? 0) - (stats.threePointsMade ?? 0), 0);
+      stats.twoPointsAttempted = Math.max((stats.fieldGoalsAttempted ?? 0) - (stats.threePointsAttempted ?? 0), 0);
+    }
+
+    const inferredDnp =
+      isZeroTime &&
+      [
+        stats.points,
+        stats.offensiveRebounds,
+        stats.defensiveRebounds,
+        stats.rebounds,
+        stats.assists,
+        stats.turnovers,
+        stats.steals,
+        stats.blocks,
+        stats.blockedAgainst,
+        stats.fouls,
+        stats.foulsDrawn,
+        stats.plusMinus,
+        stats.fieldGoalsMade,
+        stats.fieldGoalsAttempted,
+        stats.twoPointsMade,
+        stats.twoPointsAttempted,
+        stats.threePointsMade,
+        stats.threePointsAttempted,
+        stats.freeThrowsMade,
+        stats.freeThrowsAttempted,
+      ].every((value) => (Number(value ?? 0) || 0) === 0);
+
+    const finalDnp = Boolean(isDnpLine) || inferredDnp;
+
+    if (finalDnp) {
+      stats.minutes = 0;
+      stats.points = 0;
+    }
+
+    rows.push({
+      rawLine: line,
+      playerName,
+      stats,
+      dnp: finalDnp ? true : undefined,
+      started: isStarterLine ? true : undefined,
+    });
+  }
+
+  return rows;
 };
 
 // Field order: Min | Tirs Tot. | 2 Points | 3 pts | LF | Rebonds | PD | BP | IN | Ctr | Fautes | +/- | PTS
@@ -208,6 +564,7 @@ const createEmptyPlayerStat = (player: Player): PlayerStat => ({
   name: player.name || "Unknown Player",
   jerseyNumber: player.jerseyNumber,
   dnp: false,  // Did Not Play
+  started: false,
   points: 0,
   minutes: "",  // Format: "MM:SS"
   rebounds: 0,
@@ -281,7 +638,7 @@ function validateFibaPlayerStat(stat: PlayerStat): { valid: true; calculatedPoin
 
 function isGamePast45Min(game: Game): boolean {
   try {
-    const gameDateTime = new Date(`${game.date}T${game.time || "00:00"}`);
+    const gameDateTime = parseCongoDateTime(game.date, game.time || "00:00") || new Date(`${game.date}T${game.time || "00:00"}`);
     const now = new Date();
     const diffMs = now.getTime() - gameDateTime.getTime();
     return diffMs >= 45 * 60 * 1000;
@@ -298,12 +655,128 @@ function normalizeTeamName(value: string): string {
     .trim();
 }
 
+type ParsedFinalScore = {
+  teamA: string;
+  scoreA: number;
+  teamB: string;
+  scoreB: number;
+};
+
+function parseFinalScoreFromText(rawText: string): ParsedFinalScore | null {
+  const lines = rawText
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+
+  // Usually in the header, so search early lines first.
+  const scan = lines.slice(0, 30);
+  for (const line of scan) {
+    // Avoid matching the quarter breakdown line, which is often parenthetical like: (16-22, 10-12, ...)
+    if (/^[\(\[]\s*\d{1,3}\s*[–\-]\s*\d{1,3}/.test(line)) {
+      continue;
+    }
+
+    // Examples: "TEAM A 73 – 67 TEAM B" or "TEAM A 73-67 TEAM B"
+    const match = line.match(/^(.*?)(\d{1,3})\s*[–\-]\s*(\d{1,3})(.*)$/);
+    if (!match) continue;
+    const left = String(match[1] || "").trim();
+    const right = String(match[4] || "").trim();
+    const scoreA = safeNumber(match[2]) ?? null;
+    const scoreB = safeNumber(match[3]) ?? null;
+    if (scoreA === null || scoreB === null) continue;
+    if (!left || !right) continue;
+    // Require letters on both sides to ensure we captured team names.
+    if (!/[a-z]/i.test(left) || !/[a-z]/i.test(right)) continue;
+    return { teamA: left, scoreA, teamB: right, scoreB };
+  }
+
+  return null;
+}
+
+function resolveFinalScoreToHomeAway(
+  parsed: ParsedFinalScore,
+  game: Pick<Game, "homeTeamName" | "awayTeamName">
+): { homeScore: number; awayScore: number } | null {
+  const homeName = stripDiacritics(normalizeTeamName(game.homeTeamName || ""));
+  const awayName = stripDiacritics(normalizeTeamName(game.awayTeamName || ""));
+  const teamA = stripDiacritics(normalizeTeamName(parsed.teamA));
+  const teamB = stripDiacritics(normalizeTeamName(parsed.teamB));
+
+  if (!homeName || !awayName || !teamA || !teamB) return null;
+
+  const sim = (a: string, b: string): number => {
+    if (!a || !b) return 0;
+    if (a === b) return 1;
+    if (a.includes(b) || b.includes(a)) return 0.95;
+    return jaroWinkler(a, b);
+  };
+
+  const direct = sim(teamA, homeName) + sim(teamB, awayName);
+  const swapped = sim(teamA, awayName) + sim(teamB, homeName);
+
+  if (direct >= swapped) {
+    // Basic sanity: require at least some resemblance to avoid wrong auto-fill.
+    if (sim(teamA, homeName) < 0.6 && sim(teamB, awayName) < 0.6) return null;
+    return { homeScore: parsed.scoreA, awayScore: parsed.scoreB };
+  }
+
+  if (sim(teamA, awayName) < 0.6 && sim(teamB, homeName) < 0.6) return null;
+  return { homeScore: parsed.scoreB, awayScore: parsed.scoreA };
+}
+
 function normalizePersonName(value: string): string {
   return value
     .toLowerCase()
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/\[[^\]]*\]/g, " ")
     .replace(/[^a-z0-9\s]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function buildPersonNameKeys(value: string): string[] {
+  const normalized = stripDiacritics(normalizePersonName(value));
+  const rawTokens = normalized.split(" ").map((t) => t.trim()).filter(Boolean);
+  const tokens = rawTokens.filter((t) => !/^\d+$/.test(t));
+  if (tokens.length === 0) return [];
+
+  const guessLastName = (): string => {
+    if (tokens.length === 1) return tokens[0];
+    const lastToken = tokens[tokens.length - 1];
+    // Sheets often use LASTNAME Initial; in that case the last token is just the initial.
+    if (lastToken.length === 1) {
+      return tokens.slice(0, -1).join(" ").trim();
+    }
+    return lastToken;
+  };
+
+  const keys = new Set<string>();
+  const base = tokens.join(" ");
+  keys.add(base);
+
+  const lastNameOnly = guessLastName();
+  if (lastNameOnly) keys.add(lastNameOnly);
+
+  if (tokens.length >= 2) {
+    keys.add([...tokens].reverse().join(" "));
+
+    // Common sheet format: LASTNAME F (initial)
+    const firstToken = tokens[0];
+    const lastToken = tokens[tokens.length - 1];
+    const firstInitial = firstToken?.[0] ? firstToken[0] : "";
+    const lastInitial = lastToken?.[0] ? lastToken[0] : "";
+    if (firstInitial) keys.add(`${lastToken} ${firstInitial}`.trim());
+    if (lastInitial) keys.add(`${firstToken} ${lastInitial}`.trim());
+  }
+
+  return Array.from(keys).filter(Boolean);
+}
+
+function isLastNameOnly(value: string): boolean {
+  const normalized = stripDiacritics(normalizePersonName(value));
+  const rawTokens = normalized.split(" ").map((t) => t.trim()).filter(Boolean);
+  const tokens = rawTokens.filter((t) => !/^\d+$/.test(t));
+  return tokens.length === 1;
 }
 
 function getStoredStatValue(entry: Record<string, unknown>, aliases: string[]): number {
@@ -329,6 +802,11 @@ export default function StatsPage() {
   const [homeScore, setHomeScore] = useState("");
   const [saving, setSaving] = useState(false);
   const [deletingGameId, setDeletingGameId] = useState<string | null>(null);
+
+  // Forfeit flow state
+  const [forfeitOpen, setForfeitOpen] = useState(false);
+  const [forfeitWinnerSide, setForfeitWinnerSide] = useState<"home" | "away" | "">("");
+  const [forfeitCaptainId, setForfeitCaptainId] = useState("");
   
   // Player stats state
   const [homePlayers, setHomePlayers] = useState<Player[]>([]);
@@ -340,10 +818,31 @@ export default function StatsPage() {
   const [importUrl, setImportUrl] = useState("");
   const [importing, setImporting] = useState(false);
   const [importMessage, setImportMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [statsSheetPdf, setStatsSheetPdf] = useState<File | null>(null);
+  const [statsSheetImporting, setStatsSheetImporting] = useState(false);
+  const [statsSheetProgress, setStatsSheetProgress] = useState(0);
+  const [statsSheetMessage, setStatsSheetMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [popupError, setPopupError] = useState<string | null>(null);
   const [cellErrors, setCellErrors] = useState<Record<string, boolean>>({});
   const [touchedFields, setTouchedFields] = useState<Record<string, boolean>>({});  // Track which fields have been touched
   const popupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const manualEntryRef = useRef<HTMLDivElement | null>(null);
+
+  const homeStarterCount = useMemo(() => {
+    return homePlayers.reduce((acc, player) => {
+      const stat = homeStats[player.id];
+      if (!stat || stat.dnp) return acc;
+      return acc + (stat.started ? 1 : 0);
+    }, 0);
+  }, [homePlayers, homeStats]);
+
+  const awayStarterCount = useMemo(() => {
+    return awayPlayers.reduce((acc, player) => {
+      const stat = awayStats[player.id];
+      if (!stat || stat.dnp) return acc;
+      return acc + (stat.started ? 1 : 0);
+    }, 0);
+  }, [awayPlayers, awayStats]);
 
   const showValidationError = useCallback((message: string, cellKey?: string) => {
     setPopupError(message);
@@ -438,7 +937,7 @@ export default function StatsPage() {
           return true;
         }
 
-        const gameDateTime = new Date(`${game.date}T${game.time || "00:00"}`);
+        const gameDateTime = parseCongoDateTime(game.date, game.time || "00:00") || new Date(`${game.date}T${game.time || "00:00"}`);
         return Number.isFinite(gameDateTime.getTime()) && gameDateTime.getTime() <= cutoffMs;
       });
 
@@ -637,6 +1136,9 @@ export default function StatsPage() {
         if (statEntry.dnp === true) {
           updatedStat.dnp = true;
         }
+        if (statEntry.started === true) {
+          updatedStat.started = true;
+        }
         targetStats[targetPlayerId] = normalizeDerivedStats(updatedStat);
       });
       
@@ -654,6 +1156,12 @@ export default function StatsPage() {
       setExpandedGameId(null);
       setResolvedTeamIds(null);
       setImportMessage(null);
+      setStatsSheetMessage(null);
+      setStatsSheetPdf(null);
+      setStatsSheetProgress(0);
+      setForfeitOpen(false);
+      setForfeitWinnerSide("");
+      setForfeitCaptainId("");
       return;
     }
     
@@ -661,6 +1169,9 @@ export default function StatsPage() {
     setWinnerId(game.winnerTeamId || "");
     setCellErrors({});
     setPopupError(null);
+    setForfeitOpen(false);
+    setForfeitWinnerSide("");
+    setForfeitCaptainId("");
     
     // Set scores based on winner
     if ((game.completed || (game as unknown as { status?: string }).status === "completed") && game.winnerTeamId) {
@@ -678,9 +1189,358 @@ export default function StatsPage() {
 
     setImportUrl(game.fibaLiveStatsUrl || "");
     setImportMessage(null);
+    setStatsSheetMessage(null);
+    setStatsSheetProgress(0);
+    setStatsSheetPdf(null);
     
     fetchRosters(game);
   }, [expandedGameId, fetchRosters]);
+
+  const applyStatsSheetTextImport = useCallback((text: string) => {
+    const rows = parseStatsSheetText(text);
+
+    if (rows.length === 0) {
+      setStatsSheetMessage({ type: "error", text: copy.sheetNoRows });
+      return;
+    }
+
+    const buildRosterCandidates = (side: "home" | "away", players: Player[]) =>
+      players
+        .map((player) => {
+          const jersey = String(player.jerseyNumber || player.number || "").trim();
+          const name = String(player.name || "").trim();
+          const keys = buildPersonNameKeys(name);
+          return {
+            side,
+            player,
+            jersey,
+            name,
+            keys,
+          };
+        })
+        .filter((entry) => entry.keys.length > 0);
+
+    const candidates = [
+      ...buildRosterCandidates("home", homePlayers),
+      ...buildRosterCandidates("away", awayPlayers),
+    ];
+
+    const importedPlayers: ImportedPlayerStat[] = [];
+    const unmatchedRows: ParsedSheetRow[] = [];
+
+    const threshold = 0.88;
+
+    rows.forEach((row) => {
+      const rowKeys = buildPersonNameKeys(row.playerName);
+      if (rowKeys.length === 0) {
+        unmatchedRows.push(row);
+        return;
+      }
+
+      // Safety: if the sheet row contains only a last name and that last name matches multiple
+      // roster players, do not guess — leave it for manual entry.
+      if (isLastNameOnly(row.playerName)) {
+        const lastName = rowKeys[0];
+        const sameLastName = candidates.filter((candidate) => candidate.keys.includes(lastName));
+        if (sameLastName.length === 1) {
+          const bestCandidate = sameLastName[0];
+
+          const emptyStats = PLAYER_STAT_FIELDS.reduce<Record<StatField, number>>((acc, field) => {
+            acc[field] = 0;
+            return acc;
+          }, {} as Record<StatField, number>);
+
+          const mergedStats = {
+            ...emptyStats,
+            ...row.stats,
+          };
+
+          importedPlayers.push({
+            team: bestCandidate.side,
+            jerseyNumber: bestCandidate.jersey || undefined,
+            playerName: bestCandidate.name,
+            stats: mergedStats,
+            dnp: row.dnp,
+            started: row.started,
+          });
+          return;
+        }
+
+        unmatchedRows.push(row);
+        return;
+      }
+
+      let bestScore = 0;
+      let bestCandidate: (typeof candidates)[number] | null = null;
+
+      for (const candidate of candidates) {
+        let candidateBest = 0;
+        for (const candidateKey of candidate.keys) {
+          for (const rowKey of rowKeys) {
+            if (candidateKey === rowKey) {
+              candidateBest = 1;
+              break;
+            }
+            if (candidateKey.includes(rowKey) || rowKey.includes(candidateKey)) {
+              candidateBest = Math.max(candidateBest, 0.95);
+              continue;
+            }
+            candidateBest = Math.max(candidateBest, jaroWinkler(candidateKey, rowKey));
+          }
+          if (candidateBest >= 1) break;
+        }
+
+        if (candidateBest > bestScore) {
+          bestScore = candidateBest;
+          bestCandidate = candidate;
+        }
+        if (bestScore >= 1) break;
+      }
+
+      if (!bestCandidate || bestScore < threshold) {
+        unmatchedRows.push(row);
+        return;
+      }
+
+      const emptyStats = PLAYER_STAT_FIELDS.reduce<Record<StatField, number>>((acc, field) => {
+        acc[field] = 0;
+        return acc;
+      }, {} as Record<StatField, number>);
+
+      const mergedStats = {
+        ...emptyStats,
+        ...row.stats,
+      };
+
+      importedPlayers.push({
+        team: bestCandidate.side,
+        jerseyNumber: bestCandidate.jersey || undefined,
+        playerName: bestCandidate.name,
+        stats: mergedStats,
+        dnp: row.dnp,
+        started: row.started,
+      });
+    });
+
+    if (importedPlayers.length === 0) {
+      setStatsSheetMessage({ type: "error", text: copy.sheetNoMatches });
+      return;
+    }
+
+    // Apply imported player stats without overwriting scores/winner.
+    const nextHomeStats = { ...homeStats };
+    const nextAwayStats = { ...awayStats };
+
+    const isEffectivelyZeroMinutes = (minutes: string | undefined): boolean => {
+      const value = String(minutes || "").trim();
+      if (!value) return true;
+      return /^0{1,2}:0{2}$/.test(value);
+    };
+
+    const hasAnyEnteredStats = (stat: PlayerStat): boolean => {
+      if (!stat) return false;
+      if (!isEffectivelyZeroMinutes(stat.minutes)) return true;
+      for (const field of PLAYER_STAT_FIELDS) {
+        if (field === "minutes") continue;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const raw = (stat as any)[field];
+        const num = typeof raw === "number" ? raw : Number(raw ?? 0);
+        if (Number.isFinite(num) && num !== 0) return true;
+      }
+      return false;
+    };
+
+    const applyImportedPlayer = (
+      players: Player[],
+      side: "home" | "away",
+      target: Record<string, PlayerStat>,
+      updatedIds: Set<string>,
+      starterIds: Set<string>
+    ) => {
+      const sidePlayers = importedPlayers.filter((player) => player.team === side);
+      sidePlayers.forEach((entry) => {
+        const jersey = (entry.jerseyNumber || "").trim();
+        const entryKeys = buildPersonNameKeys(entry.playerName || "");
+
+        let bestPlayer: Player | null = null;
+        let bestScore = 0;
+
+        for (const player of players) {
+          const playerKeys = buildPersonNameKeys(player.name || "");
+          if (playerKeys.length === 0 || entryKeys.length === 0) continue;
+
+          let score = 0;
+          for (const key of playerKeys) {
+            if (entryKeys.includes(key)) {
+              score = 1;
+              break;
+            }
+          }
+
+          if (score < 1) {
+            for (const playerKey of playerKeys) {
+              for (const entryKey of entryKeys) {
+                score = Math.max(score, jaroWinkler(playerKey, entryKey));
+              }
+            }
+          }
+
+          // Jersey can help, but name is primary (numbers can change).
+          const playerJersey = (player.jerseyNumber || (player.number !== undefined ? String(player.number) : "")).trim();
+          if (jersey && playerJersey && jersey === playerJersey) {
+            score = Math.max(score, 0.92);
+          }
+
+          if (score > bestScore) {
+            bestScore = score;
+            bestPlayer = player;
+            if (bestScore >= 1) break;
+          }
+        }
+
+        const matched = bestScore >= 0.88 ? bestPlayer : null;
+
+        if (!matched || !target[matched.id]) {
+          return;
+        }
+
+        const updated = { ...target[matched.id] };
+        updated.dnp = Boolean(entry.dnp);
+        // Starters are marked on the PDF with a star.
+        updated.started = updated.dnp ? false : Boolean(entry.started);
+        PLAYER_STAT_FIELDS.forEach((field) => {
+          if (field === "minutes") {
+            const rawSeconds = Number(entry.stats[field] || 0);
+            if (rawSeconds > 0) {
+              const totalSeconds = Math.max(0, Math.floor(rawSeconds));
+              const mm = Math.floor(totalSeconds / 60);
+              const ss = totalSeconds % 60;
+              updated.minutes = `${mm}:${String(ss).padStart(2, "0")}`;
+            } else {
+              updated.minutes = "";
+            }
+          } else {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (updated as any)[field] = Number(entry.stats[field] || 0);
+          }
+        });
+        target[matched.id] = normalizeDerivedStats(updated);
+        updatedIds.add(matched.id);
+
+        if (!updated.dnp && updated.started) {
+          starterIds.add(matched.id);
+        }
+      });
+    };
+
+    const updatedHomeIds = new Set<string>();
+    const updatedAwayIds = new Set<string>();
+    const homeStarterIds = new Set<string>();
+    const awayStarterIds = new Set<string>();
+
+    applyImportedPlayer(homePlayers, "home", nextHomeStats, updatedHomeIds, homeStarterIds);
+    applyImportedPlayer(awayPlayers, "away", nextAwayStats, updatedAwayIds, awayStarterIds);
+
+    const parseMmSsToSeconds = (value: string | undefined): number => {
+      const text = String(value || "").trim();
+      const match = text.match(/^(\d{1,2}):(\d{2})$/);
+      if (!match) return 0;
+      const mm = Number(match[1]);
+      const ss = Number(match[2]);
+      if (!Number.isFinite(mm) || !Number.isFinite(ss)) return 0;
+      return Math.max(0, mm) * 60 + Math.min(Math.max(0, ss), 59);
+    };
+
+    const ensureExactlyFiveStarters = (players: Player[], target: Record<string, PlayerStat>, starterIdsFromPdf: Set<string>) => {
+      const eligible = players
+        .map((player) => ({ player, stat: target[player.id] }))
+        .filter((entry) => Boolean(entry.stat) && !entry.stat!.dnp);
+
+      if (eligible.length === 0) return;
+
+      // Start with PDF-starred players (if any).
+      let starterIds = new Set<string>();
+      if (starterIdsFromPdf.size > 0) {
+        eligible.forEach(({ player }) => {
+          if (starterIdsFromPdf.has(player.id)) starterIds.add(player.id);
+        });
+      }
+
+      const byMinutesDesc = [...eligible]
+        .sort((a, b) => parseMmSsToSeconds(b.stat!.minutes) - parseMmSsToSeconds(a.stat!.minutes))
+        .map((e) => e.player.id);
+
+      // If PDF gave more than 5, keep the top-5 by minutes.
+      if (starterIds.size > 5) {
+        const trimmed = new Set<string>();
+        for (const id of byMinutesDesc) {
+          if (!starterIds.has(id)) continue;
+          trimmed.add(id);
+          if (trimmed.size >= 5) break;
+        }
+        starterIds = trimmed;
+      }
+
+      // If PDF gave fewer than 5 (or none), fill with top minutes.
+      if (starterIds.size < 5) {
+        for (const id of byMinutesDesc) {
+          if (starterIds.has(id)) continue;
+          starterIds.add(id);
+          if (starterIds.size >= 5) break;
+        }
+      }
+
+      // Apply to grid.
+      players.forEach((player) => {
+        const stat = target[player.id];
+        if (!stat) return;
+        if (stat.dnp) {
+          stat.started = false;
+          return;
+        }
+        stat.started = starterIds.has(player.id);
+      });
+    };
+
+    ensureExactlyFiveStarters(homePlayers, nextHomeStats, homeStarterIds);
+    ensureExactlyFiveStarters(awayPlayers, nextAwayStats, awayStarterIds);
+
+    // If a roster player wasn't listed in the PDF and still has no stats entered,
+    // mark them as DNP so admins don't have to do it manually.
+    const markMissingAsDnp = (players: Player[], target: Record<string, PlayerStat>, updatedIds: Set<string>) => {
+      players.forEach((player) => {
+        const stat = target[player.id];
+        if (!stat) return;
+        if (updatedIds.has(player.id)) return;
+        if (hasAnyEnteredStats(stat)) return;
+
+        target[player.id] = {
+          ...stat,
+          dnp: true,
+          started: false,
+          minutes: "",
+        };
+      });
+    };
+
+    markMissingAsDnp(homePlayers, nextHomeStats, updatedHomeIds);
+    markMissingAsDnp(awayPlayers, nextAwayStats, updatedAwayIds);
+
+    setHomeStats(nextHomeStats);
+    setAwayStats(nextAwayStats);
+
+    setStatsSheetMessage({
+      type: "success",
+      text: unmatchedRows.length > 0 ? copy.photoParsedWithUnmatched : copy.photoParsed,
+    });
+  }, [awayPlayers, awayStats, copy.sheetNoMatches, copy.sheetNoRows, copy.photoParsed, copy.photoParsedWithUnmatched, homePlayers, homeStats, normalizeDerivedStats]);
+
+  const openForfeitModal = useCallback(() => {
+    setForfeitOpen(true);
+    setForfeitWinnerSide("");
+    setForfeitCaptainId("");
+    setImportMessage(null);
+  }, []);
 
   const handleSelectWinner = (teamId: string) => {
     setWinnerId(teamId);
@@ -814,9 +1674,40 @@ export default function StatsPage() {
     const applyUpdate = (prev: Record<string, PlayerStat>) => {
       const current = prev[playerId];
       if (!current) return prev;
+      const nextDnp = !current.dnp;
       return {
         ...prev,
-        [playerId]: { ...current, dnp: !current.dnp },
+        [playerId]: { ...current, dnp: nextDnp, started: nextDnp ? false : current.started },
+      };
+    };
+
+    if (isHome) {
+      setHomeStats(applyUpdate);
+    } else {
+      setAwayStats(applyUpdate);
+    }
+  };
+
+  const togglePlayerStarter = (playerId: string, isHome: boolean) => {
+    const starterCount = isHome ? homeStarterCount : awayStarterCount;
+
+    const applyUpdate = (prev: Record<string, PlayerStat>) => {
+      const current = prev[playerId];
+      if (!current) return prev;
+
+      const nextStarted = !current.started;
+      if (nextStarted && starterCount >= 5) {
+        showValidationError(copy.starterLimitReached);
+        return prev;
+      }
+
+      return {
+        ...prev,
+        [playerId]: {
+          ...current,
+          started: nextStarted,
+          dnp: nextStarted ? false : current.dnp,
+        },
       };
     };
 
@@ -918,6 +1809,181 @@ export default function StatsPage() {
     }
   }, [expandedGameId, games, importUrl, copy.pullError, copy.pullSuccess, applyImportedStats]);
 
+  const handleImportFromStatsSheetPdf = useCallback(async () => {
+    const game = games.find((g) => g.id === expandedGameId);
+
+    if (!game) {
+      setStatsSheetMessage({ type: "error", text: copy.photoError });
+      return;
+    }
+
+    if (!statsSheetPdf) {
+      setStatsSheetMessage({ type: "error", text: copy.pdfMissing });
+      return;
+    }
+
+    if (homePlayers.length === 0 && awayPlayers.length === 0) {
+      setStatsSheetMessage({ type: "error", text: copy.photoNoRoster });
+      return;
+    }
+
+    setStatsSheetImporting(true);
+    setStatsSheetProgress(0);
+    setStatsSheetMessage(null);
+
+    let worker: Awaited<ReturnType<(typeof import("tesseract.js"))['createWorker']>> | null = null;
+    try {
+      const applyFinalScoreIfPresent = (text: string) => {
+        const parsed = parseFinalScoreFromText(text);
+        if (!parsed) return;
+        const resolved = resolveFinalScoreToHomeAway(parsed, game);
+        if (!resolved) return;
+
+        setHomeScore(String(resolved.homeScore));
+        setAwayScore(String(resolved.awayScore));
+        if (resolved.homeScore > resolved.awayScore) {
+          setWinnerId(game.homeTeamId);
+        } else if (resolved.awayScore > resolved.homeScore) {
+          setWinnerId(game.awayTeamId);
+        }
+
+        requestAnimationFrame(() => {
+          manualEntryRef.current?.scrollIntoView({ block: "start" });
+        });
+      };
+
+      const pdfArrayBuffer = await statsSheetPdf.arrayBuffer();
+      const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+      // Configure the PDF.js worker so getDocument can render in the browser.
+      // Using a local worker file keeps it compatible with Vercel/Next bundling.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (pdfjs as any).GlobalWorkerOptions.workerSrc = new URL(
+        "pdfjs-dist/legacy/build/pdf.worker.min.mjs",
+        import.meta.url
+      ).toString();
+
+      const pdf = await pdfjs.getDocument({ data: pdfArrayBuffer }).promise;
+      const page = await pdf.getPage(1);
+
+      // If the PDF has selectable text, prefer extracting it directly (more accurate than OCR).
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const textContent = await (page as any).getTextContent();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const items: any[] = Array.isArray(textContent?.items) ? textContent.items : [];
+
+        const positioned = items
+          .map((item) => {
+            const str = item && typeof item.str === "string" ? String(item.str).trim() : "";
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const transform = item && Array.isArray((item as any).transform) ? (item as any).transform : null;
+            if (!str) return null;
+            if (!transform || transform.length < 6) return null;
+            const x = Number(transform[4]);
+            const y = Number(transform[5]);
+            if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+            return { str, x, y };
+          })
+          .filter((value): value is { str: string; x: number; y: number } => Boolean(value));
+
+        // Group by approximate row position (y), then order left-to-right by x.
+        const yTolerance = 2; // PDF points; small bucket to merge same-row items
+        const byRow = new Map<number, Array<{ str: string; x: number }>>();
+        for (const item of positioned) {
+          const yKey = Math.round(item.y / yTolerance) * yTolerance;
+          const existing = byRow.get(yKey) ?? [];
+          existing.push({ str: item.str, x: item.x });
+          byRow.set(yKey, existing);
+        }
+
+        const extractedText = Array.from(byRow.entries())
+          .sort((a, b) => b[0] - a[0])
+          .map(([, rowItems]) => {
+            return rowItems
+              .sort((a, b) => a.x - b.x)
+              .map((r) => r.str)
+              .join(" ")
+              .replace(/\s+/g, " ")
+              .trim();
+          })
+          .filter(Boolean)
+          .join("\n");
+
+        if (extractedText.trim().length >= 200) {
+          applyFinalScoreIfPresent(extractedText);
+          applyStatsSheetTextImport(extractedText);
+          page.cleanup();
+          pdf.cleanup();
+          return;
+        }
+      } catch {
+        // Fall back to OCR for scanned PDFs.
+      }
+
+      const viewport = page.getViewport({ scale: 2 });
+
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.ceil(viewport.width);
+      canvas.height = Math.ceil(viewport.height);
+
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        throw new Error("Unable to create canvas context");
+      }
+
+      // Slightly higher render scale improves OCR on scanned PDFs.
+      const ocrViewport = page.getViewport({ scale: 2.5 });
+      canvas.width = Math.ceil(ocrViewport.width);
+      canvas.height = Math.ceil(ocrViewport.height);
+
+      await page.render({ canvas, canvasContext: ctx, viewport: ocrViewport }).promise;
+      page.cleanup();
+      pdf.cleanup();
+
+      const pngBlob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            reject(new Error("Unable to render PDF page"));
+            return;
+          }
+          resolve(blob);
+        }, "image/png");
+      });
+
+      const pngFile = new File([pngBlob], "stats-sheet-page-1.png", { type: "image/png" });
+
+      const Tesseract = await import("tesseract.js");
+      worker = await Tesseract.createWorker("eng", 1, {
+        logger: (message) => {
+          if (typeof message?.progress === "number") {
+            setStatsSheetProgress(message.progress);
+          }
+        },
+      });
+
+      await worker.load();
+      await worker.reinitialize("eng");
+      await worker.setParameters({ preserve_interword_spaces: "1" });
+
+      const result = await worker.recognize(pngFile);
+      const text = result?.data?.text ? String(result.data.text) : "";
+      applyFinalScoreIfPresent(text);
+      applyStatsSheetTextImport(text);
+    } catch (error) {
+      console.error("Stats sheet PDF import error:", error);
+      setStatsSheetMessage({ type: "error", text: copy.photoError });
+    } finally {
+      if (worker) {
+        try {
+          await worker.terminate();
+        } catch {
+          // ignore
+        }
+      }
+      setStatsSheetImporting(false);
+    }
+  }, [applyStatsSheetTextImport, copy.pdfMissing, copy.photoError, copy.photoNoRoster, expandedGameId, games, homePlayers.length, awayPlayers.length, statsSheetPdf]);
+
   const buildStoredPlayerStat = useCallback((stat: PlayerStat, teamId: string, teamName: string, gameId: string) => {
     const fieldGoalsMade = stat.fieldGoalsMade || stat.twoPointsMade + stat.threePointsMade;
     const fieldGoalsAttempted = stat.fieldGoalsAttempted || stat.twoPointsAttempted + stat.threePointsAttempted;
@@ -941,6 +2007,7 @@ export default function StatsPage() {
       teamName,
       gameId,
       dnp: stat.dnp || false,
+      started: stat.started || false,
       number: Number(stat.jerseyNumber || 0),
       jerseyNumber: Number(stat.jerseyNumber || 0),
       points: stat.points,
@@ -1305,6 +2372,11 @@ export default function StatsPage() {
       return;
     }
 
+    if (homeStarterCount !== 5 || awayStarterCount !== 5) {
+      setImportMessage({ type: "error", text: copy.startersRequired });
+      return;
+    }
+
     const homeInvalid = Object.values(homeStats)
       .map((stat) => ({ stat, validation: validateFibaPlayerStat(stat) }))
       .find((entry) => !entry.validation.valid);
@@ -1410,6 +2482,171 @@ export default function StatsPage() {
       fetchGames();
     } catch (error) {
       console.error("Error saving game stats:", error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveForfeitWin = async () => {
+    const game = games.find((g) => g.id === expandedGameId);
+    if (!game) return;
+
+    if ((forfeitWinnerSide !== "home" && forfeitWinnerSide !== "away") || !forfeitCaptainId) {
+      setImportMessage({ type: "error", text: copy.forfeitMissing });
+      return;
+    }
+
+    const homeTeamId = resolvedTeamIds?.home || game.homeTeamId;
+    const awayTeamId = resolvedTeamIds?.away || game.awayTeamId;
+    const winnerTeamId = forfeitWinnerSide === "home" ? homeTeamId : awayTeamId;
+    const loserTeamId = forfeitWinnerSide === "home" ? awayTeamId : homeTeamId;
+    const winnerTeamName = forfeitWinnerSide === "home" ? game.homeTeamName : game.awayTeamName;
+    const loserTeamName = forfeitWinnerSide === "home" ? game.awayTeamName : game.homeTeamName;
+
+    const roster = forfeitWinnerSide === "home" ? homePlayers : awayPlayers;
+    const captain = roster.find((p) => p.id === forfeitCaptainId);
+    if (!captain) {
+      setImportMessage({ type: "error", text: copy.forfeitMissing });
+      return;
+    }
+
+    const captainName = (captain.name || `${captain.firstName || ""} ${captain.lastName || ""}`.trim() || "Captain").trim();
+    const captainNumber = String(captain.jerseyNumber ?? captain.number ?? "");
+
+    const captainStat: PlayerStat = {
+      playerId: captain.id,
+      name: captainName,
+      jerseyNumber: captainNumber,
+      dnp: false,
+      started: true,
+      points: 20,
+      minutes: "00:00",
+      rebounds: 0,
+      offensiveRebounds: 0,
+      defensiveRebounds: 0,
+      assists: 0,
+      steals: 0,
+      blocks: 0,
+      blockedAgainst: 0,
+      turnovers: 0,
+      fouls: 0,
+      foulsDrawn: 0,
+      fieldGoalsMade: 0,
+      fieldGoalsAttempted: 0,
+      twoPointsMade: 10,
+      twoPointsAttempted: 10,
+      threePointsMade: 0,
+      threePointsAttempted: 0,
+      freeThrowsMade: 0,
+      freeThrowsAttempted: 0,
+      plusMinus: 0,
+    };
+
+    const storedCaptainStat = buildStoredPlayerStat(captainStat, winnerTeamId, winnerTeamName, game.id);
+    const homeScoreValue = forfeitWinnerSide === "home" ? 20 : 0;
+    const awayScoreValue = forfeitWinnerSide === "away" ? 20 : 0;
+
+    setSaving(true);
+    try {
+      setImportMessage(null);
+
+      const existingStatsSnap = await getDocs(collection(firebaseDB, `games/${game.id}/playerStats`));
+      const existingPlayerGameStatsSnap = await getDocs(
+        query(collection(firebaseDB, "playerGameStats"), where("gameId", "==", game.id))
+      );
+      const batch = writeBatch(firebaseDB);
+      existingStatsSnap.docs.forEach((statDoc) => batch.delete(statDoc.ref));
+      existingPlayerGameStatsSnap.docs.forEach((statDoc) => batch.delete(statDoc.ref));
+
+      const gameRef = doc(firebaseDB, "games", game.id);
+      batch.update(gameRef, {
+        status: "completed",
+        completed: true,
+        winnerId: winnerTeamId,
+        winnerTeamId: winnerTeamId,
+        loserTeamId: loserTeamId,
+        winnerScore: 20,
+        loserScore: 0,
+        homeScore: homeScoreValue,
+        awayScore: awayScoreValue,
+        completedAt: serverTimestamp(),
+        playerStats: [storedCaptainStat],
+        winByForfeit: true,
+        forfeitCaptainId: captain.id,
+        forfeitCaptainName: captainName,
+        updatedAt: serverTimestamp(),
+      });
+
+      const statRef = doc(firebaseDB, `games/${game.id}/playerStats`, storedCaptainStat.playerId);
+      batch.set(statRef, {
+        ...storedCaptainStat,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      // Keep playerGameStats in sync so any averages/leaderboards using it include the forfeit result.
+      const playerGameStatsRef = doc(collection(firebaseDB, "playerGameStats"));
+      batch.set(playerGameStatsRef, {
+        gameId: game.id,
+        playerId: captain.id,
+        teamId: winnerTeamId,
+        playerName: captainName,
+        minutes: 0,
+        started: true,
+        fieldGoalsMade: 10,
+        fieldGoalsAttempted: 10,
+        threePtMade: 0,
+        threePtAttempted: 0,
+        freeThrowsMade: 0,
+        freeThrowsAttempted: 0,
+        reboundsOff: 0,
+        reboundsDef: 0,
+        assists: 0,
+        turnovers: 0,
+        blocks: 0,
+        steals: 0,
+        personalFouls: 0,
+        disqualifications: 0,
+        winByForfeit: true,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      await batch.commit();
+
+      await Promise.all([
+        recalculateTeamRosterStats(homeTeamId),
+        recalculateTeamRosterStats(awayTeamId),
+        recalculateTeamRecords([homeTeamId, awayTeamId]),
+      ]);
+
+      await logAuditAction(
+        "game_stats_recorded",
+        currentAdminUser?.id || "unknown",
+        currentAdminUser?.email || "unknown",
+        "game",
+        game.id,
+        `${game.awayTeamName} vs ${game.homeTeamName}`,
+        {
+          operation: "forfeit",
+          winnerTeam: winnerTeamName,
+          loserTeam: loserTeamName,
+          score: "20-0",
+          captainId: captain.id,
+          captainName,
+          gameDate: game.date,
+          venue: game.venue,
+        }
+      );
+
+      setForfeitOpen(false);
+      setForfeitWinnerSide("");
+      setForfeitCaptainId("");
+      setExpandedGameId(null);
+      setResolvedTeamIds(null);
+      fetchGames();
+    } catch (error) {
+      console.error("Error saving forfeit result:", error);
     } finally {
       setSaving(false);
     }
@@ -1609,7 +2846,7 @@ export default function StatsPage() {
                       {/* Date/Venue and Button */}
                       <div className="flex items-center gap-3 pl-4 border-l border-white/10">
                         <div className="text-right">
-                          <div className="text-xs text-slate-400">{game.date} • {game.time}</div>
+                          <div className="text-xs text-slate-400">{(() => { const d = parseCongoDateTime(game.date, game.time); return d ? `${d.toLocaleDateString()} • ${d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : `${game.date} • ${game.time}`; })()}</div>
                           <div className="text-xs text-slate-500 truncate max-w-[150px]">{game.venue}</div>
                         </div>
                         <div className={`rounded-xl px-4 py-2 font-bold text-sm ${
@@ -1670,10 +2907,38 @@ export default function StatsPage() {
                             {importMessage.text}
                           </p>
                         )}
+
+                        <div className="pt-3 border-t border-white/10 space-y-2">
+                          <p className="text-xs text-slate-400">{copy.pdfHelp}</p>
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                            <input
+                              type="file"
+                              accept="application/pdf"
+                              onChange={(e) => setStatsSheetPdf(e.target.files?.[0] ?? null)}
+                              className="flex-1 px-4 py-2.5 bg-slate-800 border border-white/10 rounded-xl text-white text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-slate-700 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white hover:file:bg-slate-600"
+                              aria-label={copy.pdfPick}
+                            />
+                            <button
+                              type="button"
+                              onClick={handleImportFromStatsSheetPdf}
+                              disabled={statsSheetImporting || !statsSheetPdf}
+                              className="px-4 py-2.5 rounded-xl bg-emerald-600 text-white font-semibold hover:bg-emerald-500 disabled:opacity-50"
+                            >
+                              {statsSheetImporting
+                                ? `${copy.photoImporting}${statsSheetProgress > 0 ? ` ${Math.round(statsSheetProgress * 100)}%` : ""}`
+                                : copy.pdfImport}
+                            </button>
+                          </div>
+                          {statsSheetMessage && (
+                            <p className={`text-xs ${statsSheetMessage.type === "success" ? "text-emerald-300" : "text-red-300"}`}>
+                              {statsSheetMessage.text}
+                            </p>
+                          )}
+                        </div>
                       </div>
 
                       {/* Step 1: Select Winner */}
-                      <div className="p-6 border-b border-white/10">
+                      <div ref={manualEntryRef} className="p-6 border-b border-white/10">
                         <h3 className="text-sm font-bold text-orange-400 mb-2">{copy.option2}</h3>
                         <h3 className="text-sm font-bold text-orange-400 mb-3">{copy.step1}</h3>
                         <p className="text-xs text-slate-400 mb-4">{copy.selectWinner}</p>
@@ -1838,6 +3103,7 @@ export default function StatsPage() {
                                         const playerStat = awayStats[player.id];
                                         const stat = playerStat || createEmptyPlayerStat(player);
                                         const isDNP = playerStat?.dnp || false;
+                                        const disableStarterToggle = isDNP || (!stat.started && awayStarterCount >= 5);
                                         const fgMade = Number(stat.fieldGoalsMade ?? 0);
                                         const fgAtt = Number(stat.fieldGoalsAttempted ?? 0);
                                         const threeMade = Number(stat.threePointsMade ?? 0);
@@ -1856,7 +3122,24 @@ export default function StatsPage() {
                                         return (
                                         <tr key={player.id} className={`border-b border-white/5 hover:bg-white/5 ${isDNP ? 'opacity-50' : ''}`}>
                                           <td className="p-3 text-slate-400 font-mono">{player.jerseyNumber || "-"}</td>
-                                          <td className="p-3 text-white font-medium">{player.name}</td>
+                                          <td className="p-3 text-white font-medium">
+                                            <div className="flex items-center gap-2">
+                                              <span className="min-w-0 truncate">{player.name}</span>
+                                              <button
+                                                type="button"
+                                                onClick={() => togglePlayerStarter(player.id, false)}
+                                                disabled={disableStarterToggle}
+                                                className={`w-8 h-8 rounded text-xs font-bold transition-colors ${
+                                                  stat.started
+                                                    ? "bg-orange-500/20 text-orange-300"
+                                                    : "bg-slate-700 text-slate-400 hover:bg-slate-600"
+                                                } ${disableStarterToggle ? "opacity-40 cursor-not-allowed hover:bg-slate-700" : ""}`}
+                                                title={copy.starterTooltip}
+                                              >
+                                                ★
+                                              </button>
+                                            </div>
+                                          </td>
                                           <td className="p-1 text-center">
                                             <button
                                               type="button"
@@ -2130,6 +3413,7 @@ export default function StatsPage() {
                                         const playerStat = homeStats[player.id];
                                         const stat = playerStat || createEmptyPlayerStat(player);
                                         const isDNP = playerStat?.dnp || false;
+                                        const disableStarterToggle = isDNP || (!stat.started && homeStarterCount >= 5);
                                         const fgMade = Number(stat.fieldGoalsMade ?? 0);
                                         const fgAtt = Number(stat.fieldGoalsAttempted ?? 0);
                                         const threeMade = Number(stat.threePointsMade ?? 0);
@@ -2148,7 +3432,24 @@ export default function StatsPage() {
                                         return (
                                         <tr key={player.id} className={`border-b border-white/5 hover:bg-white/5 ${isDNP ? 'opacity-50' : ''}`}>
                                           <td className="p-3 text-slate-400 font-mono">{player.jerseyNumber || "-"}</td>
-                                          <td className="p-3 text-white font-medium">{player.name}</td>
+                                          <td className="p-3 text-white font-medium">
+                                            <div className="flex items-center gap-2">
+                                              <span className="min-w-0 truncate">{player.name}</span>
+                                              <button
+                                                type="button"
+                                                onClick={() => togglePlayerStarter(player.id, true)}
+                                                disabled={disableStarterToggle}
+                                                className={`w-8 h-8 rounded text-xs font-bold transition-colors ${
+                                                  stat.started
+                                                    ? "bg-orange-500/20 text-orange-300"
+                                                    : "bg-slate-700 text-slate-400 hover:bg-slate-600"
+                                                } ${disableStarterToggle ? "opacity-40 cursor-not-allowed hover:bg-slate-700" : ""}`}
+                                                title={copy.starterTooltip}
+                                              >
+                                                ★
+                                              </button>
+                                            </div>
+                                          </td>
                                           <td className="p-1 text-center">
                                             <button
                                               type="button"
@@ -2376,16 +3677,138 @@ export default function StatsPage() {
                       )}
 
                       {/* Action Buttons */}
-                      <div className="p-4 flex gap-3">
+                      {forfeitOpen && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+                          <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-slate-950 p-5">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <h3 className="text-lg font-bold text-white">{copy.forfeitTitle}</h3>
+                                <p className="mt-1 text-sm text-slate-400">{copy.forfeitNote}</p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setForfeitOpen(false);
+                                  setForfeitWinnerSide("");
+                                  setForfeitCaptainId("");
+                                }}
+                                className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800 transition"
+                              >
+                                {copy.cancel}
+                              </button>
+                            </div>
+
+                            <div className="mt-4 space-y-4">
+                              <div>
+                                <p className="mb-2 text-sm font-semibold text-white">{copy.forfeitPickWinner}</p>
+                                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setForfeitWinnerSide("away");
+                                      setForfeitCaptainId("");
+                                    }}
+                                    className={`rounded-xl border px-3 py-3 text-left transition ${
+                                      forfeitWinnerSide === "away"
+                                        ? "border-orange-500/60 bg-orange-500/10 text-white"
+                                        : "border-white/10 bg-slate-900/40 text-slate-200 hover:bg-slate-900/70"
+                                    }`}
+                                  >
+                                    <div className="text-xs uppercase tracking-wider text-slate-400">{copy.awayTeam}</div>
+                                    <div className="mt-1 font-semibold">{game.awayTeamName}</div>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setForfeitWinnerSide("home");
+                                      setForfeitCaptainId("");
+                                    }}
+                                    className={`rounded-xl border px-3 py-3 text-left transition ${
+                                      forfeitWinnerSide === "home"
+                                        ? "border-orange-500/60 bg-orange-500/10 text-white"
+                                        : "border-white/10 bg-slate-900/40 text-slate-200 hover:bg-slate-900/70"
+                                    }`}
+                                  >
+                                    <div className="text-xs uppercase tracking-wider text-slate-400">{copy.homeTeam}</div>
+                                    <div className="mt-1 font-semibold">{game.homeTeamName}</div>
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div>
+                                <p className="mb-2 text-sm font-semibold text-white">{copy.forfeitPickCaptain}</p>
+                                <select
+                                  value={forfeitCaptainId}
+                                  onChange={(e) => setForfeitCaptainId(e.target.value)}
+                                  disabled={loadingPlayers || saving || (forfeitWinnerSide !== "home" && forfeitWinnerSide !== "away")}
+                                  aria-label={copy.forfeitPickCaptain}
+                                  title={copy.forfeitPickCaptain}
+                                  className="w-full rounded-xl border border-white/10 bg-slate-900/60 px-3 py-3 text-sm text-white outline-none disabled:opacity-60"
+                                >
+                                  <option value="">{loadingPlayers ? copy.loadingPlayers : copy.forfeitCaptain}</option>
+                                  {(forfeitWinnerSide === "home" ? homePlayers : forfeitWinnerSide === "away" ? awayPlayers : []).map((player) => {
+                                    const name = (player.name || `${player.firstName || ""} ${player.lastName || ""}`.trim() || "Player").trim();
+                                    const number = String(player.jerseyNumber ?? player.number ?? "").trim();
+                                    return (
+                                      <option key={player.id} value={player.id}>
+                                        {number ? `#${number} ` : ""}{name}
+                                      </option>
+                                    );
+                                  })}
+                                </select>
+                              </div>
+
+                              <div className="flex gap-3 pt-2">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setForfeitOpen(false);
+                                    setForfeitWinnerSide("");
+                                    setForfeitCaptainId("");
+                                  }}
+                                  className="flex-1 rounded-xl border border-white/10 bg-slate-900/60 py-3 text-sm font-semibold text-slate-200 hover:bg-slate-800 transition"
+                                >
+                                  {copy.cancel}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={saveForfeitWin}
+                                  disabled={saving || !forfeitCaptainId || (forfeitWinnerSide !== "home" && forfeitWinnerSide !== "away")}
+                                  className="flex-1 rounded-xl bg-orange-600 py-3 text-sm font-bold text-white hover:bg-orange-500 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                                >
+                                  {saving ? "..." : copy.forfeitConfirm}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="p-4 flex flex-col sm:flex-row gap-3">
                         <button
-                          onClick={() => setExpandedGameId(null)}
+                          onClick={() => {
+                            setExpandedGameId(null);
+                            setResolvedTeamIds(null);
+                            setImportMessage(null);
+                            setForfeitOpen(false);
+                            setForfeitWinnerSide("");
+                            setForfeitCaptainId("");
+                          }}
                           className="flex-1 py-3 bg-slate-800 text-slate-300 rounded-xl font-medium hover:bg-slate-700 transition"
                         >
                           {copy.cancel}
                         </button>
                         <button
+                          type="button"
+                          onClick={openForfeitModal}
+                          disabled={saving || loadingPlayers}
+                          className="flex-1 py-3 bg-orange-600 text-white rounded-xl font-bold hover:bg-orange-500 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                        >
+                          {copy.forfeitWin}
+                        </button>
+                        <button
                           onClick={saveGameStats}
-                          disabled={saving || !winnerId || !awayScore || !homeScore}
+                          disabled={saving || forfeitOpen || !winnerId || !awayScore || !homeScore}
                           className="flex-1 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed transition"
                         >
                           {saving ? "..." : copy.save}

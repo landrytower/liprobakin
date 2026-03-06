@@ -6,6 +6,7 @@ import Link from "next/link";
 import { collection, getDocs, orderBy, query } from "firebase/firestore";
 import { firebaseDB } from "@/lib/firebase";
 import { normalizeTeamGender } from "@/lib/team-gender";
+import { parseCongoDateTime } from "@/lib/congo-time";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { navSections } from "@/data/febaco";
 
@@ -107,21 +108,7 @@ const copy = {
 
 /* ─── helpers ─── */
 const parseGameDateTime = (dateStr?: string, timeStr?: string): Date | null => {
-  const safeDate = (dateStr || "").trim();
-  const safeTime = (timeStr || "00:00").trim();
-  if (!safeDate) return null;
-
-  let normalizedDate = safeDate;
-  if (safeDate.includes("/")) {
-    const [a, b, c] = safeDate.split("/");
-    if (a && b && c) {
-      normalizedDate = `${c}-${a.padStart(2, "0")}-${b.padStart(2, "0")}`;
-    }
-  }
-
-  const normalizedTime = safeTime.length === 5 ? `${safeTime}:00` : safeTime;
-  const parsed = new Date(`${normalizedDate}T${normalizedTime}`);
-  return Number.isFinite(parsed.getTime()) ? parsed : null;
+  return parseCongoDateTime(dateStr, timeStr) ?? null;
 };
 
 const getWeekStart = (date: Date, isFrench: boolean): Date => {
@@ -754,7 +741,7 @@ export default function CalendrierPage() {
   return (
     <div className="min-h-screen bg-slate-950 text-white">
       {/* ─── Navbar ─── */}
-      <nav className="sticky top-0 z-50 border-b border-white/10 bg-black/30 backdrop-blur-xl">
+      <nav className="sticky top-0 live-pin-offset z-50 border-b border-white/10 bg-black/30 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 sm:gap-4 md:gap-8 px-3 sm:px-6 py-4 sm:py-5 md:px-12 md:pl-16">
           <Link href="/" className="flex items-center gap-2 sm:gap-3 text-base sm:text-xl font-semibold tracking-[0.2em] sm:tracking-[0.3em]">
             <Image

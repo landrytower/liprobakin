@@ -107,3 +107,55 @@ export const parseCongoDateTime = (date?: string, time?: string): Date | undefin
 
   return new Date(Date.UTC(year, month - 1, day, hour - CONGO_UTC_OFFSET_HOURS, minute));
 };
+
+/**
+ * Format a Congo-stored date+time string for display in the user's local timezone.
+ * Internally converts the stored values to a proper UTC Date via parseCongoDateTime,
+ * then uses Intl.DateTimeFormat without an explicit timeZone so the browser renders
+ * the user's local time automatically.
+ */
+export const formatCongoDateForLocal = (
+  date?: string,
+  time?: string,
+  locale: string = "en-US",
+  options: Intl.DateTimeFormatOptions = {}
+): string => {
+  const parsed = parseCongoDateTime(date, time);
+  if (!parsed) return "";
+  return new Intl.DateTimeFormat(locale, options).format(parsed);
+};
+
+/**
+ * Format a Congo-stored date+time as a local time string (e.g. "2:00 PM" or "14:00").
+ */
+export const formatCongoTimeForLocal = (
+  date?: string,
+  time?: string,
+  locale: string = "en-US",
+  hour12: boolean = true
+): string => {
+  const parsed = parseCongoDateTime(date, time);
+  if (!parsed) return time || "";
+  return new Intl.DateTimeFormat(locale, {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12,
+  }).format(parsed);
+};
+
+/**
+ * Format a Congo-stored date+time as a local date string (e.g. "Mon, Dec 13").
+ */
+export const formatCongoDateLabelForLocal = (
+  date?: string,
+  time?: string,
+  locale: string = "en-US"
+): string => {
+  const parsed = parseCongoDateTime(date, time);
+  if (!parsed) return date || "";
+  return new Intl.DateTimeFormat(locale, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  }).format(parsed);
+};

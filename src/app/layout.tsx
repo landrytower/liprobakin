@@ -7,6 +7,7 @@ import { LanguageProvider } from "@/contexts/LanguageContext";
 import VerificationNotification from "@/components/VerificationNotification";
 import { AnalyticsProvider } from "@/components/AnalyticsProvider";
 import LiprobakinAI from "@/components/LiprobakinAI";
+import LivePinnedScore from "@/components/LivePinnedScore";
 import { Analytics } from "@vercel/analytics/react";
 
 const geistSans = Geist({
@@ -187,6 +188,7 @@ export default function RootLayout({
         <LanguageProvider>
           <AuthProvider>
             <AnalyticsProvider>
+              <LivePinnedScore />
               <VerificationNotification />
               {children}
               <LiprobakinAI />

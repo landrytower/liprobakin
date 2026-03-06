@@ -8,6 +8,17 @@
   --accent: #38bdf8;
   --accent-strong: #22d3ee;
   --muted: #94a3b8;
+
+  --live-pin-height: 0px;
+}
+
+html[data-live-pin="1"] {
+  --live-pin-height: 44px;
+}
+
+/* Offset ONLY top page headers/navbars when the live pin bar is present */
+html[data-live-pin="1"] .live-pin-offset {
+  top: var(--live-pin-height) !important;
 }
 
 @theme inline {

@@ -343,7 +343,7 @@ export default function ClassementPage() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
-      <nav className="sticky top-0 z-50 border-b border-white/10 bg-black/30 backdrop-blur-xl">
+      <nav className="sticky top-0 live-pin-offset z-50 border-b border-white/10 bg-black/30 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 sm:gap-4 md:gap-8 px-3 sm:px-6 py-4 sm:py-5 md:px-12 md:pl-16">
           <Link href="/" className="flex items-center gap-2 sm:gap-3 text-base sm:text-xl font-semibold tracking-[0.2em] sm:tracking-[0.3em]">
             <Image
@@ -444,7 +444,7 @@ export default function ClassementPage() {
         <div className="mt-2 w-full overflow-x-auto">
             <div className="max-h-[1080px] overflow-y-auto">
               <table className="w-full min-w-[980px] md:min-w-[1320px] border-collapse text-left text-sm md:text-base">
-              <thead className="border-y border-white/15 text-slate-300">
+              <thead className="sticky top-0 z-20 bg-slate-950/70 backdrop-blur-xl border-y border-white/15 text-slate-300">
                 <tr>
                   <th className="sticky left-0 z-30 w-10 min-w-10 bg-slate-950 px-1.5 py-2 text-center whitespace-nowrap md:static md:w-auto md:min-w-0 md:px-2 md:py-3">{t.seed}</th>
                   <th className="sticky left-10 z-30 w-[1%] min-w-0 bg-slate-950 pl-1 pr-0 py-2 whitespace-nowrap text-slate-200 md:static md:w-auto md:min-w-0 md:pr-0 md:py-3">{t.team}</th>

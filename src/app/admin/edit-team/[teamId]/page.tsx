@@ -155,8 +155,25 @@ export default function EditTeamPage() {
     const totalInches = cm / 2.54;
     const feet = Math.floor(totalInches / 12);
     const inches = Math.round(totalInches % 12);
+    // Handle rounding to 12 inches → bump feet
+    if (inches === 12) return { feet: feet + 1, inches: 0 };
     return { feet, inches };
   };
+
+  // Build height options from 4'8" to 7'7" (1-inch increments)
+  const heightOptions = (() => {
+    const options: { feet: number; inches: number; cm: number }[] = [];
+    for (let f = 4; f <= 7; f++) {
+      const startIn = f === 4 ? 8 : 0;
+      const endIn = f === 7 ? 7 : 11;
+      for (let i = startIn; i <= endIn; i++) {
+        const totalInches = f * 12 + i;
+        const cm = Math.round(totalInches * 2.54);
+        options.push({ feet: f, inches: i, cm });
+      }
+    }
+    return options;
+  })();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(firebaseAuth, async (user) => {
@@ -792,7 +809,7 @@ export default function EditTeamPage() {
   return (
     <div className="fixed inset-0 overflow-auto bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
       {/* Header */}
-      <div className="sticky top-0 z-30 border-b border-white/10 bg-slate-950/95 backdrop-blur-xl">
+      <div className="sticky top-0 live-pin-offset z-30 border-b border-white/10 bg-slate-950/95 backdrop-blur-xl">
         <div className="mx-auto max-w-7xl px-3 sm:px-6 py-3 sm:py-4">
           <div className="flex items-center justify-between gap-2 sm:gap-4">
             <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
@@ -1321,9 +1338,6 @@ export default function EditTeamPage() {
                   <label className="block text-xs text-slate-300 mb-1">Height</label>
                   <div
                     onClick={() => setShowHeightPicker(!showHeightPicker)}
-                    onBlur={() => {
-                      setTimeout(() => setShowHeightPicker(false), 200);
-                    }}
                     tabIndex={0}
                     className="w-full rounded border border-white/20 bg-white/5 px-3 py-2 text-white text-sm cursor-pointer flex justify-between items-center"
                   >
@@ -1334,40 +1348,57 @@ export default function EditTeamPage() {
                   </div>
                   
                   {showHeightPicker && (
-                    <div className="absolute z-10 mt-1 w-full rounded border border-white/20 bg-slate-800 shadow-lg">
+                    <div className="absolute z-10 mt-1 w-full min-w-[320px] rounded-xl border border-white/20 bg-slate-800 shadow-2xl">
                       <div className="p-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-white font-semibold">Select Height</span>
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-white font-semibold text-sm">Select Height</span>
                           <button
                             type="button"
                             onClick={() => setShowHeightPicker(false)}
-                            className="text-slate-400 hover:text-white"
+                            className="text-slate-400 hover:text-white text-lg leading-none"
                           >
                             ✕
                           </button>
                         </div>
-                        <div className="h-48 overflow-y-scroll border border-white/10 rounded bg-white/5 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-transparent">
-                          {Array.from({ length: 101 }, (_, i) => 150 + i).map((cm) => {
-                            const { feet, inches } = cmToFeetInches(cm);
+                        <div className="max-h-64 overflow-y-auto pr-1 space-y-1 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-transparent">
+                          {heightOptions.map((opt) => {
+                            const isSelected = heightCm === opt.cm;
                             return (
-                              <button
-                                key={cm}
-                                type="button"
-                                onClick={() => {
-                                  setHeightCm(cm);
-                                  setNewPlayerForm({ ...newPlayerForm, height: `${feet}'${inches}"` });
-                                  setShowHeightPicker(false);
-                                }}
-                                className={`w-full px-4 py-2 text-left hover:bg-white/10 flex justify-between items-center ${
-                                  heightCm === cm ? 'bg-white/20 text-white font-semibold' : 'text-slate-300'
+                              <label
+                                key={opt.cm}
+                                className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors ${
+                                  isSelected
+                                    ? "bg-orange-500/20 border border-orange-400/40"
+                                    : "hover:bg-white/10 border border-transparent"
                                 }`}
                               >
-                                <span>{cm} cm</span>
-                                <span className="text-slate-400">{feet}&apos;{inches}&quot;</span>
-                              </button>
+                                <input
+                                  type="radio"
+                                  name="heightPicker"
+                                  checked={isSelected}
+                                  onChange={() => {
+                                    setHeightCm(opt.cm);
+                                    setNewPlayerForm({ ...newPlayerForm, height: `${opt.feet}'${opt.inches}"` });
+                                  }}
+                                  className="accent-orange-500 w-4 h-4 flex-shrink-0"
+                                />
+                                <span className={`flex-1 text-sm font-medium ${isSelected ? "text-white" : "text-slate-300"}`}>
+                                  {opt.feet}&apos;{opt.inches}&quot;
+                                </span>
+                                <span className={`text-sm tabular-nums ${isSelected ? "text-orange-300" : "text-slate-500"}`}>
+                                  {opt.cm} cm
+                                </span>
+                              </label>
                             );
                           })}
                         </div>
+                        <button
+                          type="button"
+                          onClick={() => setShowHeightPicker(false)}
+                          className="mt-3 w-full rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold py-2 transition-colors"
+                        >
+                          Done
+                        </button>
                       </div>
                     </div>
                   )}

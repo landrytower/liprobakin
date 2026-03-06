@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import { collection, query, where, getDocs, orderBy, limit } from "firebase/firestore";
 import { firebaseDB } from "@/lib/firebase";
+import { parseCongoDateTime } from "@/lib/congo-time";
 import type { UserProfile } from "@/types/user";
 
 interface PlayerStats {
@@ -477,21 +478,11 @@ export default function PlayerProfilePopup({ userProfile, onClose, language }: P
                   </div>
                   <div className="text-xs text-slate-300 mt-1">
                     {(() => {
-                      const rawDate = nextGame.date as unknown;
-                      let parsedDate: Date | null = null;
-
-                      if (rawDate instanceof Date) {
-                        parsedDate = rawDate;
-                      } else if (typeof rawDate === "string" || typeof rawDate === "number") {
-                        const candidate = new Date(rawDate);
-                        parsedDate = isNaN(candidate.getTime()) ? null : candidate;
-                      } else if (rawDate && typeof rawDate === "object" && "toDate" in rawDate) {
-                        const candidate = (rawDate as { toDate?: () => Date }).toDate?.();
-                        parsedDate = candidate && !isNaN(candidate.getTime()) ? candidate : null;
-                      }
+                      // Convert stored Congo TZ date+time to user's local timezone
+                      const parsedDate = parseCongoDateTime(nextGame.date, nextGame.time);
 
                       if (!parsedDate) {
-                        return typeof rawDate === "string" ? rawDate : "TBD";
+                        return typeof nextGame.date === "string" ? nextGame.date : "TBD";
                       }
 
                       const dateStr = parsedDate.toLocaleDateString("en-US", {

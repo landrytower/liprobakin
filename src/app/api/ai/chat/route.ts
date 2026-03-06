@@ -284,7 +284,7 @@ async function buildCurrentLeagueContext(): Promise<string> {
       })
       .slice(0, 15);
 
-    pushLine("=== UPCOMING GAMES ===");
+    pushLine("=== UPCOMING GAMES (all times in Congo/Kinshasa timezone, UTC+1) ===");
     if (upcomingGames.length > 0) {
       upcomingGames.forEach((game) => {
         const genderLabel = game.gender === "women" ? "[WOMEN]" : "[MEN]";

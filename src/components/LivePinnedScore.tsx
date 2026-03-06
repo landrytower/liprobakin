@@ -60,10 +60,19 @@ export default function LivePinnedScore() {
   useEffect(() => {
     if (!pinnedGameId) return;
 
-    const gameRef = doc(firebaseDB, "games", pinnedGameId);
-    const unsubscribe = onSnapshot(
-      gameRef,
-      (snapshot) => {
+    const safePinnedId = pinnedGameId.trim();
+    if (!safePinnedId || safePinnedId.includes("/") || /\s/.test(safePinnedId)) {
+      clearPinned();
+      setLiveGame(null);
+      return;
+    }
+
+    let unsubscribe: (() => void) | null = null;
+    try {
+      const gameRef = doc(firebaseDB, "games", safePinnedId);
+      unsubscribe = onSnapshot(
+        gameRef,
+        (snapshot) => {
         if (!snapshot.exists()) {
           clearPinned();
           setLiveGame(null);
@@ -135,7 +144,7 @@ export default function LivePinnedScore() {
             : undefined;
 
         setLiveGame({
-          id: pinnedGameId,
+          id: safePinnedId,
           homeTeam: String(data.homeTeam || data.team1 || data.homeTeamName || ""),
           awayTeam: String(data.awayTeam || data.team2 || data.awayTeamName || ""),
           homeScore,
@@ -144,14 +153,22 @@ export default function LivePinnedScore() {
           liveClock,
           activeTimeoutSide,
         });
-      },
-      (error) => {
-        console.error("Error subscribing to pinned live game:", error);
-        setLiveGame(null);
-      }
-    );
+        },
+        (error) => {
+          console.error("Error subscribing to pinned live game:", error);
+          setLiveGame(null);
+        }
+      );
+    } catch (error) {
+      console.error("Invalid pinned live game id:", error);
+      clearPinned();
+      setLiveGame(null);
+      return;
+    }
 
-    return () => unsubscribe();
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
   }, [pinnedGameId]);
 
   useEffect(() => {

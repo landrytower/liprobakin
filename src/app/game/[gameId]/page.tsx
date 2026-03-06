@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -793,15 +793,8 @@ export default function GamePage() {
         ? game.awayTeamName || t.away
         : "";
 
-  const pinButtonLabel = useMemo(() => {
-    if (isLivePinned) return t.unpinLiveScore;
-    return t.pinLiveScore;
-  }, [isLivePinned, t.pinLiveScore, t.unpinLiveScore]);
-
-  const pinBadgeLabel = useMemo(() => {
-    if (!isLivePinned) return "";
-    return t.pinnedLiveScore;
-  }, [isLivePinned, t.pinnedLiveScore]);
+  const pinButtonLabel = isLivePinned ? t.unpinLiveScore : t.pinLiveScore;
+  const pinBadgeLabel = isLivePinned ? t.pinnedLiveScore : "";
 
   const togglePinnedLiveScore = () => {
     if (isLivePinned) {

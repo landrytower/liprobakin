@@ -402,9 +402,11 @@ export default function LiveConsolePage() {
 
           <div className="grid gap-3 md:gap-4 md:grid-cols-[1fr_auto_1fr] md:items-center">
             <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-3 sm:p-6">
-              <div className="mb-3 flex items-center gap-3">
+              <div className="mb-3 flex min-w-0 items-center gap-3">
                 {selectedGame.awayTeamLogo ? <Image src={selectedGame.awayTeamLogo} alt={selectedGame.awayTeamName || "Away"} width={44} height={44} className="h-11 w-11 rounded-full object-cover" unoptimized /> : null}
-                <p className="truncate text-lg font-semibold text-white">{selectedGame.awayTeamName}</p>
+                <p className="min-w-0 flex-1 truncate text-lg font-semibold text-white" title={selectedGame.awayTeamName || ""}>
+                  {selectedGame.awayTeamName}
+                </p>
               </div>
               {editingSide === "away" ? (
                 <input
@@ -521,9 +523,11 @@ export default function LiveConsolePage() {
             </div>
 
             <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-3 sm:p-6">
-              <div className="mb-3 flex items-center gap-3">
+              <div className="mb-3 flex min-w-0 items-center gap-3">
                 {selectedGame.homeTeamLogo ? <Image src={selectedGame.homeTeamLogo} alt={selectedGame.homeTeamName || "Home"} width={44} height={44} className="h-11 w-11 rounded-full object-cover" unoptimized /> : null}
-                <p className="truncate text-lg font-semibold text-white">{selectedGame.homeTeamName}</p>
+                <p className="min-w-0 flex-1 truncate text-lg font-semibold text-white" title={selectedGame.homeTeamName || ""}>
+                  {selectedGame.homeTeamName}
+                </p>
               </div>
               {editingSide === "home" ? (
                 <input

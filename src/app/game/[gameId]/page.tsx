@@ -1208,7 +1208,7 @@ export default function GamePage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-3 py-5 sm:px-4 sm:py-8">
+      <main className="live-pin-content-offset mx-auto max-w-6xl px-3 py-5 sm:px-4 sm:py-8">
         {/* Game Header - Score Display */}
         <div className="mb-6 sm:mb-8">
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-4">

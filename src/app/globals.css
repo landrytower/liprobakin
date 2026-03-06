@@ -21,6 +21,10 @@ html[data-live-pin="1"] .live-pin-offset {
   top: var(--live-pin-height) !important;
 }
 
+html[data-live-pin="1"] .live-pin-content-offset {
+  padding-top: var(--live-pin-height);
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useAdmin } from "../../layout";
 import { firebaseDB, firebaseStorage } from "@/lib/firebase";
+import { updateLiveGameWithAnnouncement } from "@/lib/liveAnnouncements";
 import { collection, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from "firebase/firestore";
 import { deleteObject, getDownloadURL, ref as storageRef, uploadBytesResumable } from "firebase/storage";
 
@@ -387,17 +388,21 @@ export default function GameMediaPage() {
       setHighlightUrl(data.watchUrl);
       setYoutubeStudioUrl(data.studioUrl || "");
 
-      await updateDoc(doc(firebaseDB, "games", selectedGame.id), {
-        streamUrl: data.watchUrl,
-        youtubeUrl: data.watchUrl,
-        highlightsVideoUrl: data.watchUrl,
-        highlightVideoUrl: data.watchUrl,
-        status: "live",
-        completed: false,
-        youtubeStudioUrl: data.studioUrl || null,
-        youtubeIngestUrl: data.rtmpUrl || null,
-        youtubeStreamKey: data.streamKey || null,
-        updatedAt: serverTimestamp(),
+      await updateLiveGameWithAnnouncement({
+        gameId: selectedGame.id,
+        homeTeamName: selectedGame.homeTeamName,
+        awayTeamName: selectedGame.awayTeamName,
+        patch: {
+          streamUrl: data.watchUrl,
+          youtubeUrl: data.watchUrl,
+          highlightsVideoUrl: data.watchUrl,
+          highlightVideoUrl: data.watchUrl,
+          status: "live",
+          completed: false,
+          youtubeStudioUrl: data.studioUrl || null,
+          youtubeIngestUrl: data.rtmpUrl || null,
+          youtubeStreamKey: data.streamKey || null,
+        },
       });
 
       setStatus({ type: "success", message: t.youtubeLiveCreated });

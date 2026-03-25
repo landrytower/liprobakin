@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import Image from "next/image";
 import { doc, onSnapshot } from "firebase/firestore";
-import { firebaseDB } from "@/lib/firebase";
+import { firebaseDB } from "@/lib/firebase/firestore";
 
 type Message = {
   id: string;
@@ -71,7 +71,7 @@ export default function LiprobakinAI() {
       },
       (error) => {
         console.error("Failed to read AI visibility settings:", error);
-        setIsAiEnabled(true);
+        setIsAiEnabled(false);
       }
     );
 

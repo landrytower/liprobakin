@@ -1,6 +1,7 @@
 import { initializeApp, getApps, cert, type App } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
+import { getStorage } from "firebase-admin/storage";
 
 // Initialize Firebase Admin only on server side
 let adminApp: App | undefined;
@@ -27,6 +28,7 @@ function initializeFirebaseAdmin() {
             privateKey,
           }),
           projectId,
+          storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET?.trim(),
         });
         console.log("Firebase Admin initialized successfully");
       } catch (error) {
@@ -53,4 +55,9 @@ export function getAdminAuth() {
 export function getAdminFirestore() {
   const app = initializeFirebaseAdmin();
   return getFirestore(app);
+}
+
+export function getAdminStorage() {
+  const app = initializeFirebaseAdmin();
+  return getStorage(app);
 }

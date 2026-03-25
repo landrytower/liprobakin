@@ -7,6 +7,7 @@ import teamTrafficRaw from "./exports/teamTraffic.json";
 import teamsRaw from "./exports/teams.json";
 import { CONGO_TIMEZONE, parseCongoDateTime } from "@/lib/congo-time";
 import { formatTeamDisplayName } from "@/lib/team-name";
+import { resolveTeamLogo } from "@/lib/team-logo";
 import { normalizeTeamGender } from "@/lib/team-gender";
 
 type FirestoreTimestamp = {
@@ -403,71 +404,16 @@ const derivedWomenStandings: StandingRow[] = combinedWomenStandings.map((standin
   lastTen: `${standing.wins ?? 0}-${standing.losses ?? 0}`,
 }));
 
-const normalizeTeamKey = (city?: string, name?: string) =>
-  [city, name].filter(Boolean).join(" ").trim().toLowerCase();
-
-const teamLogoOverrides: Record<string, string> = {
-  "espoir fukas": "/logos/Males/Espoir Fukash.png",
-  "espoir fukash": "/logos/Males/Espoir Fukash.png",
-  "city kauka": "/logos/Males/city kauka.jpg",
-  "binza city": "/logos/Males/binza_city.jpg",
-  "ballers": "/logos/Males/Ballers.jpg",
-  "nmg": "/logos/Males/nmg.jpg",
-  "ngaba basket center": "/logos/Males/ngaba_basket_center.jpg",
-  "ngaba basketball center": "/logos/Males/ngaba_basket_center.jpg",
-  "tourbillon": "/logos/Females/tourbillon.jpg",
-  "csm": "/logos/Males/csm.jpg",
-  "raphael": "/logos/Males/raphael.jpg",
-  "police": "/logos/Males/police.jpg",
-  "bana lingwala": "/logos/Males/bana lingwala.jpg",
-  "jourdain": "/logos/Males/jourdain.jpg",
-  "hatari": "/logos/Females/hatari.jpg",
-  "yellow center": "/logos/Females/yellow star.jpg",
-  "one team": "/logos/Males/one_team.jpg",
-  "cnss": "/logos/Females/cnss.jpg",
-  "sctp": "/logos/Males/sctp.jpg",
-  "ajakm": "/logos/Females/ajakm.jpg",
-  "rich": "/logos/Males/rich.jpg",
-  "molokai": "/logos/Males/molokai.jpg",
-  "maison des jeunes": "/logos/Females/maison_des_jeunes.jpg",
-  "opportunidade": "/logos/Males/oportunidade.jpg",
-  "oportunidade": "/logos/Males/oportunidade.jpg",
-  "yolo": "/logos/Females/yolo.jpg",
-  "heritage": "/logos/Males/heritage.jpg",
-  "figuier": "/logos/Males/figuier.jpg",
-  "mboka mboka": "/logos/Females/mboka_mboka.jpg",
-  "corridor de l'espoir": "/logos/Females/corridor de l'espoir.jpg",
-  "marche de la liberte": "/logos/Males/marche_de_la liberte.jpg",
-  "ngaliema": "/logos/Males/ngaliema.jpg",
-  "terreur": "/logos/Males/terreur.jpg",
-  "masano": "/logos/Males/masano.jpg",
-  "vita club": "/logos/Females/vita_club.jpg",
-  "j&a": "/logos/Males/j&a.jpg",
-  "ogks": "/logos/Females/OGSK.jpg",
-  "new gen": "/logos/Males/New_Gen.png",
-  "gen": "/logos/Males/New_Gen.png",
-  "don bosco": "/logos/Females/don bosco.jpg",
-  "bosco": "/logos/Females/don bosco.jpg",
-  "inri": "/logos/Females/inri.jpg",
-  "dcmp": "/logos/liprobakin.png",
-};
-
 const mapTeamToFranchise = (team: FirestoreTeamDoc): Franchise => {
   const colors: [string, string] = Array.isArray(team.colors) && team.colors.length >= 2
     ? [team.colors[0], team.colors[1]]
     : ["#1e293b", "#0f172a"];
 
-  const combinedKey = normalizeTeamKey(team.city, team.name);
-  const nameOnlyKey = normalizeTeamKey(undefined, team.name);
-  const overrideLogo = teamLogoOverrides[combinedKey] ?? teamLogoOverrides[nameOnlyKey];
-
-  const logo = overrideLogo ?? team.logo ?? "/logos/liprobakin.png";
-
   return {
     city: team.city ?? "",
     name: team.name ?? team.id,
     colors,
-    logo,
+    logo: resolveTeamLogo(team),
   };
 };
 
@@ -831,6 +777,7 @@ export type RosterPlayer = {
   firstName?: string;
   lastName?: string;
   number: number;
+  jerseyNumber?: string;
   height: string;
   headshot?: string;
   position?: string;

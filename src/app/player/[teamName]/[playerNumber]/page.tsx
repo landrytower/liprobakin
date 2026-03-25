@@ -1,12 +1,13 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { firebaseDB } from "@/lib/firebase";
 import { formatTeamDisplayName } from "@/lib/team-name";
+import { normalizeTeamGender } from "@/lib/team-gender";
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { RosterPlayer } from "@/data/febaco";
 import { franchises, franchisesWomen } from "@/data/febaco";
@@ -181,11 +182,14 @@ type GameLog = {
 export default function PlayerProfilePage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, userProfile } = useAuth();
   const { language } = useLanguage();
   const t = translations[language];
   const teamName = decodeURIComponent(params.teamName as string);
   const playerNumber = params.playerNumber as string;
+  const genderParam = searchParams.get("gender");
+  const requestedGender = genderParam ? normalizeTeamGender(genderParam, undefined, "men") : null;
   
   const [player, setPlayer] = useState<RosterPlayer | null>(null);
   const [loading, setLoading] = useState(true);
@@ -216,7 +220,9 @@ export default function PlayerProfilePage() {
         let targetTeamData: Record<string, unknown> | null = null;
         const normalizedRequestedTeam = normalizeTeamLabel(teamName);
         
-        // Find the team document that matches our team name
+        // Find ALL team documents that match our team name (could be men and women versions)
+        const matchingTeams: Array<{ doc: typeof teamsSnapshot.docs[0]; data: Record<string, unknown> }> = [];
+        
         for (const teamDoc of teamsSnapshot.docs) {
           const teamData = teamDoc.data();
           const teamDocName = teamData.name ?? "";
@@ -233,9 +239,31 @@ export default function PlayerProfilePage() {
             .filter(Boolean);
 
           if (candidates.includes(normalizedRequestedTeam)) {
-            targetTeamData = teamData as Record<string, unknown>;
-            playerTeamId = teamDoc.id;
-            break;
+            matchingTeams.push({ doc: teamDoc, data: teamData as Record<string, unknown> });
+          }
+        }
+        
+        // If we have a gender parameter, try to find the team with matching gender
+        if (matchingTeams.length > 0) {
+          if (requestedGender && matchingTeams.length > 1) {
+            // Find team with matching gender
+            const genderMatch = matchingTeams.find(({ data }) => {
+              const teamGender = normalizeTeamGender(data?.gender as string | undefined, data?.logo as string | undefined, "men");
+              return teamGender === requestedGender;
+            });
+            
+            if (genderMatch) {
+              targetTeamData = genderMatch.data;
+              playerTeamId = genderMatch.doc.id;
+            } else {
+              // Fall back to first match
+              targetTeamData = matchingTeams[0].data;
+              playerTeamId = matchingTeams[0].doc.id;
+            }
+          } else {
+            // Single match or no gender param, use first match
+            targetTeamData = matchingTeams[0].data;
+            playerTeamId = matchingTeams[0].doc.id;
           }
         }
         
@@ -254,7 +282,7 @@ export default function PlayerProfilePage() {
         const rosterSnapshot = await getDocs(rosterRef);
         const teamPlayers = rosterSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as RosterPlayer & { id: string }));
         
-        foundPlayer = teamPlayers.find((p) => String(p.number) === playerNumber) || null;
+        foundPlayer = teamPlayers.find((p) => String(p.jerseyNumber ?? p.number) === playerNumber) || null;
         
         if (!foundPlayer) {
           setLoading(false);
@@ -356,7 +384,7 @@ export default function PlayerProfilePage() {
     }
     
     loadPlayer();
-  }, [teamName, playerNumber]);
+  }, [teamName, playerNumber, requestedGender]);
 
   if (loading) {
     return (
@@ -463,7 +491,7 @@ export default function PlayerProfilePage() {
                 </div>
               ) : (
                 <div className="flex h-40 w-40 flex-shrink-0 items-center justify-center rounded-2xl border-4 border-white/20 bg-white/10 text-5xl font-bold text-white sm:h-56 sm:w-56 sm:rounded-3xl sm:text-6xl lg:h-64 lg:w-64">
-                  #{player.number}
+                  #{player.jerseyNumber ?? player.number}
                 </div>
               )}
 
@@ -483,7 +511,7 @@ export default function PlayerProfilePage() {
                     <p className="text-sm font-semibold uppercase tracking-wider text-blue-200">
                       {teamName}
                     </p>
-                    <p className="text-xs uppercase tracking-wider text-blue-300">#{player.number}</p>
+                    <p className="text-xs uppercase tracking-wider text-blue-300">#{player.jerseyNumber ?? player.number}</p>
                   </div>
                   {/* Import Tag */}
                   {player.isImport && (

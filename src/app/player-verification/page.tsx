@@ -652,7 +652,7 @@ export default function PlayerVerificationPage() {
                   >
                     <span>{heightCm} cm</span>
                     <span className="text-slate-400">
-                      {cmToFeetInches(heightCm).feet}'{cmToFeetInches(heightCm).inches}"
+                      {cmToFeetInches(heightCm).feet}&apos;{cmToFeetInches(heightCm).inches}&quot;
                     </span>
                   </div>
                   
@@ -686,7 +686,7 @@ export default function PlayerVerificationPage() {
                                 }`}
                               >
                                 <span>{cm} cm</span>
-                                <span className="text-slate-400">{feet}'{inches}"</span>
+                                <span className="text-slate-400">{feet}&apos;{inches}&quot;</span>
                               </button>
                             );
                           })}

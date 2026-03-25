@@ -619,11 +619,16 @@ export default function GamePage() {
   useEffect(() => {
     if (activePhotoIndex === null) return;
     if (gamePhotos.length === 0) {
-      setActivePhotoIndex(null);
-      return;
+      const frameId = window.requestAnimationFrame(() => {
+        setActivePhotoIndex(null);
+      });
+      return () => window.cancelAnimationFrame(frameId);
     }
     if (activePhotoIndex >= gamePhotos.length) {
-      setActivePhotoIndex(0);
+      const frameId = window.requestAnimationFrame(() => {
+        setActivePhotoIndex(0);
+      });
+      return () => window.cancelAnimationFrame(frameId);
     }
   }, [activePhotoIndex, gamePhotos.length]);
 
@@ -667,19 +672,25 @@ export default function GamePage() {
 
   useEffect(() => {
     if (activeTab !== "overview" || !game) {
-      setOverviewAnimationProgress(0);
-      return;
+      const frameId = window.requestAnimationFrame(() => {
+        setOverviewAnimationProgress(0);
+      });
+      return () => window.cancelAnimationFrame(frameId);
     }
 
     if (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      setOverviewAnimationProgress(1);
-      return;
+      const frameId = window.requestAnimationFrame(() => {
+        setOverviewAnimationProgress(1);
+      });
+      return () => window.cancelAnimationFrame(frameId);
     }
 
     let animationFrameId = 0;
     const duration = 1800;
     const startTime = performance.now();
-    setOverviewAnimationProgress(0);
+    const initialFrameId = window.requestAnimationFrame(() => {
+      setOverviewAnimationProgress(0);
+    });
 
     const animate = (now: number) => {
       const rawProgress = Math.min((now - startTime) / duration, 1);
@@ -702,7 +713,10 @@ export default function GamePage() {
     };
 
     animationFrameId = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(animationFrameId);
+    return () => {
+      cancelAnimationFrame(initialFrameId);
+      cancelAnimationFrame(animationFrameId);
+    };
   }, [activeTab, gameId, game]);
 
   // Update PiP window when game data changes

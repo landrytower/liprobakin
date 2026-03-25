@@ -1,7 +1,6 @@
 import {
   collection,
   getDocs,
-  query,
   serverTimestamp,
   where,
   writeBatch,
@@ -149,14 +148,14 @@ export async function recalculateLeagueStatsFromGames(): Promise<void> {
     getDocs(collection(firebaseDB, "playerGameStats")),
   ]);
 
-  const teamRecords = new Map<string, { wins: number; losses: number }>();
+  const teamRecords = new Map<string, { wins: number; losses: number; totalPoints: number }>();
   const totalsByTeamPlayer = new Map<string, Map<string, Totals>>();
   const totalsByPlayer = new Map<string, Totals>();
   const completedGameIds = new Set<string>();
   const processedGamePlayerKeys = new Set<string>();
 
   teamsSnapshot.docs.forEach((teamDoc) => {
-    teamRecords.set(teamDoc.id, { wins: 0, losses: 0 });
+    teamRecords.set(teamDoc.id, { wins: 0, losses: 0, totalPoints: 0 });
     totalsByTeamPlayer.set(teamDoc.id, new Map<string, Totals>());
   });
 
@@ -168,6 +167,8 @@ export async function recalculateLeagueStatsFromGames(): Promise<void> {
     const winnerId = getString(gameData.winnerId) || getString(gameData.winnerTeamId);
     const homeTeamId = getString(gameData.homeTeamId);
     const awayTeamId = getString(gameData.awayTeamId);
+    const homeScore = toNumber(gameData.homeScore);
+    const awayScore = toNumber(gameData.awayScore);
     const completed = status === "completed" || gameData.completed === true || Boolean(winnerId);
 
     if (!completed) return;
@@ -185,6 +186,20 @@ export async function recalculateLeagueStatsFromGames(): Promise<void> {
         if (loserRecord) {
           loserRecord.losses += 1;
         }
+      }
+    }
+
+    if (homeTeamId && teamRecords.has(homeTeamId)) {
+      const homeRecord = teamRecords.get(homeTeamId);
+      if (homeRecord) {
+        homeRecord.totalPoints += homeScore;
+      }
+    }
+
+    if (awayTeamId && teamRecords.has(awayTeamId)) {
+      const awayRecord = teamRecords.get(awayTeamId);
+      if (awayRecord) {
+        awayRecord.totalPoints += awayScore;
       }
     }
 
@@ -247,12 +262,13 @@ export async function recalculateLeagueStatsFromGames(): Promise<void> {
     const teamId = teamDoc.id;
     const rosterSnapshot = await getDocs(collection(firebaseDB, `teams/${teamId}/roster`));
     const rosterTotals = totalsByTeamPlayer.get(teamId) ?? new Map<string, Totals>();
-    const record = teamRecords.get(teamId) ?? { wins: 0, losses: 0 };
+    const record = teamRecords.get(teamId) ?? { wins: 0, losses: 0, totalPoints: 0 };
 
     const batch = writeBatch(firebaseDB);
     batch.update(teamDoc.ref, {
       wins: record.wins,
       losses: record.losses,
+      totalPoints: record.totalPoints,
       updatedAt: serverTimestamp(),
     });
 

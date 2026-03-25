@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { collection, doc, getDoc, getDocs, updateDoc, addDoc, deleteDoc, query, orderBy } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, updateDoc, addDoc, deleteDoc, query, orderBy, serverTimestamp } from "firebase/firestore";
 import { firebaseDB, firebaseAuth, firebaseStorage } from "@/lib/firebase";
 import { logAuditAction } from "@/lib/auditLog";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
@@ -10,15 +10,31 @@ import { onAuthStateChanged, User } from "firebase/auth";
 import { getAdminUser } from "@/lib/adminAuth";
 import { normalizeTeamGender } from "@/lib/team-gender";
 import type { AdminUser } from "@/types/admin";
+import { recomputeHomeProjectorCache } from "@/lib/homeProjectorCache";
 import Image from "next/image";
 import { countries, flagFromCode, nameForCountryCode } from "@/data/countries";
 import { useLanguage } from "@/contexts/LanguageContext";
+
+const JERSEY_PATTERN = /^(?:00|0|[1-9]\d?)$/;
+
+function getPlayerJerseyNumber(player: { jerseyNumber?: unknown; number?: unknown }): string {
+  const jerseyNumber = String(player.jerseyNumber ?? "").trim();
+  if (jerseyNumber) return jerseyNumber;
+  const numberValue = player.number;
+  return numberValue === undefined || numberValue === null ? "" : String(numberValue).trim();
+}
+
+function jerseyToSortNumber(jerseyNumber: string): number {
+  const parsed = parseInt(jerseyNumber, 10);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
 
 type Player = {
   id: string;
   teamId: string;
   teamName: string;
   number: number;
+  jerseyNumber?: string;
   firstName: string;
   lastName: string;
   position: string;
@@ -276,11 +292,23 @@ export default function EditTeamPage() {
         orderBy("number", "asc")
       );
       const playersSnapshot = await getDocs(playersQuery);
-      const playersData = playersSnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as Player[];
-      setPlayers(playersData.sort((a, b) => a.number - b.number));
+      const playersDataRaw = playersSnapshot.docs.map((playerDoc) => {
+        const data = playerDoc.data() as Record<string, unknown>;
+        const jerseyNumber = getPlayerJerseyNumber({ jerseyNumber: data.jerseyNumber, number: data.number });
+        const number = typeof data.number === "number" ? data.number : jerseyToSortNumber(jerseyNumber);
+        return {
+          id: playerDoc.id,
+          ...(data as unknown as Omit<Player, "id" | "number" | "jerseyNumber">),
+          number,
+          jerseyNumber: jerseyNumber || undefined,
+        } as Player;
+      });
+      playersDataRaw.sort((a, b) => {
+        const numDiff = a.number - b.number;
+        if (numDiff !== 0) return numDiff;
+        return getPlayerJerseyNumber(a).localeCompare(getPlayerJerseyNumber(b));
+      });
+      setPlayers(playersDataRaw);
 
       // Load coaching staff for this team
       const coachStaffQuery = query(
@@ -442,8 +470,13 @@ export default function EditTeamPage() {
     if (!team || !user) return;
 
     const jerseyValue = newPlayerForm.number.trim();
-    if (!/^(?:00|0|[1-9]\d?)$/.test(jerseyValue)) {
+    if (!JERSEY_PATTERN.test(jerseyValue)) {
       alert("Jersey number must be 00, 0, or 1-99.");
+      return;
+    }
+
+    if (players.some((p) => getPlayerJerseyNumber(p) === jerseyValue)) {
+      alert(`Jersey number ${jerseyValue} is already taken on this team.`);
       return;
     }
 
@@ -463,7 +496,8 @@ export default function EditTeamPage() {
       }
 
       const newPlayerRef = await addDoc(collection(firebaseDB, "teams", team.id, "roster"), {
-        number: parseInt(jerseyValue, 10),
+        number: jerseyToSortNumber(jerseyValue),
+        jerseyNumber: jerseyValue,
         firstName: newPlayerForm.firstName,
         lastName: newPlayerForm.lastName,
         position: newPlayerForm.position,
@@ -488,10 +522,14 @@ export default function EditTeamPage() {
       await logAuditAction("player_added", user.uid, user.email || "unknown", "player", newPlayerRef.id, `${newPlayerForm.firstName} ${newPlayerForm.lastName}`, {
         teamName: team.name,
         teamId: team.id,
-        jerseyNumber: newPlayerForm.number,
+        jerseyNumber: jerseyValue,
         position: newPlayerForm.position,
         nationality: newPlayerForm.nationality
       });
+      await updateDoc(doc(firebaseDB, "teams", team.id), {
+        updatedAt: serverTimestamp(),
+      });
+      await recomputeHomeProjectorCache();
 
       setNewPlayerForm({
         firstName: "",
@@ -544,9 +582,13 @@ export default function EditTeamPage() {
       await logAuditAction("player_deleted", user.uid, user.email || "unknown", "player", playerId, playerName, {
         teamName: team.name,
         teamId: team.id,
-        jerseyNumber: playerToDelete?.number,
+        jerseyNumber: playerToDelete ? getPlayerJerseyNumber(playerToDelete) : undefined,
         position: playerToDelete?.position
       });
+      await updateDoc(doc(firebaseDB, "teams", team.id), {
+        updatedAt: serverTimestamp(),
+      });
+      await recomputeHomeProjectorCache();
       
       // Reload data to confirm deletion
       await loadData();
@@ -566,6 +608,17 @@ export default function EditTeamPage() {
     if (!team || !user) return;
     try {
       setSaving(true);
+
+      const jerseyValue = getPlayerJerseyNumber(player);
+      if (!JERSEY_PATTERN.test(jerseyValue)) {
+        alert("Jersey number must be 00, 0, or 1-99.");
+        return;
+      }
+
+      if (players.some((p) => p.id !== player.id && getPlayerJerseyNumber(p) === jerseyValue)) {
+        alert(`Jersey number ${jerseyValue} is already taken on this team.`);
+        return;
+      }
       
       let headshotUrl = player.headshot;
       
@@ -576,18 +629,25 @@ export default function EditTeamPage() {
         headshotUrl = await getDownloadURL(storageRef);
       }
       
-      await updateDoc(doc(firebaseDB, "teams", team.id, "roster", player.id), {
-        ...player,
+      const { id: playerId, ...playerData } = player;
+      await updateDoc(doc(firebaseDB, "teams", team.id, "roster", playerId), {
+        ...playerData,
+        number: jerseyToSortNumber(jerseyValue),
+        jerseyNumber: jerseyValue,
         headshot: headshotUrl,
       });
       
       // Audit log for player update
-      await logAuditAction("player_updated", user.uid, user.email || "unknown", "player", player.id, `${player.firstName} ${player.lastName}`, {
+      await logAuditAction("player_updated", user.uid, user.email || "unknown", "player", playerId, `${player.firstName} ${player.lastName}`, {
         teamName: team.name,
         teamId: team.id,
-        jerseyNumber: player.number,
+        jerseyNumber: jerseyValue,
         position: player.position
       });
+      await updateDoc(doc(firebaseDB, "teams", team.id), {
+        updatedAt: serverTimestamp(),
+      });
+      await recomputeHomeProjectorCache();
       
       await loadData();
       setEditingPlayerId(null);
@@ -1702,7 +1762,7 @@ export default function EditTeamPage() {
                         {/* Mobile: Show name and number inline */}
                         <div className="sm:hidden flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="text-lg font-bold text-white">#{player.number}</span>
+                            <span className="text-lg font-bold text-white">#{getPlayerJerseyNumber(player)}</span>
                             <span className="text-white truncate">{player.firstName} {player.lastName}</span>
                           </div>
                           <div className="flex items-center gap-2 text-xs text-slate-400">
@@ -1733,7 +1793,7 @@ export default function EditTeamPage() {
                       <div className="hidden sm:grid flex-1 grid-cols-2 md:grid-cols-5 gap-3 sm:gap-4">
                         <div>
                           <div className="text-xs text-slate-400">Number</div>
-                          <div className="text-lg font-bold text-white">#{player.number}</div>
+                          <div className="text-lg font-bold text-white">#{getPlayerJerseyNumber(player)}</div>
                         </div>
                         <div>
                           <div className="text-xs text-slate-400">Name</div>
@@ -2203,7 +2263,10 @@ function PlayerEditForm({
   onSave: (player: Player, headshotFile?: File | null) => void;
   onCancel: () => void;
 }) {
-  const [form, setForm] = useState(player);
+  const [form, setForm] = useState<Player>(() => ({
+    ...player,
+    jerseyNumber: getPlayerJerseyNumber(player) || undefined,
+  }));
   const [headshotFile, setHeadshotFile] = useState<File | null>(null);
   const [headshotPreview, setHeadshotPreview] = useState<string>("");
   const [editNationalitySearch, setEditNationalitySearch] = useState("");
@@ -2226,9 +2289,18 @@ function PlayerEditForm({
         <div>
           <label className="block text-xs text-slate-400 mb-1">Jersey #</label>
           <input
-            type="number"
-            value={form.number}
-            onChange={(e) => setForm({ ...form, number: parseInt(e.target.value) })}
+            type="text"
+            inputMode="numeric"
+            pattern="^(?:00|0|[1-9]\\d?)$"
+            value={form.jerseyNumber ?? String(form.number)}
+            onChange={(e) => {
+              const value = e.target.value;
+              setForm({
+                ...form,
+                jerseyNumber: value,
+                number: jerseyToSortNumber(value),
+              });
+            }}
             className="w-full rounded border border-white/20 bg-white/5 px-3 py-2 text-white text-sm"
             aria-label="Jersey number"
           />
@@ -2600,7 +2672,21 @@ function PlayerEditForm({
           Cancel
         </button>
         <button
-          onClick={() => onSave(form, headshotFile)}
+          onClick={() => {
+            const jerseyValue = String(form.jerseyNumber ?? form.number ?? "").trim();
+            if (!JERSEY_PATTERN.test(jerseyValue)) {
+              alert("Jersey number must be 00, 0, or 1-99.");
+              return;
+            }
+            onSave(
+              {
+                ...form,
+                jerseyNumber: jerseyValue,
+                number: jerseyToSortNumber(jerseyValue),
+              },
+              headshotFile
+            );
+          }}
           className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-6 py-2 text-sm font-medium text-emerald-300 transition hover:bg-emerald-500/20"
         >
           Save Player

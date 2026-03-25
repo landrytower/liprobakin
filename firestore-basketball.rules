@@ -156,6 +156,52 @@ service cloud.firestore {
       allow read: if true;
       allow create, update, delete: if hasPermission('canPublishNews') || isMasterAdmin();
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // LEAGUE CONTENT (Home + Admin-managed collections)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    match /referees/{refereeId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin() || isMasterAdmin();
+    }
+
+    match /committee/{memberId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin() || isMasterAdmin();
+    }
+
+    match /commission/{memberId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin() || isMasterAdmin();
+    }
+
+    match /venues/{venueId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin() || isMasterAdmin();
+    }
+
+    match /partners/{partnerId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin() || isMasterAdmin();
+    }
+
+    match /publicCache/{cacheId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin() || isMasterAdmin();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // SITE SETTINGS (AI visibility, etc.)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    match /siteSettings/{settingsId} {
+      // Public read so the site can know if AI should be visible
+      allow read: if true;
+
+      // Only admins can update settings
+      allow create, update, delete: if isAdmin() || isMasterAdmin();
+    }
     
     // ─────────────────────────────────────────────────────────────────────────
     // AUDIT LOGS (Admin only, read only for most)

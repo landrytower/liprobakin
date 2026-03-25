@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { sendPasswordResetEmail, ActionCodeSettings } from "firebase/auth";
-import { firebaseAuth } from "@/lib/firebase";
+import { firebaseAuth } from "@/lib/firebase/auth";
 import { collection, query, where, getDocs } from "firebase/firestore";
-import { firebaseDB } from "@/lib/firebase";
+import { firebaseDB } from "@/lib/firebase/firestore";
 
 interface PasswordResetModalProps {
   isOpen: boolean;

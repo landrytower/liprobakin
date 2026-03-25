@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { doc, onSnapshot } from "firebase/firestore";
-import { firebaseDB } from "@/lib/firebase";
+import { firebaseDB } from "@/lib/firebase/firestore";
 import { useLanguage } from "@/contexts/LanguageContext";
 import {
   LIVE_PIN_CHANGED_EVENT,
@@ -63,7 +63,6 @@ export default function LivePinnedScore() {
     const safePinnedId = pinnedGameId.trim();
     if (!safePinnedId || safePinnedId.includes("/") || /\s/.test(safePinnedId)) {
       clearPinned();
-      setLiveGame(null);
       return;
     }
 

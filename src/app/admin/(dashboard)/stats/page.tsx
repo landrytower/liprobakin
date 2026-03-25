@@ -8,6 +8,7 @@ import { formatTeamDisplayName } from "@/lib/team-name";
 import { collection, getDocs, query, orderBy, doc, updateDoc, serverTimestamp, writeBatch, deleteDoc, where } from "firebase/firestore";
 import { logAuditAction } from "@/lib/auditLog";
 import { parseCongoDateTime } from "@/lib/congo-time";
+import { recomputeHomeProjectorCache } from "@/lib/homeProjectorCache";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -110,8 +111,9 @@ const t = {
     loser: "LOSER",
     finalScore: "Final Score",
     save: "Save Game Stats", cancel: "Cancel",
+    saving: "Saving...",
     done: "Done",
-    startersRequired: "Select exactly 5 starters for each team.",
+    startersRequired: "Starters are optional (max 5 per team).",
     starterLimitReached: "You can only select 5 starters.",
     starterTooltip: "Starter (max 5 per team)",
     complete: "Complete",
@@ -177,8 +179,9 @@ const t = {
     loser: "PERDANT",
     finalScore: "Score Final",
     save: "Enregistrer", cancel: "Annuler",
+    saving: "Enregistrement...",
     done: "Terminé",
-    startersRequired: "Sélectionnez exactement 5 titulaires pour chaque équipe.",
+    startersRequired: "Les titulaires sont optionnels (max 5 par équipe).",
     starterLimitReached: "Vous ne pouvez sélectionner que 5 titulaires.",
     starterTooltip: "Titulaire (max 5 par équipe)",
     complete: "Terminé",
@@ -397,7 +400,6 @@ const parseStatsSheetText = (rawText: string): ParsedSheetRow[] => {
     const playerName = cleaned.join(" ").trim();
     if (!playerName) continue;
 
-    const [minPart] = tokens[minuteIndex].split(":");
     const [mmPart, ssPart] = tokens[minuteIndex].split(":");
     const minutesPart = safeNumber(mmPart || "") ?? 0;
     const secondsPart = safeNumber(ssPart || "") ?? 0;
@@ -1481,14 +1483,7 @@ export default function StatsPage() {
         starterIds = trimmed;
       }
 
-      // If PDF gave fewer than 5 (or none), fill with top minutes.
-      if (starterIds.size < 5) {
-        for (const id of byMinutesDesc) {
-          if (starterIds.has(id)) continue;
-          starterIds.add(id);
-          if (starterIds.size >= 5) break;
-        }
-      }
+      // If PDF gave fewer than 5 (or none), keep as-is (starters are optional).
 
       // Apply to grid.
       players.forEach((player) => {
@@ -2300,9 +2295,9 @@ export default function StatsPage() {
     const uniqueTeamIds = Array.from(new Set(teamIds.filter(Boolean)));
     if (uniqueTeamIds.length === 0) return;
 
-    const records = new Map<string, { wins: number; losses: number }>();
+    const records = new Map<string, { wins: number; losses: number; totalPoints: number }>();
     uniqueTeamIds.forEach((teamId) => {
-      records.set(teamId, { wins: 0, losses: 0 });
+      records.set(teamId, { wins: 0, losses: 0, totalPoints: 0 });
     });
 
     const gamesSnap = await getDocs(collection(firebaseDB, "games"));
@@ -2328,6 +2323,7 @@ export default function StatsPage() {
 
       if (!isCompleted || !winnerId) return;
 
+      // Track wins/losses and total points scored
       [homeTeamId, awayTeamId].forEach((teamId) => {
         const record = records.get(teamId);
         if (!record) return;
@@ -2336,15 +2332,22 @@ export default function StatsPage() {
         } else {
           record.losses += 1;
         }
+        // Add points scored by this team
+        if (teamId === homeTeamId && Number.isFinite(homeScore)) {
+          record.totalPoints += homeScore;
+        } else if (teamId === awayTeamId && Number.isFinite(awayScore)) {
+          record.totalPoints += awayScore;
+        }
       });
     });
 
     await Promise.all(
       uniqueTeamIds.map((teamId) => {
-        const record = records.get(teamId) || { wins: 0, losses: 0 };
+        const record = records.get(teamId) || { wins: 0, losses: 0, totalPoints: 0 };
         return updateDoc(doc(firebaseDB, "teams", teamId), {
           wins: record.wins,
           losses: record.losses,
+          totalPoints: record.totalPoints,
           updatedAt: serverTimestamp(),
         });
       })
@@ -2369,11 +2372,6 @@ export default function StatsPage() {
     const expectedWinnerId = winnerMustBeHome ? game.homeTeamId : game.awayTeamId;
     if (winnerId !== expectedWinnerId) {
       setImportMessage({ type: "error", text: "Winner selection must match final score." });
-      return;
-    }
-
-    if (homeStarterCount !== 5 || awayStarterCount !== 5) {
-      setImportMessage({ type: "error", text: copy.startersRequired });
       return;
     }
 
@@ -2459,29 +2457,42 @@ export default function StatsPage() {
         recalculateTeamRosterStats(awayTeamId),
         recalculateTeamRecords([homeTeamId, awayTeamId]),
       ]);
-      
-      await logAuditAction(
-        "game_stats_recorded",
-        currentAdminUser?.id || "unknown",
-        currentAdminUser?.email || "unknown",
-        "game",
-        game.id,
-        `${game.awayTeamName} vs ${game.homeTeamName}`,
-        {
-          winnerTeam: winnerName,
-          loserTeam: loserName,
-          score: `${winScore}-${loseScore}`,
-          gameDate: game.date,
-          venue: game.venue,
-          playerStatsCount: combinedPlayerStats.length,
-        }
-      );
-      
+      await recomputeHomeProjectorCache();
+
+      try {
+        await logAuditAction(
+          "game_stats_recorded",
+          currentAdminUser?.id || "unknown",
+          currentAdminUser?.email || "unknown",
+          "game",
+          game.id,
+          `${game.awayTeamName} vs ${game.homeTeamName}`,
+          {
+            winnerTeam: winnerName,
+            loserTeam: loserName,
+            score: `${winScore}-${loseScore}`,
+            gameDate: game.date,
+            venue: game.venue,
+            playerStatsCount: combinedPlayerStats.length,
+          }
+        );
+      } catch (auditError) {
+        console.error("Game saved but audit log failed:", auditError);
+      }
+
+      await fetchGames();
+      setImportMessage({
+        type: "success",
+        text: language === "fr" ? "Les statistiques du match ont été enregistrées." : "Game stats saved successfully.",
+      });
       setExpandedGameId(null);
       setResolvedTeamIds(null);
-      fetchGames();
     } catch (error) {
       console.error("Error saving game stats:", error);
+      setImportMessage({
+        type: "error",
+        text: language === "fr" ? "Impossible d'enregistrer les statistiques du match." : "Failed to save game stats.",
+      });
     } finally {
       setSaving(false);
     }
@@ -2619,34 +2630,47 @@ export default function StatsPage() {
         recalculateTeamRosterStats(awayTeamId),
         recalculateTeamRecords([homeTeamId, awayTeamId]),
       ]);
+      await recomputeHomeProjectorCache();
 
-      await logAuditAction(
-        "game_stats_recorded",
-        currentAdminUser?.id || "unknown",
-        currentAdminUser?.email || "unknown",
-        "game",
-        game.id,
-        `${game.awayTeamName} vs ${game.homeTeamName}`,
-        {
-          operation: "forfeit",
-          winnerTeam: winnerTeamName,
-          loserTeam: loserTeamName,
-          score: "20-0",
-          captainId: captain.id,
-          captainName,
-          gameDate: game.date,
-          venue: game.venue,
-        }
-      );
+      try {
+        await logAuditAction(
+          "game_stats_recorded",
+          currentAdminUser?.id || "unknown",
+          currentAdminUser?.email || "unknown",
+          "game",
+          game.id,
+          `${game.awayTeamName} vs ${game.homeTeamName}`,
+          {
+            operation: "forfeit",
+            winnerTeam: winnerTeamName,
+            loserTeam: loserTeamName,
+            score: "20-0",
+            captainId: captain.id,
+            captainName,
+            gameDate: game.date,
+            venue: game.venue,
+          }
+        );
+      } catch (auditError) {
+        console.error("Forfeit saved but audit log failed:", auditError);
+      }
 
+      await fetchGames();
+      setImportMessage({
+        type: "success",
+        text: language === "fr" ? "Le forfait a été enregistré." : "Forfeit saved successfully.",
+      });
       setForfeitOpen(false);
       setForfeitWinnerSide("");
       setForfeitCaptainId("");
       setExpandedGameId(null);
       setResolvedTeamIds(null);
-      fetchGames();
     } catch (error) {
       console.error("Error saving forfeit result:", error);
+      setImportMessage({
+        type: "error",
+        text: language === "fr" ? "Impossible d'enregistrer le forfait." : "Failed to save forfeit result.",
+      });
     } finally {
       setSaving(false);
     }
@@ -2681,6 +2705,7 @@ export default function StatsPage() {
         recalculateTeamRosterStats(game.awayTeamId),
         recalculateTeamRecords([game.homeTeamId, game.awayTeamId]),
       ]);
+      await recomputeHomeProjectorCache();
 
       await logAuditAction(
         "game_deleted",
@@ -3811,7 +3836,15 @@ export default function StatsPage() {
                           disabled={saving || forfeitOpen || !winnerId || !awayScore || !homeScore}
                           className="flex-1 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed transition"
                         >
-                          {saving ? "..." : copy.save}
+                          <span className="inline-flex items-center justify-center gap-2">
+                            {saving ? (
+                              <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" aria-hidden="true">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                              </svg>
+                            ) : null}
+                            <span>{saving ? copy.saving : copy.save}</span>
+                          </span>
                         </button>
                       </div>
                     </div>

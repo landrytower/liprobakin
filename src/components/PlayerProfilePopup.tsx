@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
-import { collection, query, where, getDocs, orderBy, limit } from "firebase/firestore";
-import { firebaseDB } from "@/lib/firebase";
+import { collection, query, getDocs, orderBy, limit } from "firebase/firestore";
+import { firebaseDB } from "@/lib/firebase/firestore";
 import { parseCongoDateTime } from "@/lib/congo-time";
 import type { UserProfile } from "@/types/user";
 

@@ -178,7 +178,7 @@ export default function TeamPage() {
       },
       (error) => {
         console.error("Failed to read AI visibility settings:", error);
-        setIsAiEnabled(true);
+        setIsAiEnabled(false);
       }
     );
 
@@ -375,12 +375,15 @@ export default function TeamPage() {
         const rosterData: EnhancedRosterPlayer[] = rosterSnapshot.docs.map((doc) => {
           const data = doc.data();
           const playerDob = data.dateOfBirth || data.birthdate || "";
+          const jerseyNumber = typeof data.jerseyNumber === "string" && data.jerseyNumber.trim() ? data.jerseyNumber.trim() : undefined;
+          const numericNumber = typeof data.number === "number" ? data.number : parseInt(String(data.number ?? ""), 10) || 0;
           return {
             id: doc.id,
             name: `${data.firstName || ""} ${data.lastName || ""}`.trim() || "Unknown Player",
             firstName: data.firstName,
             lastName: data.lastName,
-            number: data.number || "0",
+            number: numericNumber,
+            jerseyNumber,
             position: data.position || "N/A",
             height: data.height,
             weight: data.weight,
@@ -403,7 +406,9 @@ export default function TeamPage() {
         rosterData.sort((a, b) => {
           const numA = typeof a.number === 'number' ? a.number : parseInt(String(a.number)) || 999;
           const numB = typeof b.number === 'number' ? b.number : parseInt(String(b.number)) || 999;
-          return numA - numB;
+          const diff = numA - numB;
+          if (diff !== 0) return diff;
+          return String(a.jerseyNumber ?? a.number).localeCompare(String(b.jerseyNumber ?? b.number));
         });
         
         setRoster(rosterData);
@@ -560,7 +565,7 @@ export default function TeamPage() {
       <div className="min-h-screen bg-gradient-to-b from-[#050816] via-[#050816] to-[#020407] text-white flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-4xl font-bold mb-4">{t.teamNotFound}</h1>
-          <p className="text-slate-400 mb-8">{t.teamNotFound} "{teamName}" {t.teamNotFoundDesc}</p>
+          <p className="text-slate-400 mb-8">{t.teamNotFound} &quot;{teamName}&quot; {t.teamNotFoundDesc}</p>
           <Link 
             href="/"
             className="inline-block px-6 py-3 bg-gradient-to-br from-blue-500/30 to-purple-500/30 hover:from-blue-500/40 hover:to-purple-500/40 border border-white/30 backdrop-blur-xl rounded-lg transition-all shadow-lg"
@@ -683,7 +688,11 @@ export default function TeamPage() {
       if (roster.length === 0) {
         return language === "fr" ? "Aucun joueur n'est disponible dans l'effectif." : "No players are currently available in the roster.";
       }
-      const samplePlayers = roster.slice(0, 8).map((player) => `${player.name} (#${player.number})`).join(", ");
+      const samplePlayers = roster
+        .slice(0, 8)
+        .map((player) => `${player.name} (#${player.jerseyNumber ?? player.number})`)
+        .join(", ");
+      
       return language === "fr"
         ? `Voici quelques joueurs: ${samplePlayers}${roster.length > 8 ? "..." : ""}`
         : `Here are some players: ${samplePlayers}${roster.length > 8 ? "..." : ""}`;
@@ -899,7 +908,7 @@ export default function TeamPage() {
               return (
                 <Link
                   key={player.id}
-                  href={`/player/${encodeURIComponent(fullTeamName)}/${player.number}`}
+                  href={`/player/${encodeURIComponent(fullTeamName)}/${encodeURIComponent(String(player.jerseyNumber ?? player.number))}${requestedGender ? `?gender=${requestedGender}` : ''}`}
                   className="group relative rounded-lg border border-white/10 bg-slate-900/60 overflow-hidden transition hover:border-white/30 hover:bg-slate-900/80"
                   style={{
                     animation: isTransitioning ? 'none' : `fadeInUp 0.5s ease-out ${index * 0.03}s both`
@@ -969,14 +978,14 @@ export default function TeamPage() {
             {roster.map((player, index) => (
               <Link
                 key={player.id}
-                href={`/player/${encodeURIComponent(fullTeamName)}/${player.number}`}
+                href={`/player/${encodeURIComponent(fullTeamName)}/${encodeURIComponent(String(player.jerseyNumber ?? player.number))}${requestedGender ? `?gender=${requestedGender}` : ''}`}
                 className="group block rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:px-6 sm:py-4 transition hover:border-white/30 hover:bg-slate-900/80"
                 style={{
                   animation: isTransitioning ? 'none' : `fadeInUp 0.5s ease-out ${index * 0.03}s both`
                 }}
               >
                 <div className="flex items-center gap-3 mb-2 sm:mb-0">
-                  <span className="text-xl sm:text-2xl font-bold text-blue-400 flex-shrink-0">#{player.number}</span>
+                  <span className="text-xl sm:text-2xl font-bold text-blue-400 flex-shrink-0">#{player.jerseyNumber ?? player.number}</span>
                   <h3 className="text-sm sm:text-lg font-semibold text-white group-hover:text-blue-400 transition-colors flex-1 min-w-0 truncate">
                     {player.name}
                   </h3>

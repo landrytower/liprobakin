@@ -15,6 +15,15 @@ const nextConfig: NextConfig = {
   generateEtags: true,
   compress: true,
   poweredByHeader: false,
+  async redirects() {
+    return [
+      {
+        source: '/',
+        destination: '/home',
+        permanent: false,
+      },
+    ];
+  },
   async headers() {
     return [
       {

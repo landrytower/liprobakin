@@ -3,7 +3,7 @@
 import { useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
-import { firebaseDB } from '@/lib/firebase';
+import { firebaseDB } from '@/lib/firebase/firestore';
 
 interface ArticleContentProps {
   htmlContent: string;

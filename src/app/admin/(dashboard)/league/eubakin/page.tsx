@@ -810,7 +810,15 @@ export default function EubakinLeaguePage() {
                   disabled={savingGame || scoreEditableGames.length === 0}
                   className="rounded-xl border border-emerald-400/40 bg-emerald-500/15 px-5 py-2 text-sm font-semibold text-emerald-200 transition hover:bg-emerald-500/25 disabled:opacity-60"
                 >
-                  {savingGame ? t.saving : t.saveScore}
+                  <span className="inline-flex items-center gap-2">
+                    {savingGame ? (
+                      <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" aria-hidden="true">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                      </svg>
+                    ) : null}
+                    <span>{savingGame ? t.saving : t.saveScore}</span>
+                  </span>
                 </button>
               </div>
             </form>

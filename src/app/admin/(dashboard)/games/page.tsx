@@ -6,8 +6,10 @@ import { useAdmin } from "../layout";
 import { firebaseDB } from "@/lib/firebase";
 import { logAuditAction } from "@/lib/auditLog";
 import { recalculateLeagueStatsFromGames } from "@/lib/league-stats";
+import { recomputeHomeProjectorCache } from "@/lib/homeProjectorCache";
 import { convertLocalDateTimeToCongo } from "@/lib/congo-time";
 import { normalizeTeamGender } from "@/lib/team-gender";
+import { updateLiveGameWithAnnouncement } from "@/lib/liveAnnouncements";
 import jsPDF from "jspdf";
 import {
   collection,
@@ -37,6 +39,7 @@ type Team = {
   logo: string;
   wins: number;
   losses: number;
+  totalPoints: number;
 };
 
 type Venue = {
@@ -85,9 +88,13 @@ type Game = {
   venue: string;
   venueCity?: string;
   status: "scheduled" | "live" | "completed" | "postponed" | "cancelled";
+  completed?: boolean;
+  archived?: boolean;
   homeScore?: number;
   awayScore?: number;
   winnerId?: string;
+  winnerTeamId?: string;
+  loserTeamId?: string;
   referees?: string[];
   createdAt: Date | null;
   updatedAt: Date | null;
@@ -179,6 +186,7 @@ const translations = {
     saveLiveScore: "Update Live",
     saveScore: "Save Score",
     markComplete: "Mark Complete",
+    saving: "Saving...",
     quickActions: "Quick Actions",
     bulkSchedule: "Bulk Schedule",
     exportSchedule: "Export",
@@ -273,6 +281,7 @@ const translations = {
     saveLiveScore: "Mettre à jour (Live)",
     saveScore: "Enregistrer",
     markComplete: "Terminer",
+    saving: "Enregistrement...",
     quickActions: "Actions Rapides",
     bulkSchedule: "Planification en Lot",
     exportSchedule: "Exporter",
@@ -368,6 +377,7 @@ export default function GamesPage() {
   // Score entry state
   const [scoreEntryGame, setScoreEntryGame] = useState<Game | null>(null);
   const [scoreForm, setScoreForm] = useState({ homeScore: "", awayScore: "" });
+  const [savingScoreMode, setSavingScoreMode] = useState<null | "live" | "complete">(null);
 
   // Current season (could be dynamic)
   const currentSeasonId = "2024-25";
@@ -470,6 +480,7 @@ export default function GamesPage() {
           logo: docSnap.data().logo || "",
           wins: docSnap.data().wins || 0,
           losses: docSnap.data().losses || 0,
+          totalPoints: docSnap.data().totalPoints || 0,
         }))
       );
     });
@@ -870,7 +881,7 @@ export default function GamesPage() {
       }
 
       await deleteDoc(doc(firebaseDB, "matchdays", matchday.id));
-      await recalculateLeagueStatsFromGames();
+      await Promise.all([recalculateLeagueStatsFromGames(), recomputeHomeProjectorCache()]);
 
       await logAuditAction(
         "game_deleted",
@@ -1006,7 +1017,7 @@ export default function GamesPage() {
         await deleteDoc(gameDoc.ref);
       }
 
-      await recalculateLeagueStatsFromGames();
+      await Promise.all([recalculateLeagueStatsFromGames(), recomputeHomeProjectorCache()]);
 
       await logAuditAction(
         "game_deleted",
@@ -1124,6 +1135,7 @@ export default function GamesPage() {
     setSubmitting(true);
 
     try {
+      const existingGame = formState.id ? games.find((game) => game.id === formState.id) ?? null : null;
       const homeTeam = teams.find((team) => team.id === formState.homeTeamId);
       const awayTeam = teams.find((team) => team.id === formState.awayTeamId);
       const selectedVenue = venues.find((v) => v.name === formState.venue);
@@ -1155,6 +1167,14 @@ export default function GamesPage() {
 
       if (formState.id) {
         await updateDoc(doc(firebaseDB, "games", formState.id), payload);
+        if (
+          existingGame &&
+          (existingGame.completed ||
+            existingGame.status === "completed" ||
+            Boolean(existingGame.winnerId || existingGame.winnerTeamId))
+        ) {
+          await Promise.all([recalculateLeagueStatsFromGames(), recomputeHomeProjectorCache()]);
+        }
         // Audit log for game update
         await logAuditAction(
           "game_updated", 
@@ -1231,7 +1251,7 @@ export default function GamesPage() {
       }
 
       await deleteDoc(doc(firebaseDB, "games", game.id));
-      await recalculateLeagueStatsFromGames();
+      await Promise.all([recalculateLeagueStatsFromGames(), recomputeHomeProjectorCache()]);
       // Audit log for game deletion
       await logAuditAction(
         "game_deleted", 
@@ -1265,50 +1285,63 @@ export default function GamesPage() {
       return;
     }
 
+    if (homeScore === awayScore) {
+      setStatusMessage({
+        type: "error",
+        message: language === "fr" ? "Le score final ne peut pas être à égalité" : "Final score cannot be tied",
+      });
+      return;
+    }
+
+    setSavingScoreMode("complete");
     try {
       const winnerId = homeScore > awayScore ? scoreEntryGame.homeTeamId : scoreEntryGame.awayTeamId;
+      const loserId = winnerId === scoreEntryGame.homeTeamId ? scoreEntryGame.awayTeamId : scoreEntryGame.homeTeamId;
+      const winnerScore = winnerId === scoreEntryGame.homeTeamId ? homeScore : awayScore;
+      const loserScore = winnerId === scoreEntryGame.homeTeamId ? awayScore : homeScore;
 
       await updateDoc(doc(firebaseDB, "games", scoreEntryGame.id), {
         homeScore,
         awayScore,
         winnerId,
+        winnerTeamId: winnerId,
+        loserTeamId: loserId,
+        winnerScore,
+        loserScore,
+        completed: true,
         status: "completed",
+        archived: true,
+        completedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         archivedAt: serverTimestamp(),
       });
 
-      // Update team records
-      const winnerRef = doc(firebaseDB, "teams", winnerId);
-      const loserRef = doc(firebaseDB, "teams", winnerId === scoreEntryGame.homeTeamId ? scoreEntryGame.awayTeamId : scoreEntryGame.homeTeamId);
-
-      const winnerTeam = teams.find((team) => team.id === winnerId);
-      const loserTeam = teams.find((team) => team.id !== winnerId && (team.id === scoreEntryGame.homeTeamId || team.id === scoreEntryGame.awayTeamId));
-
-      if (winnerTeam) {
-        await updateDoc(winnerRef, { wins: (winnerTeam.wins || 0) + 1 });
-      }
-      if (loserTeam) {
-        await updateDoc(loserRef, { losses: (loserTeam.losses || 0) + 1 });
-      }
+      await Promise.all([recalculateLeagueStatsFromGames(), recomputeHomeProjectorCache()]);
 
       // Audit log for score update
-      await logAuditAction(
-        "game_stats_updated", 
-        currentAdminUser?.id || "unknown", 
-        currentAdminUser?.email || "unknown", 
-        "game", 
-        scoreEntryGame.id, 
-        `${scoreEntryGame.homeTeamName} vs ${scoreEntryGame.awayTeamName}`, 
-        {
-          homeTeam: scoreEntryGame.homeTeamName,
-          awayTeam: scoreEntryGame.awayTeamName,
-          homeScore,
-          awayScore,
-          winner: winnerTeam?.name || "Unknown",
-          loser: loserTeam?.name || "Unknown",
-          gameDate: scoreEntryGame.date
-        }
-      );
+      const winnerName = winnerId === scoreEntryGame.homeTeamId ? scoreEntryGame.homeTeamName : scoreEntryGame.awayTeamName;
+      const loserName = winnerId === scoreEntryGame.homeTeamId ? scoreEntryGame.awayTeamName : scoreEntryGame.homeTeamName;
+      try {
+        await logAuditAction(
+          "game_stats_updated", 
+          currentAdminUser?.id || "unknown", 
+          currentAdminUser?.email || "unknown", 
+          "game", 
+          scoreEntryGame.id, 
+          `${scoreEntryGame.homeTeamName} vs ${scoreEntryGame.awayTeamName}`, 
+          {
+            homeTeam: scoreEntryGame.homeTeamName,
+            awayTeam: scoreEntryGame.awayTeamName,
+            homeScore,
+            awayScore,
+            winner: winnerName,
+            loser: loserName,
+            gameDate: scoreEntryGame.date
+          }
+        );
+      } catch (auditError) {
+        console.error("Score saved but audit log failed:", auditError);
+      }
 
       setScoreEntryGame(null);
       setScoreForm({ homeScore: "", awayScore: "" });
@@ -1316,6 +1349,8 @@ export default function GamesPage() {
     } catch (error) {
       console.error("Error saving score:", error);
       setStatusMessage({ type: "error", message: "Failed to save score" });
+    } finally {
+      setSavingScoreMode(null);
     }
   };
 
@@ -1330,6 +1365,7 @@ export default function GamesPage() {
       return;
     }
 
+    setSavingScoreMode("live");
     try {
       const winnerId = homeScore === awayScore
         ? null
@@ -1337,30 +1373,38 @@ export default function GamesPage() {
           ? scoreEntryGame.homeTeamId
           : scoreEntryGame.awayTeamId;
 
-      await updateDoc(doc(firebaseDB, "games", scoreEntryGame.id), {
-        homeScore,
-        awayScore,
-        winnerId,
-        status: "live",
-        updatedAt: serverTimestamp(),
-      });
-
-      await logAuditAction(
-        "game_stats_updated",
-        currentAdminUser?.id || "unknown",
-        currentAdminUser?.email || "unknown",
-        "game",
-        scoreEntryGame.id,
-        `${scoreEntryGame.homeTeamName} vs ${scoreEntryGame.awayTeamName}`,
-        {
-          homeTeam: scoreEntryGame.homeTeamName,
-          awayTeam: scoreEntryGame.awayTeamName,
+      await updateLiveGameWithAnnouncement({
+        gameId: scoreEntryGame.id,
+        homeTeamName: scoreEntryGame.homeTeamName,
+        awayTeamName: scoreEntryGame.awayTeamName,
+        patch: {
           homeScore,
           awayScore,
-          gameDate: scoreEntryGame.date,
+          winnerId,
           status: "live",
-        }
-      );
+        },
+      });
+
+      try {
+        await logAuditAction(
+          "game_stats_updated",
+          currentAdminUser?.id || "unknown",
+          currentAdminUser?.email || "unknown",
+          "game",
+          scoreEntryGame.id,
+          `${scoreEntryGame.homeTeamName} vs ${scoreEntryGame.awayTeamName}`,
+          {
+            homeTeam: scoreEntryGame.homeTeamName,
+            awayTeam: scoreEntryGame.awayTeamName,
+            homeScore,
+            awayScore,
+            gameDate: scoreEntryGame.date,
+            status: "live",
+          }
+        );
+      } catch (auditError) {
+        console.error("Live score saved but audit log failed:", auditError);
+      }
 
       setStatusMessage({
         type: "success",
@@ -1372,6 +1416,8 @@ export default function GamesPage() {
         type: "error",
         message: language === "fr" ? "Impossible de mettre à jour le score en direct" : "Failed to update live score",
       });
+    } finally {
+      setSavingScoreMode(null);
     }
   };
 
@@ -2312,20 +2358,39 @@ export default function GamesPage() {
               <div className="flex gap-3 pt-2">
                 <button
                   onClick={handleSaveLiveScore}
-                  className="flex-1 rounded-lg bg-gradient-to-r from-red-500 to-red-600 px-4 py-3 text-sm font-semibold text-white shadow-lg hover:shadow-xl transition"
+                  disabled={savingScoreMode !== null}
+                  className="flex-1 rounded-lg bg-gradient-to-r from-red-500 to-red-600 px-4 py-3 text-sm font-semibold text-white shadow-lg hover:shadow-xl transition disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  {t.saveLiveScore}
+                  <span className="inline-flex items-center justify-center gap-2">
+                    {savingScoreMode === "live" ? (
+                      <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" aria-hidden="true">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                      </svg>
+                    ) : null}
+                    <span>{savingScoreMode === "live" ? t.saving : t.saveLiveScore}</span>
+                  </span>
                 </button>
                 <button
                   onClick={handleSaveScore}
-                  className="flex-1 rounded-lg bg-gradient-to-r from-green-500 to-green-600 px-4 py-3 text-sm font-semibold text-white shadow-lg hover:shadow-xl transition"
+                  disabled={savingScoreMode !== null}
+                  className="flex-1 rounded-lg bg-gradient-to-r from-green-500 to-green-600 px-4 py-3 text-sm font-semibold text-white shadow-lg hover:shadow-xl transition disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  {t.markComplete}
+                  <span className="inline-flex items-center justify-center gap-2">
+                    {savingScoreMode === "complete" ? (
+                      <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" aria-hidden="true">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                      </svg>
+                    ) : null}
+                    <span>{savingScoreMode === "complete" ? t.saving : t.markComplete}</span>
+                  </span>
                 </button>
                 <button
                   onClick={() => {
                     setScoreEntryGame(null);
                     setScoreForm({ homeScore: "", awayScore: "" });
+                    setSavingScoreMode(null);
                   }}
                   className="rounded-lg border border-white/10 px-6 py-3 text-sm font-medium text-slate-300 hover:bg-slate-800 transition"
                 >

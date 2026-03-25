@@ -4,32 +4,39 @@ import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { addDoc, arrayRemove, arrayUnion, collection, collectionGroup, deleteDoc, doc, query, orderBy, limit, getDocs, onSnapshot, serverTimestamp, updateDoc, where } from "firebase/firestore";
-import { firebaseDB } from "@/lib/firebase";
+import { firebaseDB } from "@/lib/firebase/firestore";
 import { normalizeTeamGender } from "@/lib/team-gender";
+import { resolveTeamLogo } from "@/lib/team-logo";
+import { fetchHomeProjectorPlayers, HOME_PROJECTOR_COLLECTION, HOME_PROJECTOR_DOC } from "@/lib/homeProjectorCache";
 import { parseCongoDateTime, CONGO_TIMEZONE } from "@/lib/congo-time";
 import { useAuth } from "@/contexts/AuthContext";
+import { canonicalArticleShareUrl } from "./articleMetadata";
 import { useLanguage } from "@/contexts/LanguageContext";
-import AuthModal from "@/components/AuthModal";
-import PlayerProfilePopup from "@/components/PlayerProfilePopup";
-import AnimatedButton from "@/components/AnimatedButton";
 import ArticleContent from "@/components/ArticleContent";
 import MentionedEntities from "@/components/MentionedEntities";
-
 import {
   conferenceStandings,
   conferenceStandingsWomen,
   navSections,
   spotlightPlayers,
   spotlightPlayersWomen,
-  teamRosters,
-  leaguePartners,
   leagueCommittee,
   franchises as ssrMenFranchises,
   franchisesWomen as ssrWomenFranchises,
-  headlineNews as ssrHeadlineNews,
 } from "@/data/febaco";
 import type { FeaturedMatchup, Franchise, RosterPlayer, SpotlightPlayer } from "@/data/febaco";
+
+const AuthModal = dynamic(() => import("@/components/AuthModal"), {
+  ssr: false,
+  loading: () => null,
+});
+
+const PlayerProfilePopup = dynamic(() => import("@/components/PlayerProfilePopup"), {
+  ssr: false,
+  loading: () => null,
+});
 
 type MatchupReferee = {
   id: string;
@@ -428,6 +435,7 @@ function AutoPlayOnVisibleVideo({ src, className, style }: { src: string; classN
 const NEWS_ARTICLE_SWITCH_MS = 15000;
 const HOME_BOOTSTRAP_CACHE_KEY = "febaco:home:bootstrap:v1";
 const HOME_BOOTSTRAP_CACHE_TTL_MS = 1000 * 60 * 10;
+const HOME_STATS_CACHE_KEY = "febaco:home:stats:v1";
 
 type CachedNewsArticle = Omit<NewsArticle, "createdAt"> & { createdAt: string | null };
 
@@ -437,9 +445,19 @@ type HomeBootstrapSnapshot = {
   newsArticles: CachedNewsArticle[];
   featuredArticleId: string | null;
   partners: Array<{ id: string; name: string; logo: string }>;
+  committee: any[];
+  commission: any[];
+  referees: any[];
 };
 
 type HomeBootstrapCache = HomeBootstrapSnapshot & { savedAt: number };
+
+type HomeStatsCache = {
+  version: number;
+  savedAt: number;
+  standings: any[];
+  leagueTopPlayers: any[];
+};
 
 const emptyHomeBootstrapSnapshot = (): HomeBootstrapSnapshot => ({
   menTeams: [],
@@ -447,6 +465,9 @@ const emptyHomeBootstrapSnapshot = (): HomeBootstrapSnapshot => ({
   newsArticles: [],
   featuredArticleId: null,
   partners: [],
+  committee: [],
+  commission: [],
+  referees: [],
 });
 
 const parseHomeBootstrapCache = (raw: string | null): HomeBootstrapCache | null => {
@@ -464,6 +485,9 @@ const parseHomeBootstrapCache = (raw: string | null): HomeBootstrapCache | null 
       newsArticles: Array.isArray(parsed.newsArticles) ? parsed.newsArticles : [],
       featuredArticleId: typeof parsed.featuredArticleId === "string" ? parsed.featuredArticleId : null,
       partners: Array.isArray(parsed.partners) ? parsed.partners : [],
+      committee: Array.isArray(parsed.committee) ? parsed.committee : [],
+      commission: Array.isArray(parsed.commission) ? parsed.commission : [],
+      referees: Array.isArray(parsed.referees) ? parsed.referees : [],
     };
   } catch {
     return null;
@@ -486,6 +510,9 @@ const readHomeBootstrapCache = (): HomeBootstrapSnapshot | null => {
     newsArticles: cache.newsArticles,
     featuredArticleId: cache.featuredArticleId,
     partners: cache.partners,
+    committee: cache.committee,
+    commission: cache.commission,
+    referees: cache.referees,
   };
 };
 
@@ -508,13 +535,50 @@ const mergeHomeBootstrapCache = (partial: Partial<HomeBootstrapSnapshot>) => {
         newsArticles: current.newsArticles,
         featuredArticleId: current.featuredArticleId,
         partners: current.partners,
+        committee: current.committee,
+        commission: current.commission,
+        referees: current.referees,
       }
     : emptyHomeBootstrapSnapshot();
-
   writeHomeBootstrapCache({
     ...base,
     ...partial,
   });
+};
+
+const parseHomeStatsCache = (raw: string | null): HomeStatsCache | null => {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<HomeStatsCache>;
+    if (!parsed || typeof parsed !== "object" || typeof parsed.version !== "number") {
+      return null;
+    }
+
+    return {
+      version: parsed.version,
+      savedAt: typeof parsed.savedAt === "number" ? parsed.savedAt : Date.now(),
+      standings: Array.isArray(parsed.standings) ? parsed.standings : [],
+      leagueTopPlayers: Array.isArray(parsed.leagueTopPlayers) ? parsed.leagueTopPlayers : [],
+    };
+  } catch {
+    return null;
+  }
+};
+
+const readHomeStatsCache = (): HomeStatsCache | null => {
+  if (typeof window === "undefined") return null;
+  return parseHomeStatsCache(window.localStorage.getItem(HOME_STATS_CACHE_KEY));
+};
+
+const writeHomeStatsCache = (payload: Omit<HomeStatsCache, "savedAt">) => {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(
+    HOME_STATS_CACHE_KEY,
+    JSON.stringify({
+      ...payload,
+      savedAt: Date.now(),
+    })
+  );
 };
 
 const toCachedNewsArticle = (article: NewsArticle): CachedNewsArticle => ({
@@ -659,7 +723,7 @@ const formatGameDateTime = (dateTimeStr: string, language: Locale): string => {
   if (parts.length < 2) return dateTimeStr;
   
   const datePart = parts[0]; // e.g., "Dec 13" or "déc. 13"
-  let timePart = parts[1]; // e.g., "3:45 PM" or "15:45"
+  const timePart = parts[1]; // e.g., "3:45 PM" or "15:45"
   
   // Convert month to number
   const monthMap: {[key: string]: string} = {
@@ -926,6 +990,20 @@ const teamRecordMap = Object.fromEntries(
 
 const getTeamRecord = (team: string) => teamRecordMap[team] ?? null;
 const getTotalPoints = (wins: number, losses: number) => wins * 2 + losses;
+const getResolvedTeamLogo = ({
+  teamName,
+  logo,
+  franchise,
+}: {
+  teamName?: string;
+  logo?: string | null;
+  franchise?: Franchise | null;
+}) =>
+  resolveTeamLogo({
+    city: franchise?.city,
+    name: franchise?.name ?? teamName,
+    logo: logo ?? franchise?.logo,
+  });
 
 const playerHeadshots: Record<string, string> = {
   ...Object.fromEntries(spotlightPlayers.map((player) => [player.name, player.photo] as const)),
@@ -956,6 +1034,7 @@ const parseTipoffToDate = (tipoff: string) => {
 
 const LeaderRow = ({ leader, allFranchises, gender }: { leader: FeaturedMatchup["leaders"][number]; allFranchises: Franchise[]; gender?: Gender }) => {
   const franchise = findFranchiseByName(leader.team, allFranchises);
+  const teamLogo = getResolvedTeamLogo({ teamName: leader.team, franchise });
   const headshot = leader.headshot || playerHeadshots[leader.player];
   const initials = leader.player
     .split(" ")
@@ -986,10 +1065,10 @@ const LeaderRow = ({ leader, allFranchises, gender }: { leader: FeaturedMatchup[
             height={40}
             className="h-10 w-10 rounded-full border border-white/20 object-cover flex-shrink-0 group-hover:border-blue-400 transition-colors"
           />
-        ) : franchise?.logo ? (
+        ) : teamLogo ? (
           <Image
-            src={franchise.logo}
-            alt={`${formatFranchiseName(franchise)} logo`}
+            src={teamLogo}
+            alt={`${franchise ? formatFranchiseName(franchise) : leader.team} logo`}
             width={40}
             height={40}
             className="h-10 w-10 rounded-full border border-white/20 bg-white/5 object-cover flex-shrink-0 group-hover:border-blue-400 transition-colors"
@@ -1122,7 +1201,7 @@ const MatchupTeam = ({ team, record, logo, allFranchises, gender }: { team: stri
   const colors = franchise?.colors ?? ["#1e293b", "#0f172a"];
   const label = franchise?.city?.trim();
   const showLabel = Boolean(label && label.toLowerCase() !== displayName.toLowerCase());
-  const teamLogo = logo || franchise?.logo;
+  const teamLogo = getResolvedTeamLogo({ teamName: team, logo, franchise });
   const initials = team
     .split(" ")
     .map((word) => word[0])
@@ -1185,6 +1264,7 @@ const ScoreTeamRow = ({
 }) => {
   const franchise = findFranchiseByName(team, allFranchises);
   const displayName = franchise ? formatFranchiseName(franchise) : normalizeTeamName(team);
+  const teamLogo = getResolvedTeamLogo({ teamName: team, franchise });
   const initials = team
     .split(" ")
     .map((word) => word[0])
@@ -1196,9 +1276,9 @@ const ScoreTeamRow = ({
   return (
     <div className={`flex items-center justify-between ${highlight ? "text-white" : "text-slate-300"}`}>
       <div className="flex items-center gap-3">
-        {franchise?.logo ? (
+        {teamLogo ? (
           <Image
-            src={franchise.logo}
+            src={teamLogo}
             alt={`${displayName} logo`}
             width={32}
             height={32}
@@ -1222,6 +1302,7 @@ const ScoreTeamRow = ({
 const ScheduleTeam = ({ team, label, allFranchises }: { team: string; label: string; allFranchises: Franchise[] }) => {
   const franchise = findFranchiseByName(team, allFranchises);
   const displayName = franchise ? formatFranchiseName(franchise) : normalizeTeamName(team);
+  const teamLogo = getResolvedTeamLogo({ teamName: team, franchise });
   const initials = team
     .split(" ")
     .map((word) => word[0])
@@ -1231,9 +1312,9 @@ const ScheduleTeam = ({ team, label, allFranchises }: { team: string; label: str
 
   return (
     <div className="flex items-center gap-3">
-      {franchise?.logo ? (
+      {teamLogo ? (
         <Image
-          src={franchise.logo}
+          src={teamLogo}
           alt={`${displayName} logo`}
           width={48}
           height={48}
@@ -1726,7 +1807,7 @@ export default function Home() {
   const [completedGames, setCompletedGames] = useState<any[]>([]);
   const [menTeams, setMenTeams] = useState<Franchise[]>(ssrMenFranchises);
   const [womenTeams, setWomenTeams] = useState<Franchise[]>(ssrWomenFranchises);
-  const [leagueTopPlayers, setLeagueTopPlayers] = useState<any[]>([]);
+  const [leagueTopPlayers, setLeagueTopPlayers] = useState<any[]>(() => readHomeStatsCache()?.leagueTopPlayers ?? []);
   const [leagueLeadersExpanded, setLeagueLeadersExpanded] = useState(false);
   const [newsArticles, setNewsArticles] = useState<NewsArticle[]>([]);
   const [featuredArticleId, setFeaturedArticleId] = useState<string | null>(null);
@@ -1764,14 +1845,16 @@ export default function Home() {
   const [touchEndX, setTouchEndX] = useState(0);
   const [isSwiping, setIsSwiping] = useState(false);
   const [isArticleChanging, setIsArticleChanging] = useState(false);
-  const [dynamicStandings, setDynamicStandings] = useState<any[] | null>(null);
+  const [dynamicStandings, setDynamicStandings] = useState<any[] | null>(() => readHomeStatsCache()?.standings ?? null);
   const [currentPartnerIndex, setCurrentPartnerIndex] = useState(0);
   const [currentCommitteeIndex, setCurrentCommitteeIndex] = useState(0);
-  const [dynamicPartners, setDynamicPartners] = useState<any[]>(leaguePartners);
+  const [dynamicPartners, setDynamicPartners] = useState<any[]>(() => readHomeBootstrapCache()?.partners ?? []);
   const [visiblePartners, setVisiblePartners] = useState<number[]>([0, 1, 2, 3]);
   const [partnerAnimating, setPartnerAnimating] = useState<number | null>(null);
   const [dynamicCommittee, setDynamicCommittee] = useState<any[]>(leagueCommittee);
   const [dynamicCommission, setDynamicCommission] = useState<any[]>([]);
+  const [dynamicReferees, setDynamicReferees] = useState<any[]>([]);
+  const [showRefs, setShowRefs] = useState(false);
   const [playerCardExpanded, setPlayerCardExpanded] = useState(true);
   const [playerData, setPlayerData] = useState<RosterPlayer | null>(null);
   const [nextGame, setNextGame] = useState<EnhancedMatchup | null>(null);
@@ -1790,6 +1873,7 @@ export default function Home() {
   const featuredVideoCompletionRef = useRef(false);
   const featuredArticleStartTimeRef = useRef<number>(Date.now());
   const featuredVideoRotateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const projectorFallbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   // Fan favorites state
   const [showFavoritePlayer, setShowFavoritePlayer] = useState(false);
@@ -2232,7 +2316,7 @@ export default function Home() {
 
   const completedGamesSorted = useMemo(() => {
     const toSortTime = (game: any) =>
-      game?.completedAtObj?.getTime?.() || game?.dateObj?.getTime?.() || 0;
+      game?.dateObj?.getTime?.() || game?.completedAtObj?.getTime?.() || 0;
     return [...completedGames].sort((a, b) => toSortTime(b) - toSortTime(a));
   }, [completedGames]);
 
@@ -2247,7 +2331,7 @@ export default function Home() {
     requestAnimationFrame(() => {
       container.scrollTo({ left: 0, behavior: "auto" });
     });
-  }, [completedGamesSorted.length]);
+  }, [completedGamesSorted]);
 
   useEffect(() => {
     const cached = readHomeBootstrapCache();
@@ -2260,6 +2344,9 @@ export default function Home() {
         setFeaturedArticleId(cached.featuredArticleId ?? hydratedNews[0]?.id ?? null);
       }
       if (cached.partners.length > 0) setDynamicPartners(cached.partners);
+      if (cached.committee.length > 0) setDynamicCommittee(cached.committee);
+      if (cached.commission.length > 0) setDynamicCommission(cached.commission);
+      if (cached.referees.length > 0) setDynamicReferees(cached.referees);
     }
 
     // NOTE: Do not pre-populate standings from cache/SSR.
@@ -2665,6 +2752,18 @@ export default function Home() {
     });
   }, [dynamicPartners]);
 
+  useEffect(() => {
+    if (dynamicCommittee.length === 0 && dynamicCommission.length === 0 && dynamicReferees.length === 0) {
+      return;
+    }
+
+    mergeHomeBootstrapCache({
+      committee: dynamicCommittee,
+      commission: dynamicCommission,
+      referees: dynamicReferees,
+    });
+  }, [dynamicCommittee, dynamicCommission, dynamicReferees]);
+
   const scrollFinalBuzzer = useCallback((direction: "prev" | "next") => {
     const container = finalBuzzerScrollRef.current;
     if (!container) {
@@ -2843,6 +2942,11 @@ export default function Home() {
 
   useEffect(() => {
     const fetchTeams = async () => {
+      const cached = readHomeBootstrapCache();
+      if (cached && cached.menTeams.length > 0 && cached.womenTeams.length > 0) {
+        return;
+      }
+
       try {
         const teamsRef = collection(firebaseDB, "teams");
         const teamsSnapshot = await getDocs(teamsRef);
@@ -2873,7 +2977,7 @@ export default function Home() {
             city: data.city ?? "",
             name: data.name ?? doc.id,
             colors,
-            logo: data.logo ?? "/logos/liprobakin.png",
+            logo: resolveTeamLogo({ city: data.city ?? "", name: data.name ?? doc.id, logo: data.logo ?? null }),
           };
 
           const teamGender = normalizeTeamGender(data.gender, data.logo, "men");
@@ -2907,7 +3011,8 @@ export default function Home() {
   useEffect(() => {
     // Real-time listener for news articles
     const newsRef = collection(firebaseDB, "news");
-    const newsQuery = query(newsRef, orderBy("createdAt", "desc"));
+    // Fetch a small window (includes paused articles that will be filtered out)
+    const newsQuery = query(newsRef, orderBy("createdAt", "desc"), limit(20));
     
     const unsubscribe = onSnapshot(newsQuery, (snapshot) => {
       const articles: NewsArticle[] = snapshot.docs.map((doc) => {
@@ -3001,12 +3106,10 @@ export default function Home() {
   }, [newsArticles]);
 
   useEffect(() => {
-    const fetchPartners = async () => {
-      try {
-        const partnersRef = collection(firebaseDB, "partners");
-        const partnersSnapshot = await getDocs(partnersRef);
-        
-        const partners = partnersSnapshot.docs.map((doc) => {
+    const unsubscribe = onSnapshot(
+      collection(firebaseDB, "partners"),
+      (snapshot) => {
+        const partners = snapshot.docs.map((doc) => {
           const data = doc.data();
           return {
             id: doc.id,
@@ -3014,14 +3117,15 @@ export default function Home() {
             logo: data.logo || "",
           };
         });
-        
+
         setDynamicPartners(partners);
-      } catch (error) {
+      },
+      (error) => {
         console.error("Error fetching partners:", error);
       }
-    };
-    
-    fetchPartners();
+    );
+
+    return () => unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -3218,6 +3322,21 @@ export default function Home() {
   }, [nextGame]);
 
   useEffect(() => {
+    const cached = readHomeBootstrapCache();
+    if (cached && cached.committee.length > 0) {
+      setDynamicCommittee(cached.committee);
+    }
+    if (cached && cached.commission.length > 0) {
+      setDynamicCommission(cached.commission);
+    }
+    if (cached && cached.referees.length > 0) {
+      setDynamicReferees(cached.referees);
+    }
+
+    if (cached && cached.committee.length > 0 && cached.commission.length > 0 && cached.referees.length > 0) {
+      return;
+    }
+
     const fetchCommittee = async () => {
       try {
         const committeeRef = collection(firebaseDB, "committee");
@@ -3292,9 +3411,31 @@ export default function Home() {
       }
     };
     
+    const fetchReferees = async () => {
+      try {
+        const refereesRef = collection(firebaseDB, "referees");
+        const refereesSnapshot = await getDocs(refereesRef);
+        
+        const refs = refereesSnapshot.docs.map((doc) => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            name: `${data.firstName || ""} ${data.lastName || ""}`.trim(),
+            role: language === "fr" ? "Arbitre" : "Referee",
+            photo: data.headshot || "",
+          };
+        }).sort((a, b) => a.name.localeCompare(b.name));
+        
+        setDynamicReferees(refs);
+      } catch (error) {
+        console.error("Error fetching referees:", error);
+      }
+    };
+    
     fetchCommittee();
     fetchCommission();
-  }, []);
+    fetchReferees();
+  }, [language]);
 
   useEffect(() => {
     const STANDINGS_HISTORY_KEY = "liprobakin:standings-history";
@@ -3323,186 +3464,106 @@ export default function Home() {
         // Ignore storage quota / privacy errors
       }
     };
-
-    const calculateStandings = async () => {
+    const calculateStandingsFromTeams = (snapshot: any) => {
       try {
         loadStandingsHistory();
 
-        const canonicalTeamKey = (gender: string, name: string) => {
-          const canonicalName = normalizeTeamName(name).trim().toLowerCase().replace(/\s+/g, " ");
-          return `${gender}:${canonicalName}`;
-        };
+        const standingsArray: Array<{
+          seed: number;
+          teamKey: string;
+          teamId: string;
+          team: string;
+          wins: number;
+          losses: number;
+          totalPoints: number;
+          gender: "men" | "women";
+        }> = snapshot.docs
+          .map((teamDoc: any) => {
+            const data = teamDoc.data?.() ?? teamDoc.data ?? {};
+            const teamId = teamDoc.id;
+            const baseName = String(data.name || data.teamName || "").trim();
+            if (!baseName) return null;
 
-        // Fetch teams and games in PARALLEL instead of sequentially
-        const teamsRef = collection(firebaseDB, "teams");
-        const gamesRef = collection(firebaseDB, "games");
-        const [teamsSnapshot, gamesSnapshot] = await Promise.all([
-          getDocs(teamsRef),
-          getDocs(gamesRef),
-        ]);
+            const teamGender = normalizeTeamGender(data.gender, data.logo, "men") as "men" | "women";
+            const teamName = buildTeamDisplayName({
+              city: String(data.city || "").trim(),
+              name: baseName,
+            });
+            const wins = typeof data.wins === "number" && Number.isFinite(data.wins) ? data.wins : 0;
+            const losses = typeof data.losses === "number" && Number.isFinite(data.losses) ? data.losses : 0;
+            const totalPoints = typeof data.totalPoints === "number" && Number.isFinite(data.totalPoints) ? data.totalPoints : 0;
 
-        const teamIdToKey = new Map<string, string>();
-        const teamStats: Record<
-          string,
-          {
+            return {
+              seed: 0,
+              teamKey: `${teamGender}:${teamId}`,
+              teamId,
+              team: teamName,
+              wins,
+              losses,
+              totalPoints,
+              gender: teamGender,
+            };
+          })
+          .filter(
+            (
+              team: unknown
+            ): team is {
+              seed: number;
+              teamKey: string;
+              teamId: string;
+              team: string;
+              wins: number;
+              losses: number;
+              totalPoints: number;
+              gender: "men" | "women";
+            } => Boolean(team)
+          );
+
+        standingsArray.sort((
+          a: {
+            seed: number;
+            teamKey: string;
+            teamId: string;
+            team: string;
             wins: number;
             losses: number;
             totalPoints: number;
-            teamName: string;
-            gender: string;
-            teamId?: string;
+            gender: "men" | "women";
+          },
+          b: {
+            seed: number;
+            teamKey: string;
+            teamId: string;
+            team: string;
+            wins: number;
+            losses: number;
+            totalPoints: number;
+            gender: "men" | "women";
           }
-        > = {};
-        
-        // Initialize ALL teams with 0-0 records (deduped by gender + name)
-        teamsSnapshot.docs.forEach((doc) => {
-          const team = doc.data();
-          const teamId = doc.id;
-          const teamName = team.name || team.teamName || "";
-          const teamGender = normalizeTeamGender(team.gender, team.logo, "men");
-          
-          if (teamName) {
-            const key = canonicalTeamKey(teamGender, teamName);
-            teamIdToKey.set(teamId, key);
-            const existing = teamStats[key];
-            if (!existing) {
-              teamStats[key] = {
-                wins: 0,
-                losses: 0,
-                totalPoints: 0,
-                teamName,
-                gender: teamGender,
-                teamId,
-              };
-            } else {
-              // Prefer a more descriptive name; keep the first seen teamId as representative.
-              if (teamName.length > existing.teamName.length) {
-                existing.teamName = teamName;
-              }
-              if (!existing.teamId) {
-                existing.teamId = teamId;
-              }
-            }
-          }
-        });
-        
-        gamesSnapshot.docs.forEach((doc) => {
-          const game = doc.data();
-
-          const toNumberOrNull = (value: any): number | null => {
-            if (typeof value === "number" && Number.isFinite(value)) return value;
-            if (typeof value === "string" && value.trim() !== "") {
-              const parsed = Number(value);
-              return Number.isFinite(parsed) ? parsed : null;
-            }
-            return null;
-          };
-
-          const homeTeam = game.homeTeamId;
-          const awayTeam = game.awayTeamId;
-          const winnerTeam = game.winnerTeamId || game.winnerId;
-          const loserTeam = game.loserTeamId || (winnerTeam === homeTeam ? awayTeam : homeTeam);
-          const winnerScoreValue = toNumberOrNull(game.winnerScore);
-          const loserScoreValue = toNumberOrNull(game.loserScore);
-          const hasOfficialFinalScore = winnerScoreValue !== null && loserScoreValue !== null;
-          const hasStatsModuleData = Array.isArray(game.playerStats) && game.playerStats.length > 0;
-          const isCompletedGame = Boolean(
-            hasOfficialFinalScore &&
-            hasStatsModuleData &&
-            winnerTeam &&
-            homeTeam &&
-            awayTeam
-          );
-
-          if (isCompletedGame && winnerTeam && loserTeam) {
-            const winnerScore = winnerScoreValue ?? 0;
-            const loserScore = loserScoreValue ?? 0;
-            const homeTeamName = game.homeTeamName || "";
-            const awayTeamName = game.awayTeamName || "";
-            const gameGender = normalizeTeamGender(game.gender, undefined, "men");
-
-            const resolveTeamNameForId = (teamId?: string) => {
-              if (!teamId) return "";
-              if (teamId === homeTeam) return homeTeamName;
-              if (teamId === awayTeam) return awayTeamName;
-              return "";
-            };
-
-            const ensureTeam = (teamId: string, name: string) => {
-              const key = teamIdToKey.get(teamId) ?? canonicalTeamKey(gameGender, name || teamId);
-              if (!teamStats[key]) {
-                teamStats[key] = {
-                  wins: 0,
-                  losses: 0,
-                  totalPoints: 0,
-                  teamName: name || teamId,
-                  gender: gameGender,
-                  teamId,
-                };
-              }
-              // If this canonical bucket doesn't have a representative id yet, set it.
-              if (!teamStats[key].teamId) {
-                teamStats[key].teamId = teamId;
-              }
-              return key;
-            };
-
-            const winnerName = resolveTeamNameForId(winnerTeam);
-            const loserName = resolveTeamNameForId(loserTeam);
-            const winnerKey = ensureTeam(winnerTeam, winnerName);
-            const loserKey = ensureTeam(loserTeam, loserName);
-
-            teamStats[winnerKey].wins += 1;
-            teamStats[loserKey].losses += 1;
-            teamStats[winnerKey].totalPoints += winnerScore;
-            teamStats[loserKey].totalPoints += loserScore;
-          }
-        });
-        
-
-        
-        // Convert to array and sort
-        const standingsArray = Object.entries(teamStats).map(([teamKey, stats], index) => ({
-          seed: index + 1,
-          teamKey,
-          teamId: stats.teamId,
-          team: stats.teamName,
-          wins: stats.wins,
-          losses: stats.losses,
-          totalPoints: stats.totalPoints,
-          gender: stats.gender
-        }));
-        
-        // Sort by wins (descending), then by total points (descending), then alphabetically
-        standingsArray.sort((a, b) => {
+        ) => {
           if (b.wins !== a.wins) return b.wins - a.wins;
-          if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
+          if (a.losses !== b.losses) return a.losses - b.losses;
+          if ((b.totalPoints ?? 0) !== (a.totalPoints ?? 0)) return (b.totalPoints ?? 0) - (a.totalPoints ?? 0);
           return a.team.localeCompare(b.team);
         });
-        
-        // Update seed numbers after sorting
-        const menStandings = standingsArray.filter(s => s.gender === "men");
-        const womenStandings = standingsArray.filter(s => s.gender === "women");
-        
-        menStandings.forEach((s, i) => s.seed = i + 1);
-        womenStandings.forEach((s, i) => s.seed = i + 1);
-        
+
+        const menStandings = standingsArray.filter((s) => s.gender === "men");
+        const womenStandings = standingsArray.filter((s) => s.gender === "women");
+        menStandings.forEach((s, i) => (s.seed = i + 1));
+        womenStandings.forEach((s, i) => (s.seed = i + 1));
+
         const previousRanks = standingsHistoryRef.current;
         const finalStandings = [...menStandings, ...womenStandings].map((standing) => {
-          const historyKey = standing.teamKey;
-          const previousSeed = previousRanks[historyKey];
-          const rankChange = typeof previousSeed === "number"
-            ? standing.seed < previousSeed
-              ? "up"
-              : standing.seed > previousSeed
-                ? "down"
-                : "same"
-            : "same";
-
-          return {
-            ...standing,
-            rankChange,
-          };
+          const previousSeed = previousRanks[standing.teamKey];
+          const rankChange =
+            typeof previousSeed === "number"
+              ? standing.seed < previousSeed
+                ? "up"
+                : standing.seed > previousSeed
+                  ? "down"
+                  : "same"
+              : "same";
+          return { ...standing, rankChange };
         });
 
         const nextRanks: Record<string, number> = {};
@@ -3512,41 +3573,213 @@ export default function Home() {
         standingsHistoryRef.current = nextRanks;
         persistStandingsHistory(nextRanks);
 
-        if (finalStandings.length > 0) {
-          setDynamicStandings(finalStandings);
-        }
+        return finalStandings;
       } catch (error) {
         console.error("Error calculating standings:", error);
+        return [];
       }
     };
 
+    const toNumber = (value: unknown): number => {
+      if (typeof value === "number") {
+        return Number.isFinite(value) ? value : 0;
+      }
+
+      if (typeof value === "string") {
+        const cleaned = value.trim().replace(/,/g, ".").replace(/[^0-9.+\-]/g, "");
+        const parsed = Number.parseFloat(cleaned);
+        return Number.isFinite(parsed) ? parsed : 0;
+      }
+
+      return 0;
+    };
+
+    const resolveEvaluation = (statsSource: Record<string, unknown>) => {
+      const evStored = toNumber(statsSource.evl ?? statsSource.ev);
+      if (evStored !== 0) {
+        return evStored;
+      }
+
+      const pts = toNumber(statsSource.pts ?? statsSource.points);
+      const rebDirect = toNumber(statsSource.reb ?? statsSource.rebounds);
+      const oreb = toNumber(statsSource.oreb ?? statsSource.offensiveRebounds);
+      const dreb = toNumber(statsSource.dreb ?? statsSource.defensiveRebounds);
+      const reb = rebDirect > 0 ? rebDirect : oreb + dreb;
+      const ast = toNumber(statsSource.ast ?? statsSource.assists);
+      const stl = toNumber(statsSource.stl ?? statsSource.steals);
+      const blk = toNumber(statsSource.blk ?? statsSource.blocks);
+      const turnovers = toNumber(statsSource.to ?? statsSource.turnovers);
+      const twoPa = toNumber(statsSource.two_pa ?? statsSource.twoPointsAttempted);
+      const threePa = toNumber(statsSource.three_pa ?? statsSource.threePointsAttempted);
+      const twoPm = toNumber(statsSource.two_pm ?? statsSource.twoPointsMade);
+      const threePm = toNumber(statsSource.three_pm ?? statsSource.threePointsMade);
+      const fga = toNumber(statsSource.fga ?? statsSource.fieldGoalsAttempted) || (twoPa + threePa);
+      const fgm = toNumber(statsSource.fgm ?? statsSource.fieldGoalsMade) || (twoPm + threePm);
+      const fta = toNumber(statsSource.ft_a ?? statsSource.freeThrowsAttempted);
+      const ftm = toNumber(statsSource.ft_m ?? statsSource.freeThrowsMade);
+
+      return pts + reb + ast + stl + blk - turnovers - (fga - fgm) - (fta - ftm);
+    };
+
+    const toMillis = (value: unknown) => {
+      if (value && typeof value === "object" && "toMillis" in (value as Record<string, unknown>) && typeof (value as { toMillis?: unknown }).toMillis === "function") {
+        return ((value as { toMillis: () => number }).toMillis());
+      }
+      if (value instanceof Date) {
+        return value.getTime();
+      }
+      return 0;
+    };
+
+    const getHomeStatsVersion = async () => {
+      const [teamsUpdatedSnap, gamesUpdatedSnap] = await Promise.all([
+        getDocs(query(collection(firebaseDB, "teams"), orderBy("updatedAt", "desc"), limit(1))),
+        getDocs(query(collection(firebaseDB, "games"), orderBy("updatedAt", "desc"), limit(1))),
+      ]);
+
+      const teamsUpdatedAt = teamsUpdatedSnap.docs[0]?.data()?.updatedAt;
+      const gamesUpdatedAt = gamesUpdatedSnap.docs[0]?.data()?.updatedAt;
+      return Math.max(toMillis(teamsUpdatedAt), toMillis(gamesUpdatedAt));
+    };
+
+    let activeRefreshToken = 0;
+
+    const refreshHomeStats = async (version: number) => {
+      const refreshToken = ++activeRefreshToken;
+      try {
+        const teamsSnapshot = await getDocs(collection(firebaseDB, "teams"));
+        const standings = calculateStandingsFromTeams(teamsSnapshot);
+
+        if (refreshToken !== activeRefreshToken) return;
+
+        setDynamicStandings(standings);
+        writeHomeStatsCache({
+          version,
+          standings,
+          leagueTopPlayers: readHomeStatsCache()?.leagueTopPlayers ?? [],
+        });
+      } catch (error) {
+        console.error("Error refreshing home stats:", error);
+      }
+    };
+
+    let cancelled = false;
+
+    const bootstrapHomeStats = async () => {
+      try {
+        const version = await getHomeStatsVersion();
+        if (cancelled) return;
+
+        const cache = readHomeStatsCache();
+        if (cache && cache.version === version && cache.standings.length > 0) {
+          setDynamicStandings(cache.standings);
+          return;
+        }
+
+        await refreshHomeStats(version);
+      } catch (error) {
+        console.error("Error bootstrapping home stats:", error);
+      }
+    };
+
+    bootstrapHomeStats();
+
     const unsubscribeTeams = onSnapshot(
-      collection(firebaseDB, "teams"),
+      query(collection(firebaseDB, "teams"), orderBy("updatedAt", "desc"), limit(1)),
       () => {
-        calculateStandings();
-      },
-      (error) => {
-        console.error("Error listening to teams updates:", error);
+        void bootstrapHomeStats();
       }
     );
 
     const unsubscribeGames = onSnapshot(
-      collection(firebaseDB, "games"),
+      query(collection(firebaseDB, "games"), orderBy("updatedAt", "desc"), limit(1)),
       () => {
-        calculateStandings();
-      },
-      (error) => {
-        console.error("Error listening to games updates:", error);
+        void bootstrapHomeStats();
       }
     );
 
-    calculateStandings();
-
     return () => {
+      cancelled = true;
+      activeRefreshToken += 1;
       unsubscribeTeams();
       unsubscribeGames();
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    let fallbackRequested = false;
+
+    const applyProjectorPlayers = (players: any[]) => {
+      if (cancelled || !Array.isArray(players) || players.length === 0) {
+        return;
+      }
+
+      setLeagueTopPlayers(players);
+
+      const cache = readHomeStatsCache();
+      writeHomeStatsCache({
+        version: cache?.version ?? 0,
+        standings: cache?.standings ?? dynamicStandings ?? [],
+        leagueTopPlayers: players,
+      });
+    };
+
+    const loadFallbackProjector = async () => {
+      if (fallbackRequested) {
+        return;
+      }
+
+      fallbackRequested = true;
+      try {
+        const players = await fetchHomeProjectorPlayers();
+        applyProjectorPlayers(players);
+      } catch (error) {
+        console.error("Error loading fallback home projector players:", error);
+      }
+    };
+
+    const unsubscribeProjector = onSnapshot(
+      doc(firebaseDB, HOME_PROJECTOR_COLLECTION, HOME_PROJECTOR_DOC),
+      (snapshot) => {
+        const data = snapshot.data() as { players?: any[] } | undefined;
+        if (!data || !Array.isArray(data.players) || data.players.length === 0) {
+          if (leagueTopPlayers.length === 0 && !projectorFallbackTimeoutRef.current) {
+            projectorFallbackTimeoutRef.current = setTimeout(() => {
+              projectorFallbackTimeoutRef.current = null;
+              void loadFallbackProjector();
+            }, 1500);
+          }
+          return;
+        }
+
+        if (projectorFallbackTimeoutRef.current) {
+          clearTimeout(projectorFallbackTimeoutRef.current);
+          projectorFallbackTimeoutRef.current = null;
+        }
+
+        applyProjectorPlayers(data.players);
+      },
+      (error) => {
+        console.error("Error listening to home projector cache:", error);
+        if (leagueTopPlayers.length === 0 && !projectorFallbackTimeoutRef.current) {
+          projectorFallbackTimeoutRef.current = setTimeout(() => {
+            projectorFallbackTimeoutRef.current = null;
+            void loadFallbackProjector();
+          }, 1500);
+        }
+      }
+    );
+
+    return () => {
+      cancelled = true;
+      if (projectorFallbackTimeoutRef.current) {
+        clearTimeout(projectorFallbackTimeoutRef.current);
+        projectorFallbackTimeoutRef.current = null;
+      }
+      unsubscribeProjector();
+    };
+  }, [dynamicStandings, leagueTopPlayers.length]);
 
   // Auto-rotate non-video featured news articles every configured interval
   useEffect(() => {
@@ -3763,126 +3996,6 @@ export default function Home() {
   };
 
   useEffect(() => {
-    const fetchLeagueTopPlayers = async () => {
-      try {
-        const teamsRef = collection(firebaseDB, "teams");
-        const teamsSnapshot = await getDocs(teamsRef);
-
-        const toNumber = (value: unknown): number => {
-          if (typeof value === "number") {
-            return Number.isFinite(value) ? value : 0;
-          }
-
-          if (typeof value === "string") {
-            const cleaned = value
-              .trim()
-              .replace(/,/g, ".")
-              .replace(/[^0-9.+\-]/g, "");
-            const parsed = Number.parseFloat(cleaned);
-            return Number.isFinite(parsed) ? parsed : 0;
-          }
-
-          return 0;
-        };
-
-        const resolveEvaluation = (statsSource: Record<string, unknown>) => {
-          const evStored = toNumber(statsSource.evl ?? statsSource.ev);
-          if (evStored !== 0) {
-            return evStored;
-          }
-
-          const pts = toNumber(statsSource.pts ?? statsSource.points);
-
-          const rebDirect = toNumber(statsSource.reb ?? statsSource.rebounds);
-          const oreb = toNumber(statsSource.oreb ?? statsSource.offensiveRebounds);
-          const dreb = toNumber(statsSource.dreb ?? statsSource.defensiveRebounds);
-          const reb = rebDirect > 0 ? rebDirect : oreb + dreb;
-
-          const ast = toNumber(statsSource.ast ?? statsSource.assists);
-          const stl = toNumber(statsSource.stl ?? statsSource.steals);
-          const blk = toNumber(statsSource.blk ?? statsSource.blocks);
-          const turnovers = toNumber(statsSource.to ?? statsSource.turnovers);
-
-          const twoPa = toNumber(statsSource.two_pa ?? statsSource.twoPointsAttempted);
-          const threePa = toNumber(statsSource.three_pa ?? statsSource.threePointsAttempted);
-          const twoPm = toNumber(statsSource.two_pm ?? statsSource.twoPointsMade);
-          const threePm = toNumber(statsSource.three_pm ?? statsSource.threePointsMade);
-
-          const fga = toNumber(statsSource.fga ?? statsSource.fieldGoalsAttempted) || (twoPa + threePa);
-          const fgm = toNumber(statsSource.fgm ?? statsSource.fieldGoalsMade) || (twoPm + threePm);
-
-          const fta = toNumber(statsSource.ft_a ?? statsSource.freeThrowsAttempted);
-          const ftm = toNumber(statsSource.ft_m ?? statsSource.freeThrowsMade);
-
-          return pts + reb + ast + stl + blk - turnovers - (fga - fgm) - (fta - ftm);
-        };
-        
-        // Fetch all team rosters in parallel instead of sequentially
-        const rosterPromises = teamsSnapshot.docs.map(async (teamDoc) => {
-          const teamData = teamDoc.data();
-          const rawTeamName = [teamData.city, teamData.name]
-            .filter(Boolean)
-            .join(" ")
-            .trim() || "Unknown";
-          // Fix duplicate "Espoir Espoir" pattern
-          const teamName = rawTeamName.replace(/^espoir\s+espoir\s+/i, "Espoir ");
-          const teamLogo = teamData.logo || "/logos/liprobakin.png";
-          const teamGender = normalizeTeamGender(teamData.gender, teamData.logo, "men");
-          const rosterRef = collection(firebaseDB, "teams", teamDoc.id, "roster");
-          
-          try {
-            const rosterSnapshot = await getDocs(rosterRef);
-            
-            return rosterSnapshot.docs.map((playerDoc) => {
-              const playerData = playerDoc.data();
-              const firstName = playerData.firstName || "";
-              const lastName = playerData.lastName || "";
-              const playerName = (playerData.name || `${firstName} ${lastName}`).trim();
-
-              const statsSource = playerData.stats ?? playerData.leaderboard ?? {};
-
-              return {
-                id: `${teamDoc.id}:${playerDoc.id}`,
-                name: playerName,
-                firstName,
-                lastName,
-                number: String(playerData.number ?? "00"),
-                teamName,
-                teamGender,
-                teamLogo,
-                headshot: playerData.headshot,
-                isImport: playerData.isImport || false,
-                stats: {
-                  pts: toNumber(statsSource.pts),
-                  reb: toNumber(statsSource.reb),
-                  ast: toNumber(statsSource.ast),
-                  blk: toNumber(statsSource.blk),
-                  stl: toNumber(statsSource.stl),
-                  evl: resolveEvaluation(statsSource),
-                },
-              };
-            });
-          } catch (error) {
-            console.error(`Error fetching roster for team ${teamDoc.id}:`, error);
-            return [];
-          }
-        });
-        
-        // Wait for all rosters to be fetched in parallel
-        const allRosters = await Promise.all(rosterPromises);
-        const allPlayers = allRosters.flat();
-        
-        const sortedByPts = [...allPlayers].sort((a, b) => b.stats.pts - a.stats.pts);
-        setLeagueTopPlayers(sortedByPts);
-      } catch (error) {
-        console.error("Error fetching league top players:", error);
-      }
-    };
-    
-    fetchLeagueTopPlayers();
-  }, []);
-
-  useEffect(() => {
     const toNumberOrNull = (value: unknown): number | null => {
       if (typeof value === "number" && Number.isFinite(value)) {
         return value;
@@ -3895,7 +4008,7 @@ export default function Home() {
     };
 
     const gamesRef = collection(firebaseDB, "games");
-    const gamesQuery = query(gamesRef, orderBy("date", "asc"));
+    const gamesQuery = query(gamesRef, where("status", "==", "live"), limit(8));
 
     const unsubscribe = onSnapshot(
       gamesQuery,
@@ -3903,7 +4016,6 @@ export default function Home() {
         const live = snapshot.docs
           .filter((doc) => {
             const data = doc.data();
-            const status = String(data.status || "").toLowerCase();
             if (data.isHiddenFromPublic === true) {
               return false;
             }
@@ -3911,7 +4023,7 @@ export default function Home() {
               return false;
             }
 
-            return status === "live";
+            return true;
           })
           .map((doc) => {
             const data = doc.data();
@@ -3954,8 +4066,14 @@ export default function Home() {
               livePeriod: livePeriodSource ? String(livePeriodSource) : "",
               liveClock: String(data.gameClock || data.clock || data.timeRemaining || ""),
               dateTime: `${data.date || ""}T${data.time || "00:00"}`,
-              homeTeamLogo: data.homeTeamLogo || data.team1Logo,
-              awayTeamLogo: data.awayTeamLogo || data.team2Logo,
+              homeTeamLogo: getResolvedTeamLogo({
+                teamName: data.homeTeam || data.team1 || data.homeTeamName || "Home",
+                logo: data.homeTeamLogo || data.team1Logo,
+              }),
+              awayTeamLogo: getResolvedTeamLogo({
+                teamName: data.awayTeam || data.team2 || data.awayTeamName || "Away",
+                logo: data.awayTeamLogo || data.team2Logo,
+              }),
               gender: data.gender as "men" | "women",
               location: data.venue || data.location || "",
               status: "live" as const,
@@ -4320,8 +4438,8 @@ export default function Home() {
             },
             homeTeam: game.data.homeTeamName || "Home",
             awayTeam: game.data.awayTeamName || "Away",
-            homeTeamLogo: game.data.homeTeamLogo,
-            awayTeamLogo: game.data.awayTeamLogo,
+            homeTeamLogo: getResolvedTeamLogo({ teamName: game.data.homeTeamName || "Home", logo: game.data.homeTeamLogo }),
+            awayTeamLogo: getResolvedTeamLogo({ teamName: game.data.awayTeamName || "Away", logo: game.data.awayTeamLogo }),
             gender: game.data.gender,
             dateTime: game.dateObj ? game.dateObj.toISOString() : "",
             isStartingSoon,
@@ -4344,7 +4462,8 @@ export default function Home() {
         // Fetch completed games for Final Buzzer section (rolling last 25)
         const completedGamesQuery = query(
           gamesRef,
-          orderBy("date", "desc")
+          orderBy("date", "desc"),
+          limit(25)
         );
         const completedSnapshot = await getDocs(completedGamesQuery);
         
@@ -4374,8 +4493,6 @@ export default function Home() {
             const dateObj = parseGameDateTime(data.date, data.time);
 
             const completedAtObj = toDateObject(data.completedAt);
-            const updatedAtObj = toDateObject(data.updatedAt);
-            const effectiveCompletedAt = completedAtObj || updatedAtObj || dateObj;
 
             const winnerScore = toNumberOrNull(data.winnerScore);
             const loserScore = toNumberOrNull(data.loserScore);
@@ -4384,19 +4501,21 @@ export default function Home() {
 
             const hasWinnerLoserScores =
               winnerScore !== null && loserScore !== null;
-            const hasOfficialFinalScore = hasWinnerLoserScores;
+            const hasDirectFinalScores = homeScore !== null && awayScore !== null;
+            const hasOfficialFinalScore = hasWinnerLoserScores || hasDirectFinalScores;
             const hasStatsModuleData = Array.isArray(data.playerStats) && data.playerStats.length > 0;
 
             const isCompleted =
               (data.completed === true || data.archived === true || Boolean(data.status === "completed" || data.status === "final" || data.status === "finished")) &&
-              hasOfficialFinalScore &&
-              hasStatsModuleData;
+              hasOfficialFinalScore;
 
             return {
               id: doc.id,
               ...data,
+              homeTeamLogo: getResolvedTeamLogo({ teamName: data.homeTeamName || data.homeTeam || data.team1 || "Home", logo: data.homeTeamLogo || data.team1Logo }),
+              awayTeamLogo: getResolvedTeamLogo({ teamName: data.awayTeamName || data.awayTeam || data.team2 || "Away", logo: data.awayTeamLogo || data.team2Logo }),
               dateObj,
-              completedAtObj: effectiveCompletedAt,
+              completedAtObj,
               winnerScore,
               loserScore,
               homeScore,
@@ -4408,13 +4527,13 @@ export default function Home() {
           })
           .filter((game: any) => {
             // Show completed games with final score (rolling list)
-            if (game.completedAtObj && game.completedAtObj > now) return false;
+            if (game.dateObj && game.dateObj > now) return false;
 
-            return game.isCompleted && game.hasOfficialFinalScore && game.hasStatsModuleData;
+            return game.isCompleted && game.hasOfficialFinalScore;
           })
           .sort((a: any, b: any) => {
-            const aTime = a.completedAtObj?.getTime() || a.dateObj?.getTime() || 0;
-            const bTime = b.completedAtObj?.getTime() || b.dateObj?.getTime() || 0;
+            const aTime = a.dateObj?.getTime() || a.completedAtObj?.getTime() || 0;
+            const bTime = b.dateObj?.getTime() || b.completedAtObj?.getTime() || 0;
             return bTime - aTime;
           })
           .slice(0, 25);
@@ -4760,13 +4879,11 @@ export default function Home() {
             const getArticleSummary = (article: NewsArticle) =>
               language === "en" && article.summary_en ? article.summary_en : article.summary;
 
-            const articleShareUrl =
-              typeof window === "undefined"
-                ? `https://liprobakin.com/?article=${encodeURIComponent(featured.id)}`
-                : `${window.location.origin}${window.location.pathname}?article=${encodeURIComponent(featured.id)}`;
+            const articleShareUrl = canonicalArticleShareUrl(featured.id);
             const articleShareTitle = getArticleTitle(featured);
             const articleShareExcerpt = getArticleExcerpt(featured).slice(0, 100);
             const articleImageUrl = featured.imageUrl || "https://liprobakin.com/logos/liprobakin.png";
+            const whatsappPreviewUrl = `${articleShareUrl}&wa=${encodeURIComponent(articleImageUrl)}`;
             
             // Facebook: Use simple sharer URL (iOS will prompt to open FB app)
             const facebookShareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(articleShareUrl)}`;
@@ -4775,7 +4892,7 @@ export default function Home() {
             const xShareUrl = `https://x.com/intent/tweet?url=${encodeURIComponent(articleShareUrl)}&text=${encodeURIComponent(`${articleShareTitle} - ${articleShareExcerpt}`)}&hashtags=Liprobakin,Basketball`;
 
             // WhatsApp: direct share link with title + URL
-            const whatsappShareUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(`${articleShareTitle}\n\n${articleShareExcerpt}\n\n${articleShareUrl}`)}`;
+            const whatsappShareUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(`${articleShareTitle}\n\n${articleShareExcerpt}\n\n${whatsappPreviewUrl}`)}`;
             
             // Instagram: Prepare share handler (will use native share or copy link)
             const handleInstagramShare = async (e: React.MouseEvent) => {
@@ -6976,7 +7093,7 @@ export default function Home() {
                           </td>
                           <td className="px-3 py-2 font-semibold text-white">
                             <Link href={teamHref} className="block">
-                              {row.totalPoints || getTotalPoints(row.wins, row.losses)}
+                              {row.totalPoints ?? getTotalPoints(row.wins, row.losses)}
                             </Link>
                           </td>
                           <td className="px-2 py-2">
@@ -7223,90 +7340,174 @@ export default function Home() {
 
         {/* Committee Section */}
         <section className="space-y-3">
-          <SectionHeader
-            id="committee"
-            eyebrow={sectionCopy.committee.eyebrow}
-            title={sectionCopy.committee.title}
-            description={sectionCopy.committee.description}
-          />
-          {(dynamicCommittee.length > 0 || dynamicCommission.length > 0) ? (
-            <div className="overflow-x-auto overflow-y-hidden pb-4 -mx-4 px-4">
-              <div className="flex gap-3 md:gap-4">
-                {/* Committee Members */}
-                {dynamicCommittee.map((member) => (
-                  <Link
-                    key={member.id}
-                    href={`/staff/${member.id}`}
-                    className="group relative overflow-hidden rounded-lg border border-white/10 bg-slate-900/50 transition-all hover:border-orange-500/30 hover:shadow-lg hover:shadow-orange-500/10 flex-shrink-0 w-[162px] sm:w-[180px] md:w-[198px]"
-                  >
-                    <div className="aspect-[4/5] relative">
-                      {member.photo ? (
-                        <Image
-                          src={member.photo}
-                          alt={member.name}
-                          fill
-                          className="object-cover transition-transform duration-500 group-hover:scale-105"
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-orange-900/20 via-slate-900 to-slate-900">
-                          <div className="flex h-12 w-12 md:h-14 md:w-14 items-center justify-center rounded-full bg-gradient-to-br from-orange-500 to-orange-600 text-xl md:text-2xl font-bold text-white shadow-lg">
-                            {member.name.charAt(0)}
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setShowRefs(false)}
+              className="text-left"
+              aria-label={language === "fr" ? "Afficher le comité" : "Show committee"}
+            >
+              {sectionCopy.committee.eyebrow ? (
+                <p className="text-xs uppercase tracking-[0.4em] text-slate-400">{sectionCopy.committee.eyebrow}</p>
+              ) : null}
+              <h2 id="committee-title" className="text-3xl font-semibold text-white">
+                {sectionCopy.committee.title}
+              </h2>
+              {sectionCopy.committee.description ? (
+                <p className="mt-2 text-sm text-slate-300">{sectionCopy.committee.description}</p>
+              ) : null}
+            </button>
+            <div className="flex items-center gap-2">
+              <div className="hidden sm:block h-10 w-0.5 bg-slate-400/30" aria-hidden />
+              <button
+                type="button"
+                onClick={() => setShowRefs(true)}
+                className="group flex flex-col items-start transition-all duration-300"
+                aria-label={language === "fr" ? "Afficher les arbitres" : "Show referees"}
+              >
+                <span className="gold-hover-text text-3xl font-semibold text-white transition-colors">
+                  {language === "fr" ? "Arbitres" : "Referee"}
+                </span>
+              </button>
+            </div>
+          </div>
+          
+          {/* Sliding container for Committee/Refs transition */}
+          <div className="relative overflow-hidden">
+            <div 
+              className="flex transition-transform duration-500 ease-in-out"
+              style={{ transform: showRefs ? "translateX(-100%)" : "translateX(0)" }}
+            >
+              {/* Committee View */}
+              <div className="w-full flex-shrink-0">
+                {(dynamicCommittee.length > 0 || dynamicCommission.length > 0) ? (
+                  <div className="overflow-x-auto overflow-y-hidden pb-4 -mx-4 px-4">
+                    <div className="flex gap-3 md:gap-4">
+                      {/* Committee Members */}
+                      {dynamicCommittee.map((member) => (
+                        <Link
+                          key={member.id}
+                          href={`/staff/${member.id}`}
+                          className="group relative overflow-hidden rounded-lg border border-white/10 bg-slate-900/50 transition-all hover:border-orange-500/30 hover:shadow-lg hover:shadow-orange-500/10 flex-shrink-0 w-[162px] sm:w-[180px] md:w-[198px]"
+                        >
+                          <div className="aspect-[4/5] relative">
+                            {member.photo ? (
+                              <Image
+                                src={member.photo}
+                                alt={member.name}
+                                fill
+                                className="object-cover transition-transform duration-500 group-hover:scale-105"
+                              />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-orange-900/20 via-slate-900 to-slate-900">
+                                <div className="flex h-12 w-12 md:h-14 md:w-14 items-center justify-center rounded-full bg-gradient-to-br from-orange-500 to-orange-600 text-xl md:text-2xl font-bold text-white shadow-lg">
+                                  {member.name.charAt(0)}
+                                </div>
+                              </div>
+                            )}
+                            {/* Gradient overlay */}
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
+                            {/* Info at bottom */}
+                            <div className="absolute bottom-0 left-0 right-0 p-2 md:p-3">
+                              <p className="font-semibold text-white text-xs md:text-sm truncate">{member.name}</p>
+                              <p className="text-[10px] md:text-xs text-orange-400 truncate">{member.role}</p>
+                            </div>
+                            {/* Hover overlay */}
+                            <div className="absolute inset-0 bg-orange-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />
                           </div>
-                        </div>
-                      )}
-                      {/* Gradient overlay */}
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
-                      {/* Info at bottom */}
-                      <div className="absolute bottom-0 left-0 right-0 p-2 md:p-3">
-                        <p className="font-semibold text-white text-xs md:text-sm truncate">{member.name}</p>
-                        <p className="text-[10px] md:text-xs text-orange-400 truncate">{member.role}</p>
-                      </div>
-                      {/* Hover overlay */}
-                      <div className="absolute inset-0 bg-orange-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </div>
-                  </Link>
-                ))}
-                {/* Commission Members - Blue styling */}
-                {dynamicCommission.map((member) => (
-                  <Link
-                    key={member.id}
-                    href={`/staff/${member.id}`}
-                    className="group relative overflow-hidden rounded-lg border border-white/10 bg-slate-900/50 transition-all hover:border-blue-500/30 hover:shadow-lg hover:shadow-blue-500/10 flex-shrink-0 w-[162px] sm:w-[180px] md:w-[198px]"
-                  >
-                    <div className="aspect-[4/5] relative">
-                      {member.photo ? (
-                        <Image
-                          src={member.photo}
-                          alt={member.name}
-                          fill
-                          className="object-cover transition-transform duration-500 group-hover:scale-105"
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-blue-900/20 via-slate-900 to-slate-900">
-                          <div className="flex h-12 w-12 md:h-14 md:w-14 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-blue-600 text-xl md:text-2xl font-bold text-white shadow-lg">
-                            {member.name.charAt(0)}
+                        </Link>
+                      ))}
+                      {/* Commission Members - Blue styling */}
+                      {dynamicCommission.map((member) => (
+                        <Link
+                          key={member.id}
+                          href={`/staff/${member.id}`}
+                          className="group relative overflow-hidden rounded-lg border border-white/10 bg-slate-900/50 transition-all hover:border-blue-500/30 hover:shadow-lg hover:shadow-blue-500/10 flex-shrink-0 w-[162px] sm:w-[180px] md:w-[198px]"
+                        >
+                          <div className="aspect-[4/5] relative">
+                            {member.photo ? (
+                              <Image
+                                src={member.photo}
+                                alt={member.name}
+                                fill
+                                className="object-cover transition-transform duration-500 group-hover:scale-105"
+                              />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-blue-900/20 via-slate-900 to-slate-900">
+                                <div className="flex h-12 w-12 md:h-14 md:w-14 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-blue-600 text-xl md:text-2xl font-bold text-white shadow-lg">
+                                  {member.name.charAt(0)}
+                                </div>
+                              </div>
+                            )}
+                            {/* Gradient overlay */}
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
+                            {/* Info at bottom */}
+                            <div className="absolute bottom-0 left-0 right-0 p-2 md:p-3">
+                              <p className="font-semibold text-white text-xs md:text-sm truncate">{member.name}</p>
+                              <p className="text-[10px] md:text-xs text-blue-400 truncate">{member.role}</p>
+                            </div>
+                            {/* Hover overlay */}
+                            <div className="absolute inset-0 bg-blue-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />
                           </div>
-                        </div>
-                      )}
-                      {/* Gradient overlay */}
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
-                      {/* Info at bottom */}
-                      <div className="absolute bottom-0 left-0 right-0 p-2 md:p-3">
-                        <p className="font-semibold text-white text-xs md:text-sm truncate">{member.name}</p>
-                        <p className="text-[10px] md:text-xs text-blue-400 truncate">{member.role}</p>
-                      </div>
-                      {/* Hover overlay */}
-                      <div className="absolute inset-0 bg-blue-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </Link>
+                      ))}
                     </div>
-                  </Link>
-                ))}
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-white/20 bg-slate-900/30 py-12 text-center">
+                    <p className="text-slate-400">{language === "fr" ? "Aucun membre du comité" : "No committee members yet"}</p>
+                  </div>
+                )}
+              </div>
+              
+              {/* Refs View */}
+              <div className="w-full flex-shrink-0">
+                {dynamicReferees.length > 0 ? (
+                  <div className="overflow-x-auto overflow-y-hidden pb-4 -mx-4 px-4">
+                    <div className="flex gap-3 md:gap-4">
+                      {dynamicReferees.map((ref) => (
+                        <Link
+                          key={ref.id}
+                          href={`/referees/${ref.id}`}
+                          className="group relative overflow-hidden rounded-lg border border-white/10 bg-slate-900/50 transition-all hover:border-slate-400/30 hover:shadow-lg hover:shadow-slate-400/10 flex-shrink-0 w-[162px] sm:w-[180px] md:w-[198px]"
+                        >
+                          <div className="aspect-[4/5] relative">
+                            {ref.photo ? (
+                              <Image
+                                src={ref.photo}
+                                alt={ref.name}
+                                fill
+                                className="object-cover transition-transform duration-500 group-hover:scale-105"
+                              />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-800/50 via-slate-900 to-slate-900">
+                                <div className="flex h-12 w-12 md:h-14 md:w-14 items-center justify-center rounded-full bg-gradient-to-br from-slate-500 to-slate-600 text-xl md:text-2xl font-bold text-white shadow-lg">
+                                  {ref.name.charAt(0)}
+                                </div>
+                              </div>
+                            )}
+                            {/* Gradient overlay */}
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
+                            {/* Info at bottom */}
+                            <div className="absolute bottom-0 left-0 right-0 p-2 md:p-3">
+                              <p className="font-semibold text-white text-xs md:text-sm truncate">{ref.name}</p>
+                              <p className="text-[10px] md:text-xs text-slate-400 truncate">{ref.role}</p>
+                            </div>
+                            {/* Hover overlay */}
+                            <div className="absolute inset-0 bg-slate-400/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-white/20 bg-slate-900/30 py-12 text-center">
+                    <p className="text-slate-400">{language === "fr" ? "Aucun arbitre" : "No referees yet"}</p>
+                  </div>
+                )}
               </div>
             </div>
-          ) : (
-            <div className="rounded-xl border border-dashed border-white/20 bg-slate-900/30 py-12 text-center">
-              <p className="text-slate-400">{language === "fr" ? "Aucun membre du comité" : "No committee members yet"}</p>
-            </div>
-          )}
+          </div>
         </section>
         </div>
       </main>

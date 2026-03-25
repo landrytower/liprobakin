@@ -7,6 +7,7 @@ import { useSearchParams } from "next/navigation";
 import { collection, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from "firebase/firestore";
 import { firebaseDB } from "@/lib/firebase";
 import { useAdmin } from "../../../layout";
+import { updateLiveGameWithAnnouncement } from "@/lib/liveAnnouncements";
 
 type GameItem = {
   id: string;
@@ -18,6 +19,7 @@ type GameItem = {
   time?: string;
   status?: string;
   completed?: boolean;
+  liveAnnouncementId?: string;
   homeScore?: number;
   awayScore?: number;
   period?: string | number;
@@ -151,10 +153,22 @@ export default function LiveConsolePage() {
     setGames((prev) => prev.map((game) => (game.id === selectedGame.id ? { ...game, ...optimistic } : game)));
 
     try {
-      await updateDoc(doc(firebaseDB, "games", selectedGame.id), {
-        ...optimistic,
-        updatedAt: serverTimestamp(),
-      });
+      const alreadyLive = String(selectedGame.status || "").toLowerCase() === "live";
+      const hasAnnouncement = typeof selectedGame.liveAnnouncementId === "string" && selectedGame.liveAnnouncementId.trim().length > 0;
+
+      if (alreadyLive && hasAnnouncement) {
+        await updateDoc(doc(firebaseDB, "games", selectedGame.id), {
+          ...optimistic,
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        await updateLiveGameWithAnnouncement({
+          gameId: selectedGame.id,
+          homeTeamName: selectedGame.homeTeamName,
+          awayTeamName: selectedGame.awayTeamName,
+          patch: optimistic,
+        });
+      }
       setStatus({ type: "success", message: successMessage });
     } catch (error) {
       console.error("Live update failed:", error);
@@ -249,10 +263,19 @@ export default function LiveConsolePage() {
     setGames((prev) => prev.map((game) => (game.id === selectedGame.id ? { ...game, ...optimistic } : game)));
 
     try {
-      await updateDoc(doc(firebaseDB, "games", selectedGame.id), {
-        ...optimistic,
-        updatedAt: serverTimestamp(),
-      });
+      if (nextLive) {
+        await updateLiveGameWithAnnouncement({
+          gameId: selectedGame.id,
+          homeTeamName: selectedGame.homeTeamName,
+          awayTeamName: selectedGame.awayTeamName,
+          patch: optimistic,
+        });
+      } else {
+        await updateDoc(doc(firebaseDB, "games", selectedGame.id), {
+          ...optimistic,
+          updatedAt: serverTimestamp(),
+        });
+      }
       setStatus({ type: "success", message: t.liveStatusUpdated });
     } catch (error) {
       console.error("Live status update failed:", error);

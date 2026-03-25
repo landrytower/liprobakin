@@ -16,7 +16,6 @@ import {
   ConfirmationResult,
   PhoneAuthProvider,
   linkWithCredential,
-  updatePhoneNumber,
 } from "firebase/auth";
 import {
   doc,
@@ -29,7 +28,8 @@ import {
   getDocs,
   onSnapshot,
 } from "firebase/firestore";
-import { firebaseAuth, firebaseDB } from "@/lib/firebase";
+import { firebaseAuth } from "@/lib/firebase/auth";
+import { firebaseDB } from "@/lib/firebase/firestore";
 import { normalizePhoneNumber } from "@/lib/passwordReset";
 import type { UserProfile } from "@/types/user";
 

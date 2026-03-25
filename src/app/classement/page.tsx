@@ -6,6 +6,7 @@ import Link from "next/link";
 import { collection, getDocs, onSnapshot } from "firebase/firestore";
 import { firebaseDB } from "@/lib/firebase";
 import { normalizeTeamGender } from "@/lib/team-gender";
+import { resolveTeamLogo } from "@/lib/team-logo";
 import { useLanguage } from "@/contexts/LanguageContext";
 import {
   conferenceStandings,
@@ -25,21 +26,36 @@ type CurrentTeam = {
   gender?: string;
   logo?: string;
   colors?: string[];
+  wins?: number;
+  losses?: number;
+  totalPoints?: number;
 };
 type CurrentGame = {
   id: string;
   gender?: string;
   completed?: boolean;
+  archived?: boolean;
+  status?: string;
   homeTeamId?: string;
   awayTeamId?: string;
   homeTeamName?: string;
   awayTeamName?: string;
   homeScore?: number;
   awayScore?: number;
+  winnerId?: string;
   winnerTeamId?: string;
   winnerScore?: number;
   loserTeamId?: string;
   loserScore?: number;
+};
+type StandingsRow = {
+  teamId: string;
+  team: string;
+  wins: number;
+  losses: number;
+  totalPoints: number;
+  gender: Gender;
+  rankChange?: "up" | "down" | "same";
 };
 
 const normalizeTeamName = (name: string) => {
@@ -50,6 +66,7 @@ const normalizeTeamName = (name: string) => {
   return withFixedTypo.replace(/^espoir\s+espoir\s+/i, "Espoir ").trim();
 };
 const normalizeTeamKey = (name: string) => normalizeTeamName(name).toLowerCase();
+const STANDINGS_HISTORY_KEY = "liprobakin:classement-history:v1";
 
 const buildTeamDisplayName = (team: Pick<CurrentTeam, "id" | "name" | "city"> | Franchise) => {
   const city = normalizeTeamName(team.city ?? "");
@@ -143,6 +160,23 @@ export default function ClassementPage() {
   const [currentPartners, setCurrentPartners] = useState<CurrentPartner[]>([]);
   const [currentTeams, setCurrentTeams] = useState<CurrentTeam[]>([]);
   const [currentGames, setCurrentGames] = useState<CurrentGame[]>([]);
+  const [rankHistory, setRankHistory] = useState<Record<string, number>>(() => {
+    if (typeof window === "undefined") {
+      return {};
+    }
+
+    try {
+      const raw = window.localStorage.getItem(STANDINGS_HISTORY_KEY);
+      if (!raw) {
+        return {};
+      }
+
+      const parsed = JSON.parse(raw) as Record<string, number>;
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch {
+      return {};
+    }
+  });
 
   useEffect(() => {
     const unsubscribe = onSnapshot(
@@ -206,20 +240,30 @@ export default function ClassementPage() {
     [gender]
   );
 
-  const standings = useMemo(() => {
+  const standings = useMemo<StandingsRow[]>(() => {
     const liveGenderTeams = currentTeams.filter((team) => normalizeTeamGender(team.gender, team.logo, "men") === gender);
 
     if (liveGenderTeams.length === 0) {
-      return fallbackStandings.map((row) => ({ team: row.team }));
+      return fallbackStandings.map((row, index) => ({
+        teamId: `fallback-${gender}-${index}`,
+        team: row.team,
+        wins: 0,
+        losses: 0,
+        totalPoints: 0,
+        gender,
+        rankChange: "same",
+      }));
     }
 
-    const unique = new Map<string, { team: string }>();
-    liveGenderTeams.forEach((team) => {
-      const display = buildTeamDisplayName(team) || team.id;
-      unique.set(normalizeTeamKey(display), { team: display });
-    });
-
-    return Array.from(unique.values());
+    return liveGenderTeams.map((team) => ({
+      teamId: team.id,
+      team: buildTeamDisplayName(team) || team.id,
+      wins: typeof team.wins === "number" && Number.isFinite(team.wins) ? team.wins : 0,
+      losses: typeof team.losses === "number" && Number.isFinite(team.losses) ? team.losses : 0,
+      totalPoints: typeof team.totalPoints === "number" && Number.isFinite(team.totalPoints) ? team.totalPoints : 0,
+      gender,
+      rankChange: "same",
+    }));
   }, [currentTeams, fallbackStandings, gender]);
 
   const teams = useMemo<Franchise[]>(() => {
@@ -240,18 +284,37 @@ export default function ClassementPage() {
   }, [currentTeams, gender]);
 
   const scoreStatsByTeam = useMemo(() => {
-    const selectedTeamKeys = new Set(
-      standings.map((row) => normalizeTeamKey(row.team))
-    );
+    const selectedTeamIds = new Set(standings.map((row) => row.teamId));
+    const teamIdsByName = new Map<string, Set<string>>();
+    standings.forEach((row) => {
+      const key = normalizeTeamKey(row.team);
+      const existing = teamIdsByName.get(key) ?? new Set<string>();
+      existing.add(row.teamId);
+      teamIdsByName.set(key, existing);
+    });
+
+    const resolveTeamId = (teamId?: string, teamName?: string) => {
+      if (teamId && selectedTeamIds.has(teamId)) {
+        return teamId;
+      }
+
+      const normalizedName = normalizeTeamKey(teamName ?? "");
+      if (!normalizedName) {
+        return "";
+      }
+
+      const matches = teamIdsByName.get(normalizedName);
+      if (!matches || matches.size !== 1) {
+        return "";
+      }
+
+      return Array.from(matches)[0] ?? "";
+    };
 
     const map = new Map<string, { played: number; scored: number; allowed: number; wins: number; losses: number }>();
 
     currentGames.forEach((game) => {
       if (game.gender && game.gender !== gender) {
-        return;
-      }
-
-      if (!game.completed) {
         return;
       }
 
@@ -280,10 +343,22 @@ export default function ClassementPage() {
         return;
       }
 
-      const homeKey = normalizeTeamKey(game.homeTeamName ?? "");
-      const awayKey = normalizeTeamKey(game.awayTeamName ?? "");
+      const isCompleted =
+        game.completed === true ||
+        game.archived === true ||
+        game.status === "completed" ||
+        game.status === "final" ||
+        game.status === "finished" ||
+        Boolean(game.winnerTeamId || game.winnerId);
 
-      if (selectedTeamKeys.has(homeKey)) {
+      if (!isCompleted) {
+        return;
+      }
+
+      const homeKey = resolveTeamId(game.homeTeamId, game.homeTeamName);
+      const awayKey = resolveTeamId(game.awayTeamId, game.awayTeamName);
+
+      if (homeKey && selectedTeamIds.has(homeKey)) {
         const current = map.get(homeKey) ?? { played: 0, scored: 0, allowed: 0, wins: 0, losses: 0 };
         current.played += 1;
         current.scored += homeScore;
@@ -296,7 +371,7 @@ export default function ClassementPage() {
         map.set(homeKey, current);
       }
 
-      if (selectedTeamKeys.has(awayKey)) {
+      if (awayKey && selectedTeamIds.has(awayKey)) {
         const current = map.get(awayKey) ?? { played: 0, scored: 0, allowed: 0, wins: 0, losses: 0 };
         current.played += 1;
         current.scored += awayScore;
@@ -314,15 +389,8 @@ export default function ClassementPage() {
   }, [currentGames, gender, standings]);
 
   const sortedStandings = useMemo(() => {
-    return [...standings].sort((a, b) => {
-      const aStats = scoreStatsByTeam.get(normalizeTeamKey(a.team)) ?? {
-        played: 0,
-        scored: 0,
-        allowed: 0,
-        wins: 0,
-        losses: 0,
-      };
-      const bStats = scoreStatsByTeam.get(normalizeTeamKey(b.team)) ?? {
+    const sorted = [...standings].map((row) => {
+      const gameStats = scoreStatsByTeam.get(row.teamId) ?? {
         played: 0,
         scored: 0,
         allowed: 0,
@@ -330,8 +398,35 @@ export default function ClassementPage() {
         losses: 0,
       };
 
-      if (bStats.wins !== aStats.wins) return bStats.wins - aStats.wins;
-      if (aStats.losses !== bStats.losses) return aStats.losses - bStats.losses;
+      const useLiveGameTotals = gameStats.played > 0;
+
+      return {
+        ...row,
+        wins: useLiveGameTotals ? gameStats.wins : row.wins,
+        losses: useLiveGameTotals ? gameStats.losses : row.losses,
+        totalPoints: useLiveGameTotals ? gameStats.scored : row.totalPoints,
+      };
+    });
+
+    sorted.sort((a, b) => {
+      const aStats = scoreStatsByTeam.get(a.teamId) ?? {
+        played: 0,
+        scored: 0,
+        allowed: 0,
+        wins: 0,
+        losses: 0,
+      };
+      const bStats = scoreStatsByTeam.get(b.teamId) ?? {
+        played: 0,
+        scored: 0,
+        allowed: 0,
+        wins: 0,
+        losses: 0,
+      };
+
+      if (b.wins !== a.wins) return b.wins - a.wins;
+      if (a.losses !== b.losses) return a.losses - b.losses;
+      if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
 
       const aDiff = aStats.scored - aStats.allowed;
       const bDiff = bStats.scored - bStats.allowed;
@@ -339,7 +434,41 @@ export default function ClassementPage() {
 
       return normalizeTeamName(a.team).localeCompare(normalizeTeamName(b.team));
     });
-  }, [scoreStatsByTeam, standings]);
+
+    return sorted.map((row, index) => {
+      const previousSeed = rankHistory[`${gender}:${row.teamId}`];
+      const currentSeed = index + 1;
+      const rankChange =
+        typeof previousSeed === "number"
+          ? currentSeed < previousSeed
+            ? "up"
+            : currentSeed > previousSeed
+              ? "down"
+              : "same"
+          : "same";
+
+      return {
+        ...row,
+        rankChange,
+      };
+    });
+  }, [gender, rankHistory, scoreStatsByTeam, standings]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || sortedStandings.length === 0) return;
+
+    const nextHistory = { ...rankHistory };
+    sortedStandings.forEach((row, index) => {
+      nextHistory[`${gender}:${row.teamId}`] = index + 1;
+    });
+
+    const currentSerialized = JSON.stringify(rankHistory);
+    const nextSerialized = JSON.stringify(nextHistory);
+    if (currentSerialized === nextSerialized) return;
+
+    window.localStorage.setItem(STANDINGS_HISTORY_KEY, nextSerialized);
+    setRankHistory(nextHistory);
+  }, [gender, rankHistory, sortedStandings]);
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
@@ -447,6 +576,7 @@ export default function ClassementPage() {
               <thead className="sticky top-0 z-20 bg-slate-950/70 backdrop-blur-xl border-y border-white/15 text-slate-300">
                 <tr>
                   <th className="sticky left-0 z-30 w-10 min-w-10 bg-slate-950 px-1.5 py-2 text-center whitespace-nowrap md:static md:w-auto md:min-w-0 md:px-2 md:py-3">{t.seed}</th>
+                  <th className="w-10 px-1 py-2 text-center whitespace-nowrap md:px-2 md:py-3">↕</th>
                   <th className="sticky left-10 z-30 w-[1%] min-w-0 bg-slate-950 pl-1 pr-0 py-2 whitespace-nowrap text-slate-200 md:static md:w-auto md:min-w-0 md:pr-0 md:py-3">{t.team}</th>
                   <th className="px-2 py-2 text-center whitespace-nowrap md:px-3 md:py-3">{t.gamesPlayed}</th>
                   <th className="px-2 py-2 text-center whitespace-nowrap md:px-3 md:py-3">{t.wins}</th>
@@ -524,19 +654,25 @@ export default function ClassementPage() {
               </thead>
               <tbody>
                 {sortedStandings.map((row, index) => {
-                  const franchise = findFranchiseByName(row.team, teams);
-                  const displayName = franchise ? formatFranchiseName(franchise) : normalizeTeamName(row.team);
-                  const rawTeamStats =
-                    scoreStatsByTeam.get(normalizeTeamKey(displayName)) ??
-                    scoreStatsByTeam.get(normalizeTeamKey(row.team)) ??
-                    { played: 0, scored: 0, allowed: 0, wins: 0, losses: 0 };
+                  const currentTeam = currentTeams.find((team) => team.id === row.teamId);
+                  const franchise = currentTeam ? null : findFranchiseByName(row.team, teams);
+                  const displayName = currentTeam
+                    ? buildTeamDisplayName(currentTeam)
+                    : franchise
+                      ? formatFranchiseName(franchise)
+                      : normalizeTeamName(row.team);
+                  const rawTeamStats = scoreStatsByTeam.get(row.teamId) ?? { played: 0, scored: 0, allowed: 0, wins: 0, losses: 0 };
                   const teamStats = rawTeamStats;
-                  const wins = teamStats.wins;
-                  const losses = teamStats.losses;
+                  const wins = row.wins;
+                  const losses = row.losses;
                   const scoredAvg = teamStats.played > 0 ? (teamStats.scored / teamStats.played).toFixed(1) : "0.0";
                   const allowedAvg = teamStats.played > 0 ? (teamStats.allowed / teamStats.played).toFixed(1) : "0.0";
                   const difference = teamStats.scored - teamStats.allowed;
-                  const teamLogo = franchise?.logo;
+                  const teamLogo = currentTeam
+                    ? resolveTeamLogo(currentTeam)
+                    : franchise
+                      ? resolveTeamLogo(franchise)
+                      : undefined;
                   const shortName = displayName.length > 10 ? `${displayName.slice(0, 10)}...` : displayName;
                   const initials = displayName
                     .split(" ")
@@ -547,8 +683,17 @@ export default function ClassementPage() {
                   const teamHref = `/team/${encodeURIComponent(displayName)}?gender=${gender}`;
 
                   return (
-                    <tr key={`${gender}-${row.team}`} className="border-b border-white/10">
+                    <tr key={`${gender}-${row.teamId}`} className="border-b border-white/10">
                       <td className="sticky left-0 z-20 w-10 min-w-10 bg-slate-950 px-1.5 py-1.5 text-center text-slate-300 tabular-nums md:static md:w-auto md:min-w-0 md:px-2 md:py-3">{index + 1}</td>
+                      <td className="px-1 py-1.5 text-center text-xs font-semibold uppercase text-slate-300 md:px-2 md:py-3">
+                        {row.rankChange === "up" ? (
+                          <span className="text-emerald-400">▲</span>
+                        ) : row.rankChange === "down" ? (
+                          <span className="text-rose-400">▼</span>
+                        ) : (
+                          <span className="text-slate-500">-</span>
+                        )}
+                      </td>
                       <td className="sticky left-10 z-20 w-[1%] min-w-0 bg-slate-950 pl-1 pr-0 py-1.5 whitespace-nowrap md:static md:w-auto md:min-w-0 md:pr-0 md:py-3">
                         <Link
                           href={teamHref}
@@ -573,7 +718,7 @@ export default function ClassementPage() {
                       <td className="px-2 py-1.5 text-center tabular-nums md:px-3 md:py-3">{teamStats.played}</td>
                       <td className="px-2 py-1.5 text-center tabular-nums md:px-3 md:py-3">{wins}</td>
                       <td className="px-2 py-1.5 text-center tabular-nums md:px-3 md:py-3">{losses}</td>
-                      <td className="px-2 py-1.5 text-center tabular-nums md:px-3 md:py-3">{teamStats.scored}</td>
+                      <td className="px-2 py-1.5 text-center tabular-nums md:px-3 md:py-3">{row.totalPoints}</td>
                       <td className="px-2 py-1.5 text-center tabular-nums md:px-3 md:py-3">{scoredAvg}</td>
                       <td className="px-2 py-1.5 text-center tabular-nums md:px-3 md:py-3">{teamStats.allowed}</td>
                       <td className="px-2 py-1.5 text-center tabular-nums md:px-3 md:py-3">{allowedAvg}</td>

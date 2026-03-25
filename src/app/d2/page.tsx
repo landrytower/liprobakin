@@ -4,9 +4,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { firebaseDB } from "@/lib/firebase";
+import { firebaseDB } from "@/lib/firebase/firestore";
 import { parseCongoDateTime } from "@/lib/congo-time";
-import { collection, getDocs, orderBy, query } from "firebase/firestore";
+import { collection, getDocs, limit, orderBy, query, where } from "firebase/firestore";
 
 type EubakinTeam = {
   id: string;
@@ -91,6 +91,16 @@ const translations = {
   },
 };
 
+const teamsRequestCache = new Map<string, Promise<EubakinTeam[]>>();
+const gamesRequestCache = new Map<string, Promise<EubakinGame[]>>();
+
+const formatDateKey = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
 export default function D2Page() {
   const { language, setLanguage } = useLanguage();
   const t = translations[language as keyof typeof translations] || translations.en;
@@ -103,20 +113,38 @@ export default function D2Page() {
   const [loadingGames, setLoadingGames] = useState(true);
 
   useEffect(() => {
+    const cacheKey = "all";
+
     const fetchTeams = async () => {
       setLoadingTeams(true);
       try {
-        const snap = await getDocs(query(collection(firebaseDB, "eubakinTeams"), orderBy("name", "asc")));
-        setTeams(
-          snap.docs.map((item) => ({
-            id: item.id,
-            name: item.data().name || "",
-            conference: (item.data().conference || "west") as "west" | "east",
-            gender: (item.data().gender || "men") as "men" | "women",
-            wins: typeof item.data().wins === "number" ? item.data().wins : 0,
-            losses: typeof item.data().losses === "number" ? item.data().losses : 0,
-          }))
-        );
+        const cached = teamsRequestCache.get(cacheKey);
+        const request =
+          cached ??
+          (async () => {
+            const snap = await getDocs(
+              query(
+                collection(firebaseDB, "eubakinTeams"),
+                orderBy("name", "asc"),
+                limit(500)
+              )
+            );
+
+            return snap.docs.map((item) => ({
+              id: item.id,
+              name: item.data().name || "",
+              conference: (item.data().conference || "west") as "west" | "east",
+              gender: (item.data().gender || "men") as "men" | "women",
+              wins: typeof item.data().wins === "number" ? item.data().wins : 0,
+              losses: typeof item.data().losses === "number" ? item.data().losses : 0,
+            }));
+          })();
+
+        if (!cached) {
+          teamsRequestCache.set(cacheKey, request);
+        }
+
+        setTeams(await request);
       } catch (error) {
         console.error("Error loading EUBAKIN teams", error);
       } finally {
@@ -128,28 +156,57 @@ export default function D2Page() {
   }, []);
 
   useEffect(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const weekEnd = new Date(today);
+    weekEnd.setDate(weekEnd.getDate() + 7);
+
+    const fromKey = formatDateKey(today);
+    const toKey = formatDateKey(weekEnd);
+    const cacheKey = `${fromKey}:${toKey}`;
+
     const fetchGames = async () => {
       setLoadingGames(true);
       try {
-        const snap = await getDocs(collection(firebaseDB, "eubakinGames"));
-        setGames(
-          snap.docs.map((item) => ({
-            id: item.id,
-            conference: (item.data().conference || "west") as "west" | "east",
-            gender: (item.data().gender || "men") as "men" | "women",
-            gameDate: item.data().gameDate || "",
-            gameTime: item.data().gameTime || "",
-            homeTeamName: item.data().homeTeamName || "",
-            awayTeamName: item.data().awayTeamName || "",
-            homeScore: typeof item.data().homeScore === "number" ? item.data().homeScore : undefined,
-            awayScore: typeof item.data().awayScore === "number" ? item.data().awayScore : undefined,
-            status: (item.data().status || "scheduled") as "scheduled" | "final",
-          })).sort((a, b) => {
-            const dateCompare = (a.gameDate || "").localeCompare(b.gameDate || "");
-            if (dateCompare !== 0) return dateCompare;
-            return (a.gameTime || "").localeCompare(b.gameTime || "");
-          })
-        );
+        const cached = gamesRequestCache.get(cacheKey);
+        const request =
+          cached ??
+          (async () => {
+            const snap = await getDocs(
+              query(
+                collection(firebaseDB, "eubakinGames"),
+                where("gameDate", ">=", fromKey),
+                where("gameDate", "<=", toKey),
+                orderBy("gameDate", "asc"),
+                limit(300)
+              )
+            );
+
+            return snap.docs
+              .map((item) => ({
+                id: item.id,
+                conference: (item.data().conference || "west") as "west" | "east",
+                gender: (item.data().gender || "men") as "men" | "women",
+                gameDate: item.data().gameDate || "",
+                gameTime: item.data().gameTime || "",
+                homeTeamName: item.data().homeTeamName || "",
+                awayTeamName: item.data().awayTeamName || "",
+                homeScore: typeof item.data().homeScore === "number" ? item.data().homeScore : undefined,
+                awayScore: typeof item.data().awayScore === "number" ? item.data().awayScore : undefined,
+                status: (item.data().status || "scheduled") as "scheduled" | "final",
+              }))
+              .sort((a, b) => {
+                const dateCompare = (a.gameDate || "").localeCompare(b.gameDate || "");
+                if (dateCompare !== 0) return dateCompare;
+                return (a.gameTime || "").localeCompare(b.gameTime || "");
+              });
+          })();
+
+        if (!cached) {
+          gamesRequestCache.set(cacheKey, request);
+        }
+
+        setGames(await request);
       } catch (error) {
         console.error("Error loading EUBAKIN games", error);
       } finally {

@@ -191,7 +191,7 @@ async function recalculateLeagueStats() {
   const processedGamePlayerKeys = new Set();
 
   for (const teamDoc of teamsSnapshot.docs) {
-    teamRecords.set(teamDoc.id, { wins: 0, losses: 0 });
+    teamRecords.set(teamDoc.id, { wins: 0, losses: 0, totalPoints: 0 });
     totalsByTeamPlayer.set(teamDoc.id, new Map());
   }
 
@@ -203,6 +203,8 @@ async function recalculateLeagueStats() {
     const winnerId = getString(gameData.winnerId) || getString(gameData.winnerTeamId);
     const homeTeamId = getString(gameData.homeTeamId);
     const awayTeamId = getString(gameData.awayTeamId);
+    const homeScore = toNumber(gameData.homeScore);
+    const awayScore = toNumber(gameData.awayScore);
     const completed = status === "completed" || gameData.completed === true || Boolean(winnerId);
 
     if (!completed) continue;
@@ -217,6 +219,16 @@ async function recalculateLeagueStats() {
         const loserRecord = teamRecords.get(loserId);
         loserRecord.losses += 1;
       }
+    }
+
+    // Track totalPoints (sum of points scored per team)
+    if (homeTeamId && teamRecords.has(homeTeamId) && homeScore > 0) {
+      const homeRecord = teamRecords.get(homeTeamId);
+      homeRecord.totalPoints += homeScore;
+    }
+    if (awayTeamId && teamRecords.has(awayTeamId) && awayScore > 0) {
+      const awayRecord = teamRecords.get(awayTeamId);
+      awayRecord.totalPoints += awayScore;
     }
 
     if (!Array.isArray(gameData.playerStats)) continue;
@@ -274,7 +286,7 @@ async function recalculateLeagueStats() {
     const teamId = teamDoc.id;
     const rosterSnapshot = await db.collection(`teams/${teamId}/roster`).get();
     const rosterTotals = totalsByTeamPlayer.get(teamId) || new Map();
-    const record = teamRecords.get(teamId) || { wins: 0, losses: 0 };
+    const record = teamRecords.get(teamId) || { wins: 0, losses: 0, totalPoints: 0 };
 
     const updates = [];
     updates.push({
@@ -282,6 +294,7 @@ async function recalculateLeagueStats() {
       data: {
         wins: record.wins,
         losses: record.losses,
+        totalPoints: record.totalPoints,
         updatedAt: serverTimestamp(),
       },
     });

@@ -637,12 +637,12 @@ export default function TeamsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-white">🏀 {copy.title}</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-white">🏀 {copy.title}</h1>
           <p className="mt-1 text-sm text-slate-400">{copy.subtitle}</p>
         </div>
         <button
           onClick={() => setShowAddForm(!showAddForm)}
-          className="rounded-full border border-cyan-400/60 bg-cyan-500/20 px-6 py-2 text-xs font-semibold uppercase tracking-[0.4em] text-cyan-100 transition hover:bg-cyan-500/30"
+          className="rounded-full border border-cyan-400/60 bg-cyan-500/20 px-4 sm:px-6 py-2 text-xs font-semibold uppercase tracking-wider sm:tracking-[0.4em] text-cyan-100 transition hover:bg-cyan-500/30"
         >
           {copy.addTeam}
         </button>
@@ -750,14 +750,14 @@ export default function TeamsPage() {
             <button
               type="submit"
               disabled={saving}
-              className="rounded-full border border-emerald-400/60 bg-emerald-500/20 px-6 py-2 text-xs font-semibold uppercase tracking-[0.4em] text-emerald-100 transition hover:bg-emerald-500/30 disabled:opacity-50"
+              className="rounded-full border border-emerald-400/60 bg-emerald-500/20 px-4 sm:px-6 py-2 text-xs font-semibold uppercase tracking-wider sm:tracking-[0.4em] text-emerald-100 transition hover:bg-emerald-500/30 disabled:opacity-50"
             >
               {saving ? copy.creating : copy.createTeam}
             </button>
             <button
               type="button"
               onClick={() => setShowAddForm(false)}
-              className="rounded-full border border-white/10 px-6 py-2 text-xs font-semibold uppercase tracking-[0.4em] text-slate-300 hover:bg-white/5"
+              className="rounded-full border border-white/10 px-4 sm:px-6 py-2 text-xs font-semibold uppercase tracking-wider sm:tracking-[0.4em] text-slate-300 hover:bg-white/5"
             >
               {copy.cancel}
             </button>
@@ -766,10 +766,10 @@ export default function TeamsPage() {
       )}
 
       {/* Teams Grid */}
-      <div className="rounded-2xl border border-white/10 bg-slate-900/80 p-6">
+      <div className="rounded-2xl border border-white/10 bg-slate-900/80 p-4 sm:p-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div>
-            <p className="text-xs uppercase tracking-[0.4em] text-slate-400">{copy.teamManagement}</p>
+            <p className="text-xs uppercase tracking-wider sm:tracking-[0.4em] text-slate-400">{copy.teamManagement}</p>
             <p className="text-sm text-slate-500">
               {teams.length} {copy.teamsSaved} · {copy.clickToEdit}
             </p>
@@ -812,7 +812,7 @@ export default function TeamsPage() {
         {filteredTeams.length === 0 ? (
           <p className="text-center text-slate-500 py-8">{copy.noTeams}</p>
         ) : (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7">
+          <div className="grid grid-cols-2 gap-2 sm:gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7">
             {filteredTeams.map((team) => (
               <div
                 key={team.id}
@@ -874,12 +874,12 @@ export default function TeamsPage() {
       <button
         type="button"
         onClick={() => setStatsResetOpen(!statsResetOpen)}
-        className="group relative w-full overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-rose-600/20 to-orange-600/20 p-6 text-left shadow-xl transition hover:border-white/30"
+        className="group relative w-full overflow-hidden rounded-2xl sm:rounded-3xl border border-white/10 bg-gradient-to-br from-rose-600/20 to-orange-600/20 p-4 sm:p-6 text-left shadow-xl transition hover:border-white/30"
       >
         <div className="relative z-10 flex items-center justify-between">
           <div>
-            <p className="text-xs uppercase tracking-[0.4em] text-slate-400">MODULE</p>
-            <h2 className="mt-2 text-xl font-bold text-white">📊 {copy.statsReset}</h2>
+            <p className="text-xs uppercase tracking-wider sm:tracking-[0.4em] text-slate-400">MODULE</p>
+            <h2 className="mt-2 text-base sm:text-xl font-bold text-white">📊 {copy.statsReset}</h2>
             <p className="mt-1 text-sm text-slate-300">{copy.statsResetDesc}</p>
           </div>
           <span className="text-2xl text-white">{statsResetOpen ? "−" : "+"}</span>
@@ -887,7 +887,7 @@ export default function TeamsPage() {
       </button>
 
       {statsResetOpen && (
-        <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 space-y-6">
+        <section className="rounded-2xl sm:rounded-3xl border border-white/10 bg-slate-900/80 p-4 sm:p-6 space-y-6">
           {/* Tab Navigation */}
           <div className="flex flex-wrap gap-2 border-b border-white/10 pb-4">
             <button

@@ -1877,10 +1877,10 @@ export default function EditTeamPage() {
         {/* Coaching Staff Tab Content */}
           {activeTab === 'staff' && (
             <div className="p-6">
-              <div className="mb-4 flex items-center justify-between">
+              <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <h3 className="text-lg font-semibold text-white">Coaching Staff</h3>
                 {!coachStaffFormVisible && (
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
                     <button
                       onClick={() => handleAddCoachStaff('head_coach')}
                       disabled={coachStaffList.some((c) => c.role === 'head_coach')}
@@ -1960,7 +1960,7 @@ export default function EditTeamPage() {
                   <button
                     type="submit"
                     disabled={coachStaffSubmitting}
-                    className="w-full rounded-full bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.4em] text-black transition hover:bg-slate-200 disabled:opacity-50"
+                    className="w-full rounded-full bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] sm:tracking-[0.4em] text-black transition hover:bg-slate-200 disabled:opacity-50"
                   >
                     {coachStaffSubmitting ? "Saving..." : coachStaffForm.id ? "Update" : "Add"}
                   </button>
@@ -2148,7 +2148,7 @@ export default function EditTeamPage() {
                       </div>
                     )}
                     <div>
-                      <h4 className="text-3xl font-bold text-white drop-shadow-lg">{teamForm.name || 'Team Name'}</h4>
+                      <h4 className="text-2xl sm:text-3xl font-bold text-white drop-shadow-lg">{teamForm.name || 'Team Name'}</h4>
                       <p className="text-lg text-white/80 drop-shadow">Record: {team?.wins || 0}W - {team?.losses || 0}L</p>
                     </div>
                   </div>
@@ -2285,7 +2285,7 @@ function PlayerEditForm({
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
         <div>
           <label className="block text-xs text-slate-400 mb-1">Jersey #</label>
           <input

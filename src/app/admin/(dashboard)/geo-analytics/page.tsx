@@ -204,25 +204,25 @@ export default function GeoAnalyticsPage() {
   const totalCountryViews = sortedCountries.reduce((sum, [, count]) => sum + count, 0);
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-6">
+    <div className="min-h-screen bg-gray-900 text-white p-3 sm:p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="flex justify-between items-center mb-8">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-6 sm:mb-8">
           <div>
-            <h1 className="text-3xl font-bold">🌍 Geographic Analytics</h1>
-            <p className="text-gray-400 mt-1">
+            <h1 className="text-2xl sm:text-3xl font-bold">🌍 Geographic Analytics</h1>
+            <p className="text-gray-400 mt-1 text-sm sm:text-base">
               See where your visitors are coming from
             </p>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
             {lastUpdated && (
-              <span className="text-gray-400 text-sm">
+              <span className="text-gray-400 text-xs sm:text-sm">
                 Last updated: {lastUpdated.toLocaleTimeString()}
               </span>
             )}
             <button
               onClick={fetchAnalytics}
-              className="px-4 py-2 bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors"
+              className="px-3 py-2 sm:px-4 bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors text-sm sm:text-base"
             >
               🔄 Refresh
             </button>
@@ -244,30 +244,30 @@ export default function GeoAnalyticsPage() {
         {data && (
           <>
             {/* Summary Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-              <div className="bg-gray-800 rounded-xl p-6">
-                <div className="text-3xl font-bold text-orange-500">{data.pageviews_total.toLocaleString()}</div>
-                <div className="text-gray-400 mt-1">Total Pageviews</div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
+              <div className="bg-gray-800 rounded-xl p-4 sm:p-6">
+                <div className="text-xl sm:text-3xl font-bold text-orange-500">{data.pageviews_total.toLocaleString()}</div>
+                <div className="text-gray-400 mt-1 text-xs sm:text-base">Total Pageviews</div>
               </div>
-              <div className="bg-gray-800 rounded-xl p-6">
-                <div className="text-3xl font-bold text-blue-500">{data.active_sessions}</div>
-                <div className="text-gray-400 mt-1">Active Sessions</div>
+              <div className="bg-gray-800 rounded-xl p-4 sm:p-6">
+                <div className="text-xl sm:text-3xl font-bold text-blue-500">{data.active_sessions}</div>
+                <div className="text-gray-400 mt-1 text-xs sm:text-base">Active Sessions</div>
               </div>
-              <div className="bg-gray-800 rounded-xl p-6">
-                <div className="text-3xl font-bold text-green-500">{sortedCountries.length}</div>
-                <div className="text-gray-400 mt-1">Countries</div>
+              <div className="bg-gray-800 rounded-xl p-4 sm:p-6">
+                <div className="text-xl sm:text-3xl font-bold text-green-500">{sortedCountries.length}</div>
+                <div className="text-gray-400 mt-1 text-xs sm:text-base">Countries</div>
               </div>
-              <div className="bg-gray-800 rounded-xl p-6">
-                <div className="text-3xl font-bold text-purple-500">{Math.round(data.time_on_page_avg)}s</div>
-                <div className="text-gray-400 mt-1">Avg Time on Page</div>
+              <div className="bg-gray-800 rounded-xl p-4 sm:p-6">
+                <div className="text-xl sm:text-3xl font-bold text-purple-500">{Math.round(data.time_on_page_avg)}s</div>
+                <div className="text-gray-400 mt-1 text-xs sm:text-base">Avg Time on Page</div>
               </div>
             </div>
 
             {/* Country Map & List */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
               {/* Country List */}
-              <div className="bg-gray-800 rounded-xl p-6">
-                <h2 className="text-xl font-bold mb-4">📍 Visitors by Country</h2>
+              <div className="bg-gray-800 rounded-xl p-4 sm:p-6">
+                <h2 className="text-lg sm:text-xl font-bold mb-4">📍 Visitors by Country</h2>
                 
                 {sortedCountries.length === 0 ? (
                   <div className="text-center py-12 text-gray-400">
@@ -310,8 +310,8 @@ export default function GeoAnalyticsPage() {
               </div>
 
               {/* Top Pages */}
-              <div className="bg-gray-800 rounded-xl p-6">
-                <h2 className="text-xl font-bold mb-4">📄 Top Pages</h2>
+              <div className="bg-gray-800 rounded-xl p-4 sm:p-6">
+                <h2 className="text-lg sm:text-xl font-bold mb-4">📄 Top Pages</h2>
                 
                 {Object.keys(data.pageViewsByPage).length === 0 ? (
                   <div className="text-center py-12 text-gray-400">
@@ -332,7 +332,7 @@ export default function GeoAnalyticsPage() {
                         return (
                           <div key={page} className="relative">
                             <div className="flex items-center justify-between relative z-10 py-2">
-                              <span className="font-mono text-sm truncate max-w-[200px]">{page}</span>
+                              <span className="font-mono text-xs sm:text-sm truncate max-w-[140px] sm:max-w-[200px]">{page}</span>
                               <div className="text-right">
                                 <span className="font-bold">{count.toLocaleString()}</span>
                                 <span className="text-gray-400 ml-2">({percentage.toFixed(1)}%)</span>
@@ -349,8 +349,8 @@ export default function GeoAnalyticsPage() {
             </div>
 
             {/* Info Box */}
-            <div className="mt-8 bg-blue-500/10 border border-blue-500/30 rounded-xl p-6">
-              <h3 className="text-lg font-bold text-blue-400 mb-2">ℹ️ About Geographic Tracking</h3>
+            <div className="mt-6 sm:mt-8 bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 sm:p-6">
+              <h3 className="text-base sm:text-lg font-bold text-blue-400 mb-2">ℹ️ About Geographic Tracking</h3>
               <ul className="text-gray-300 space-y-2 text-sm">
                 <li>• <strong>Local Development:</strong> Shows as &quot;Unknown&quot; because localhost IPs (::1, 127.0.0.1) have no geographic data</li>
                 <li>• <strong>Production (liprobakin.com):</strong> Automatically tracks real visitor locations using Vercel&apos;s geo headers</li>

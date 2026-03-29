@@ -79,20 +79,20 @@ export default function ErrorsPage() {
       </div>
 
       {/* Open Grafana CTA */}
-      <div className="rounded-2xl border border-orange-500/30 bg-gradient-to-br from-orange-600/20 to-amber-600/20 p-8">
-        <div className="flex flex-col md:flex-row items-center gap-6">
-          <div className="w-20 h-20 rounded-2xl bg-orange-500/20 flex items-center justify-center text-5xl">
+      <div className="rounded-2xl border border-orange-500/30 bg-gradient-to-br from-orange-600/20 to-amber-600/20 p-4 sm:p-8">
+        <div className="flex flex-col md:flex-row items-center gap-4 sm:gap-6">
+          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-orange-500/20 flex items-center justify-center text-4xl sm:text-5xl">
             📊
           </div>
           <div className="flex-1 text-center md:text-left">
-            <h2 className="text-xl font-bold text-white mb-2">Grafana Dashboard</h2>
-            <p className="text-slate-300">{t.grafanaDesc}</p>
+            <h2 className="text-lg sm:text-xl font-bold text-white mb-2">Grafana Dashboard</h2>
+            <p className="text-slate-300 text-sm sm:text-base">{t.grafanaDesc}</p>
           </div>
           <a
             href={grafanaUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="px-8 py-4 bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold rounded-xl hover:shadow-lg hover:shadow-orange-500/30 transition-all text-lg"
+            className="w-full sm:w-auto text-center px-6 py-3 sm:px-8 sm:py-4 bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold rounded-xl hover:shadow-lg hover:shadow-orange-500/30 transition-all text-base sm:text-lg"
           >
             {t.openGrafana} →
           </a>
@@ -104,13 +104,13 @@ export default function ErrorsPage() {
         <h2 className="text-lg font-bold text-white mb-2">{t.setupTitle}</h2>
         <p className="text-slate-400 text-sm mb-6">{t.setupDesc}</p>
 
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4">
           {t.services.map((service) => (
             <div
               key={service.name}
-              className="rounded-xl border border-white/10 bg-slate-800/50 p-4 text-center"
+              className="rounded-xl border border-white/10 bg-slate-800/50 p-3 sm:p-4 text-center"
             >
-              <span className="text-3xl">{service.icon}</span>
+              <span className="text-2xl sm:text-3xl">{service.icon}</span>
               <h3 className="font-semibold text-white mt-2">{service.name}</h3>
               <p className="text-xs text-slate-400">{service.desc}</p>
               <p className="text-xs text-orange-400 mt-1 font-mono">:{service.port}</p>

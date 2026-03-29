@@ -641,8 +641,8 @@ export default function AdminsPage() {
 
       {/* ─── Admin List ─────────────────────────────────────────────────── */}
       {admins.length === 0 ? (
-        <div className="rounded-3xl border-2 border-dashed border-slate-700 bg-slate-900/40 p-16 text-center">
-          <div className="text-6xl mb-4">👥</div>
+        <div className="rounded-3xl border-2 border-dashed border-slate-700 bg-slate-900/40 p-8 sm:p-16 text-center">
+          <div className="text-5xl sm:text-6xl mb-4">👥</div>
           <p className="text-lg font-semibold text-slate-300">{t.noAdmins}</p>
           <p className="mt-2 text-sm text-slate-500">{t.noAdminsDesc}</p>
         </div>

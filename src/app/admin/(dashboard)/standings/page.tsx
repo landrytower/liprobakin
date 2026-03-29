@@ -195,31 +195,32 @@ export default function StandingsPage() {
         </div>
       ) : (
         <div className="bg-black/30 rounded-2xl border border-white/10 overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-white/10 bg-slate-900/50">
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">
+                <th className="px-3 sm:px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">
                   Rank
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">
+                <th className="px-3 sm:px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">
                   Team
                 </th>
-                <th className="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-slate-400">
+                <th className="px-2 sm:px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-slate-400">
                   W
                 </th>
-                <th className="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-slate-400">
+                <th className="px-2 sm:px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-slate-400">
                   L
                 </th>
-                <th className="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-slate-400">
+                <th className="px-2 sm:px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-slate-400">
                   PCT
                 </th>
-                <th className="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-slate-400">
+                <th className="px-2 sm:px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-slate-400 hidden sm:table-cell">
                   PF
                 </th>
-                <th className="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-slate-400">
+                <th className="px-2 sm:px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-slate-400 hidden sm:table-cell">
                   PA
                 </th>
-                <th className="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-slate-400">
+                <th className="px-2 sm:px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-slate-400">
                   DIFF
                 </th>
               </tr>
@@ -277,32 +278,32 @@ export default function StandingsPage() {
                   </td>
 
                   {/* W */}
-                  <td className="px-4 py-3 text-center font-semibold text-green-400">
+                  <td className="px-2 sm:px-4 py-3 text-center font-semibold text-green-400">
                     {entry.wins}
                   </td>
 
                   {/* L */}
-                  <td className="px-4 py-3 text-center font-semibold text-red-400">
+                  <td className="px-2 sm:px-4 py-3 text-center font-semibold text-red-400">
                     {entry.losses}
                   </td>
 
                   {/* PCT */}
-                  <td className="px-4 py-3 text-center text-white">
+                  <td className="px-2 sm:px-4 py-3 text-center text-white">
                     {entry.winPct.toFixed(3).slice(1)}
                   </td>
 
                   {/* PF (Points For) */}
-                  <td className="px-4 py-3 text-center text-slate-300">
+                  <td className="px-2 sm:px-4 py-3 text-center text-slate-300 hidden sm:table-cell">
                     {entry.pointsScored}
                   </td>
 
                   {/* PA (Points Against) */}
-                  <td className="px-4 py-3 text-center text-slate-300">
+                  <td className="px-2 sm:px-4 py-3 text-center text-slate-300 hidden sm:table-cell">
                     {entry.pointsAllowed}
                   </td>
 
                   {/* Diff */}
-                  <td className="px-4 py-3 text-center">
+                  <td className="px-2 sm:px-4 py-3 text-center">
                     <span
                       className={
                         entry.pointDiff > 0
@@ -320,6 +321,7 @@ export default function StandingsPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </div>

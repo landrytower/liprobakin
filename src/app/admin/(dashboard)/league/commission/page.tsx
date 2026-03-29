@@ -212,7 +212,7 @@ export default function CommissionPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">{t.title}</h1>
           <p className="text-slate-400 text-sm">{t.subtitle}</p>
@@ -241,7 +241,7 @@ export default function CommissionPage() {
           <p className="text-slate-400 text-sm mt-1">{t.addFirst}</p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
           {members.map((member) => (
             <div
               key={member.id}
@@ -366,7 +366,7 @@ export default function CommissionPage() {
               </div>
 
               {/* Name Fields */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-2">{t.firstName} *</label>
                   <input
@@ -405,7 +405,7 @@ export default function CommissionPage() {
               </div>
 
               {/* Contact Info */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-2">{t.email}</label>
                   <input

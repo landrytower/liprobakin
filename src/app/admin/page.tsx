@@ -152,7 +152,7 @@ export default function AdminLoginPage() {
         ) : !user ? (
           /* Login form */
           <div className="w-full max-w-xl">
-            <div className="relative overflow-hidden rounded-[2rem] border border-white/20 bg-white/[0.06] p-8 shadow-[0_30px_90px_rgba(2,6,23,0.55)] backdrop-blur-2xl sm:p-10">
+            <div className="relative overflow-hidden rounded-[2rem] border border-white/20 bg-white/[0.06] p-6 shadow-[0_30px_90px_rgba(2,6,23,0.55)] backdrop-blur-2xl sm:p-10">
               <div className="pointer-events-none absolute -left-16 -top-16 h-48 w-48 rounded-full bg-blue-500/20 blur-3xl" />
               <div className="pointer-events-none absolute -bottom-24 -right-16 h-64 w-64 rounded-full bg-cyan-400/10 blur-3xl" />
 
@@ -169,7 +169,7 @@ export default function AdminLoginPage() {
                       priority
                     />
                   </div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.45em] text-blue-300/90">
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] sm:tracking-[0.45em] text-blue-300/90">
                     Admin Console
                   </p>
                   <h1 className="mt-3 text-4xl font-bold text-white sm:text-[2.75rem]">
@@ -264,7 +264,7 @@ export default function AdminLoginPage() {
 
                 {/* Footer note */}
                 <div className="rounded-2xl border border-white/15 bg-white/[0.04] p-4">
-                  <p className="text-xs uppercase tracking-[0.28em] text-slate-400">Need Access?</p>
+                  <p className="text-xs uppercase tracking-[0.18em] sm:tracking-[0.28em] text-slate-400">Need Access?</p>
                   <p className="mt-2 text-xs leading-relaxed text-slate-300/85">
                     Contact your master admin to activate your account and assign proper permissions.
                   </p>
@@ -282,14 +282,14 @@ export default function AdminLoginPage() {
                 </svg>
               </div>
               <div>
-                <h1 className="text-3xl font-bold text-white mb-2">Access Required</h1>
+                <h1 className="text-3xl font-bold text-white mb-2 sm:text-3xl">Access Required</h1>
                 <p className="text-slate-300/80 text-lg">
                   Your account needs admin privileges to access this dashboard.
                 </p>
               </div>
             </div>
 
-            <div className="rounded-3xl border border-white/20 bg-white/5 backdrop-blur-xl p-8 space-y-4">
+            <div className="rounded-3xl border border-white/20 bg-white/5 backdrop-blur-xl p-4 sm:p-8 space-y-4">
               <p className="text-sm font-semibold text-slate-300">Account Status</p>
               <div className="divide-y divide-white/10 text-sm">
                 <div className="flex justify-between py-2">
@@ -298,7 +298,7 @@ export default function AdminLoginPage() {
                 </div>
                 <div className="flex justify-between py-2">
                   <span className="text-slate-400">User ID:</span>
-                  <span className="text-white font-mono">{user.uid}</span>
+                  <span className="text-white font-mono text-xs truncate max-w-[140px] sm:max-w-none">{user.uid}</span>
                 </div>
                 <div className="flex justify-between py-2">
                   <span className="text-slate-400">Status:</span>
@@ -307,7 +307,7 @@ export default function AdminLoginPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <button
                 onClick={() => window.location.reload()}
                 className="flex items-center justify-center gap-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-6 py-4 font-semibold text-emerald-300 transition-all hover:bg-emerald-500/20"

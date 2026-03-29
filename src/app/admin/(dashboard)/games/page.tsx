@@ -1745,17 +1745,17 @@ export default function GamesPage() {
         </div>
 
         {/* Stats Cards */}
-        <div className="flex gap-3">
-          <div className="rounded-xl border border-white/10 bg-slate-900/60 px-4 py-2 text-center">
-            <p className="text-2xl font-bold text-white">{stats.total}</p>
+        <div className="flex gap-2 sm:gap-3 flex-wrap">
+          <div className="rounded-xl border border-white/10 bg-slate-900/60 px-3 sm:px-4 py-2 text-center">
+            <p className="text-lg sm:text-2xl font-bold text-white">{stats.total}</p>
             <p className="text-[10px] uppercase tracking-wider text-slate-500">{t.totalGames}</p>
           </div>
-          <div className="rounded-xl border border-green-500/20 bg-green-500/10 px-4 py-2 text-center">
-            <p className="text-2xl font-bold text-green-400">{stats.completed}</p>
+          <div className="rounded-xl border border-green-500/20 bg-green-500/10 px-3 sm:px-4 py-2 text-center">
+            <p className="text-lg sm:text-2xl font-bold text-green-400">{stats.completed}</p>
             <p className="text-[10px] uppercase tracking-wider text-green-500/70">{t.completed}</p>
           </div>
-          <div className="rounded-xl border border-blue-500/20 bg-blue-500/10 px-4 py-2 text-center">
-            <p className="text-2xl font-bold text-blue-400">{stats.upcoming}</p>
+          <div className="rounded-xl border border-blue-500/20 bg-blue-500/10 px-3 sm:px-4 py-2 text-center">
+            <p className="text-lg sm:text-2xl font-bold text-blue-400">{stats.upcoming}</p>
             <p className="text-[10px] uppercase tracking-wider text-blue-500/70">{t.upcoming}</p>
           </div>
         </div>
@@ -2036,12 +2036,12 @@ export default function GamesPage() {
       {formVisible && (
         <div
           ref={gameFormPanelRef}
-          className="rounded-2xl border border-white/10 bg-slate-900/95 p-6 shadow-2xl md:p-8"
+          className="rounded-2xl border border-white/10 bg-slate-900/95 p-4 sm:p-6 shadow-2xl md:p-8"
         >
           <div className="mb-6 flex items-start justify-between gap-4 border-b border-white/10 pb-4">
             <div>
-              <p className="text-xs uppercase tracking-[0.25em] text-slate-400">{t.quickActions}</p>
-              <h2 className="mt-1 text-2xl font-bold text-white">
+              <p className="text-xs uppercase tracking-wider sm:tracking-[0.25em] text-slate-400">{t.quickActions}</p>
+              <h2 className="mt-1 text-xl sm:text-2xl font-bold text-white">
                 {formState.id ? t.editGame : t.scheduleGame}
               </h2>
             </div>
@@ -2426,7 +2426,7 @@ export default function GamesPage() {
                   </button>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
                   {matchdays
                     .sort((a, b) => a.week - b.week)
                     .map((matchday) => {
@@ -2477,8 +2477,8 @@ export default function GamesPage() {
 
                           {/* Matchday Content */}
                           <div className="text-center">
-                            <p className="text-xs uppercase tracking-[0.2em] text-indigo-400 mb-1">{t.matchday}</p>
-                            <h3 className="text-3xl font-bold text-white mb-3">{matchday.week}</h3>
+                            <p className="text-xs uppercase tracking-wider sm:tracking-[0.2em] text-indigo-400 mb-1">{t.matchday}</p>
+                            <h3 className="text-2xl sm:text-3xl font-bold text-white mb-3">{matchday.week}</h3>
                             <div className="inline-flex items-center gap-1 rounded-full bg-slate-800/60 px-3 py-1 text-sm text-slate-300">
                               <svg className="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -2720,18 +2720,18 @@ export default function GamesPage() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Calendar Grid */}
             <div className="lg:col-span-1">
-              <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-6">
+              <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-4 sm:p-6">
                 {/* Day Headers */}
-                <div className="grid grid-cols-7 gap-2 mb-4">
+                <div className="grid grid-cols-7 gap-1 sm:gap-2 mb-4">
                   {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-                    <div key={day} className="text-center text-xs font-semibold text-slate-500 py-2">
+                    <div key={day} className="text-center text-[10px] sm:text-xs font-semibold text-slate-500 py-1 sm:py-2">
                       {language === "fr" ? (["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"][["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(day)]) : day}
                     </div>
                   ))}
                 </div>
 
                 {/* Calendar Days */}
-                <div className="grid grid-cols-7 gap-2">
+                <div className="grid grid-cols-7 gap-1 sm:gap-2">
                   {(() => {
                     const year = currentMonth.getFullYear();
                     const month = currentMonth.getMonth();

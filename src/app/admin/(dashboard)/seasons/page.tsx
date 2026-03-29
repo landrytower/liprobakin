@@ -162,7 +162,7 @@ export default function SeasonManagementPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs uppercase tracking-[0.3em] text-slate-500">
+          <p className="text-xs uppercase tracking-[0.2em] sm:tracking-[0.3em] text-slate-500">
             League Management
           </p>
           <h1 className="text-2xl font-semibold text-white">Seasons</h1>
@@ -283,7 +283,7 @@ export default function SeasonManagementPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm text-slate-400 mb-1">
                     Start Date

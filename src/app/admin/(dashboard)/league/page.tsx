@@ -753,29 +753,29 @@ export default function LeaguePage() {
       </div>
 
       {/* Tabs - Only show tabs the admin has permission for */}
-      <div className="flex gap-2 p-1 bg-slate-800/50 rounded-xl border border-white/10 w-fit">
+      <div className="flex gap-1 sm:gap-2 p-1 bg-slate-800/50 rounded-xl border border-white/10 w-fit max-w-full overflow-x-auto">
         {currentAdminUser?.permissions?.canManageReferees && (
-          <button onClick={() => setActiveTab("referees")} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${activeTab === "referees" ? "bg-orange-500 text-white" : "text-slate-400 hover:text-white"}`}>
+          <button onClick={() => setActiveTab("referees")} className={`px-2.5 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition flex-shrink-0 whitespace-nowrap ${activeTab === "referees" ? "bg-orange-500 text-white" : "text-slate-400 hover:text-white"}`}>
             {copy.referees}
-            <span className="ml-2 text-xs opacity-70">({referees.length})</span>
+            <span className="ml-1 sm:ml-2 text-[10px] sm:text-xs opacity-70">({referees.length})</span>
           </button>
         )}
         {currentAdminUser?.permissions?.canManageCommittee && (
-          <button onClick={() => setActiveTab("committee")} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${activeTab === "committee" ? "bg-orange-500 text-white" : "text-slate-400 hover:text-white"}`}>
+          <button onClick={() => setActiveTab("committee")} className={`px-2.5 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition flex-shrink-0 whitespace-nowrap ${activeTab === "committee" ? "bg-orange-500 text-white" : "text-slate-400 hover:text-white"}`}>
             {copy.committee}
-            <span className="ml-2 text-xs opacity-70">({committee.length})</span>
+            <span className="ml-1 sm:ml-2 text-[10px] sm:text-xs opacity-70">({committee.length})</span>
           </button>
         )}
         {currentAdminUser?.permissions?.canManageCommission && (
-          <button onClick={() => setActiveTab("commission")} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${activeTab === "commission" ? "bg-orange-500 text-white" : "text-slate-400 hover:text-white"}`}>
+          <button onClick={() => setActiveTab("commission")} className={`px-2.5 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition flex-shrink-0 whitespace-nowrap ${activeTab === "commission" ? "bg-orange-500 text-white" : "text-slate-400 hover:text-white"}`}>
             {copy.commission}
-            <span className="ml-2 text-xs opacity-70">({commission.length})</span>
+            <span className="ml-1 sm:ml-2 text-[10px] sm:text-xs opacity-70">({commission.length})</span>
           </button>
         )}
         {currentAdminUser?.permissions?.canManageVenues && (
-          <button onClick={() => setActiveTab("venues")} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${activeTab === "venues" ? "bg-orange-500 text-white" : "text-slate-400 hover:text-white"}`}>
+          <button onClick={() => setActiveTab("venues")} className={`px-2.5 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition flex-shrink-0 whitespace-nowrap ${activeTab === "venues" ? "bg-orange-500 text-white" : "text-slate-400 hover:text-white"}`}>
             {copy.venues}
-            <span className="ml-2 text-xs opacity-70">({venues.length})</span>
+            <span className="ml-1 sm:ml-2 text-[10px] sm:text-xs opacity-70">({venues.length})</span>
           </button>
         )}
       </div>

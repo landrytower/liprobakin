@@ -285,18 +285,18 @@ export default function AccountsPage() {
       <div><h1 className="text-2xl font-bold text-white">{copy.title}</h1><p className="text-slate-400 text-sm mt-1">{copy.subtitle}</p></div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <button onClick={() => setFilter("all")} className={`p-4 rounded-xl border text-left transition-all ${filter === "all" ? "border-white/40 bg-white/10 ring-2 ring-white/20" : "border-white/10 bg-blue-500/10 hover:border-white/20"}`}>
-          <div className="text-sm text-slate-400">{copy.totalUsers}</div><div className="mt-2 text-3xl font-bold text-blue-400">{users.length}</div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4">
+        <button onClick={() => setFilter("all")} className={`p-3 sm:p-4 rounded-xl border text-left transition-all ${filter === "all" ? "border-white/40 bg-white/10 ring-2 ring-white/20" : "border-white/10 bg-blue-500/10 hover:border-white/20"}`}>
+          <div className="text-xs sm:text-sm text-slate-400">{copy.totalUsers}</div><div className="mt-1 sm:mt-2 text-2xl sm:text-3xl font-bold text-blue-400">{users.length}</div>
         </button>
-        <button onClick={() => setFilter("player")} className={`p-4 rounded-xl border text-left transition-all ${filter === "player" ? "border-cyan-400/60 bg-cyan-500/20 ring-2 ring-cyan-400/30" : "border-white/10 bg-cyan-500/10 hover:border-white/20"}`}>
-          <div className="text-sm text-slate-400">{copy.players}</div><div className="mt-2 text-3xl font-bold text-cyan-400">{playerCount}</div>
+        <button onClick={() => setFilter("player")} className={`p-3 sm:p-4 rounded-xl border text-left transition-all ${filter === "player" ? "border-cyan-400/60 bg-cyan-500/20 ring-2 ring-cyan-400/30" : "border-white/10 bg-cyan-500/10 hover:border-white/20"}`}>
+          <div className="text-xs sm:text-sm text-slate-400">{copy.players}</div><div className="mt-1 sm:mt-2 text-2xl sm:text-3xl font-bold text-cyan-400">{playerCount}</div>
         </button>
-        <button onClick={() => setFilter("coach")} className={`p-4 rounded-xl border text-left transition-all ${filter === "coach" ? "border-purple-400/60 bg-purple-500/20 ring-2 ring-purple-400/30" : "border-white/10 bg-purple-500/10 hover:border-white/20"}`}>
-          <div className="text-sm text-slate-400">{copy.coaches}</div><div className="mt-2 text-3xl font-bold text-purple-400">{coachCount}</div>
+        <button onClick={() => setFilter("coach")} className={`p-3 sm:p-4 rounded-xl border text-left transition-all ${filter === "coach" ? "border-purple-400/60 bg-purple-500/20 ring-2 ring-purple-400/30" : "border-white/10 bg-purple-500/10 hover:border-white/20"}`}>
+          <div className="text-xs sm:text-sm text-slate-400">{copy.coaches}</div><div className="mt-1 sm:mt-2 text-2xl sm:text-3xl font-bold text-purple-400">{coachCount}</div>
         </button>
-        <button onClick={() => setFilter("fan")} className={`p-4 rounded-xl border text-left transition-all ${filter === "fan" ? "border-orange-400/60 bg-orange-500/20 ring-2 ring-orange-400/30" : "border-white/10 bg-orange-500/10 hover:border-white/20"}`}>
-          <div className="text-sm text-slate-400">{copy.fans}</div><div className="mt-2 text-3xl font-bold text-orange-400">{fanCount}</div>
+        <button onClick={() => setFilter("fan")} className={`p-3 sm:p-4 rounded-xl border text-left transition-all ${filter === "fan" ? "border-orange-400/60 bg-orange-500/20 ring-2 ring-orange-400/30" : "border-white/10 bg-orange-500/10 hover:border-white/20"}`}>
+          <div className="text-xs sm:text-sm text-slate-400">{copy.fans}</div><div className="mt-1 sm:mt-2 text-2xl sm:text-3xl font-bold text-orange-400">{fanCount}</div>
         </button>
       </div>
 
@@ -314,19 +314,19 @@ export default function AccountsPage() {
         {filteredUsers.length === 0 ? (<div className="text-center py-12 text-slate-400">{copy.noUsers}</div>) : (
           filteredUsers.map((user) => (
             <div key={user.id} className={`rounded-xl border transition-all ${expandedUserId === user.id ? "border-cyan-400/40 bg-slate-800/60" : "border-white/10 bg-slate-800/30 hover:border-white/20"}`}>
-              <div className="p-4 cursor-pointer" onClick={() => setExpandedUserId(expandedUserId === user.id ? null : user.id)}>
+              <div className="p-3 sm:p-4 cursor-pointer" onClick={() => setExpandedUserId(expandedUserId === user.id ? null : user.id)}>
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold text-white ${user.role === "player" ? "bg-gradient-to-br from-cyan-500 to-blue-600" : user.role === "coach" || user.role === "staff" ? "bg-gradient-to-br from-purple-500 to-pink-600" : "bg-gradient-to-br from-orange-500 to-amber-600"}`}>
+                  <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+                    <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center text-sm sm:text-lg font-bold text-white flex-shrink-0 ${user.role === "player" ? "bg-gradient-to-br from-cyan-500 to-blue-600" : user.role === "coach" || user.role === "staff" ? "bg-gradient-to-br from-purple-500 to-pink-600" : "bg-gradient-to-br from-orange-500 to-amber-600"}`}>
                       {user.headshot ? (<Image src={user.headshot} alt={user.lastName} width={48} height={48} className="w-full h-full rounded-full object-cover" unoptimized />) : (<>{user.firstName?.[0]}{user.lastName?.[0]}</>)}
                     </div>
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h4 className="font-semibold text-white text-lg">{user.firstName} {user.lastName}</h4>
+                        <h4 className="font-semibold text-white text-sm sm:text-lg truncate">{user.firstName} {user.lastName}</h4>
                         <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${user.role === "player" ? "bg-cyan-500/20 text-cyan-400" : user.role === "coach" || user.role === "staff" ? "bg-purple-500/20 text-purple-400" : "bg-orange-500/20 text-orange-400"}`}>{getRoleLabel(user.role)}</span>
                         {user.verificationStatus === "approved" && (<span className="rounded-full px-2 py-0.5 text-xs font-semibold bg-green-500/20 text-green-400">✓</span>)}
                       </div>
-                      <div className="mt-1 flex items-center gap-3 text-sm text-slate-400"><span>📧 {user.email || copy.notSet}</span><span>📱 {user.phoneNumber || copy.notSet}</span></div>
+                      <div className="mt-1 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 text-xs sm:text-sm text-slate-400"><span className="truncate">📧 {user.email || copy.notSet}</span><span className="truncate">📱 {user.phoneNumber || copy.notSet}</span></div>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
@@ -367,7 +367,7 @@ export default function AccountsPage() {
           <div className="w-full max-w-lg bg-slate-900 rounded-2xl border border-white/10 shadow-2xl">
             <div className="p-6 border-b border-white/10"><h3 className="text-xl font-bold text-white">{copy.editProfile}</h3></div>
             <div className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div><label className="block text-sm font-medium text-slate-400 mb-1">{copy.firstName}</label><input type="text" value={editForm.firstName} onChange={(e) => setEditForm({ ...editForm, firstName: e.target.value })} placeholder={copy.firstName} className="w-full px-4 py-2 bg-slate-800 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-orange-500/50" /></div>
                 <div><label className="block text-sm font-medium text-slate-400 mb-1">{copy.lastName}</label><input type="text" value={editForm.lastName} onChange={(e) => setEditForm({ ...editForm, lastName: e.target.value })} placeholder={copy.lastName} className="w-full px-4 py-2 bg-slate-800 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-orange-500/50" /></div>
               </div>

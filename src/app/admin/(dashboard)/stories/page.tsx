@@ -1160,7 +1160,7 @@ export default function StoriesPage() {
 
       {/* Create/Edit Story Form */}
       {canManageNews && (
-        <section className="rounded-2xl border border-white/10 bg-slate-900/70 p-6">
+        <section className="rounded-2xl border border-white/10 bg-slate-900/70 p-4 sm:p-6">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-bold text-white">
               📰 {editing ? copy.editStory : copy.createStory}
@@ -1628,16 +1628,16 @@ export default function StoriesPage() {
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
           </div>
         ) : articles.length === 0 ? (
-          <div className="rounded-xl border-2 border-dashed border-slate-700 bg-slate-900/40 p-16 text-center">
-            <div className="text-5xl mb-4">📰</div>
+          <div className="rounded-xl border-2 border-dashed border-slate-700 bg-slate-900/40 p-8 sm:p-16 text-center">
+            <div className="text-4xl sm:text-5xl mb-4">📰</div>
             <p className="text-base font-semibold text-slate-300">{copy.noStories}</p>
           </div>
         ) : (
           <div className="space-y-3">
             {articles.map((article) => (
-              <div key={article.id} className="flex items-center gap-4 rounded-xl border border-white/10 bg-slate-800/30 p-4 hover:bg-slate-800/50 transition">
+              <div key={article.id} className="flex items-center gap-3 sm:gap-4 rounded-xl border border-white/10 bg-slate-800/30 p-3 sm:p-4 hover:bg-slate-800/50 transition">
                 {article.imageUrl ? (
-                  <div className="relative h-20 w-28 flex-shrink-0 rounded-lg overflow-hidden">
+                  <div className="relative h-16 w-20 sm:h-20 sm:w-28 flex-shrink-0 rounded-lg overflow-hidden">
                     <Image 
                       src={article.imageUrl} 
                       alt={article.title} 
@@ -1648,7 +1648,7 @@ export default function StoriesPage() {
                     />
                   </div>
                 ) : (
-                  <div className="flex h-20 w-28 flex-shrink-0 items-center justify-center rounded-lg border border-dashed border-white/10 bg-slate-900/50">
+                  <div className="flex h-16 w-20 sm:h-20 sm:w-28 flex-shrink-0 items-center justify-center rounded-lg border border-dashed border-white/10 bg-slate-900/50">
                     <span className="text-xs text-slate-600">{copy.noImage}</span>
                   </div>
                 )}

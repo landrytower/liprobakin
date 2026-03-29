@@ -618,8 +618,8 @@ export default function AdminDocumentsPage() {
 
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-white">{t.title}</h1>
-          <p className="text-sm text-slate-400">{t.subtitle}</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-white">{t.title}</h1>
+          <p className="text-xs sm:text-sm text-slate-400">{t.subtitle}</p>
         </div>
         <div className="rounded-2xl border border-white/10 bg-slate-900/60 px-4 py-3 text-sm text-slate-300">
           <span className="text-slate-500">{t.activeFolder}:</span>{" "}
@@ -633,7 +633,7 @@ export default function AdminDocumentsPage() {
           <span className="text-xs uppercase tracking-[0.25em] text-slate-500">{folders.length} {language === "fr" ? "dossiers" : "folders"}</span>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+        <div className="grid grid-cols-2 gap-2 sm:gap-3 sm:grid-cols-3 xl:grid-cols-6">
           <button
             type="button"
             onClick={() => setActiveFolderId("all")}
@@ -643,8 +643,8 @@ export default function AdminDocumentsPage() {
                 : "border-white/10 bg-slate-900/50 text-slate-300 hover:border-white/20"
             }`}
           >
-            <p className="text-xs uppercase tracking-[0.25em] text-slate-400">{t.allDocuments}</p>
-            <p className="mt-3 text-2xl font-bold text-white">{documents.length}</p>
+            <p className="text-xs uppercase tracking-wider sm:tracking-[0.25em] text-slate-400">{t.allDocuments}</p>
+            <p className="mt-2 sm:mt-3 text-xl sm:text-2xl font-bold text-white">{documents.length}</p>
             <p className="mt-1 text-xs text-slate-500">{t.documentsCount}</p>
           </button>
 
@@ -708,7 +708,7 @@ export default function AdminDocumentsPage() {
         </form>
       </section>
 
-      <div className="grid gap-6 xl:grid-cols-[1.5fr_1fr]">
+      <div className="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
         <section className="space-y-6">
           <form onSubmit={handleUploadDocument} className="rounded-[2rem] border border-white/10 bg-slate-900/50 p-5 sm:p-6">
             <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -883,7 +883,7 @@ export default function AdminDocumentsPage() {
           </section>
         </section>
 
-        <section className="flex min-h-[740px] flex-col overflow-hidden rounded-[2rem] border border-white/10 bg-slate-900/50 p-5 sm:p-6">
+        <section className="flex min-h-[400px] sm:min-h-[740px] flex-col overflow-hidden rounded-2xl sm:rounded-[2rem] border border-white/10 bg-slate-900/50 p-4 sm:p-6">
           <div>
             <h2 className="text-xl font-semibold text-white">{t.chatTitle}</h2>
             <p className="text-sm text-slate-400">{t.chatSubtitle}</p>

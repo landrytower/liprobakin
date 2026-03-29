@@ -845,7 +845,7 @@ function LeaguePulseDashboard() {
         </div>
 
         {/* ═══════ KEY METRICS ROW ═══════ */}
-        <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
           {[
             {
               icon: "🏀",
@@ -1511,7 +1511,7 @@ function LeaguePulseDashboard() {
 
         {/* ═══════ LEAGUE HEALTH INDICATORS ═══════ */}
         <div
-          className="card-entrance grid grid-cols-2 md:grid-cols-5 gap-4"
+          className="card-entrance grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4"
           style={{ animationDelay: "1000ms" }}
         >
           {[
@@ -1594,7 +1594,7 @@ function LeaguePulseDashboard() {
             </span>
           </div>
           
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
             {[
               {
                 icon: "📸",
@@ -1708,22 +1708,22 @@ function DetailModal({
       content = (
         <div className="space-y-6">
           {/* Header */}
-          <div className="flex items-center gap-4 border-b border-indigo-500/20 pb-4">
-            <div className="w-16 h-16 rounded-full overflow-hidden bg-slate-800 border-2" style={{ borderColor: team.colors?.[0] || "#f97316" }}>
+          <div className="flex items-center gap-3 sm:gap-4 border-b border-indigo-500/20 pb-4">
+            <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full overflow-hidden bg-slate-800 border-2 flex-shrink-0" style={{ borderColor: team.colors?.[0] || "#f97316" }}>
               {team.logo ? (
                 <Image src={team.logo.startsWith("http") || team.logo.startsWith("/") ? team.logo : `/${team.logo}`} alt={team.name} width={64} height={64} className="w-full h-full object-cover" />
               ) : (
-                <span className="w-full h-full flex items-center justify-center text-2xl">🏀</span>
+                <span className="w-full h-full flex items-center justify-center text-xl sm:text-2xl">🏀</span>
               )}
             </div>
-            <div>
-              <h2 className="text-2xl font-black">{team.name}</h2>
-              <p className="text-sm text-slate-400">{team.city || "Unknown City"} · {team.gender === "women" ? t.women : t.men}</p>
+            <div className="min-w-0">
+              <h2 className="text-lg sm:text-2xl font-black truncate">{team.name}</h2>
+              <p className="text-xs sm:text-sm text-slate-400 truncate">{team.city || "Unknown City"} · {team.gender === "women" ? t.women : t.men}</p>
             </div>
           </div>
 
           {/* CRM Stats Grid */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
             <div className="bg-slate-900/50 rounded-xl p-3 border border-white/5">
               <p className="text-[10px] text-slate-500 uppercase tracking-widest">{t.record || "Record"}</p>
               <p className="text-xl font-bold">{team.wins} - {team.losses}</p>
@@ -1791,21 +1791,21 @@ function DetailModal({
       
       content = (
         <div className="space-y-6">
-          <div className="flex items-center gap-4 border-b border-indigo-500/20 pb-4">
-            <div className="w-16 h-16 rounded-full overflow-hidden bg-slate-800 border-2" style={{ borderColor: player.teamColors?.[0] || "#f97316" }}>
+          <div className="flex items-center gap-3 sm:gap-4 border-b border-indigo-500/20 pb-4">
+            <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full overflow-hidden bg-slate-800 border-2 flex-shrink-0" style={{ borderColor: player.teamColors?.[0] || "#f97316" }}>
               {player.headshot ? (
                 <Image src={player.headshot.startsWith("http") || player.headshot.startsWith("/") ? player.headshot : `/${player.headshot}`} alt="" width={64} height={64} className="w-full h-full object-cover" />
               ) : (
-                <span className="w-full h-full flex items-center justify-center text-2xl">👤</span>
+                <span className="w-full h-full flex items-center justify-center text-xl sm:text-2xl">👤</span>
               )}
             </div>
-            <div>
-              <h2 className="text-2xl font-black">{player.firstName} {player.lastName}</h2>
-              <p className="text-sm text-slate-400">{player.teamName} · #{player.number || "--"} · {player.position || "POS"}</p>
+            <div className="min-w-0">
+              <h2 className="text-lg sm:text-2xl font-black truncate">{player.firstName} {player.lastName}</h2>
+              <p className="text-xs sm:text-sm text-slate-400 truncate">{player.teamName} · #{player.number || "--"} · {player.position || "POS"}</p>
             </div>
           </div>
 
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
             {[
               { l: "PTS", v: stats.pts },
               { l: "REB", v: stats.reb },

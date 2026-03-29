@@ -576,7 +576,7 @@ export default function PlayerStatsEntryPage() {
       </div>
 
       {/* Game Selector */}
-      <div className="flex gap-4 flex-wrap">
+      <div className="flex gap-3 sm:gap-4 flex-wrap overflow-x-auto pb-2">
         {games
           .filter((g) => !g.statsSubmitted)
           .slice(0, 10)
@@ -588,7 +588,7 @@ export default function PlayerStatsEntryPage() {
               <button
                 key={game.id}
                 onClick={() => setSelectedGame(game)}
-                className={`p-4 rounded-xl border transition-all ${
+                className={`p-3 sm:p-4 rounded-xl border transition-all flex-shrink-0 ${
                   selectedGame?.id === game.id
                     ? "bg-white/10 border-white/30"
                     : "bg-black/20 border-white/10 hover:border-white/20"

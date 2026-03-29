@@ -2764,8 +2764,8 @@ export default function StatsPage() {
         </div>
 
         {games.length === 0 ? (
-          <div className="rounded-2xl border-2 border-dashed border-slate-700 bg-slate-900/40 p-16 text-center">
-            <div className="text-5xl mb-4">📊</div>
+          <div className="rounded-2xl border-2 border-dashed border-slate-700 bg-slate-900/40 p-8 sm:p-16 text-center">
+            <div className="text-4xl sm:text-5xl mb-4">📊</div>
             <p className="text-base font-semibold text-slate-300">{copy.noGames}</p>
             <p className="text-sm text-slate-500 mt-2">{copy.gamesNote}</p>
           </div>
@@ -2822,25 +2822,25 @@ export default function StatsPage() {
 
                       {/* Score / VS */}
                       {isDone ? (
-                        <div className="flex flex-col items-center px-6">
+                        <div className="flex flex-col items-center px-3 sm:px-6">
                           <div className="text-[10px] font-bold uppercase text-emerald-400 mb-1">{copy.done}</div>
-                          <div className="flex items-center gap-3">
-                            <span className={`text-3xl font-black ${game.winnerTeamId === game.awayTeamId ? "text-emerald-400" : "text-slate-500"}`}>
+                          <div className="flex items-center gap-2 sm:gap-3">
+                            <span className={`text-2xl sm:text-3xl font-black ${game.winnerTeamId === game.awayTeamId ? "text-emerald-400" : "text-slate-500"}`}>
                               {game.winnerTeamId === game.awayTeamId ? game.winnerScore : game.loserScore}
                             </span>
                             <span className="text-lg text-slate-600">-</span>
-                            <span className={`text-3xl font-black ${game.winnerTeamId === game.homeTeamId ? "text-emerald-400" : "text-slate-500"}`}>
+                            <span className={`text-2xl sm:text-3xl font-black ${game.winnerTeamId === game.homeTeamId ? "text-emerald-400" : "text-slate-500"}`}>
                               {game.winnerTeamId === game.homeTeamId ? game.winnerScore : game.loserScore}
                             </span>
                           </div>
                         </div>
                       ) : game.completed ? (
-                        <div className="flex items-center gap-2 px-4">
-                          <span className={`text-2xl font-black ${game.winnerTeamId === game.awayTeamId ? "text-emerald-400" : "text-slate-500"}`}>
+                        <div className="flex items-center gap-2 px-2 sm:px-4">
+                          <span className={`text-xl sm:text-2xl font-black ${game.winnerTeamId === game.awayTeamId ? "text-emerald-400" : "text-slate-500"}`}>
                             {game.winnerTeamId === game.awayTeamId ? game.winnerScore : game.loserScore}
                           </span>
                           <span className="text-lg text-slate-600">-</span>
-                          <span className={`text-2xl font-black ${game.winnerTeamId === game.homeTeamId ? "text-emerald-400" : "text-slate-500"}`}>
+                          <span className={`text-xl sm:text-2xl font-black ${game.winnerTeamId === game.homeTeamId ? "text-emerald-400" : "text-slate-500"}`}>
                             {game.winnerTeamId === game.homeTeamId ? game.winnerScore : game.loserScore}
                           </span>
                         </div>
@@ -3028,18 +3028,18 @@ export default function StatsPage() {
 
                       {/* Step 2: Enter Score */}
                       {winnerId && (
-                        <div className="p-6 border-b border-white/10">
+                        <div className="p-4 sm:p-6 border-b border-white/10">
                           <h3 className="text-sm font-bold text-orange-400 mb-4">{copy.step2}</h3>
-                          <div className="grid grid-cols-2 gap-6">
+                          <div className="grid grid-cols-2 gap-3 sm:gap-6">
                             <div className="text-center">
-                              <label className="text-xs text-slate-400 block mb-2">{expandedGame.awayTeamName}</label>
+                              <label className="text-xs text-slate-400 block mb-2 truncate">{expandedGame.awayTeamName}</label>
                               <input
                                 type="number"
                                 min="0"
                                 value={awayScore}
                                 onChange={(e) => setAwayScore(e.target.value)}
                                 placeholder="0"
-                                className={`w-full px-4 py-4 bg-slate-800 border-2 rounded-xl text-white text-3xl text-center font-black ${
+                                className={`w-full px-3 sm:px-4 py-3 sm:py-4 bg-slate-800 border-2 rounded-xl text-white text-2xl sm:text-3xl text-center font-black ${
                                   winnerId === expandedGame.awayTeamId
                                     ? "border-emerald-500/50"
                                     : "border-red-500/30"
@@ -3047,14 +3047,14 @@ export default function StatsPage() {
                               />
                             </div>
                             <div className="text-center">
-                              <label className="text-xs text-slate-400 block mb-2">{expandedGame.homeTeamName}</label>
+                              <label className="text-xs text-slate-400 block mb-2 truncate">{expandedGame.homeTeamName}</label>
                               <input
                                 type="number"
                                 min="0"
                                 value={homeScore}
                                 onChange={(e) => setHomeScore(e.target.value)}
                                 placeholder="0"
-                                className={`w-full px-4 py-4 bg-slate-800 border-2 rounded-xl text-white text-3xl text-center font-black ${
+                                className={`w-full px-3 sm:px-4 py-3 sm:py-4 bg-slate-800 border-2 rounded-xl text-white text-2xl sm:text-3xl text-center font-black ${
                                   winnerId === expandedGame.homeTeamId
                                     ? "border-emerald-500/50"
                                     : "border-red-500/30"

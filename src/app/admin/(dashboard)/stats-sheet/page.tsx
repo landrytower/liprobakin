@@ -153,7 +153,7 @@ export default function StatsSheetPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <p className="text-xs uppercase tracking-[0.3em] text-slate-500">
+        <p className="text-xs uppercase tracking-[0.2em] sm:tracking-[0.3em] text-slate-500">
           Reports
         </p>
         <h1 className="text-2xl font-semibold text-white">

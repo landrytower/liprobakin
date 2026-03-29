@@ -414,21 +414,21 @@ export default function LeagueManagementPage() {
   }
 
   return (
-    <div className="p-5 max-w-6xl mx-auto">
-      <div className="mb-8 flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-[#1089D3]">
+    <div className="p-3 sm:p-5 max-w-6xl mx-auto">
+      <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+        <h1 className="text-2xl sm:text-3xl font-bold text-[#1089D3]">
           League Management
         </h1>
         <button
           onClick={() => router.push("/admin")}
-          className="px-5 py-2.5 bg-gray-500 text-white rounded-lg cursor-pointer hover:bg-gray-600 transition"
+          className="px-4 py-2 sm:px-5 sm:py-2.5 bg-gray-500 text-white rounded-lg cursor-pointer hover:bg-gray-600 transition text-sm sm:text-base"
         >
           ← Back to Admin
         </button>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2.5 mb-8 border-b-2 border-gray-200">
+      <div className="flex gap-1.5 sm:gap-2.5 mb-6 sm:mb-8 border-b-2 border-gray-200 overflow-x-auto">
         {permissions?.canManageReferees && (
           <button
             onClick={() => setActiveTab("referees")}
@@ -491,7 +491,7 @@ export default function LeagueManagementPage() {
                 {refereeForm.id ? "Edit Referee" : "Add New Referee"}
               </h3>
               <form onSubmit={handleSubmitReferee}>
-                <div className="grid grid-cols-2 gap-4 mb-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                   <div>
                     <label className="block mb-1 font-bold text-sm">
                       First Name *
@@ -575,13 +575,13 @@ export default function LeagueManagementPage() {
           )}
 
           {/* Referees List */}
-          <div className="bg-white rounded-xl p-5 shadow-md">
+          <div className="bg-white rounded-xl p-3 sm:p-5 shadow-md">
             {referees.length === 0 ? (
               <p className="text-center text-gray-500 py-10">
                 No referees added yet. Click &quot;Add Referee&quot; to get started.
               </p>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto -mx-3 sm:mx-0">
                 <table className="w-full border-collapse">
                   <thead>
                     <tr className="border-b-2 border-gray-200">
@@ -689,8 +689,8 @@ export default function LeagueManagementPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-3 gap-4 mb-4">
-                  <div className="col-span-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                  <div className="sm:col-span-2">
                     <label className="block mb-1 font-bold text-sm">
                       Address
                     </label>
@@ -753,13 +753,13 @@ export default function LeagueManagementPage() {
           )}
 
           {/* Venues List */}
-          <div className="bg-white rounded-xl p-5 shadow-md">
+          <div className="bg-white rounded-xl p-3 sm:p-5 shadow-md">
             {venues.length === 0 ? (
               <p className="text-center text-gray-500 py-10">
                 No venues added yet. Click &quot;Add Venue&quot; to get started.
               </p>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto -mx-3 sm:mx-0">
                 <table className="w-full border-collapse">
                   <thead>
                     <tr className="border-b-2 border-gray-200">

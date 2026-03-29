@@ -579,8 +579,8 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
       <div className="min-h-screen bg-slate-950 text-white">
         {/* Header */}
         <header className="sticky top-0 live-pin-offset z-50 bg-slate-900/95 backdrop-blur-sm border-b border-white/10">
-          <div className="max-w-[1800px] mx-auto px-4 sm:px-6 py-4">
-            <div className="flex items-center justify-between flex-wrap gap-4">
+          <div className="max-w-[1800px] mx-auto px-3 sm:px-6 py-3 sm:py-4">
+            <div className="flex items-center justify-between flex-wrap gap-2 sm:gap-4">
               <div className="flex items-center gap-3">
                 {/* Profile Picture */}
                 <div className="relative" ref={onlineAdminsDropdownRef}>
@@ -620,10 +620,10 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
                     </div>
                   )}
                 </div>
-                <div>
-                  <h1 className="text-xl font-bold text-white">{t.dashboard}</h1>
-                  <div className="flex items-center gap-2 mt-1">
-                    <p className="text-sm text-orange-400 font-medium">
+                <div className="min-w-0 flex-1">
+                  <h1 className="text-base sm:text-xl font-bold text-white truncate">{t.dashboard}</h1>
+                  <div className="flex items-center gap-2 mt-0.5 sm:mt-1">
+                    <p className="text-xs sm:text-sm text-orange-400 font-medium truncate max-w-[140px] sm:max-w-none">
                       {currentAdminUser?.displayName || currentAdminUser?.email}
                     </p>
                     <button
@@ -631,7 +631,7 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
                         setNewDisplayName(currentAdminUser?.displayName || "");
                         setShowDisplayNameEdit(true);
                       }}
-                      className="text-slate-400 hover:text-orange-400 transition-colors"
+                      className="text-slate-400 hover:text-orange-400 transition-colors flex-shrink-0"
                       title={t.editDisplayName}
                     >
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -639,19 +639,19 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
                       </svg>
                     </button>
                   </div>
-                  <p className="text-xs text-slate-400">{t.cms}</p>
+                  <p className="text-xs text-slate-400 hidden sm:block">{t.cms}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
                 {/* Online admins indicator */}
                 <div className="relative">
                   <button
                     onClick={() => setShowOnlineAdmins(!showOnlineAdmins)}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800 border border-white/10 hover:bg-slate-700 transition-colors cursor-pointer"
+                    className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-full bg-slate-800 border border-white/10 hover:bg-slate-700 transition-colors cursor-pointer"
                   >
                     <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-                    <span className="text-sm text-slate-300">
-                      {onlineAdminsCount} {t.adminsOnline}
+                    <span className="text-xs sm:text-sm text-slate-300">
+                      {onlineAdminsCount} <span className="hidden sm:inline">{t.adminsOnline}</span><span className="sm:hidden">en ligne</span>
                     </span>
                     <svg className={`w-4 h-4 text-slate-400 transition-transform ${showOnlineAdmins ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -661,7 +661,7 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
                   {/* Online Admins Dropdown */}
                   {showOnlineAdmins && (
                     <>
-                      <div className="absolute right-0 top-full mt-2 z-50 w-80 bg-slate-900 border border-white/10 rounded-xl shadow-xl overflow-hidden">
+                      <div className="absolute right-0 top-full mt-2 z-50 w-[calc(100vw-2rem)] sm:w-80 max-w-80 bg-slate-900 border border-white/10 rounded-xl shadow-xl overflow-hidden">
                         <div className="px-4 py-3 border-b border-white/10 bg-slate-800/50">
                           <h3 className="text-sm font-semibold text-white flex items-center gap-2">
                             <div className="w-2 h-2 rounded-full bg-green-500"></div>
@@ -770,7 +770,7 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
                 <div className="flex rounded-lg overflow-hidden border border-white/10">
                   <button
                     onClick={() => setLanguage("en")}
-                    className={`px-3 py-1.5 text-sm font-medium transition-colors ${
+                    className={`px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium transition-colors ${
                       language === "en" ? "bg-slate-700 text-white" : "bg-slate-800 text-slate-400 hover:text-white"
                     }`}
                   >
@@ -778,7 +778,7 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
                   </button>
                   <button
                     onClick={() => setLanguage("fr")}
-                    className={`px-3 py-1.5 text-sm font-medium transition-colors ${
+                    className={`px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium transition-colors ${
                       language === "fr" ? "bg-orange-500 text-white" : "bg-slate-800 text-slate-400 hover:text-white"
                     }`}
                   >
@@ -789,32 +789,40 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
                 {/* Password change button */}
                 <button
                   onClick={() => setShowPasswordChange(true)}
-                  className="px-4 py-2 text-sm font-medium text-white bg-slate-800 hover:bg-slate-700 rounded-lg border border-white/10 transition-colors"
+                  className="px-2.5 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-slate-800 hover:bg-slate-700 rounded-lg border border-white/10 transition-colors"
+                  title={t.changePassword}
                 >
-                  {t.changePassword}
+                  <span className="hidden sm:inline">{t.changePassword}</span>
+                  <svg className="w-4 h-4 sm:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
                 </button>
 
                 {/* Sign out button */}
                 <button
                   onClick={handleSignOut}
-                  className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+                  className="px-2.5 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+                  title={t.signOut}
                 >
-                  {t.signOut}
+                  <span className="hidden sm:inline">{t.signOut}</span>
+                  <svg className="w-4 h-4 sm:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
                 </button>
               </div>
             </div>
           </div>
 
           {/* Navigation tabs */}
-          <div className="max-w-[1800px] mx-auto px-4 sm:px-6">
-            <nav className="flex gap-1 overflow-x-auto pb-2 scrollbar-hide">
+          <div className="max-w-[1800px] mx-auto px-2 sm:px-6">
+            <nav className="flex gap-0.5 sm:gap-1 overflow-x-auto pb-2 scrollbar-hide -mx-2 px-2 sm:mx-0 sm:px-0">
               {filteredNavItems.map((item) => {
                 const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
                 return (
                   <Link
                     key={item.key}
                     href={item.href}
-                    className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold uppercase tracking-wider whitespace-nowrap transition-colors border-b-2 ${
+                    className={`flex items-center gap-1 sm:gap-2 px-2.5 sm:px-4 py-2 sm:py-2.5 text-[10px] sm:text-xs font-semibold uppercase tracking-wide sm:tracking-wider whitespace-nowrap transition-colors border-b-2 ${
                       isActive
                         ? "border-orange-500 text-orange-400"
                         : "border-transparent text-slate-400 hover:text-slate-300"
@@ -830,7 +838,7 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
         </header>
 
         {/* Main content with page transition */}
-        <main className="max-w-[1800px] mx-auto px-4 sm:px-6 py-6">
+        <main className="max-w-[1800px] mx-auto px-3 sm:px-6 py-4 sm:py-6">
           <div 
             key={pathname}
             className="animate-in fade-in slide-in-from-right-4 duration-300"

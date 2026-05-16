@@ -1133,7 +1133,7 @@ export default function CalendrierPage() {
             <p>{t.footerTagline}</p>
             <span className="hidden sm:inline text-slate-600">•</span>
             <a
-              href="https://www.landrypalata.com"
+              href="https://buildbyland.com"
               target="_blank"
               rel="noopener noreferrer"
               className="group flex items-center gap-2 text-[10px] tracking-[0.4em] text-slate-500 hover:text-orange-400 transition-all duration-300"

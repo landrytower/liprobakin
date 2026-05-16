@@ -301,21 +301,15 @@ export default function TeamPage() {
         const currentTeamId = teamDoc.id;
         const currentIndex = allTeamsList.findIndex(t => t.id === currentTeamId);
         
-        console.log('🏀 Current team:', currentFullName);
-        console.log('🏀 Current index:', currentIndex);
-        console.log('🏀 Total teams:', allTeamsList.length);
-        
         // Always set next and previous teams - wrap around for continuous navigation
         if (currentIndex !== -1 && allTeamsList.length > 1) {
           const nextIndex = (currentIndex + 1) % allTeamsList.length;
           const prevIndex = (currentIndex - 1 + allTeamsList.length) % allTeamsList.length;
           setNextTeam(allTeamsList[nextIndex]);
           setPreviousTeam(allTeamsList[prevIndex]);
-          console.log('🏀 Previous:', allTeamsList[prevIndex].fullName, '| Current:', currentFullName, '| Next:', allTeamsList[nextIndex].fullName);
         } else {
           setNextTeam(null);
           setPreviousTeam(null);
-          console.log('🏀 Navigation disabled (only one team or team not found)');
         }
         
         const data = teamDoc.data();
@@ -335,38 +329,7 @@ export default function TeamPage() {
           nationality2: data.nationality2,
         };
         
-        // Calculate wins/losses from games
-        const gamesRef = collection(firebaseDB, "games");
-        const gamesSnapshot = await getDocs(gamesRef);
-        
-        let wins = 0;
-        let losses = 0;
-        
-        gamesSnapshot.docs.forEach((gameDoc) => {
-          const game = gameDoc.data();
-          if (game.winnerTeamId === foundTeamId) {
-            wins++;
-          } else if (game.loserTeamId === foundTeamId) {
-            losses++;
-          }
-        });
-        
-        const updatedTeam: TeamData = {
-          id: foundTeam.id,
-          name: foundTeam.name,
-          city: foundTeam.city,
-          logo: foundTeam.logo,
-          teamPhoto: foundTeam.teamPhoto,
-          teamPhotoPosition: foundTeam.teamPhotoPosition,
-          colors: foundTeam.colors,
-          conference: foundTeam.conference,
-          nationality: foundTeam.nationality,
-          nationality2: foundTeam.nationality2,
-          wins,
-          losses,
-        };
-        
-        setTeamData(updatedTeam);
+        setTeamData(foundTeam);
         
         // Fetch roster
         const rosterRef = collection(firebaseDB, "teams", foundTeamId, "roster");
@@ -417,11 +380,8 @@ export default function TeamPage() {
         const staffRef = collection(firebaseDB, "teams", foundTeamId, "coachStaff");
         const staffSnapshot = await getDocs(staffRef);
         
-        console.log("Staff snapshot size:", staffSnapshot.size);
-        
         const staffData: StaffMember[] = staffSnapshot.docs.map((doc) => {
           const data = doc.data();
-          console.log("Staff member data:", data);
           return {
             id: doc.id,
             firstName: data.firstName || "",
@@ -437,7 +397,6 @@ export default function TeamPage() {
         const roleOrder = { head_coach: 1, assistant_coach: 2, staff: 3 };
         staffData.sort((a, b) => roleOrder[a.role] - roleOrder[b.role]);
         
-        console.log("Staff data to set:", staffData);
         
         // Separate coaches and staff
         const coachesOnly = staffData.filter(member => 
@@ -450,14 +409,6 @@ export default function TeamPage() {
         setStaff(staffData);
         setCoaches(coachesOnly);
         setTeamStaff(staffOnly);
-
-        if (entryLoaderStartRef.current) {
-          const elapsed = Date.now() - entryLoaderStartRef.current;
-          const remaining = Math.max(0, 1300 - elapsed);
-          if (remaining > 0) {
-            await new Promise((resolve) => setTimeout(resolve, remaining));
-          }
-        }
 
         setLoading(false);
         setTimeout(() => setIsTransitioning(false), 100);
@@ -925,7 +876,7 @@ export default function TeamPage() {
                     
                     {/* Hover overlay with stats - desktop only */}
                     <div className="absolute inset-0 bg-gradient-to-b from-blue-950/50 via-blue-950/70 to-blue-950/85 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 transition-all duration-300 ease-out hidden md:flex flex-col items-center justify-center p-2">
-                      <span className="text-xl font-bold text-white mb-0.5 transform -translate-y-2 group-hover:translate-y-0 transition-transform duration-300 delay-75">#{index}</span>
+                      <span className="text-xl font-bold text-white mb-0.5 transform -translate-y-2 group-hover:translate-y-0 transition-transform duration-300 delay-75">#{player.jerseyNumber ?? player.number}</span>
                       <h3 className="text-xs font-semibold text-blue-300 text-center mb-2 leading-tight transform -translate-y-2 group-hover:translate-y-0 transition-transform duration-300 delay-100">
                         {player.name}
                       </h3>
@@ -961,7 +912,7 @@ export default function TeamPage() {
                     <div className="absolute bottom-0 left-0 right-0 p-1.5 md:group-hover:opacity-0 transition-opacity duration-200">
                       <div className="flex items-end justify-between">
                         <div className="flex-1">
-                          <span className="text-xl font-bold text-blue-400 block">#{index}</span>
+                          <span className="text-xl font-bold text-blue-400 block">#{player.jerseyNumber ?? player.number}</span>
                           <h3 className="text-xs font-semibold text-white group-hover:text-blue-400 transition-colors leading-tight">
                             {player.name}
                           </h3>

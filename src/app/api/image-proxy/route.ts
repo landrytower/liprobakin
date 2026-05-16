@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
   try {
     const upstreamResponse = await fetch(parsedUrl.toString(), {
       cache: "force-cache",
-      next: { revalidate: 300 },
+      next: { revalidate: 3600 },
       headers: { Accept: "image/*,*/*;q=0.8" },
     });
 
@@ -66,7 +66,7 @@ export async function GET(request: NextRequest) {
       status: 200,
       headers: {
         "Content-Type": contentType,
-        "Cache-Control": "public, max-age=300, s-maxage=300",
+        "Cache-Control": "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800",
       },
     });
   } catch {

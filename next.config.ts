@@ -8,7 +8,30 @@ const nextConfig: NextConfig = {
     root: __dirname,
   },
   images: {
-    unoptimized: true,
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "firebasestorage.googleapis.com",
+      },
+      {
+        protocol: "https",
+        hostname: "storage.googleapis.com",
+      },
+      {
+        protocol: "https",
+        hostname: "*.googleusercontent.com",
+      },
+      {
+        protocol: "https",
+        hostname: "*.liprobakin.com",
+      },
+      {
+        protocol: "https",
+        hostname: "*.vercel.app",
+      },
+    ],
+    formats: ["image/avif", "image/webp"],
+    minimumCacheTTL: 86400,
   },
   trailingSlash: false,
   // SEO optimization
@@ -38,7 +61,25 @@ const nextConfig: NextConfig = {
             value: 'SAMEORIGIN'
           }
         ]
-      }
+      },
+      {
+        source: '/logos/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=86400, stale-while-revalidate=604800'
+          }
+        ]
+      },
+      {
+        source: '/players/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=86400, stale-while-revalidate=604800'
+          }
+        ]
+      },
     ]
   },
 };

@@ -1807,7 +1807,7 @@ export default function Home() {
   const [completedGames, setCompletedGames] = useState<any[]>([]);
   const [menTeams, setMenTeams] = useState<Franchise[]>(ssrMenFranchises);
   const [womenTeams, setWomenTeams] = useState<Franchise[]>(ssrWomenFranchises);
-  const [leagueTopPlayers, setLeagueTopPlayers] = useState<any[]>(() => readHomeStatsCache()?.leagueTopPlayers ?? []);
+  const [leagueTopPlayers, setLeagueTopPlayers] = useState<any[]>([]);
   const [leagueLeadersExpanded, setLeagueLeadersExpanded] = useState(false);
   const [newsArticles, setNewsArticles] = useState<NewsArticle[]>([]);
   const [featuredArticleId, setFeaturedArticleId] = useState<string | null>(null);
@@ -1845,10 +1845,10 @@ export default function Home() {
   const [touchEndX, setTouchEndX] = useState(0);
   const [isSwiping, setIsSwiping] = useState(false);
   const [isArticleChanging, setIsArticleChanging] = useState(false);
-  const [dynamicStandings, setDynamicStandings] = useState<any[] | null>(() => readHomeStatsCache()?.standings ?? null);
+  const [dynamicStandings, setDynamicStandings] = useState<any[] | null>(null);
   const [currentPartnerIndex, setCurrentPartnerIndex] = useState(0);
   const [currentCommitteeIndex, setCurrentCommitteeIndex] = useState(0);
-  const [dynamicPartners, setDynamicPartners] = useState<any[]>(() => readHomeBootstrapCache()?.partners ?? []);
+  const [dynamicPartners, setDynamicPartners] = useState<any[]>([]);
   const [visiblePartners, setVisiblePartners] = useState<number[]>([0, 1, 2, 3]);
   const [partnerAnimating, setPartnerAnimating] = useState<number | null>(null);
   const [dynamicCommittee, setDynamicCommittee] = useState<any[]>(leagueCommittee);
@@ -2349,8 +2349,11 @@ export default function Home() {
       if (cached.referees.length > 0) setDynamicReferees(cached.referees);
     }
 
-    // NOTE: Do not pre-populate standings from cache/SSR.
-    // On slow loads this can flash incorrect standings before real standings are computed.
+    // Load stats cache (leagueTopPlayers) after hydration to avoid SSR mismatch.
+    const statsCached = readHomeStatsCache();
+    if (statsCached) {
+      if (statsCached.leagueTopPlayers.length > 0) setLeagueTopPlayers(statsCached.leagueTopPlayers);
+    }
   }, []);
 
   useEffect(() => {

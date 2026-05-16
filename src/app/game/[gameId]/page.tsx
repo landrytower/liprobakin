@@ -1771,7 +1771,7 @@ export default function GamePage() {
                 {/* Away Team */}
                 <div>
                   <h3 className="mb-3 sm:mb-4 flex items-center gap-2 text-base sm:text-lg font-bold">
-                    {game.awayTeamLogo && <Image src={game.awayTeamLogo} alt="" width={32} height={32} className="w-6 h-6 sm:w-8 sm:h-8 rounded-full border-2 border-white/20 object-cover" />}
+                    {game.awayTeamLogo && <Image src={game.awayTeamLogo} alt={game.awayTeamName ?? ""} width={32} height={32} className="w-6 h-6 sm:w-8 sm:h-8 rounded-full border-2 border-white/20 object-cover" />}
                     <span className="truncate">{game.awayTeamName}</span>
                   </h3>
                   <div className="space-y-2 sm:hidden">
@@ -1820,7 +1820,7 @@ export default function GamePage() {
                               <div className="flex items-center gap-1 sm:gap-2">
                                 {player.headshot && (
                                   <div className="hidden sm:block w-7 h-7 sm:w-8 sm:h-8 flex-shrink-0">
-                                    <Image src={player.headshot} alt="" width={32} height={32} className="rounded-full object-cover w-full h-full" />
+                                    <Image src={player.headshot} alt={getPlayerDisplayName(player)} width={32} height={32} className="rounded-full object-cover w-full h-full" />
                                   </div>
                                 )}
                                 <div className="min-w-0">
@@ -1850,7 +1850,7 @@ export default function GamePage() {
                 {/* Home Team */}
                 <div>
                   <h3 className="mb-3 sm:mb-4 flex items-center gap-2 text-base sm:text-lg font-bold">
-                    {game.homeTeamLogo && <Image src={game.homeTeamLogo} alt="" width={32} height={32} className="w-6 h-6 sm:w-8 sm:h-8 rounded-full border-2 border-white/20 object-cover" />}
+                    {game.homeTeamLogo && <Image src={game.homeTeamLogo} alt={game.homeTeamName ?? ""} width={32} height={32} className="w-6 h-6 sm:w-8 sm:h-8 rounded-full border-2 border-white/20 object-cover" />}
                     <span className="truncate">{game.homeTeamName}</span>
                   </h3>
                   <div className="space-y-2 sm:hidden">
@@ -1899,7 +1899,7 @@ export default function GamePage() {
                               <div className="flex items-center gap-1 sm:gap-2">
                                 {player.headshot && (
                                   <div className="hidden sm:block w-7 h-7 sm:w-8 sm:h-8 flex-shrink-0">
-                                    <Image src={player.headshot} alt="" width={32} height={32} className="rounded-full object-cover w-full h-full" />
+                                    <Image src={player.headshot} alt={getPlayerDisplayName(player)} width={32} height={32} className="rounded-full object-cover w-full h-full" />
                                   </div>
                                 )}
                                 <div className="min-w-0">

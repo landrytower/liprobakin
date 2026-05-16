@@ -5743,7 +5743,7 @@ export default function Home() {
                         href={whatsappShareUrl}
                         target="_blank"
                         rel="nofollow noopener noreferrer"
-                        className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white transition" style={{ backgroundColor: '#25D366' }}
+                        className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white transition bg-[#25D366] hover:bg-[#20b958]"
                       >
                         <svg viewBox="0 0 32 32" className="h-5 w-5" fill="currentColor" aria-hidden><path fillRule="evenodd" d="M16.21 4.41C9.973 4.41 4.917 9.465 4.917 15.7c0 2.134.592 4.13 1.62 5.832L4.5 27.59l6.25-2.002a11.24 11.24 0 0 0 5.46 1.404c6.234 0 11.29-5.055 11.29-11.29 0-6.237-5.056-11.292-11.29-11.292m0 20.69c-1.91 0-3.69-.57-5.173-1.553l-3.61 1.156 1.173-3.49a9.35 9.35 0 0 1-1.79-5.512c0-5.18 4.217-9.4 9.4-9.4s9.397 4.22 9.397 9.4c0 5.188-4.214 9.4-9.398 9.4zm5.293-6.832c-.284-.155-1.673-.906-1.934-1.012-.265-.106-.455-.16-.658.12s-.78.91-.954 1.096c-.176.186-.345.203-.628.048-.282-.154-1.2-.494-2.264-1.517-.83-.795-1.373-1.76-1.53-2.055s0-.445.15-.584c.134-.124.3-.326.45-.488.15-.163.203-.28.306-.47.104-.19.06-.36-.005-.506-.066-.147-.59-1.587-.81-2.173-.218-.586-.46-.498-.63-.505-.168-.007-.358-.038-.55-.045-.19-.007-.51.054-.78.332-.277.274-1.05.943-1.1 2.362-.055 1.418.926 2.826 1.064 3.023.137.2 1.874 3.272 4.76 4.537 2.888 1.264 2.9.878 3.43.85.53-.027 1.734-.633 2-1.297s.287-1.24.22-1.363c-.07-.123-.26-.203-.54-.357z" clipRule="evenodd"/></svg>
                         WhatsApp
@@ -5753,7 +5753,7 @@ export default function Home() {
                         href={facebookShareUrl}
                         target="_blank"
                         rel="nofollow noopener noreferrer"
-                        className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white transition" style={{ backgroundColor: '#1877F2' }}
+                        className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white transition bg-[#1877F2] hover:bg-[#1465d8]"
                       >
                         <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor" aria-hidden><path d="M22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.988C18.343 21.128 22 16.991 22 12z"/></svg>
                         Facebook
@@ -7675,7 +7675,7 @@ export default function Home() {
             </p>
             <span className="hidden sm:inline text-slate-600">•</span>
             <a 
-              href="https://www.landrypalata.com" 
+              href="https://buildbyland.com"
               target="_blank" 
               rel="noopener noreferrer"
               className="group flex items-center gap-2 text-[10px] tracking-[0.4em] text-slate-500 hover:text-orange-400 transition-all duration-300"

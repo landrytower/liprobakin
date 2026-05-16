@@ -49,3 +49,6 @@ next-env.d.ts
 
 # Firestore backups
 backups/
+
+# Git worktrees
+.worktrees/

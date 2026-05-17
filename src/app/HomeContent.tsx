@@ -6806,13 +6806,13 @@ export default function Home() {
                       <div className="mb-2 flex items-center justify-between text-[11px] sm:text-xs text-slate-400">
                         <span className="font-medium tracking-wide">{gameDate}{gameTime ? `  ${gameTime}` : ""}</span>
                         {game.winByForfeit === true && (
-                          <span className="rounded-full border border-orange-500/30 bg-orange-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-orange-200">
+                          <span className="rounded-full border border-orange-500/30 bg-orange-500/10 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-orange-200">
                             {language === "fr" ? "Victoire par forfait" : "Win per forfeit"}
                           </span>
                         )}
                       </div>
 
-                      <div className="mb-2 flex items-center gap-3 text-[10px] sm:text-[11px] uppercase tracking-[0.18em] text-slate-500">
+                      <div className="mb-2 flex items-center gap-3 text-xs uppercase tracking-[0.18em] text-slate-500">
                         <span>{matchdayNumber !== null ? `${language === "fr" ? "Journée" : "Matchday"} ${matchdayNumber}` : (language === "fr" ? "Journée" : "Matchday")}</span>
                         <span>{game.gender === "men" ? "M" : game.gender === "women" ? "W" : ""}</span>
                       </div>
@@ -6940,9 +6940,9 @@ export default function Home() {
                 return (
                   <div
                     key={`${player.id}-${playerMetric}`}
-                    className="flex-shrink-0 w-[280px] snap-start rounded-3xl border border-white/10 bg-slate-900/60 overflow-hidden hover:border-white/30 transition"
+                    className="flex-shrink-0 w-[240px] sm:w-[280px] snap-start rounded-3xl border border-white/10 bg-slate-900/60 overflow-hidden hover:border-white/30 transition"
                   >
-                    <div className="p-6 flex flex-col items-center text-center">
+                    <div className="p-4 sm:p-6 flex flex-col items-center text-center">
                       <span className="text-lg font-bold text-slate-300 mb-3">
                         #{String(index + 1).padStart(2, "0")}
                       </span>
@@ -6956,8 +6956,8 @@ export default function Home() {
                           glowedStandingPlayerPhotos[playerPhotoGlowKey] ? "standings-player-photo-glow-once" : ""
                         }`}
                         style={{
-                          width: 180,
-                          height: 180,
+                          width: 140,
+                          height: 140,
                         }}
                       />
                       <p className="text-xs uppercase tracking-[0.3em] text-slate-400 mb-1">
@@ -6969,26 +6969,26 @@ export default function Home() {
                       >
                         {playerName}
                       </Link>
-                      <div className="grid grid-cols-5 gap-3 w-full">
+                      <div className="grid grid-cols-5 gap-2 sm:gap-3 w-full">
                         <div>
-                          <p className="text-[10px] uppercase text-slate-400">PTS</p>
-                          <p className="text-lg font-bold text-white">{player.stats.pts}</p>
+                          <p className="text-xs uppercase text-slate-400">PTS</p>
+                          <p className="text-base sm:text-lg font-bold text-white">{player.stats.pts}</p>
                         </div>
                         <div>
-                          <p className="text-[10px] uppercase text-slate-400">REB</p>
-                          <p className="text-lg font-bold text-white">{player.stats.reb}</p>
+                          <p className="text-xs uppercase text-slate-400">REB</p>
+                          <p className="text-base sm:text-lg font-bold text-white">{player.stats.reb}</p>
                         </div>
                         <div>
-                          <p className="text-[10px] uppercase text-slate-400">AST</p>
-                          <p className="text-lg font-bold text-white">{player.stats.ast}</p>
+                          <p className="text-xs uppercase text-slate-400">AST</p>
+                          <p className="text-base sm:text-lg font-bold text-white">{player.stats.ast}</p>
                         </div>
                         <div>
-                          <p className="text-[10px] uppercase text-slate-400">BLK</p>
-                          <p className="text-lg font-bold text-white">{player.stats.blk}</p>
+                          <p className="text-xs uppercase text-slate-400">BLK</p>
+                          <p className="text-base sm:text-lg font-bold text-white">{player.stats.blk}</p>
                         </div>
                         <div>
-                          <p className="text-[10px] uppercase text-slate-400">EVL</p>
-                          <p className="text-lg font-bold text-white">{Math.round(player.stats.evl)}</p>
+                          <p className="text-xs uppercase text-slate-400">EVL</p>
+                          <p className="text-base sm:text-lg font-bold text-white">{Math.round(player.stats.evl)}</p>
                         </div>
                       </div>
                       {player.isImport && (

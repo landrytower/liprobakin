@@ -522,7 +522,7 @@ export default function PlayerProfilePage() {
                   )}
                 </div>
                 
-                <h1 className="mb-4 text-4xl font-bold text-white sm:mb-6 sm:text-5xl lg:text-6xl xl:text-7xl">
+                <h1 className="mb-4 text-3xl font-bold text-white sm:mb-6 sm:text-4xl lg:text-5xl xl:text-6xl">
                   {player.firstName} {player.lastName}
                 </h1>
 
@@ -530,7 +530,7 @@ export default function PlayerProfilePage() {
                 <div className="flex flex-wrap gap-2 sm:grid sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
                   {player.nationality && (
                     <div className="flex-1 min-w-[110px] rounded-xl border border-white/20 bg-black/20 p-2.5 sm:p-4">
-                      <p className="mb-1 text-[10px] uppercase tracking-wider text-blue-200 sm:text-xs">{t.nationality}</p>
+                      <p className="mb-1 text-xs uppercase tracking-wider text-blue-200">{t.nationality}</p>
                       <p className="text-xs font-semibold text-white sm:text-base flex items-center gap-2">
                         <img
                           src={`https://flagcdn.com/w40/${player.nationality.toLowerCase()}.png`}
@@ -566,7 +566,7 @@ export default function PlayerProfilePage() {
                   )}
                   {player.dateOfBirth && (
                     <div className="flex-1 min-w-[110px] rounded-xl border border-white/20 bg-black/20 p-2.5 sm:p-4">
-                      <p className="mb-1 text-[10px] uppercase tracking-wider text-blue-200 sm:text-xs">{t.dateOfBirth}</p>
+                      <p className="mb-1 text-xs uppercase tracking-wider text-blue-200">{t.dateOfBirth}</p>
                       <p className="text-xs font-semibold text-white sm:text-base truncate">
                         {new Date(player.dateOfBirth).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', {
                           month: "short",
@@ -577,12 +577,12 @@ export default function PlayerProfilePage() {
                     </div>
                   )}
                   <div className="flex-1 min-w-[90px] rounded-xl border border-white/20 bg-black/20 p-2.5 sm:p-4">
-                    <p className="mb-1 text-[10px] uppercase tracking-wider text-blue-200 sm:text-xs">{t.height}</p>
+                    <p className="mb-1 text-xs uppercase tracking-wider text-blue-200">{t.height}</p>
                     <p className="text-xs font-semibold text-white sm:text-base">{player.height || "—"}</p>
                   </div>
                   {player.position && (
                     <div className="flex-1 min-w-[90px] rounded-xl border border-white/20 bg-black/20 p-2.5 sm:p-4">
-                      <p className="mb-1 text-[10px] uppercase tracking-wider text-blue-200 sm:text-xs">{t.position}</p>
+                      <p className="mb-1 text-xs uppercase tracking-wider text-blue-200">{t.position}</p>
                       <p className="text-xs font-semibold text-white sm:text-base truncate">{player.position}</p>
                     </div>
                   )}
@@ -716,24 +716,24 @@ export default function PlayerProfilePage() {
           </h2>
           <div className="grid grid-cols-2 gap-3 sm:gap-6 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/80 to-slate-900/40 p-3 sm:p-6">
-              <p className="mb-1 text-[10px] uppercase tracking-wider text-slate-400 sm:mb-2 sm:text-sm">{t.pointsPerGame}</p>
+              <p className="mb-1 text-xs uppercase tracking-wider text-slate-400 sm:mb-2 sm:text-sm">{t.pointsPerGame}</p>
               <p className="mb-1 text-3xl font-bold text-white sm:mb-2 sm:text-5xl lg:text-6xl">{player.stats.pts}</p>
-              <p className="text-[10px] font-semibold text-emerald-400 sm:text-sm">#{rankings.pts} {t.inLeague}</p>
+              <p className="text-xs font-semibold text-emerald-400 sm:text-sm">#{rankings.pts} {t.inLeague}</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/80 to-slate-900/40 p-3 sm:p-6">
-              <p className="mb-1 text-[10px] uppercase tracking-wider text-slate-400 sm:mb-2 sm:text-sm">{t.reboundsPerGame}</p>
+              <p className="mb-1 text-xs uppercase tracking-wider text-slate-400 sm:mb-2 sm:text-sm">{t.reboundsPerGame}</p>
               <p className="mb-1 text-3xl font-bold text-white sm:mb-2 sm:text-5xl lg:text-6xl">{player.stats.reb}</p>
-              <p className="text-[10px] font-semibold text-emerald-400 sm:text-sm">#{rankings.reb} {t.inLeague}</p>
+              <p className="text-xs font-semibold text-emerald-400 sm:text-sm">#{rankings.reb} {t.inLeague}</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/80 to-slate-900/40 p-3 sm:p-6">
-              <p className="mb-1 text-[10px] uppercase tracking-wider text-slate-400 sm:mb-2 sm:text-sm">{t.stealsPerGame}</p>
+              <p className="mb-1 text-xs uppercase tracking-wider text-slate-400 sm:mb-2 sm:text-sm">{t.stealsPerGame}</p>
               <p className="mb-1 text-3xl font-bold text-white sm:mb-2 sm:text-5xl lg:text-6xl">{player.stats.stl}</p>
-              <p className="text-[10px] font-semibold text-emerald-400 sm:text-sm">#{rankings.stl} {t.inLeague}</p>
+              <p className="text-xs font-semibold text-emerald-400 sm:text-sm">#{rankings.stl} {t.inLeague}</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/80 to-slate-900/40 p-3 sm:p-6">
-              <p className="mb-1 text-[10px] uppercase tracking-wider text-slate-400 sm:mb-2 sm:text-sm">{t.blocksPerGame}</p>
+              <p className="mb-1 text-xs uppercase tracking-wider text-slate-400 sm:mb-2 sm:text-sm">{t.blocksPerGame}</p>
               <p className="mb-1 text-3xl font-bold text-white sm:mb-2 sm:text-5xl lg:text-6xl">{(player.stats as any).blk || "0.0"}</p>
-              <p className="text-[10px] font-semibold text-emerald-400 sm:text-sm">#{rankings.blk} {t.inLeague}</p>
+              <p className="text-xs font-semibold text-emerald-400 sm:text-sm">#{rankings.blk} {t.inLeague}</p>
             </div>
           </div>
 
@@ -744,19 +744,19 @@ export default function PlayerProfilePage() {
               </h3>
               <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
                 <div className="rounded-xl border border-white/10 bg-slate-900/60 p-3 sm:p-4">
-                  <p className="text-[10px] uppercase tracking-wider text-slate-400 sm:text-xs">{t.pointsPerGame}</p>
+                  <p className="text-xs uppercase tracking-wider text-slate-400">{t.pointsPerGame}</p>
                   <p className="mt-1 text-2xl font-bold text-white sm:text-3xl">{lastFiveAverages.pts}</p>
                 </div>
                 <div className="rounded-xl border border-white/10 bg-slate-900/60 p-3 sm:p-4">
-                  <p className="text-[10px] uppercase tracking-wider text-slate-400 sm:text-xs">{t.reboundsPerGame}</p>
+                  <p className="text-xs uppercase tracking-wider text-slate-400">{t.reboundsPerGame}</p>
                   <p className="mt-1 text-2xl font-bold text-white sm:text-3xl">{lastFiveAverages.reb}</p>
                 </div>
                 <div className="rounded-xl border border-white/10 bg-slate-900/60 p-3 sm:p-4">
-                  <p className="text-[10px] uppercase tracking-wider text-slate-400 sm:text-xs">{t.assistsPerGame}</p>
+                  <p className="text-xs uppercase tracking-wider text-slate-400">{t.assistsPerGame}</p>
                   <p className="mt-1 text-2xl font-bold text-white sm:text-3xl">{lastFiveAverages.ast}</p>
                 </div>
                 <div className="rounded-xl border border-white/10 bg-slate-900/60 p-3 sm:p-4">
-                  <p className="text-[10px] uppercase tracking-wider text-slate-400 sm:text-xs">{t.stealsPerGame}</p>
+                  <p className="text-xs uppercase tracking-wider text-slate-400">{t.stealsPerGame}</p>
                   <p className="mt-1 text-2xl font-bold text-white sm:text-3xl">{lastFiveAverages.stl}</p>
                 </div>
               </div>

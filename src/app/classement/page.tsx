@@ -708,7 +708,7 @@ export default function ClassementPage() {
                               className="h-6 w-6 rounded-full border border-white/10 bg-white/5 object-cover md:h-7 md:w-7"
                             />
                           ) : (
-                            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/5 text-[10px] font-semibold text-slate-300 md:h-7 md:w-7">
+                            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/5 text-xs font-semibold text-slate-300 md:h-7 md:w-7">
                               {initials}
                             </span>
                           )}

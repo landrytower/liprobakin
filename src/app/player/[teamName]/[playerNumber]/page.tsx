@@ -717,22 +717,22 @@ export default function PlayerProfilePage() {
           <div className="grid grid-cols-2 gap-3 sm:gap-6 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/80 to-slate-900/40 p-3 sm:p-6">
               <p className="mb-1 text-xs uppercase tracking-wider text-slate-400 sm:mb-2 sm:text-sm">{t.pointsPerGame}</p>
-              <p className="mb-1 text-3xl font-bold text-white sm:mb-2 sm:text-5xl lg:text-6xl">{player.stats.pts}</p>
+              <p className="animate-stat-pop mb-1 text-3xl font-bold text-white sm:mb-2 sm:text-5xl lg:text-6xl">{player.stats.pts}</p>
               <p className="text-xs font-semibold text-emerald-400 sm:text-sm">#{rankings.pts} {t.inLeague}</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/80 to-slate-900/40 p-3 sm:p-6">
               <p className="mb-1 text-xs uppercase tracking-wider text-slate-400 sm:mb-2 sm:text-sm">{t.reboundsPerGame}</p>
-              <p className="mb-1 text-3xl font-bold text-white sm:mb-2 sm:text-5xl lg:text-6xl">{player.stats.reb}</p>
+              <p className="animate-stat-pop delay-100 mb-1 text-3xl font-bold text-white sm:mb-2 sm:text-5xl lg:text-6xl">{player.stats.reb}</p>
               <p className="text-xs font-semibold text-emerald-400 sm:text-sm">#{rankings.reb} {t.inLeague}</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/80 to-slate-900/40 p-3 sm:p-6">
               <p className="mb-1 text-xs uppercase tracking-wider text-slate-400 sm:mb-2 sm:text-sm">{t.stealsPerGame}</p>
-              <p className="mb-1 text-3xl font-bold text-white sm:mb-2 sm:text-5xl lg:text-6xl">{player.stats.stl}</p>
+              <p className="animate-stat-pop delay-200 mb-1 text-3xl font-bold text-white sm:mb-2 sm:text-5xl lg:text-6xl">{player.stats.stl}</p>
               <p className="text-xs font-semibold text-emerald-400 sm:text-sm">#{rankings.stl} {t.inLeague}</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/80 to-slate-900/40 p-3 sm:p-6">
               <p className="mb-1 text-xs uppercase tracking-wider text-slate-400 sm:mb-2 sm:text-sm">{t.blocksPerGame}</p>
-              <p className="mb-1 text-3xl font-bold text-white sm:mb-2 sm:text-5xl lg:text-6xl">{(player.stats as any).blk || "0.0"}</p>
+              <p className="animate-stat-pop delay-300 mb-1 text-3xl font-bold text-white sm:mb-2 sm:text-5xl lg:text-6xl">{(player.stats as any).blk || "0.0"}</p>
               <p className="text-xs font-semibold text-emerald-400 sm:text-sm">#{rankings.blk} {t.inLeague}</p>
             </div>
           </div>

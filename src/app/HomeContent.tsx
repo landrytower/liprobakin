@@ -6801,7 +6801,7 @@ export default function Home() {
                     <Link
                       key={game.id}
                       href={`/game/${game.id}`}
-                      className="inline-block w-fit shrink-0 snap-start rounded-xl border border-white/10 bg-slate-950/80 p-3 sm:p-4 transition-all hover:border-orange-500/70 hover:bg-slate-900/90"
+                      className="card-lift animate-fade-in inline-block w-fit shrink-0 snap-start rounded-xl border border-white/10 bg-slate-950/80 p-3 sm:p-4 transition-all hover:border-orange-500/70 hover:bg-slate-900/90"
                     >
                       <div className="mb-2 flex items-center justify-between text-[11px] sm:text-xs text-slate-400">
                         <span className="font-medium tracking-wide">{gameDate}{gameTime ? `  ${gameTime}` : ""}</span>
@@ -6940,7 +6940,8 @@ export default function Home() {
                 return (
                   <div
                     key={`${player.id}-${playerMetric}`}
-                    className="flex-shrink-0 w-[240px] sm:w-[280px] snap-start rounded-3xl border border-white/10 bg-slate-900/60 overflow-hidden hover:border-white/30 transition"
+                    className="card-lift animate-scale-in flex-shrink-0 w-[240px] sm:w-[280px] snap-start rounded-3xl border border-white/10 bg-slate-900/60 overflow-hidden hover:border-white/30 transition"
+                    style={{ animationDelay: `${index * 60}ms` }}
                   >
                     <div className="p-4 sm:p-6 flex flex-col items-center text-center">
                       <span className="text-lg font-bold text-slate-300 mb-3">

@@ -1431,7 +1431,7 @@ export default function GamePage() {
                 <p className="text-xs uppercase tracking-wider text-red-300">{t.liveNow}</p>
                 <h3 className="text-base font-bold text-white sm:text-lg">{t.liveScore}</h3>
               </div>
-              <div className="inline-flex items-center gap-1 rounded-full border border-red-500/40 bg-red-500/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-red-200">
+              <div className="animate-glow-ring inline-flex items-center gap-1 rounded-full border border-red-500/40 bg-red-500/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-red-200">
                 <span className="h-1.5 w-1.5 rounded-full bg-red-400 animate-pulse" />
                 LIVE
               </div>

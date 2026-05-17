@@ -860,7 +860,7 @@ export default function TeamPage() {
                 <Link
                   key={player.id}
                   href={`/player/${encodeURIComponent(fullTeamName)}/${encodeURIComponent(String(player.jerseyNumber ?? player.number))}${requestedGender ? `?gender=${requestedGender}` : ''}`}
-                  className="group relative rounded-lg border border-white/10 bg-slate-900/60 overflow-hidden transition hover:border-white/30 hover:bg-slate-900/80"
+                  className="card-lift group relative rounded-lg border border-white/10 bg-slate-900/60 overflow-hidden transition hover:border-white/30 hover:bg-slate-900/80"
                   style={{
                     animation: isTransitioning ? 'none' : `fadeInUp 0.5s ease-out ${index * 0.03}s both`
                   }}

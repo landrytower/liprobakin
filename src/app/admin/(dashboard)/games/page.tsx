@@ -1725,6 +1725,7 @@ export default function GamesPage() {
       completed: "bg-slate-500/20 text-slate-400 border-slate-500/30",
       postponed: "bg-yellow-500/20 text-yellow-300 border-yellow-500/30",
       cancelled: "bg-rose-500/20 text-rose-300 border-rose-500/30",
+      forfeit: "bg-amber-500/20 text-amber-300 border-amber-500/30",
     };
     return (
       <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${styles[status]}`}>

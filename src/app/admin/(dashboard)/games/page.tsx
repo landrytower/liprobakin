@@ -1461,7 +1461,7 @@ export default function GamesPage() {
       try {
         await logAuditAction(
           "game_stats_updated",
-          currentAdminUser.id,
+          currentAdminUser.id || "unknown",
           currentAdminUser.email || "unknown",
           "game",
           scoreEntryGame.id,

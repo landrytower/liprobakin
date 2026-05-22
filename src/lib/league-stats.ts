@@ -169,12 +169,27 @@ export async function recalculateLeagueStatsFromGames(): Promise<void> {
     const awayTeamId = getString(gameData.awayTeamId);
     const homeScore = toNumber(gameData.homeScore);
     const awayScore = toNumber(gameData.awayScore);
-    const completed = status === "completed" || gameData.completed === true || Boolean(winnerId);
+    const isForfeit = gameData.forfeit === true || status === "forfeit";
+    const completed =
+      status === "completed" ||
+      status === "forfeit" ||
+      gameData.completed === true ||
+      Boolean(winnerId);
 
     if (!completed) return;
     completedGameIds.add(gameId);
 
-    if (winnerId && teamRecords.has(winnerId)) {
+    if (isForfeit) {
+      // Double forfeit: both teams receive a loss, neither wins
+      if (homeTeamId && teamRecords.has(homeTeamId)) {
+        const homeRecord = teamRecords.get(homeTeamId);
+        if (homeRecord) homeRecord.losses += 1;
+      }
+      if (awayTeamId && teamRecords.has(awayTeamId)) {
+        const awayRecord = teamRecords.get(awayTeamId);
+        if (awayRecord) awayRecord.losses += 1;
+      }
+    } else if (winnerId && teamRecords.has(winnerId)) {
       const winnerRecord = teamRecords.get(winnerId);
       if (winnerRecord) {
         winnerRecord.wins += 1;

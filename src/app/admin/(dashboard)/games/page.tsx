@@ -87,7 +87,8 @@ type Game = {
   time: string;
   venue: string;
   venueCity?: string;
-  status: "scheduled" | "live" | "completed" | "postponed" | "cancelled";
+  status: "scheduled" | "live" | "completed" | "postponed" | "cancelled" | "forfeit";
+  forfeit?: boolean;
   completed?: boolean;
   archived?: boolean;
   homeScore?: number;
@@ -169,6 +170,7 @@ const translations = {
       completed: "Final",
       postponed: "Postponed",
       cancelled: "Cancelled",
+      forfeit: "Forfeit",
     },
     vs: "vs",
     at: "@",
@@ -223,6 +225,10 @@ const translations = {
     cleanupCompleted: "Orphan cleanup completed: {games} game(s) and {stats} player stat row(s) deleted.",
     cleanupNoOrphans: "No orphan games found.",
     cleanupFailed: "Failed to cleanup orphan games",
+    forfeitBoth: "Double Forfeit",
+    forfeitBothConfirm: "Mark this game as a double forfeit? Both teams will receive a loss.",
+    forfeitBothSuccess: "Game marked as double forfeit",
+    forfeitBothError: "Failed to mark forfeit",
   },
   fr: {
     title: "Gestion des Matchs",
@@ -264,6 +270,7 @@ const translations = {
       completed: "Terminé",
       postponed: "Reporté",
       cancelled: "Annulé",
+      forfeit: "Forfait",
     },
     vs: "vs",
     at: "@",
@@ -318,6 +325,10 @@ const translations = {
     cleanupCompleted: "Nettoyage terminé : {games} match(s) et {stats} statistique(s) joueur supprimés.",
     cleanupNoOrphans: "Aucun match orphelin trouvé.",
     cleanupFailed: "Échec du nettoyage des matchs orphelins",
+    forfeitBoth: "Double Forfait",
+    forfeitBothConfirm: "Marquer ce match comme double forfait ? Les deux équipes recevront une défaite.",
+    forfeitBothSuccess: "Match marqué comme double forfait",
+    forfeitBothError: "Impossible de marquer le forfait",
   },
 };
 

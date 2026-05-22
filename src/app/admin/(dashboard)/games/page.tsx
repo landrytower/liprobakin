@@ -1861,9 +1861,9 @@ export default function GamesPage() {
       </div>
 
       {/* View Mode & Filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
+      <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
         {/* View Mode Tabs */}
-        <div className="flex rounded-xl bg-slate-900/60 border border-white/10 p-1">
+        <div className="flex rounded-xl bg-slate-900/60 border border-white/10 p-1 overflow-x-auto scrollbar-hide min-w-0">
           <button
             onClick={() => setViewMode("matchday")}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
@@ -2533,7 +2533,7 @@ export default function GamesPage() {
                           onClick={() => setSelectedMatchday(matchday)}
                         >
                           {/* Edit/Delete buttons */}
-                          <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="absolute top-3 right-3 flex gap-1">
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -3089,7 +3089,18 @@ function GameCard({ game, t, formatDate, getStatusBadge, onEdit, onDelete, onEnt
       {/* Mobile Info Row */}
       <div className="md:hidden mt-3 pt-3 border-t border-white/5 flex items-center justify-between text-xs text-slate-500">
         <span>{formatDate(game.date)} • {game.time}</span>
-        <span>{game.venue}</span>
+        <div className="flex items-center gap-2">
+          <span className="truncate max-w-[120px]">{game.venue}</span>
+          <button
+            onClick={() => onDelete(game)}
+            className="rounded-lg border border-rose-500/30 p-1.5 text-rose-400 hover:bg-rose-500/10 transition flex-shrink-0 flex items-center justify-center min-w-[32px] min-h-[32px]"
+            title={t.deleteGame}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
   );

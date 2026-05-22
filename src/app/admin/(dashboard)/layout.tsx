@@ -698,6 +698,20 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
                                     : (() => {
                                         const hours = Math.floor(admin.minutesAgo / 60);
                                         const mins = admin.minutesAgo % 60;
+                                        const days = Math.floor(hours / 24);
+                                        const remainingHours = hours % 24;
+
+                                        if (days > 0) {
+                                          if (language === "fr") {
+                                            return remainingHours > 0
+                                              ? `Dernière connexion il y a ${days}j ${remainingHours}h`
+                                              : `Dernière connexion il y a ${days}j`;
+                                          }
+                                          return remainingHours > 0
+                                            ? `Last connected ${days}d ${remainingHours}h ago`
+                                            : `Last connected ${days}d ago`;
+                                        }
+
                                         if (language === "fr") {
                                           return mins > 0
                                             ? `Dernière connexion il y a ${hours}h ${mins}min`

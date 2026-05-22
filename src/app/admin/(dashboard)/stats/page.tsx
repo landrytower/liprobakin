@@ -154,12 +154,13 @@ const t = {
     homeScore: "Home Score",
     forfeitWin: "Win by Forfeit",
     forfeitTitle: "Win by forfeit",
-    forfeitPickWinner: "Select winning team",
+    forfeitPickWinner: "Select forfeit result",
+    forfeitDouble: "Double forfeit",
     forfeitPickCaptain: "Select captain",
     forfeitCaptain: "Captain",
     forfeitConfirm: "Confirm Forfeit Result",
-    forfeitNote: "Final score will be set to 20–0. Captain receives all 20 points.",
-    forfeitMissing: "Select winner team and captain.",
+    forfeitNote: "Single forfeit sets the final score to 20–0 and the winning captain receives all 20 points. Double forfeit gives both teams a loss and 0 point.",
+    forfeitMissing: "Select a forfeit result. A captain is required for single-team forfeit wins.",
     clearStats: "Clear Stats",
     clearStatsConfirm: "Delete all player stats for this game? The game score and result will be kept.",
     clearStatsSuccess: "Player stats cleared.",
@@ -236,12 +237,13 @@ const t = {
     homeScore: "Score Domicile",
     forfeitWin: "Victoire par forfait",
     forfeitTitle: "Victoire par forfait",
-    forfeitPickWinner: "Sélectionnez l'équipe gagnante",
+    forfeitPickWinner: "Sélectionnez le résultat du forfait",
+    forfeitDouble: "Double forfait",
     forfeitPickCaptain: "Sélectionnez la capitaine",
     forfeitCaptain: "Capitaine",
     forfeitConfirm: "Confirmer le forfait",
-    forfeitNote: "Le score final sera 20–0. La capitaine reçoit les 20 points.",
-    forfeitMissing: "Sélectionnez l'équipe gagnante et la capitaine.",
+    forfeitNote: "Un forfait simple fixe le score final à 20–0 et la capitaine gagnante reçoit les 20 points. Un double forfait donne une défaite aux deux équipes et 0 point.",
+    forfeitMissing: "Sélectionnez un résultat de forfait. Une capitaine est requise pour un forfait simple.",
     clearStats: "Effacer Stats",
     clearStatsConfirm: "Supprimer toutes les statistiques joueurs de ce match ? Le score et le résultat seront conservés.",
     clearStatsSuccess: "Statistiques joueurs effacées.",
@@ -816,7 +818,7 @@ export default function StatsPage() {
 
   // Forfeit flow state
   const [forfeitOpen, setForfeitOpen] = useState(false);
-  const [forfeitWinnerSide, setForfeitWinnerSide] = useState<"home" | "away" | "">("");
+  const [forfeitWinnerSide, setForfeitWinnerSide] = useState<"home" | "away" | "double" | "">("");
   const [forfeitCaptainId, setForfeitCaptainId] = useState("");
   
   // Player stats state
@@ -2523,13 +2525,109 @@ export default function StatsPage() {
     const game = games.find((g) => g.id === expandedGameId);
     if (!game) return;
 
-    if ((forfeitWinnerSide !== "home" && forfeitWinnerSide !== "away") || !forfeitCaptainId) {
+    if (forfeitWinnerSide !== "home" && forfeitWinnerSide !== "away" && forfeitWinnerSide !== "double") {
       setImportMessage({ type: "error", text: copy.forfeitMissing });
       return;
     }
 
+    const isDoubleForfeit = forfeitWinnerSide === "double";
+
     const homeTeamId = resolvedTeamIds?.home || game.homeTeamId;
     const awayTeamId = resolvedTeamIds?.away || game.awayTeamId;
+    if (!homeTeamId || !awayTeamId) {
+      setImportMessage({ type: "error", text: copy.forfeitMissing });
+      return;
+    }
+
+    if (isDoubleForfeit) {
+      setSaving(true);
+      try {
+        setImportMessage(null);
+
+        const existingStatsSnap = await getDocs(collection(firebaseDB, `games/${game.id}/playerStats`));
+        const existingPlayerGameStatsSnap = await getDocs(
+          query(collection(firebaseDB, "playerGameStats"), where("gameId", "==", game.id))
+        );
+        const batch = writeBatch(firebaseDB);
+        existingStatsSnap.docs.forEach((statDoc) => batch.delete(statDoc.ref));
+        existingPlayerGameStatsSnap.docs.forEach((statDoc) => batch.delete(statDoc.ref));
+
+        const gameRef = doc(firebaseDB, "games", game.id);
+        batch.update(gameRef, {
+          status: "forfeit",
+          forfeit: true,
+          completed: true,
+          winnerId: null,
+          winnerTeamId: null,
+          loserTeamId: null,
+          winnerScore: 0,
+          loserScore: 0,
+          homeScore: 0,
+          awayScore: 0,
+          completedAt: serverTimestamp(),
+          playerStats: [],
+          winByForfeit: false,
+          forfeitCaptainId: null,
+          forfeitCaptainName: null,
+          updatedAt: serverTimestamp(),
+        });
+
+        await batch.commit();
+
+        await Promise.all([
+          recalculateTeamRosterStats(homeTeamId),
+          recalculateTeamRosterStats(awayTeamId),
+          recalculateTeamRecords([homeTeamId, awayTeamId]),
+        ]);
+        await recomputeHomeProjectorCache();
+
+        try {
+          await logAuditAction(
+            "game_stats_recorded",
+            currentAdminUser?.id || "unknown",
+            currentAdminUser?.email || "unknown",
+            "game",
+            game.id,
+            `${game.awayTeamName} vs ${game.homeTeamName}`,
+            {
+              operation: "double_forfeit",
+              teams: [game.awayTeamName, game.homeTeamName],
+              score: "FF-FF",
+              gameDate: game.date,
+              venue: game.venue,
+            }
+          );
+        } catch (auditError) {
+          console.error("Double forfeit saved but audit log failed:", auditError);
+        }
+
+        await fetchGames();
+        setImportMessage({
+          type: "success",
+          text: language === "fr" ? "Le double forfait a été enregistré." : "Double forfeit saved successfully.",
+        });
+        setForfeitOpen(false);
+        setForfeitWinnerSide("");
+        setForfeitCaptainId("");
+        setExpandedGameId(null);
+        setResolvedTeamIds(null);
+      } catch (error) {
+        console.error("Error saving double forfeit result:", error);
+        setImportMessage({
+          type: "error",
+          text: language === "fr" ? "Impossible d'enregistrer le double forfait." : "Failed to save double forfeit result.",
+        });
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
+    if (!forfeitCaptainId) {
+      setImportMessage({ type: "error", text: copy.forfeitMissing });
+      return;
+    }
+
     const winnerTeamId = forfeitWinnerSide === "home" ? homeTeamId : awayTeamId;
     const loserTeamId = forfeitWinnerSide === "home" ? awayTeamId : homeTeamId;
     const winnerTeamName = forfeitWinnerSide === "home" ? game.homeTeamName : game.awayTeamName;
@@ -2593,6 +2691,7 @@ export default function StatsPage() {
       const gameRef = doc(firebaseDB, "games", game.id);
       batch.update(gameRef, {
         status: "completed",
+        forfeit: false,
         completed: true,
         winnerId: winnerTeamId,
         winnerTeamId: winnerTeamId,
@@ -2870,9 +2969,10 @@ export default function StatsPage() {
                     }}
                     className={`w-full text-left p-5 transition ${canManageStats ? "hover:bg-white/5 cursor-pointer" : "opacity-50 cursor-not-allowed"}`}
                   >
-                    <div className="flex items-center gap-4">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
+                      <div className="grid flex-1 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 sm:gap-4">
                       {/* Away Team */}
-                      <div className="flex-1 flex items-center gap-3">
+                      <div className="flex min-w-0 items-center gap-3">
                         {game.awayTeamLogo && (
                           <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-white/15 bg-slate-900 p-1 ring-2 ring-white/10">
                             <Image
@@ -2885,15 +2985,15 @@ export default function StatsPage() {
                             />
                           </div>
                         )}
-                        <div>
-                          <div className="font-bold text-white">{game.awayTeamName}</div>
+                        <div className="min-w-0">
+                          <div className="truncate font-bold text-white">{game.awayTeamName}</div>
                           <div className="text-xs text-slate-400">{copy.awayTeam}</div>
                         </div>
                       </div>
 
                       {/* Score / VS */}
                       {isDone ? (
-                        <div className="flex flex-col items-center px-3 sm:px-6">
+                        <div className="flex flex-col items-center px-2 sm:px-6">
                           <div className="text-[10px] font-bold uppercase text-emerald-400 mb-1">{copy.done}</div>
                           <div className="flex items-center gap-2 sm:gap-3">
                             <span className={`text-2xl sm:text-3xl font-black ${game.winnerTeamId === game.awayTeamId ? "text-emerald-400" : "text-slate-500"}`}>
@@ -2916,11 +3016,11 @@ export default function StatsPage() {
                           </span>
                         </div>
                       ) : (
-                        <div className="text-xl font-bold text-slate-500 px-6">VS</div>
+                        <div className="px-2 text-xl font-bold text-slate-500 sm:px-6">VS</div>
                       )}
 
                       {/* Home Team */}
-                      <div className="flex-1 flex items-center gap-3 flex-row-reverse">
+                      <div className="flex min-w-0 items-center gap-3 flex-row-reverse">
                         {game.homeTeamLogo && (
                           <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-white/15 bg-slate-900 p-1 ring-2 ring-white/10">
                             <Image
@@ -2933,17 +3033,18 @@ export default function StatsPage() {
                             />
                           </div>
                         )}
-                        <div className="text-right">
-                          <div className="font-bold text-white">{game.homeTeamName}</div>
+                        <div className="min-w-0 text-right">
+                          <div className="truncate font-bold text-white">{game.homeTeamName}</div>
                           <div className="text-xs text-slate-400">{copy.homeTeam}</div>
                         </div>
                       </div>
+                      </div>
 
                       {/* Date/Venue and Button */}
-                      <div className="flex items-center gap-3 pl-4 border-l border-white/10">
-                        <div className="text-right">
+                      <div className="flex flex-wrap items-center gap-2 border-t border-white/10 pt-4 lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0">
+                        <div className="min-w-0 flex-1 text-left lg:flex-none lg:text-right">
                           <div className="text-xs text-slate-400">{(() => { const d = parseCongoDateTime(game.date, game.time); return d ? `${d.toLocaleDateString()} • ${d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : `${game.date} • ${game.time}`; })()}</div>
-                          <div className="text-xs text-slate-500 truncate max-w-[150px]">{game.venue}</div>
+                          <div className="truncate text-xs text-slate-500 lg:max-w-[150px]">{game.venue}</div>
                         </div>
                         <div className={`rounded-xl px-4 py-2 font-bold text-sm ${
                           isDone
@@ -3843,6 +3944,21 @@ export default function StatsPage() {
                                     <div className="text-xs uppercase tracking-wider text-slate-400">{copy.homeTeam}</div>
                                     <div className="mt-1 font-semibold">{game.homeTeamName}</div>
                                   </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setForfeitWinnerSide("double");
+                                      setForfeitCaptainId("");
+                                    }}
+                                    className={`rounded-xl border px-3 py-3 text-left transition sm:col-span-2 ${
+                                      forfeitWinnerSide === "double"
+                                        ? "border-orange-500/60 bg-orange-500/10 text-white"
+                                        : "border-white/10 bg-slate-900/40 text-slate-200 hover:bg-slate-900/70"
+                                    }`}
+                                  >
+                                    <div className="text-xs uppercase tracking-wider text-slate-400">FF</div>
+                                    <div className="mt-1 font-semibold">{copy.forfeitDouble}</div>
+                                  </button>
                                 </div>
                               </div>
 
@@ -3851,12 +3967,12 @@ export default function StatsPage() {
                                 <select
                                   value={forfeitCaptainId}
                                   onChange={(e) => setForfeitCaptainId(e.target.value)}
-                                  disabled={loadingPlayers || saving || (forfeitWinnerSide !== "home" && forfeitWinnerSide !== "away")}
+                                  disabled={loadingPlayers || saving || forfeitWinnerSide === "double" || (forfeitWinnerSide !== "home" && forfeitWinnerSide !== "away")}
                                   aria-label={copy.forfeitPickCaptain}
                                   title={copy.forfeitPickCaptain}
                                   className="w-full rounded-xl border border-white/10 bg-slate-900/60 px-3 py-3 text-sm text-white outline-none disabled:opacity-60"
                                 >
-                                  <option value="">{loadingPlayers ? copy.loadingPlayers : copy.forfeitCaptain}</option>
+                                  <option value="">{forfeitWinnerSide === "double" ? copy.forfeitDouble : loadingPlayers ? copy.loadingPlayers : copy.forfeitCaptain}</option>
                                   {(forfeitWinnerSide === "home" ? homePlayers : forfeitWinnerSide === "away" ? awayPlayers : []).map((player) => {
                                     const name = (player.name || `${player.firstName || ""} ${player.lastName || ""}`.trim() || "Player").trim();
                                     const number = String(player.jerseyNumber ?? player.number ?? "").trim();
@@ -3884,7 +4000,7 @@ export default function StatsPage() {
                                 <button
                                   type="button"
                                   onClick={saveForfeitWin}
-                                  disabled={saving || !forfeitCaptainId || (forfeitWinnerSide !== "home" && forfeitWinnerSide !== "away")}
+                                  disabled={saving || !forfeitWinnerSide || (forfeitWinnerSide !== "double" && !forfeitCaptainId)}
                                   className="flex-1 rounded-xl bg-orange-600 py-3 text-sm font-bold text-white hover:bg-orange-500 disabled:opacity-50 disabled:cursor-not-allowed transition"
                                 >
                                   {saving ? "..." : copy.forfeitConfirm}

@@ -1432,6 +1432,62 @@ export default function GamesPage() {
     }
   };
 
+  const handleForfeit = async () => {
+    if (!scoreEntryGame || !currentAdminUser) return;
+
+    if (!window.confirm(t.forfeitBothConfirm)) return;
+
+    setSavingScoreMode("complete");
+    try {
+      await updateDoc(doc(firebaseDB, "games", scoreEntryGame.id), {
+        homeScore: 0,
+        awayScore: 0,
+        winnerId: null,
+        winnerTeamId: null,
+        loserTeamId: null,
+        winnerScore: null,
+        loserScore: null,
+        forfeit: true,
+        completed: true,
+        status: "forfeit",
+        archived: true,
+        completedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        archivedAt: serverTimestamp(),
+      });
+
+      await Promise.all([recalculateLeagueStatsFromGames(), recomputeHomeProjectorCache()]);
+
+      try {
+        await logAuditAction(
+          "game_stats_updated",
+          currentAdminUser.id,
+          currentAdminUser.email || "unknown",
+          "game",
+          scoreEntryGame.id,
+          `${scoreEntryGame.homeTeamName} vs ${scoreEntryGame.awayTeamName}`,
+          {
+            homeTeam: scoreEntryGame.homeTeamName,
+            awayTeam: scoreEntryGame.awayTeamName,
+            outcome: "double_forfeit",
+            gameDate: scoreEntryGame.date,
+          }
+        );
+      } catch (auditError) {
+        console.error("Forfeit saved but audit log failed:", auditError);
+      }
+
+      setScoreEntryGame(null);
+      setScoreForm({ homeScore: "", awayScore: "" });
+      setStatusMessage({ type: "success", message: t.forfeitBothSuccess });
+    } catch (error) {
+      console.error("Error marking forfeit:", error);
+      setStatusMessage({ type: "error", message: t.forfeitBothError });
+    } finally {
+      setSavingScoreMode(null);
+    }
+  };
+
   const handleDownloadPDF = async () => {
     const pdfDoc = new jsPDF("p", "mm", "a4");
     const pageWidth = pdfDoc.internal.pageSize.getWidth();

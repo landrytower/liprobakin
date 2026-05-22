@@ -2423,46 +2423,55 @@ export default function GamesPage() {
               </div>
 
               {/* Actions */}
-              <div className="flex gap-3 pt-2">
+              <div className="space-y-2 pt-2">
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleSaveLiveScore}
+                    disabled={savingScoreMode !== null}
+                    className="flex-1 rounded-lg bg-gradient-to-r from-red-500 to-red-600 px-4 py-3 text-sm font-semibold text-white shadow-lg hover:shadow-xl transition disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    <span className="inline-flex items-center justify-center gap-2">
+                      {savingScoreMode === "live" ? (
+                        <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" aria-hidden="true">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                        </svg>
+                      ) : null}
+                      <span>{savingScoreMode === "live" ? t.saving : t.saveLiveScore}</span>
+                    </span>
+                  </button>
+                  <button
+                    onClick={handleSaveScore}
+                    disabled={savingScoreMode !== null}
+                    className="flex-1 rounded-lg bg-gradient-to-r from-green-500 to-green-600 px-4 py-3 text-sm font-semibold text-white shadow-lg hover:shadow-xl transition disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    <span className="inline-flex items-center justify-center gap-2">
+                      {savingScoreMode === "complete" ? (
+                        <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" aria-hidden="true">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                        </svg>
+                      ) : null}
+                      <span>{savingScoreMode === "complete" ? t.saving : t.markComplete}</span>
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setScoreEntryGame(null);
+                      setScoreForm({ homeScore: "", awayScore: "" });
+                      setSavingScoreMode(null);
+                    }}
+                    className="rounded-lg border border-white/10 px-4 py-3 text-sm font-medium text-slate-300 hover:bg-slate-800 transition"
+                  >
+                    {t.cancelEdit}
+                  </button>
+                </div>
                 <button
-                  onClick={handleSaveLiveScore}
+                  onClick={handleForfeit}
                   disabled={savingScoreMode !== null}
-                  className="flex-1 rounded-lg bg-gradient-to-r from-red-500 to-red-600 px-4 py-3 text-sm font-semibold text-white shadow-lg hover:shadow-xl transition disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="w-full rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-2.5 text-sm font-semibold text-amber-300 hover:bg-amber-500/20 transition disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  <span className="inline-flex items-center justify-center gap-2">
-                    {savingScoreMode === "live" ? (
-                      <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" aria-hidden="true">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-                      </svg>
-                    ) : null}
-                    <span>{savingScoreMode === "live" ? t.saving : t.saveLiveScore}</span>
-                  </span>
-                </button>
-                <button
-                  onClick={handleSaveScore}
-                  disabled={savingScoreMode !== null}
-                  className="flex-1 rounded-lg bg-gradient-to-r from-green-500 to-green-600 px-4 py-3 text-sm font-semibold text-white shadow-lg hover:shadow-xl transition disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  <span className="inline-flex items-center justify-center gap-2">
-                    {savingScoreMode === "complete" ? (
-                      <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" aria-hidden="true">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-                      </svg>
-                    ) : null}
-                    <span>{savingScoreMode === "complete" ? t.saving : t.markComplete}</span>
-                  </span>
-                </button>
-                <button
-                  onClick={() => {
-                    setScoreEntryGame(null);
-                    setScoreForm({ homeScore: "", awayScore: "" });
-                    setSavingScoreMode(null);
-                  }}
-                  className="rounded-lg border border-white/10 px-6 py-3 text-sm font-medium text-slate-300 hover:bg-slate-800 transition"
-                >
-                  {t.cancelEdit}
+                  {t.forfeitBoth}
                 </button>
               </div>
             </div>
@@ -2934,7 +2943,7 @@ type GameCardProps = {
 };
 
 function GameCard({ game, t, formatDate, getStatusBadge, onEdit, onDelete, onEnterScore, compact }: GameCardProps) {
-  const isCompleted = game.status === "completed";
+  const isCompleted = game.status === "completed" || game.status === "forfeit";
   const logoSizeClass = compact ? "h-7 w-7" : "h-9 w-9";
   const logoImageSize = compact ? 28 : 36;
 
@@ -2979,7 +2988,7 @@ function GameCard({ game, t, formatDate, getStatusBadge, onEdit, onDelete, onEnt
             </div>
             {isCompleted && (
               <span className={`font-bold ${game.winnerId === game.awayTeamId ? "text-green-400" : "text-slate-400"} ${compact ? "text-lg" : "text-xl"}`}>
-                {game.awayScore}
+                {game.status === "forfeit" ? "FF" : game.awayScore}
               </span>
             )}
           </div>
@@ -2987,7 +2996,9 @@ function GameCard({ game, t, formatDate, getStatusBadge, onEdit, onDelete, onEnt
           {/* VS / Score */}
           <div className="flex-shrink-0 text-center">
             {isCompleted ? (
-              <span className="text-xs text-slate-600 uppercase">{t.gameStatus.completed}</span>
+              <span className="text-xs text-slate-600 uppercase">
+                {game.status === "forfeit" ? "–" : t.gameStatus.completed}
+              </span>
             ) : (
               <span className="text-sm text-slate-500">{t.at}</span>
             )}
@@ -2997,7 +3008,7 @@ function GameCard({ game, t, formatDate, getStatusBadge, onEdit, onDelete, onEnt
           <div className="flex items-center gap-2 min-w-0 flex-1 justify-end">
             {isCompleted && (
               <span className={`font-bold ${game.winnerId === game.homeTeamId ? "text-green-400" : "text-slate-400"} ${compact ? "text-lg" : "text-xl"}`}>
-                {game.homeScore}
+                {game.status === "forfeit" ? "FF" : game.homeScore}
               </span>
             )}
             <div className="min-w-0 text-right">

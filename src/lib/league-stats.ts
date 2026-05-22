@@ -204,17 +204,19 @@ export async function recalculateLeagueStatsFromGames(): Promise<void> {
       }
     }
 
-    if (homeTeamId && teamRecords.has(homeTeamId)) {
-      const homeRecord = teamRecords.get(homeTeamId);
-      if (homeRecord) {
-        homeRecord.totalPoints += homeScore;
+    if (!isForfeit) {
+      if (homeTeamId && teamRecords.has(homeTeamId)) {
+        const homeRecord = teamRecords.get(homeTeamId);
+        if (homeRecord) {
+          homeRecord.totalPoints += homeScore;
+        }
       }
-    }
 
-    if (awayTeamId && teamRecords.has(awayTeamId)) {
-      const awayRecord = teamRecords.get(awayTeamId);
-      if (awayRecord) {
-        awayRecord.totalPoints += awayScore;
+      if (awayTeamId && teamRecords.has(awayTeamId)) {
+        const awayRecord = teamRecords.get(awayTeamId);
+        if (awayRecord) {
+          awayRecord.totalPoints += awayScore;
+        }
       }
     }
 

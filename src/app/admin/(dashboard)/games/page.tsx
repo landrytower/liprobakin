@@ -388,7 +388,7 @@ export default function GamesPage() {
   // Score entry state
   const [scoreEntryGame, setScoreEntryGame] = useState<Game | null>(null);
   const [scoreForm, setScoreForm] = useState({ homeScore: "", awayScore: "" });
-  const [savingScoreMode, setSavingScoreMode] = useState<null | "live" | "complete">(null);
+  const [savingScoreMode, setSavingScoreMode] = useState<null | "live" | "complete" | "forfeit">(null);
 
   // Current season (could be dynamic)
   const currentSeasonId = "2024-25";
@@ -1437,7 +1437,7 @@ export default function GamesPage() {
 
     if (!window.confirm(t.forfeitBothConfirm)) return;
 
-    setSavingScoreMode("complete");
+    setSavingScoreMode("forfeit");
     try {
       await updateDoc(doc(firebaseDB, "games", scoreEntryGame.id), {
         homeScore: 0,
@@ -2471,7 +2471,15 @@ export default function GamesPage() {
                   disabled={savingScoreMode !== null}
                   className="w-full rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-2.5 text-sm font-semibold text-amber-300 hover:bg-amber-500/20 transition disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  {t.forfeitBoth}
+                  <span className="inline-flex items-center justify-center gap-2">
+                    {savingScoreMode === "forfeit" ? (
+                      <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" aria-hidden="true">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                      </svg>
+                    ) : null}
+                    <span>{savingScoreMode === "forfeit" ? t.saving : t.forfeitBoth}</span>
+                  </span>
                 </button>
               </div>
             </div>

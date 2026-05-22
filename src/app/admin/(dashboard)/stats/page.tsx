@@ -160,6 +160,10 @@ const t = {
     forfeitConfirm: "Confirm Forfeit Result",
     forfeitNote: "Final score will be set to 20–0. Captain receives all 20 points.",
     forfeitMissing: "Select winner team and captain.",
+    clearStats: "Clear Stats",
+    clearStatsConfirm: "Delete all player stats for this game? The game score and result will be kept.",
+    clearStatsSuccess: "Player stats cleared.",
+    clearStatsError: "Failed to clear player stats.",
   },
   fr: {
     title: "Statistiques des Matchs",
@@ -238,6 +242,10 @@ const t = {
     forfeitConfirm: "Confirmer le forfait",
     forfeitNote: "Le score final sera 20–0. La capitaine reçoit les 20 points.",
     forfeitMissing: "Sélectionnez l'équipe gagnante et la capitaine.",
+    clearStats: "Effacer Stats",
+    clearStatsConfirm: "Supprimer toutes les statistiques joueurs de ce match ? Le score et le résultat seront conservés.",
+    clearStatsSuccess: "Statistiques joueurs effacées.",
+    clearStatsError: "Impossible d'effacer les statistiques joueurs.",
   },
 };
 
@@ -804,6 +812,7 @@ export default function StatsPage() {
   const [homeScore, setHomeScore] = useState("");
   const [saving, setSaving] = useState(false);
   const [deletingGameId, setDeletingGameId] = useState<string | null>(null);
+  const [clearingStatsGameId, setClearingStatsGameId] = useState<string | null>(null);
 
   // Forfeit flow state
   const [forfeitOpen, setForfeitOpen] = useState(false);
@@ -2738,6 +2747,57 @@ export default function StatsPage() {
     }
   };
 
+  const handleClearStats = async (game: Game) => {
+    if (!currentAdminUser?.permissions?.canManageGames) return;
+    if (!window.confirm(copy.clearStatsConfirm)) return;
+
+    setClearingStatsGameId(game.id);
+    try {
+      const [sharedStatsSnap, nestedStatsSnap] = await Promise.all([
+        getDocs(query(collection(firebaseDB, "playerGameStats"), where("gameId", "==", game.id))),
+        getDocs(collection(firebaseDB, `games/${game.id}/playerStats`)),
+      ]);
+
+      if (!sharedStatsSnap.empty || !nestedStatsSnap.empty) {
+        const batch = writeBatch(firebaseDB);
+        sharedStatsSnap.docs.forEach((d) => batch.delete(d.ref));
+        nestedStatsSnap.docs.forEach((d) => batch.delete(d.ref));
+        await batch.commit();
+      }
+
+      await Promise.all([
+        recalculateTeamRosterStats(game.homeTeamId),
+        recalculateTeamRosterStats(game.awayTeamId),
+        recalculateTeamRecords([game.homeTeamId, game.awayTeamId]),
+      ]);
+      await recomputeHomeProjectorCache();
+
+      await logAuditAction(
+        "player_stats_reset",
+        currentAdminUser.id,
+        currentAdminUser.email || "unknown",
+        "game",
+        game.id,
+        `${game.awayTeamName} @ ${game.homeTeamName}`,
+        {
+          operation: "clear_player_stats",
+          homeTeam: game.homeTeamName,
+          awayTeam: game.awayTeamName,
+          gameDate: game.date,
+          deletedPlayerGameStats: sharedStatsSnap.size,
+          deletedNestedStats: nestedStatsSnap.size,
+        }
+      );
+
+      window.alert(copy.clearStatsSuccess);
+    } catch (error) {
+      console.error("Error clearing stats:", error);
+      window.alert(copy.clearStatsError);
+    } finally {
+      setClearingStatsGameId(null);
+    }
+  };
+
   const canManageStats = currentAdminUser?.permissions?.canManageGames;
 
   // Memoize expanded game
@@ -2898,6 +2958,21 @@ export default function StatsPage() {
                             title={copy.deleteGame}
                           >
                             {deletingGameId === game.id ? "..." : copy.deleteGame}
+                          </button>
+                        )}
+                        {canManageStats && game.completed && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleClearStats(game);
+                            }}
+                            disabled={clearingStatsGameId === game.id}
+                            className="rounded-xl px-3 py-2 text-xs font-bold border border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 disabled:opacity-60 disabled:cursor-not-allowed"
+                            aria-label={copy.clearStats}
+                            title={copy.clearStats}
+                          >
+                            {clearingStatsGameId === game.id ? "..." : copy.clearStats}
                           </button>
                         )}
                       </div>

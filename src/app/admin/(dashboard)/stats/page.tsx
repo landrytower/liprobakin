@@ -2325,12 +2325,24 @@ export default function StatsPage() {
         explicitWinnerId ||
         (hasValidScores ? (homeScore > awayScore ? homeTeamId : awayTeamId) : "");
 
+      const isForfeit = gameData.forfeit === true || gameData.status === "forfeit";
       const isCompleted =
+        isForfeit ||
         gameData.completed === true ||
         gameData.status === "completed" ||
         Boolean(winnerId);
 
-      if (!isCompleted || !winnerId) return;
+      if (!isCompleted) return;
+
+      if (isForfeit) {
+        [homeTeamId, awayTeamId].forEach((teamId) => {
+          const record = records.get(teamId);
+          if (record) record.losses += 1;
+        });
+        return;
+      }
+
+      if (!winnerId) return;
 
       // Track wins/losses and total points scored
       [homeTeamId, awayTeamId].forEach((teamId) => {
@@ -2758,12 +2770,11 @@ export default function StatsPage() {
         getDocs(collection(firebaseDB, `games/${game.id}/playerStats`)),
       ]);
 
-      if (!sharedStatsSnap.empty || !nestedStatsSnap.empty) {
-        const batch = writeBatch(firebaseDB);
-        sharedStatsSnap.docs.forEach((d) => batch.delete(d.ref));
-        nestedStatsSnap.docs.forEach((d) => batch.delete(d.ref));
-        await batch.commit();
-      }
+      const batch = writeBatch(firebaseDB);
+      sharedStatsSnap.docs.forEach((d) => batch.delete(d.ref));
+      nestedStatsSnap.docs.forEach((d) => batch.delete(d.ref));
+      batch.update(doc(firebaseDB, "games", game.id), { playerStats: [] });
+      await batch.commit();
 
       await Promise.all([
         recalculateTeamRosterStats(game.homeTeamId),

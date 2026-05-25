@@ -7,7 +7,8 @@ import Link from "next/link";
 import { collection, getDocs, onSnapshot, doc, getDoc } from "firebase/firestore";
 import { firebaseDB } from "@/lib/firebase";
 import { normalizeTeamGender } from "@/lib/team-gender";
-import { formatTeamDisplayName } from "@/lib/team-name";
+import { formatTeamDisplayName, normalizeTeamName } from "@/lib/team-name";
+import { resolveTeamLogo } from "@/lib/team-logo";
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { RosterPlayer } from "@/data/febaco";
 import { flagFromCode } from "@/data/countries";
@@ -25,8 +26,10 @@ const translations = {
     record: "Record",
     conference: "Conference",
     roster: "Roster",
+    games: "Games",
     coachingStaff: "Coaching Staff",
     noRoster: "No roster data available for this team.",
+    noGames: "No completed games with a final score are available for this team yet.",
     noStaff: "No coaching staff data available for this team.",
     number: "#",
     position: "Position",
@@ -42,6 +45,7 @@ const translations = {
     staff: "Staff",
     grid: "Grid",
     list: "List",
+    finalScore: "Final Score",
   },
   fr: {
     loading: "Chargement...",
@@ -54,8 +58,10 @@ const translations = {
     record: "Bilan",
     conference: "Conférence",
     roster: "Effectif",
+    games: "Games",
     coachingStaff: "Staff Technique",
     noRoster: "Aucune donnée d'effectif disponible pour cette équipe.",
+    noGames: "Aucun match terminé avec score final n'est disponible pour cette équipe pour le moment.",
     noStaff: "Aucune donnée du staff technique disponible pour cette équipe.",
     number: "#",
     position: "Position",
@@ -71,6 +77,7 @@ const translations = {
     staff: "Staff",
     grid: "Grille",
     list: "Liste",
+    finalScore: "Score final",
   },
 };
 
@@ -119,10 +126,77 @@ type TeamPageTransitionPayload = {
   colors?: string[];
 };
 
+type TeamCompletedGame = {
+  id: string;
+  homeTeamName: string;
+  awayTeamName: string;
+  homeTeamLogo: string;
+  awayTeamLogo: string;
+  homeScore: number;
+  awayScore: number;
+  dateObj: Date | null;
+  completedAtObj: Date | null;
+  gender: string;
+};
+
 type ChatMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
+};
+
+const parseDateValue = (value: unknown): Date | null => {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  if (typeof value === "object" && value !== null && "toDate" in value && typeof (value as { toDate?: unknown }).toDate === "function") {
+    return ((value as { toDate: () => Date }).toDate());
+  }
+  if (typeof value === "string" || typeof value === "number") {
+    const parsed = new Date(value);
+    return Number.isFinite(parsed.getTime()) ? parsed : null;
+  }
+  return null;
+};
+
+const parseGameDateTime = (dateValue: unknown, timeValue: unknown): Date | null => {
+  if (typeof dateValue === "string" && dateValue.trim()) {
+    if (typeof timeValue === "string" && timeValue.trim()) {
+      const combined = new Date(`${dateValue}T${timeValue}`);
+      if (Number.isFinite(combined.getTime())) {
+        return combined;
+      }
+    }
+
+    const parsed = new Date(dateValue);
+    if (Number.isFinite(parsed.getTime())) {
+      return parsed;
+    }
+  }
+
+  return parseDateValue(dateValue);
+};
+
+const toNumberOrNull = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
+const firstNonEmptyString = (...values: unknown[]) => {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+  return "";
+};
+
+const normalizeTeamKey = (value: unknown) => {
+  if (typeof value !== "string") return "";
+  return normalizeTeamName(value).trim().toLowerCase();
 };
 
 export default function TeamPage() {
@@ -142,7 +216,9 @@ export default function TeamPage() {
   const [coaches, setCoaches] = useState<StaffMember[]>([]);
   const [teamStaff, setTeamStaff] = useState<StaffMember[]>([]);
   const [loading, setLoading] = useState(true);
+  const [teamPanelMode, setTeamPanelMode] = useState<"roster" | "games">("roster");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [teamGames, setTeamGames] = useState<TeamCompletedGame[]>([]);
   const [allTeams, setAllTeams] = useState<{ id: string; name: string; fullName: string }[]>([]);
   const [nextTeam, setNextTeam] = useState<{ id: string; name: string; fullName: string } | null>(null);
   const [previousTeam, setPreviousTeam] = useState<{ id: string; name: string; fullName: string } | null>(null);
@@ -190,6 +266,11 @@ export default function TeamPage() {
       setChatOpen(false);
     }
   }, [isAiEnabled]);
+
+  useEffect(() => {
+    setTeamPanelMode("roster");
+    setViewMode("grid");
+  }, [teamName]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -318,7 +399,7 @@ export default function TeamPage() {
           id: teamDoc.id,
           name: data.name,
           city: data.city,
-          logo: data.logo,
+          logo: resolveTeamLogo({ city: data.city, name: data.name, logo: data.logo }),
           teamPhoto: data.teamPhoto,
           teamPhotoPosition: data.teamPhotoPosition ?? 50,
           colors: data.colors || ["#000000", "#FFFFFF"],
@@ -409,6 +490,82 @@ export default function TeamPage() {
         setStaff(staffData);
         setCoaches(coachesOnly);
         setTeamStaff(staffOnly);
+
+        const gamesRef = collection(firebaseDB, "games");
+        const gamesSnapshot = await getDocs(gamesRef);
+        const teamNameKeys = new Set([
+          normalizeTeamKey(data.name || ""),
+          normalizeTeamKey(currentFullName),
+          normalizeTeamKey(formatTeamDisplayName(data.city, data.name, currentFullName)),
+        ]);
+
+        const completedTeamGames = gamesSnapshot.docs
+          .map((gameDoc) => {
+            const gameData = gameDoc.data();
+            const homeTeamName = firstNonEmptyString(gameData.homeTeamName, gameData.homeTeam, gameData.team1Name, gameData.team1, "Home");
+            const awayTeamName = firstNonEmptyString(gameData.awayTeamName, gameData.awayTeam, gameData.team2Name, gameData.team2, "Away");
+            const homeTeamLogo = firstNonEmptyString(gameData.homeTeamLogo, gameData.team1Logo);
+            const awayTeamLogo = firstNonEmptyString(gameData.awayTeamLogo, gameData.team2Logo);
+            const winnerScore = toNumberOrNull(gameData.winnerScore);
+            const loserScore = toNumberOrNull(gameData.loserScore);
+            const directHomeScore = toNumberOrNull(gameData.homeScore);
+            const directAwayScore = toNumberOrNull(gameData.awayScore);
+            const hasWinnerLoserScores = winnerScore !== null && loserScore !== null;
+            const hasDirectFinalScores = directHomeScore !== null && directAwayScore !== null;
+            const dateObj = parseGameDateTime(gameData.date, gameData.time);
+            const completedAtObj = parseDateValue(gameData.completedAt);
+
+            const isCompleted =
+              gameData.completed === true ||
+              gameData.archived === true ||
+              gameData.status === "completed" ||
+              gameData.status === "final" ||
+              gameData.status === "finished";
+
+            const matchesTeamById = gameData.homeTeamId === foundTeamId || gameData.awayTeamId === foundTeamId;
+            const matchesTeamByName =
+              teamNameKeys.has(normalizeTeamKey(homeTeamName)) ||
+              teamNameKeys.has(normalizeTeamKey(awayTeamName));
+
+            if (!isCompleted || !(matchesTeamById || matchesTeamByName)) {
+              return null;
+            }
+
+            let resolvedHomeScore: number | null = hasDirectFinalScores ? directHomeScore : null;
+            let resolvedAwayScore: number | null = hasDirectFinalScores ? directAwayScore : null;
+
+            if ((!hasDirectFinalScores || resolvedHomeScore === null || resolvedAwayScore === null) && hasWinnerLoserScores) {
+              if (gameData.winnerTeamId && gameData.homeTeamId && gameData.awayTeamId) {
+                resolvedHomeScore = gameData.winnerTeamId === gameData.homeTeamId ? winnerScore : loserScore;
+                resolvedAwayScore = gameData.winnerTeamId === gameData.awayTeamId ? winnerScore : loserScore;
+              }
+            }
+
+            if (resolvedHomeScore === null || resolvedAwayScore === null) {
+              return null;
+            }
+
+            return {
+              id: gameDoc.id,
+              homeTeamName,
+              awayTeamName,
+              homeTeamLogo: resolveTeamLogo({ name: homeTeamName, logo: homeTeamLogo }),
+              awayTeamLogo: resolveTeamLogo({ name: awayTeamName, logo: awayTeamLogo }),
+              homeScore: resolvedHomeScore,
+              awayScore: resolvedAwayScore,
+              dateObj,
+              completedAtObj,
+              gender: normalizeTeamGender(gameData.gender, homeTeamLogo, "men"),
+            } satisfies TeamCompletedGame;
+          })
+          .filter((game): game is TeamCompletedGame => game !== null)
+          .sort((a, b) => {
+            const aTime = a.dateObj?.getTime() || a.completedAtObj?.getTime() || 0;
+            const bTime = b.dateObj?.getTime() || b.completedAtObj?.getTime() || 0;
+            return bTime - aTime;
+          });
+
+        setTeamGames(completedTeamGames);
 
         setLoading(false);
         setTimeout(() => setIsTransitioning(false), 100);
@@ -809,11 +966,37 @@ export default function TeamPage() {
       <div className={`mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8 transition-all duration-1000 delay-200 ${
         isTransitioning ? 'opacity-0 translate-y-12' : 'opacity-100 translate-y-0'
       }`}>
-        <div className="flex items-center justify-between mb-8">
-          <h2 className="text-3xl font-bold">{t.roster}</h2>
+        <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-3">
+            <h2 className="text-3xl font-bold">{teamPanelMode === "roster" ? t.roster : t.games}</h2>
+            <div className="inline-flex rounded-full border border-white/10 bg-slate-900/70 p-1 backdrop-blur-xl">
+              <button
+                type="button"
+                onClick={() => setTeamPanelMode("roster")}
+                className={`rounded-full px-4 py-2 text-sm font-semibold transition-all ${
+                  teamPanelMode === "roster"
+                    ? "bg-white text-slate-950 shadow-lg"
+                    : "text-slate-300 hover:text-white"
+                }`}
+              >
+                {t.roster}
+              </button>
+              <button
+                type="button"
+                onClick={() => setTeamPanelMode("games")}
+                className={`rounded-full px-4 py-2 text-sm font-semibold transition-all ${
+                  teamPanelMode === "games"
+                    ? "bg-white text-slate-950 shadow-lg"
+                    : "text-slate-300 hover:text-white"
+                }`}
+              >
+                {t.games}
+              </button>
+            </div>
+          </div>
           
           {/* Grid/List Toggle */}
-          <div className="flex gap-2">
+          <div className={`flex gap-2 transition-all duration-300 ${teamPanelMode === "roster" ? "opacity-100 translate-x-0" : "pointer-events-none opacity-0 translate-x-4"}`}>
             <button
               onClick={() => setViewMode("grid")}
               className={`group relative flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all overflow-hidden ${
@@ -846,8 +1029,11 @@ export default function TeamPage() {
             </button>
           </div>
         </div>
-        
-        {roster.length === 0 ? (
+
+        <div key={`${teamPanelMode}-${viewMode}`} className="animate-in fade-in slide-in-from-right-4 duration-300">
+        {teamPanelMode === "roster" ? (
+          <>
+          {roster.length === 0 ? (
           <div className="text-center py-12 text-slate-400">
             <p>{t.noRoster}</p>
           </div>
@@ -975,6 +1161,83 @@ export default function TeamPage() {
             ))}
           </div>
         )}
+          </>
+        ) : teamGames.length === 0 ? (
+          <div className="text-center py-12 text-slate-400">
+            <p>{t.noGames}</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {teamGames.map((game, index) => {
+              const gameDate = game.dateObj
+                ? new Intl.DateTimeFormat(language === "fr" ? "fr-FR" : "en-US", {
+                    day: "2-digit",
+                    month: "2-digit",
+                    year: "numeric",
+                  }).format(game.dateObj)
+                : "";
+              const gameTime = game.dateObj
+                ? new Intl.DateTimeFormat(language === "fr" ? "fr-FR" : "en-US", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    hour12: language !== "fr",
+                  }).format(game.dateObj)
+                : "";
+
+              return (
+                <Link
+                  key={game.id}
+                  href={`/game/${game.id}`}
+                  className="group block rounded-2xl border border-white/10 bg-slate-900/60 px-4 py-4 transition hover:border-white/30 hover:bg-slate-900/80"
+                  style={{
+                    animation: isTransitioning ? "none" : `fadeInUp 0.45s ease-out ${index * 0.03}s both`,
+                  }}
+                >
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="flex items-center gap-3 text-sm text-slate-400">
+                      <span>{gameDate}</span>
+                      {gameTime && <span>{gameTime}</span>}
+                      <span className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] uppercase tracking-[0.24em] text-slate-300">
+                        {game.gender === "women" ? "W" : "M"}
+                      </span>
+                    </div>
+
+                    <div className="grid flex-1 gap-3 lg:grid-cols-[1fr_auto_1fr] lg:items-center">
+                      <div className="flex items-center gap-3 lg:justify-end">
+                        <span className="truncate text-base font-semibold text-white lg:text-right">{game.homeTeamName}</span>
+                        <Image
+                          src={game.homeTeamLogo}
+                          alt={game.homeTeamName}
+                          width={40}
+                          height={40}
+                          className="h-10 w-10 rounded-full border border-white/10 object-cover"
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-center">
+                        <span className="text-2xl font-black text-white">{game.homeScore}</span>
+                        <span className="text-xs uppercase tracking-[0.28em] text-slate-500">{t.finalScore}</span>
+                        <span className="text-2xl font-black text-white">{game.awayScore}</span>
+                      </div>
+
+                      <div className="flex items-center gap-3 lg:justify-start">
+                        <Image
+                          src={game.awayTeamLogo}
+                          alt={game.awayTeamName}
+                          width={40}
+                          height={40}
+                          className="h-10 w-10 rounded-full border border-white/10 object-cover"
+                        />
+                        <span className="truncate text-base font-semibold text-white">{game.awayTeamName}</span>
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+        </div>
       </div>
 
       {/* Coaching Staff */}

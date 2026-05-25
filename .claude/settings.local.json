@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -E \"0x|#[0-9a-fA-F]{3,6}\")",
+      "Bash(wc:*)",
+      "Bash(grep -r \"w-\\\\[.*px\\\\]\" /c/Users/bobiy/OneDrive/Documents/Bio/febakin/src/app/*.tsx)",
+      "Bash(grep -r \"text-\\\\[.*px\\\\]\" /c/Users/bobiy/OneDrive/Documents/Bio/febakin/src/app/*.tsx)",
+      "Bash(grep -r \"hidden\" /c/Users/bobiy/OneDrive/Documents/Bio/febakin/src/app/*.tsx)",
+      "Bash(grep:*)",
+      "Bash(where vercel:*)",
+      "Bash(vercel --prod)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(npx tsc *)",
+      "Bash(git *)"
+    ]
+  }
+}

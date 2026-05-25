@@ -4569,8 +4569,7 @@ export default function Home() {
         // Fetch completed games for Final Buzzer section (rolling last 25)
         const completedGamesQuery = query(
           gamesRef,
-          orderBy("date", "desc"),
-          limit(25)
+          orderBy("date", "desc")
         );
         const completedSnapshot = await getDocs(completedGamesQuery);
         
@@ -4643,7 +4642,7 @@ export default function Home() {
             const bTime = b.dateObj?.getTime() || b.completedAtObj?.getTime() || 0;
             return bTime - aTime;
           })
-          .slice(0, 25);
+          ;
         
         setCompletedGames(completedGamesData);
         

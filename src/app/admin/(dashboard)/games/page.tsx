@@ -668,6 +668,9 @@ export default function GamesPage() {
   // Filter games based on current view and filters
   const filteredGames = useMemo(() => {
     let result = gamesLinkedToMatchdays;
+    const hasFinalScore = (game: Game) =>
+      typeof game.homeScore === "number" && Number.isFinite(game.homeScore) &&
+      typeof game.awayScore === "number" && Number.isFinite(game.awayScore);
 
     // Filter by gender
     if (filterGender !== "all") {
@@ -675,9 +678,9 @@ export default function GamesPage() {
     }
 
     if (statsCollectionFilter === "done") {
-      result = result.filter((g) => g.statsSubmitted === true);
+      result = result.filter((g) => hasFinalScore(g));
     } else if (statsCollectionFilter === "pending") {
-      result = result.filter((g) => g.statsSubmitted !== true);
+      result = result.filter((g) => !hasFinalScore(g));
     }
 
     // Filter by week in matchday view (when viewing games list)

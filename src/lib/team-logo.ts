@@ -57,7 +57,6 @@ export const teamLogoOverrides: Record<string, string> = {
   "don bosco": "/logos/Females/don bosco.jpg",
   bosco: "/logos/Females/don bosco.jpg",
   inri: "/logos/Females/inri.jpg",
-  dcmp: "/logos/liprobakin.png",
 };
 
 export const resolveTeamLogo = (team: TeamLogoSource, fallback = "/logos/liprobakin.png") => {

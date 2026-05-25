@@ -989,7 +989,7 @@ const teamRecordMap = Object.fromEntries(
 );
 
 const getTeamRecord = (team: string) => teamRecordMap[team] ?? null;
-const getTotalPoints = (wins: number, losses: number) => wins * 2 + losses;
+const getLeaguePoints = (wins: number, losses: number, forfeitLosses = 0) => (wins * 2) + Math.max(0, losses - forfeitLosses);
 const getResolvedTeamLogo = ({
   teamName,
   logo,
@@ -3467,7 +3467,40 @@ export default function Home() {
         // Ignore storage quota / privacy errors
       }
     };
-    const calculateStandingsFromTeams = (snapshot: any) => {
+    const buildForfeitLossCounts = (singleForfeitSnapshot: any, doubleForfeitSnapshot: any) => {
+      const counts = new Map<string, number>();
+      const addLoss = (teamId?: string) => {
+        if (!teamId) return;
+        counts.set(teamId, (counts.get(teamId) ?? 0) + 1);
+      };
+
+      singleForfeitSnapshot.docs.forEach((gameDoc: any) => {
+        const data = gameDoc.data?.() ?? gameDoc.data ?? {};
+        const explicitLoserTeamId = typeof data.loserTeamId === "string" ? data.loserTeamId : "";
+        const homeTeamId = typeof data.homeTeamId === "string" ? data.homeTeamId : "";
+        const awayTeamId = typeof data.awayTeamId === "string" ? data.awayTeamId : "";
+        const winnerTeamId = typeof data.winnerTeamId === "string" ? data.winnerTeamId : typeof data.winnerId === "string" ? data.winnerId : "";
+
+        if (explicitLoserTeamId) {
+          addLoss(explicitLoserTeamId);
+          return;
+        }
+
+        if (winnerTeamId && homeTeamId && awayTeamId) {
+          addLoss(winnerTeamId === homeTeamId ? awayTeamId : homeTeamId);
+        }
+      });
+
+      doubleForfeitSnapshot.docs.forEach((gameDoc: any) => {
+        const data = gameDoc.data?.() ?? gameDoc.data ?? {};
+        addLoss(typeof data.homeTeamId === "string" ? data.homeTeamId : "");
+        addLoss(typeof data.awayTeamId === "string" ? data.awayTeamId : "");
+      });
+
+      return counts;
+    };
+
+    const calculateStandingsFromTeams = (snapshot: any, forfeitLossCounts: Map<string, number>) => {
       try {
         loadStandingsHistory();
 
@@ -3479,6 +3512,7 @@ export default function Home() {
           wins: number;
           losses: number;
           totalPoints: number;
+          leaguePoints: number;
           gender: "men" | "women";
         }> = snapshot.docs
           .map((teamDoc: any) => {
@@ -3495,6 +3529,7 @@ export default function Home() {
             const wins = typeof data.wins === "number" && Number.isFinite(data.wins) ? data.wins : 0;
             const losses = typeof data.losses === "number" && Number.isFinite(data.losses) ? data.losses : 0;
             const totalPoints = typeof data.totalPoints === "number" && Number.isFinite(data.totalPoints) ? data.totalPoints : 0;
+            const leaguePoints = getLeaguePoints(wins, losses, forfeitLossCounts.get(teamId) ?? 0);
 
             return {
               seed: 0,
@@ -3504,6 +3539,7 @@ export default function Home() {
               wins,
               losses,
               totalPoints,
+              leaguePoints,
               gender: teamGender,
             };
           })
@@ -3518,6 +3554,7 @@ export default function Home() {
               wins: number;
               losses: number;
               totalPoints: number;
+              leaguePoints: number;
               gender: "men" | "women";
             } => Boolean(team)
           );
@@ -3531,6 +3568,7 @@ export default function Home() {
             wins: number;
             losses: number;
             totalPoints: number;
+            leaguePoints: number;
             gender: "men" | "women";
           },
           b: {
@@ -3541,11 +3579,13 @@ export default function Home() {
             wins: number;
             losses: number;
             totalPoints: number;
+            leaguePoints: number;
             gender: "men" | "women";
           }
         ) => {
           if (b.wins !== a.wins) return b.wins - a.wins;
           if (a.losses !== b.losses) return a.losses - b.losses;
+          if ((b.leaguePoints ?? 0) !== (a.leaguePoints ?? 0)) return (b.leaguePoints ?? 0) - (a.leaguePoints ?? 0);
           if ((b.totalPoints ?? 0) !== (a.totalPoints ?? 0)) return (b.totalPoints ?? 0) - (a.totalPoints ?? 0);
           return a.team.localeCompare(b.team);
         });
@@ -3650,8 +3690,13 @@ export default function Home() {
     const refreshHomeStats = async (version: number) => {
       const refreshToken = ++activeRefreshToken;
       try {
-        const teamsSnapshot = await getDocs(collection(firebaseDB, "teams"));
-        const standings = calculateStandingsFromTeams(teamsSnapshot);
+        const [teamsSnapshot, singleForfeitSnapshot, doubleForfeitSnapshot] = await Promise.all([
+          getDocs(collection(firebaseDB, "teams")),
+          getDocs(query(collection(firebaseDB, "games"), where("winByForfeit", "==", true))),
+          getDocs(query(collection(firebaseDB, "games"), where("status", "==", "forfeit"))),
+        ]);
+        const forfeitLossCounts = buildForfeitLossCounts(singleForfeitSnapshot, doubleForfeitSnapshot);
+        const standings = calculateStandingsFromTeams(teamsSnapshot, forfeitLossCounts);
 
         if (refreshToken !== activeRefreshToken) return;
 
@@ -7097,7 +7142,7 @@ export default function Home() {
                           </td>
                           <td className="px-3 py-2 font-semibold text-white">
                             <Link href={teamHref} className="block">
-                              {row.totalPoints ?? getTotalPoints(row.wins, row.losses)}
+                              {row.leaguePoints ?? getLeaguePoints(row.wins, row.losses)}
                             </Link>
                           </td>
                           <td className="px-2 py-2">

@@ -27,6 +27,8 @@ const translations = {
     conference: "Conference",
     roster: "Roster",
     games: "Games",
+    forfeit: "Forfeit",
+    doubleForfeit: "Double Forfeit",
     coachingStaff: "Coaching Staff",
     noRoster: "No roster data available for this team.",
     noGames: "No completed games with a final score are available for this team yet.",
@@ -59,6 +61,8 @@ const translations = {
     conference: "Conférence",
     roster: "Effectif",
     games: "Games",
+    forfeit: "Forfait",
+    doubleForfeit: "Double forfait",
     coachingStaff: "Staff Technique",
     noRoster: "Aucune donnée d'effectif disponible pour cette équipe.",
     noGames: "Aucun match terminé avec score final n'est disponible pour cette équipe pour le moment.",
@@ -130,6 +134,8 @@ type TeamCompletedGame = {
   id: string;
   homeTeamName: string;
   awayTeamName: string;
+  homeTeamId: string;
+  awayTeamId: string;
   homeTeamLogo: string;
   awayTeamLogo: string;
   homeScore: number;
@@ -137,6 +143,9 @@ type TeamCompletedGame = {
   dateObj: Date | null;
   completedAtObj: Date | null;
   gender: TeamGender;
+  winnerTeamId: string;
+  isForfeit: boolean;
+  isDoubleForfeit: boolean;
 };
 
 type ChatMessage = {
@@ -514,6 +523,11 @@ export default function TeamPage() {
             const hasDirectFinalScores = directHomeScore !== null && directAwayScore !== null;
             const dateObj = parseGameDateTime(gameData.date, gameData.time);
             const completedAtObj = parseDateValue(gameData.completedAt);
+            const homeTeamId = firstNonEmptyString(gameData.homeTeamId);
+            const awayTeamId = firstNonEmptyString(gameData.awayTeamId);
+            const winnerTeamId = firstNonEmptyString(gameData.winnerTeamId, gameData.winnerId);
+            const isForfeit = gameData.winByForfeit === true || gameData.forfeit === true || gameData.status === "forfeit";
+            const isDoubleForfeit = gameData.forfeit === true || gameData.status === "forfeit";
 
             const isCompleted =
               gameData.completed === true ||
@@ -522,7 +536,7 @@ export default function TeamPage() {
               gameData.status === "final" ||
               gameData.status === "finished";
 
-            const matchesTeamById = gameData.homeTeamId === foundTeamId || gameData.awayTeamId === foundTeamId;
+            const matchesTeamById = homeTeamId === foundTeamId || awayTeamId === foundTeamId;
             const matchesTeamByName =
               teamNameKeys.has(normalizeTeamKey(homeTeamName)) ||
               teamNameKeys.has(normalizeTeamKey(awayTeamName));
@@ -535,9 +549,9 @@ export default function TeamPage() {
             let resolvedAwayScore: number | null = hasDirectFinalScores ? directAwayScore : null;
 
             if ((!hasDirectFinalScores || resolvedHomeScore === null || resolvedAwayScore === null) && hasWinnerLoserScores) {
-              if (gameData.winnerTeamId && gameData.homeTeamId && gameData.awayTeamId) {
-                resolvedHomeScore = gameData.winnerTeamId === gameData.homeTeamId ? winnerScore : loserScore;
-                resolvedAwayScore = gameData.winnerTeamId === gameData.awayTeamId ? winnerScore : loserScore;
+              if (winnerTeamId && homeTeamId && awayTeamId) {
+                resolvedHomeScore = winnerTeamId === homeTeamId ? winnerScore : loserScore;
+                resolvedAwayScore = winnerTeamId === awayTeamId ? winnerScore : loserScore;
               }
             }
 
@@ -549,6 +563,8 @@ export default function TeamPage() {
               id: gameDoc.id,
               homeTeamName,
               awayTeamName,
+              homeTeamId,
+              awayTeamId,
               homeTeamLogo: resolveTeamLogo({ name: homeTeamName, logo: homeTeamLogo }),
               awayTeamLogo: resolveTeamLogo({ name: awayTeamName, logo: awayTeamLogo }),
               homeScore: resolvedHomeScore,
@@ -556,6 +572,9 @@ export default function TeamPage() {
               dateObj,
               completedAtObj,
               gender: normalizeTeamGender(gameData.gender, homeTeamLogo, "men"),
+              winnerTeamId,
+              isForfeit,
+              isDoubleForfeit,
             } satisfies TeamCompletedGame;
           })
           .filter((game): game is TeamCompletedGame => game !== null)
@@ -1169,6 +1188,14 @@ export default function TeamPage() {
         ) : (
           <div className="space-y-3">
             {teamGames.map((game, index) => {
+              const homeWon = Boolean(game.winnerTeamId) ? game.winnerTeamId === game.homeTeamId : game.homeScore > game.awayScore;
+              const awayWon = Boolean(game.winnerTeamId) ? game.winnerTeamId === game.awayTeamId : game.awayScore > game.homeScore;
+              const homeHighlightClass = homeWon
+                ? "text-white"
+                : "text-slate-300";
+              const awayHighlightClass = awayWon
+                ? "text-white"
+                : "text-slate-300";
               const gameDate = game.dateObj
                 ? new Intl.DateTimeFormat(language === "fr" ? "fr-FR" : "en-US", {
                     day: "2-digit",
@@ -1200,24 +1227,29 @@ export default function TeamPage() {
                       <span className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] uppercase tracking-[0.24em] text-slate-300">
                         {game.gender === "women" ? "W" : "M"}
                       </span>
+                      {game.isForfeit && (
+                        <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300">
+                          {game.isDoubleForfeit ? t.doubleForfeit : t.forfeit}
+                        </span>
+                      )}
                     </div>
 
                     <div className="grid flex-1 gap-3 lg:grid-cols-[1fr_auto_1fr] lg:items-center">
                       <div className="flex items-center gap-3 lg:justify-end">
-                        <span className="truncate text-base font-semibold text-white lg:text-right">{game.homeTeamName}</span>
+                        <span className={`truncate text-base font-semibold lg:text-right ${homeHighlightClass}`}>{game.homeTeamName}</span>
                         <Image
                           src={game.homeTeamLogo}
                           alt={game.homeTeamName}
                           width={40}
                           height={40}
-                          className="h-10 w-10 rounded-full border border-white/10 object-cover"
+                          className={`h-10 w-10 rounded-full object-cover ${homeWon ? "border-2 border-emerald-400 shadow-lg shadow-emerald-500/20" : "border border-white/10"}`}
                         />
                       </div>
 
                       <div className="flex items-center justify-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-center">
-                        <span className="text-2xl font-black text-white">{game.homeScore}</span>
+                        <span className={`text-2xl font-black ${homeWon ? "text-emerald-300" : "text-white"}`}>{game.homeScore}</span>
                         <span className="text-xs uppercase tracking-[0.28em] text-slate-500">{t.finalScore}</span>
-                        <span className="text-2xl font-black text-white">{game.awayScore}</span>
+                        <span className={`text-2xl font-black ${awayWon ? "text-emerald-300" : "text-white"}`}>{game.awayScore}</span>
                       </div>
 
                       <div className="flex items-center gap-3 lg:justify-start">
@@ -1226,9 +1258,9 @@ export default function TeamPage() {
                           alt={game.awayTeamName}
                           width={40}
                           height={40}
-                          className="h-10 w-10 rounded-full border border-white/10 object-cover"
+                          className={`h-10 w-10 rounded-full object-cover ${awayWon ? "border-2 border-emerald-400 shadow-lg shadow-emerald-500/20" : "border border-white/10"}`}
                         />
-                        <span className="truncate text-base font-semibold text-white">{game.awayTeamName}</span>
+                        <span className={`truncate text-base font-semibold ${awayHighlightClass}`}>{game.awayTeamName}</span>
                       </div>
                     </div>
                   </div>

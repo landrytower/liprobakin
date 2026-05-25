@@ -3509,6 +3509,7 @@ export default function Home() {
           teamKey: string;
           teamId: string;
           team: string;
+          logo: string;
           wins: number;
           losses: number;
           totalPoints: number;
@@ -3526,6 +3527,10 @@ export default function Home() {
               city: String(data.city || "").trim(),
               name: baseName,
             });
+            const teamLogo = getResolvedTeamLogo({
+              teamName: teamName,
+              logo: typeof data.logo === "string" ? data.logo : null,
+            });
             const wins = typeof data.wins === "number" && Number.isFinite(data.wins) ? data.wins : 0;
             const losses = typeof data.losses === "number" && Number.isFinite(data.losses) ? data.losses : 0;
             const totalPoints = typeof data.totalPoints === "number" && Number.isFinite(data.totalPoints) ? data.totalPoints : 0;
@@ -3536,6 +3541,7 @@ export default function Home() {
               teamKey: `${teamGender}:${teamId}`,
               teamId,
               team: teamName,
+              logo: teamLogo,
               wins,
               losses,
               totalPoints,
@@ -3551,6 +3557,7 @@ export default function Home() {
               teamKey: string;
               teamId: string;
               team: string;
+              logo: string;
               wins: number;
               losses: number;
               totalPoints: number;
@@ -3576,6 +3583,7 @@ export default function Home() {
             teamKey: string;
             teamId: string;
             team: string;
+            logo: string;
             wins: number;
             losses: number;
             totalPoints: number;
@@ -7082,7 +7090,11 @@ export default function Home() {
                       const normalizedName = displayName.replace(/^espoir\s+espoir\s+/i, "Espoir ");
                       const truncatedName =
                         normalizedName.length > 15 ? `${normalizedName.slice(0, 12)}...` : normalizedName;
-                      const teamLogo = franchise?.logo;
+                      const teamLogo = getResolvedTeamLogo({
+                        teamName: row.team,
+                        logo: row.logo,
+                        franchise,
+                      });
                       const initials = normalizedName
                         .split(" ")
                         .map((word) => word[0])

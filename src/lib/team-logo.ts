@@ -15,6 +15,8 @@ const normalizeLogoKey = (city?: string | null, name?: string | null) => {
 };
 
 export const teamLogoOverrides: Record<string, string> = {
+  "chaux sport": "/logos/Males/chaux_sport.svg",
+  chaux: "/logos/Males/chaux_sport.svg",
   "espoir fukas": "/logos/Males/Espoir Fukash.png",
   "espoir fukash": "/logos/Males/Espoir Fukash.png",
   "city kauka": "/logos/Males/city kauka.jpg",

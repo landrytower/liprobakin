@@ -1,0 +1,19 @@
+<svg width="240" height="240" viewBox="0 0 240 240" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="40" y1="24" x2="200" y2="216" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#111827"/>
+      <stop offset="1" stop-color="#7F1D1D"/>
+    </linearGradient>
+    <linearGradient id="ring" x1="32" y1="20" x2="210" y2="220" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F59E0B"/>
+      <stop offset="1" stop-color="#FDE68A"/>
+    </linearGradient>
+  </defs>
+  <circle cx="120" cy="120" r="108" fill="url(#bg)"/>
+  <circle cx="120" cy="120" r="98" stroke="url(#ring)" stroke-width="8"/>
+  <circle cx="120" cy="120" r="72" fill="#0F172A" fill-opacity="0.82" stroke="#FCA5A5" stroke-width="4"/>
+  <path d="M79 78H118C136.225 78 151 92.7746 151 111C151 129.225 136.225 144 118 144H91V173H79V78ZM91 132H117C128.598 132 138 122.598 138 111C138 99.402 128.598 90 117 90H91V132Z" fill="#F8FAFC"/>
+  <path d="M163.086 88.808C155.178 82.4936 144.878 79 133.869 79V91.6319C141.758 91.6319 149.025 94.1286 154.995 98.3899L163.086 88.808Z" fill="#FCA5A5"/>
+  <path d="M133.869 149.368C146.97 149.368 157.632 160.03 157.632 173.132H170.264C170.264 153.053 153.948 136.736 133.869 136.736V149.368Z" fill="#FDE68A"/>
+  <text x="120" y="201" text-anchor="middle" fill="#F8FAFC" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" letter-spacing="3">CHAUX SPORT</text>
+</svg>

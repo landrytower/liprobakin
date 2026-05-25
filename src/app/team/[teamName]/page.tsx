@@ -6,7 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { collection, getDocs, onSnapshot, doc, getDoc } from "firebase/firestore";
 import { firebaseDB } from "@/lib/firebase";
-import { normalizeTeamGender } from "@/lib/team-gender";
+import { normalizeTeamGender, type TeamGender } from "@/lib/team-gender";
 import { formatTeamDisplayName, normalizeTeamName } from "@/lib/team-name";
 import { resolveTeamLogo } from "@/lib/team-logo";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -136,7 +136,7 @@ type TeamCompletedGame = {
   awayScore: number;
   dateObj: Date | null;
   completedAtObj: Date | null;
-  gender: string;
+  gender: TeamGender;
 };
 
 type ChatMessage = {

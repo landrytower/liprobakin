@@ -4226,8 +4226,7 @@ export default function Home() {
         const gamesRef = collection(firebaseDB, "games");
         const gamesQuery = query(
           gamesRef,
-          orderBy("date", "asc"),
-          limit(50)
+          orderBy("date", "asc")
         );
         const teamsRef = collection(firebaseDB, "teams");
         const refereesRef = collection(firebaseDB, "referees");
@@ -4558,7 +4557,7 @@ export default function Home() {
         // Format once, then reuse slices
         const allFormattedGames = allGames.map(formatGameData);
         const spotlightGames = allFormattedGames.slice(0, 3);
-        const allWeeklyGames = allFormattedGames.slice(3);
+        const allWeeklyGames = allFormattedGames;
 
         // Store all games for calendar filtering
         setAllScheduledGames(allFormattedGames);

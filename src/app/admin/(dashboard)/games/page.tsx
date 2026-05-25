@@ -88,6 +88,7 @@ type Game = {
   venue: string;
   venueCity?: string;
   status: "scheduled" | "live" | "completed" | "postponed" | "cancelled" | "forfeit";
+  statsSubmitted?: boolean;
   forfeit?: boolean;
   completed?: boolean;
   archived?: boolean;
@@ -124,6 +125,7 @@ type MatchdayFormState = {
 
 type ViewMode = "schedule" | "archive" | "matchday" | "calendar";
 type FilterGender = "all" | "men" | "women";
+type StatsCollectionFilter = "all" | "done" | "pending";
 
 // ============================================================================
 // TRANSLATIONS
@@ -141,6 +143,9 @@ const translations = {
     allGenders: "All",
     mensLeague: "Men's",
     womensLeague: "Women's",
+    allStats: "All",
+    statsDone: "Done",
+    statsPending: "Not Yet",
     scheduleGame: "Schedule Game",
     editGame: "Edit Game",
     cancelEdit: "Cancel",
@@ -241,6 +246,9 @@ const translations = {
     allGenders: "Tous",
     mensLeague: "Hommes",
     womensLeague: "Femmes",
+    allStats: "Tous",
+    statsDone: "Faits",
+    statsPending: "Pas encore",
     scheduleGame: "Programmer un Match",
     editGame: "Modifier le Match",
     cancelEdit: "Annuler",
@@ -361,6 +369,7 @@ export default function GamesPage() {
   // View state
   const [viewMode, setViewMode] = useState<ViewMode>("matchday");
   const [filterGender, setFilterGender] = useState<FilterGender>("all");
+  const [statsCollectionFilter, setStatsCollectionFilter] = useState<StatsCollectionFilter>("all");
   const [selectedWeek, ] = useState<number>(1);
   const [selectedMatchday, setSelectedMatchday] = useState<Matchday | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -436,6 +445,7 @@ export default function GamesPage() {
           venue: data.venue,
           venueCity: data.venueCity,
           status: data.status || (hasLegacyCompletion ? "completed" : "scheduled"),
+          statsSubmitted: data.statsSubmitted === true,
           homeScore: data.homeScore ?? data.winnerScore,
           awayScore: data.awayScore ?? data.loserScore,
           winnerId: data.winnerId || data.winnerTeamId,
@@ -664,6 +674,12 @@ export default function GamesPage() {
       result = result.filter((g) => g.gender === filterGender);
     }
 
+    if (statsCollectionFilter === "done") {
+      result = result.filter((g) => g.statsSubmitted === true);
+    } else if (statsCollectionFilter === "pending") {
+      result = result.filter((g) => g.statsSubmitted !== true);
+    }
+
     // Filter by week in matchday view (when viewing games list)
     if (viewMode === "matchday" && selectedMatchday) {
       // Filter games by date range of the selected matchday
@@ -681,7 +697,7 @@ export default function GamesPage() {
     }
 
     return result;
-  }, [gamesLinkedToMatchdays, filterGender, viewMode, selectedWeek, selectedMatchday]);
+  }, [gamesLinkedToMatchdays, filterGender, statsCollectionFilter, viewMode, selectedWeek, selectedMatchday]);
 
   // Group games by date (for schedule view)
   const gamesByDate = useMemo(() => {
@@ -1898,32 +1914,31 @@ export default function GamesPage() {
           </button>
         </div>
 
-        {/* Gender Filter - Hidden when viewing matchday grid, shown otherwise */}
         {!(viewMode === "matchday" && !selectedMatchday) && (
           <div className="flex rounded-xl bg-slate-900/60 border border-white/10 p-1">
             <button
-              onClick={() => setFilterGender("all")}
+              onClick={() => setStatsCollectionFilter("all")}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-                filterGender === "all" ? "bg-slate-700 text-white" : "text-slate-400 hover:text-white"
+                statsCollectionFilter === "all" ? "bg-slate-700 text-white" : "text-slate-400 hover:text-white"
               }`}
             >
-              {t.allGenders}
+              {t.allStats}
             </button>
             <button
-              onClick={() => setFilterGender("men")}
+              onClick={() => setStatsCollectionFilter("done")}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-                filterGender === "men" ? "bg-blue-500 text-white" : "text-slate-400 hover:text-white"
+                statsCollectionFilter === "done" ? "bg-emerald-500 text-white" : "text-slate-400 hover:text-white"
               }`}
             >
-              {t.mensLeague}
+              {t.statsDone}
             </button>
             <button
-              onClick={() => setFilterGender("women")}
+              onClick={() => setStatsCollectionFilter("pending")}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-                filterGender === "women" ? "bg-pink-500 text-white" : "text-slate-400 hover:text-white"
+                statsCollectionFilter === "pending" ? "bg-amber-500 text-slate-950" : "text-slate-400 hover:text-white"
               }`}
             >
-              {t.womensLeague}
+              {t.statsPending}
             </button>
           </div>
         )}

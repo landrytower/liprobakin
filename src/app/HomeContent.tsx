@@ -2320,6 +2320,30 @@ export default function Home() {
     return [...completedGames].sort((a, b) => toSortTime(b) - toSortTime(a));
   }, [completedGames]);
 
+  const standingsLogosFromLoadedGames = useMemo(() => {
+    const logos = new Map<string, string>();
+    const addLogo = (teamName: unknown, logo: unknown) => {
+      if (typeof teamName !== "string" || !teamName.trim()) return;
+      if (typeof logo !== "string" || !logo.trim()) return;
+      const normalizedLogo = logo.trim();
+      if (normalizedLogo.includes("/logos/liprobakin.png")) return;
+      logos.set(normalizeTeamName(teamName).toLowerCase(), normalizedLogo);
+    };
+
+    const registerGame = (game: any) => {
+      addLogo(game?.homeTeamName ?? game?.homeTeam ?? game?.team1, game?.homeTeamLogo);
+      addLogo(game?.awayTeamName ?? game?.awayTeam ?? game?.team2, game?.awayTeamLogo);
+    };
+
+    completedGamesSorted.forEach(registerGame);
+    liveGames.forEach(registerGame);
+    allScheduledGames.forEach(registerGame);
+    dynamicSpotlightGames.forEach(registerGame);
+    weeklyScheduleGames.forEach(registerGame);
+
+    return logos;
+  }, [allScheduledGames, completedGamesSorted, dynamicSpotlightGames, liveGames, weeklyScheduleGames]);
+
   useEffect(() => {
     const container = finalBuzzerScrollRef.current;
     if (!container) {
@@ -3500,7 +3524,29 @@ export default function Home() {
       return counts;
     };
 
-    const calculateStandingsFromTeams = (snapshot: any, forfeitLossCounts: Map<string, number>) => {
+    const buildTeamLogoMapFromGames = (gamesSnapshot: any) => {
+      const logos = new Map<string, string>();
+      const addLogo = (teamId: unknown, teamName: unknown, logo: unknown) => {
+        if (typeof logo !== "string" || !logo.trim()) return;
+        const normalizedLogo = logo.trim();
+        if (typeof teamId === "string" && teamId.trim()) {
+          logos.set(teamId.trim(), normalizedLogo);
+        }
+        if (typeof teamName === "string" && teamName.trim()) {
+          logos.set(normalizeTeamName(teamName).toLowerCase(), normalizedLogo);
+        }
+      };
+
+      gamesSnapshot.docs.forEach((gameDoc: any) => {
+        const data = gameDoc.data?.() ?? gameDoc.data ?? {};
+        addLogo(data.homeTeamId, data.homeTeamName ?? data.homeTeam ?? data.team1, data.homeTeamLogo ?? data.team1Logo);
+        addLogo(data.awayTeamId, data.awayTeamName ?? data.awayTeam ?? data.team2, data.awayTeamLogo ?? data.team2Logo);
+      });
+
+      return logos;
+    };
+
+    const calculateStandingsFromTeams = (snapshot: any, forfeitLossCounts: Map<string, number>, teamLogosFromGames: Map<string, string>) => {
       try {
         loadStandingsHistory();
 
@@ -3527,9 +3573,12 @@ export default function Home() {
               city: String(data.city || "").trim(),
               name: baseName,
             });
+            const fallbackLogoFromGames = teamLogosFromGames.get(teamId) ?? teamLogosFromGames.get(normalizeTeamName(teamName).toLowerCase()) ?? null;
+            const rawTeamLogo = typeof data.logo === "string" ? data.logo.trim() : "";
+            const preferredTeamLogo = rawTeamLogo && !rawTeamLogo.includes("/logos/liprobakin.png") ? rawTeamLogo : fallbackLogoFromGames;
             const teamLogo = getResolvedTeamLogo({
               teamName: teamName,
-              logo: typeof data.logo === "string" ? data.logo : null,
+              logo: preferredTeamLogo,
             });
             const wins = typeof data.wins === "number" && Number.isFinite(data.wins) ? data.wins : 0;
             const losses = typeof data.losses === "number" && Number.isFinite(data.losses) ? data.losses : 0;
@@ -3698,13 +3747,15 @@ export default function Home() {
     const refreshHomeStats = async (version: number) => {
       const refreshToken = ++activeRefreshToken;
       try {
-        const [teamsSnapshot, singleForfeitSnapshot, doubleForfeitSnapshot] = await Promise.all([
+        const [teamsSnapshot, singleForfeitSnapshot, doubleForfeitSnapshot, gamesSnapshot] = await Promise.all([
           getDocs(collection(firebaseDB, "teams")),
           getDocs(query(collection(firebaseDB, "games"), where("winByForfeit", "==", true))),
           getDocs(query(collection(firebaseDB, "games"), where("status", "==", "forfeit"))),
+          getDocs(collection(firebaseDB, "games")),
         ]);
         const forfeitLossCounts = buildForfeitLossCounts(singleForfeitSnapshot, doubleForfeitSnapshot);
-        const standings = calculateStandingsFromTeams(teamsSnapshot, forfeitLossCounts);
+        const teamLogosFromGames = buildTeamLogoMapFromGames(gamesSnapshot);
+        const standings = calculateStandingsFromTeams(teamsSnapshot, forfeitLossCounts, teamLogosFromGames);
 
         if (refreshToken !== activeRefreshToken) return;
 
@@ -7090,9 +7141,10 @@ export default function Home() {
                       const normalizedName = displayName.replace(/^espoir\s+espoir\s+/i, "Espoir ");
                       const truncatedName =
                         normalizedName.length > 15 ? `${normalizedName.slice(0, 12)}...` : normalizedName;
+                      const loadedGameLogo = standingsLogosFromLoadedGames.get(normalizeTeamName(row.team).toLowerCase()) ?? null;
                       const teamLogo = getResolvedTeamLogo({
                         teamName: row.team,
-                        logo: row.logo,
+                        logo: typeof row.logo === "string" && !row.logo.includes("/logos/liprobakin.png") ? row.logo : loadedGameLogo,
                         franchise,
                       });
                       const initials = normalizedName

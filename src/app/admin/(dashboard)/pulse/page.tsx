@@ -4,6 +4,7 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef, Component } from "react";
 import type { ReactNode, ErrorInfo } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { firebaseDB } from "@/lib/firebase";
 import { parseCongoDateTime } from "@/lib/congo-time";
 import {
@@ -432,6 +433,7 @@ function LeaguePulseDashboard() {
   const [now] = useState(() => new Date());
   const [activeModal, setActiveModal] = useState<ModalState>(null);
 
+
   /* ── real-time data ── */
   useEffect(() => {
     let rosterLoaded = false;
@@ -827,22 +829,32 @@ function LeaguePulseDashboard() {
           </div>
 
           {/* Gender filter pills */}
-          <div className="flex items-center gap-1 bg-slate-800/60 rounded-xl p-1 border border-white/5">
-            {(["all", "men", "women"] as const).map((g) => (
-              <button
-                key={g}
-                onClick={() => setGenderFilter(g)}
-                className={`px-4 py-1.5 text-xs font-bold uppercase rounded-lg transition-all duration-300 ${
-                  genderFilter === g
-                    ? "bg-orange-500 text-white shadow-lg shadow-orange-500/30"
-                    : "text-slate-400 hover:text-white hover:bg-slate-700/50"
-                }`}
-              >
-                {g === "all" ? t.all : g === "men" ? t.men : t.women}
-              </button>
-            ))}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1 bg-slate-800/60 rounded-xl p-1 border border-white/5">
+              {(["all", "men", "women"] as const).map((g) => (
+                <button
+                  key={g}
+                  onClick={() => setGenderFilter(g)}
+                  className={`px-4 py-1.5 text-xs font-bold uppercase rounded-lg transition-all duration-300 ${
+                    genderFilter === g
+                      ? "bg-orange-500 text-white shadow-lg shadow-orange-500/30"
+                      : "text-slate-400 hover:text-white hover:bg-slate-700/50"
+                  }`}
+                >
+                  {g === "all" ? t.all : g === "men" ? t.men : t.women}
+                </button>
+              ))}
+            </div>
+            <Link
+              href="/allstar-results"
+              className="flex items-center gap-1.5 px-4 py-2 bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/30 text-orange-400 font-bold text-xs rounded-xl transition-all"
+            >
+              ⭐ {language === "fr" ? "Votes All-Star" : "All-Star Votes"}
+            </Link>
           </div>
         </div>
+
+
 
         {/* ═══════ KEY METRICS ROW ═══════ */}
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">

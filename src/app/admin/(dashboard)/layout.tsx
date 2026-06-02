@@ -39,6 +39,7 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   { key: "pulse", label: { en: "League Pulse", fr: "Pouls Ligue" }, href: "/admin/pulse", icon: "⚡" },
+  { key: "allstar", label: { en: "All-Star Votes", fr: "Votes All-Star" }, href: "/admin/allstar", icon: "⭐" },
   { key: "documents", label: { en: "Documents", fr: "Documents" }, href: "/admin/documents", icon: "🗂️" },
   { key: "stories", label: { en: "Stories", fr: "Histoires" }, href: "/admin/stories", icon: "📰", requiredPermission: "canManageNews" },
   { key: "teams", label: { en: "Teams", fr: "Équipes" }, href: "/admin/teams", icon: "🏀", requiredPermission: "canManageTeams" },

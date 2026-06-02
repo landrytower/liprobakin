@@ -5,6 +5,7 @@ import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import VerificationNotification from "@/components/VerificationNotification";
+import AllStarVoteBanner from "@/components/AllStarVoteBanner";
 import { AnalyticsProvider } from "@/components/AnalyticsProvider";
 import ClientWidgets from "./ClientWidgets";
 import { Analytics } from "@vercel/analytics/react";
@@ -189,6 +190,7 @@ export default function RootLayout({
             <AnalyticsProvider>
               <ClientWidgets />
               <VerificationNotification />
+              <AllStarVoteBanner />
               {children}
               <Analytics />
             </AnalyticsProvider>

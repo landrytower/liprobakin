@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, getDocs, doc, getDoc, setDoc } from "firebase/firestore";
 import type { Timestamp } from "firebase/firestore";
 import { firebaseDB } from "@/lib/firebase";
 import { normalizeTeamGender } from "@/lib/team-gender";
@@ -145,6 +145,8 @@ export default function AllStarVotesPage() {
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("votes");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [allStarEnabled, setAllStarEnabled] = useState(true);
+  const [toggling, setToggling] = useState(false);
   const [results, setResults] = useState<Results>({
     menPlayers: [], womenPlayers: [], menCoaches: [], womenCoaches: [],
   });
@@ -256,6 +258,32 @@ export default function AllStarVotesPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Load All-Star enabled/disabled setting
+  useEffect(() => {
+    const loadSetting = async () => {
+      const settingsDoc = await getDoc(doc(firebaseDB, "settings", "allStar"));
+      if (settingsDoc.exists()) {
+        setAllStarEnabled(settingsDoc.data().enabled ?? true);
+      }
+    };
+    loadSetting();
+  }, []);
+
+  const toggleAllStar = async () => {
+    setToggling(true);
+    try {
+      const newState = !allStarEnabled;
+      await setDoc(doc(firebaseDB, "settings", "allStar"), {
+        enabled: newState,
+        lastModified: new Date(),
+      });
+      setAllStarEnabled(newState);
+    } catch (error) {
+      console.error("Failed to toggle All-Star:", error);
+    }
+    setToggling(false);
+  };
+
   const toggleSort = (key: SortKey) => {
     if (key === sortKey) {
       setSortDir((d) => (d === "desc" ? "asc" : "desc"));
@@ -291,7 +319,33 @@ export default function AllStarVotesPage() {
           </h1>
           <p className="text-xs text-slate-400 uppercase tracking-widest mt-1">{t.subtitle}</p>
         </div>
-        <div className="flex items-center gap-3 self-start">
+        <div className="flex items-center gap-3 self-start flex-wrap">
+          {/* All-Star Enable/Disable Toggle */}
+          <div className="flex items-center gap-2 px-4 py-2 bg-slate-800/60 border border-white/10 rounded-xl">
+            <span className="text-xs font-semibold text-slate-400">
+              {language === "fr" ? "Vote public" : "Public voting"}:
+            </span>
+            <button
+              onClick={toggleAllStar}
+              disabled={toggling}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 ${
+                allStarEnabled ? "bg-emerald-600" : "bg-slate-600"
+              }`}
+              title={allStarEnabled ? "Click to disable" : "Click to enable"}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  allStarEnabled ? "translate-x-6" : "translate-x-1"
+                }`}
+              />
+            </button>
+            <span className={`text-xs font-bold ${
+              allStarEnabled ? "text-emerald-400" : "text-slate-500"
+            }`}>
+              {allStarEnabled ? (language === "fr" ? "Activé" : "ON") : (language === "fr" ? "Désactivé" : "OFF")}
+            </span>
+          </div>
+          
           {lastRefreshedLabel && (
             <span className="text-xs text-slate-500">
               {t.lastRefreshed} {lastRefreshedLabel}

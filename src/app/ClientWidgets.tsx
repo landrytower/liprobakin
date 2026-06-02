@@ -12,11 +12,17 @@ const LiprobakinAI = dynamic(() => import("@/components/LiprobakinAI"), {
   loading: () => null,
 });
 
+const AllStarFloatingButton = dynamic(() => import("@/components/AllStarFloatingButton"), {
+  ssr: false,
+  loading: () => null,
+});
+
 export default function ClientWidgets() {
   return (
     <>
       <LivePinnedScore />
       <LiprobakinAI />
+      <AllStarFloatingButton />
     </>
   );
 }

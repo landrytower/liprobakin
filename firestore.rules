@@ -2,26 +2,134 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // TEMPORARY TEST MODE - ALLOW ALL ACCESS
-    match /{document=**} {
-      allow read, write: if true;
-    }
-    
-    // Helper function to check if user is authenticated
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
     function isSignedIn() {
       return request.auth != null;
     }
-    
-    // Helper function to check if user is accessing their own document
+
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
-    
-    // Helper function to check if user is admin
+
+    // Admin check: uid must exist in adminUsers collection
     function isAdmin() {
-      return isSignedIn() && 
-             exists(/databases/$(database)/documents/admins/$(request.auth.uid)) &&
-             get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.active == true;
+      return isSignedIn() &&
+             exists(/databases/$(database)/documents/adminUsers/$(request.auth.uid));
     }
+
+    // Validate a user write (only safe fields allowed — no role escalation)
+    function validUserWrite() {
+      let allowed = ['uid', 'email', 'phoneNumber', 'firstName', 'lastName',
+                     'phoneVerified', 'createdAt', 'updatedAt',
+                     'verificationSubmittedAt', 'verificationReviewedAt'];
+      return request.resource.data.keys().hasOnly(allowed);
+    }
+
+
+    // ── Users collection ─────────────────────────────────────────────────────
+    // Voters create and manage their own profile. No cross-user access.
+
+    match /users/{userId} {
+      allow read:   if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && validUserWrite();
+      allow update: if isOwner(userId) && validUserWrite();
+      allow delete: if isAdmin();
+    }
+
+
+    // ── Admin users collection ───────────────────────────────────────────────
+    // Only admins can read or write. Voters can never touch this collection.
+
+    match /adminUsers/{userId} {
+      allow read, write: if isAdmin();
+    }
+
+
+    // ── All-Star votes ───────────────────────────────────────────────────────
+    // Each voter writes exactly their own document (keyed by uid).
+    // Admins can read all votes for analytics.
+
+    match /allStarVotes/{voterId} {
+      allow read:   if isOwner(voterId) || isAdmin();
+      allow write:  if isOwner(voterId);
+    }
+
+
+    // ── Aggregated vote results ──────────────────────────────────────────────
+    // Public leaderboard reads — no auth required.
+    // Only backend (admin SDK / Cloud Functions) should write these.
+
+    match /allStarVoteResults/{document} {
+      allow read:  if true;
+      allow write: if isAdmin();
+    }
+
+
+    // ── Teams & rosters ──────────────────────────────────────────────────────
+    // Public read. Admin-only write.
+
+    match /teams/{teamId} {
+      allow read: if true;
+      allow write: if isAdmin();
+
+      match /roster/{playerId} {
+        allow read: if true;
+        allow write: if isAdmin();
+      }
+    }
+
+
+    // ── Games ────────────────────────────────────────────────────────────────
+    // Public read. Admin-only write.
+
+    match /games/{gameId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+
+    // ── Standings ────────────────────────────────────────────────────────────
+
+    match /standings/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+
+    // ── Schedules ────────────────────────────────────────────────────────────
+
+    match /schedules/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+
+    // ── Players (top-level, if any) ──────────────────────────────────────────
+
+    match /players/{playerId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+
+    // ── App config / public content ──────────────────────────────────────────
+
+    match /config/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+
+    // ── App settings (feature flags, toggles) ────────────────────────────────
+    // Public read so pages can check flags like settings/allStar.enabled.
+    // Admin-only write.
+
+    match /settings/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
   }
 }

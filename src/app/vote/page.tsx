@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import {
@@ -92,17 +93,36 @@ const PersonPlaceholder = ({ size }: { size: number }) => (
 );
 
 export default function VotePage() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { language } = useLanguage();
+  const router = useRouter();
   const t = tr[language];
 
-  // Use logged-in uid or a stable anonymous id stored in localStorage
+  const [allStarEnabled, setAllStarEnabled] = useState(true);
+  const [checkingSettings, setCheckingSettings] = useState(true);
+
+  // Check if All-Star voting is enabled
+  useEffect(() => {
+    const checkSetting = async () => {
+      const settingsDoc = await getDoc(doc(firebaseDB, "settings", "allStar"));
+      if (settingsDoc.exists()) {
+        setAllStarEnabled(settingsDoc.data().enabled ?? true);
+      }
+      setCheckingSettings(false);
+    };
+    checkSetting();
+  }, []);
+
+  // Redirect unauthenticated users to auth page
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.replace("/vote/auth");
+    }
+  }, [user, authLoading, router]);
+
   const getVoterId = () => {
     if (user?.uid) return user.uid;
-    const key = "allstar_anon_id";
-    let id = localStorage.getItem(key);
-    if (!id) { id = crypto.randomUUID(); localStorage.setItem(key, id); }
-    return id;
+    return "";
   };
 
   const [gender, setGender] = useState<TeamGender>("men");
@@ -272,6 +292,66 @@ export default function VotePage() {
         .filter((p) => p.name.toLowerCase().includes(q) || p.teamName.toLowerCase().includes(q))
         .slice(0, 12)
     : [];
+
+  // Show nothing while auth resolves (redirect effect fires if not logged in)
+  if (authLoading || !user || checkingSettings) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <svg className="w-6 h-6 animate-spin text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+      </div>
+    );
+  }
+
+  // Show "not available" message if All-Star voting is disabled
+  if (!allStarEnabled) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white">
+        <div className="sticky top-0 z-20 bg-slate-950/95 backdrop-blur border-b border-white/10 px-4 py-3">
+          <div className="flex items-center justify-between max-w-5xl mx-auto">
+            <Link href="/" className="flex items-center gap-1.5 text-slate-400 hover:text-white transition-colors">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+            </Link>
+            <div className="flex items-center gap-2">
+              <Image src="/logos/liprobakin.png" alt="Logo" width={32} height={32} className="rounded-full border border-white/20 object-cover" />
+              <h1 className="text-lg font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">
+                {t.title}
+              </h1>
+            </div>
+            <div className="w-8" />
+          </div>
+        </div>
+        
+        <div className="max-w-2xl mx-auto px-4 py-16 text-center">
+          <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-slate-800/50 flex items-center justify-center">
+            <svg className="w-10 h-10 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-3">
+            {language === "fr" ? "Vote All-Star non disponible" : "All-Star Voting Unavailable"}
+          </h2>
+          <p className="text-slate-400 mb-8">
+            {language === "fr" 
+              ? "Le vote All-Star n'est pas actuellement disponible. Veuillez revenir plus tard." 
+              : "All-Star voting is not currently available. Please check back later."}
+          </p>
+          <Link 
+            href="/"
+            className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-bold rounded-xl transition-all"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+            </svg>
+            {language === "fr" ? "Retour à l'accueil" : "Back to Home"}
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-white pb-28">

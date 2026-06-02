@@ -113,14 +113,18 @@ const copy = {
     },
     seed: "Seed",
     team: "Team",
-    gamesPlayed: "GP",
-    wins: "W",
-    losses: "L",
+    gamesPlayed: "MJ",
+    wins: "MG",
+    losses: "MP",
+    forfeits: "FF",
+    pointsScored: "+PM",
+    pointsAllowed: "PE",
+    difference: "GD",
+    standingsPts: "PTS",
     pointsScoredTotal: "Points Scored (Total)",
     pointsScoredAvg: "Points Scored (Avg)",
     pointsAllowedTotal: "Points Allowed (Total)",
     pointsAllowedAvg: "Points Allowed (Avg)",
-    difference: "Difference",
     footerTagline: "Liprobakin League",
   },
   fr: {
@@ -141,13 +145,17 @@ const copy = {
     seed: "N°",
     team: "Équipe",
     gamesPlayed: "MJ",
-    wins: "V",
-    losses: "D",
+    wins: "MG",
+    losses: "MP",
+    forfeits: "FF",
+    pointsScored: "+PM",
+    pointsAllowed: "PE",
+    difference: "GD",
+    standingsPts: "PTS",
     pointsScoredTotal: "Points marqués (total)",
     pointsScoredAvg: "Points marqués (moy)",
     pointsAllowedTotal: "Points encaissés (total)",
     pointsAllowedAvg: "Points encaissés (moy)",
-    difference: "Difference",
     footerTagline: "Ligue Liprobakin",
   },
 } as const;
@@ -311,17 +319,19 @@ export default function ClassementPage() {
       return Array.from(matches)[0] ?? "";
     };
 
-    const map = new Map<string, { played: number; scored: number; allowed: number; wins: number; losses: number }>();
+    const map = new Map<string, { played: number; scored: number; allowed: number; wins: number; losses: number; forfeits: number }>();
 
     currentGames.forEach((game) => {
       if (game.gender && game.gender !== gender) {
         return;
       }
 
+      const isForfeit = (game as any).forfeit === true || game.status === "forfeit";
+      
       let homeScore = game.homeScore;
       let awayScore = game.awayScore;
 
-      if (typeof homeScore !== "number" || typeof awayScore !== "number") {
+      if (!isForfeit && (typeof homeScore !== "number" || typeof awayScore !== "number")) {
         if (
           typeof game.winnerScore === "number" &&
           typeof game.loserScore === "number" &&
@@ -339,16 +349,13 @@ export default function ClassementPage() {
         }
       }
 
-      if (typeof homeScore !== "number" || typeof awayScore !== "number") {
-        return;
-      }
-
       const isCompleted =
         game.completed === true ||
         game.archived === true ||
         game.status === "completed" ||
         game.status === "final" ||
         game.status === "finished" ||
+        game.status === "forfeit" ||
         Boolean(game.winnerTeamId || game.winnerId);
 
       if (!isCompleted) {
@@ -358,30 +365,53 @@ export default function ClassementPage() {
       const homeKey = resolveTeamId(game.homeTeamId, game.homeTeamName);
       const awayKey = resolveTeamId(game.awayTeamId, game.awayTeamName);
 
-      if (homeKey && selectedTeamIds.has(homeKey)) {
-        const current = map.get(homeKey) ?? { played: 0, scored: 0, allowed: 0, wins: 0, losses: 0 };
-        current.played += 1;
-        current.scored += homeScore;
-        current.allowed += awayScore;
-        if (homeScore > awayScore) {
-          current.wins += 1;
-        } else {
+      if (isForfeit) {
+        // Forfeit: both teams get a loss and a forfeit count
+        if (homeKey && selectedTeamIds.has(homeKey)) {
+          const current = map.get(homeKey) ?? { played: 0, scored: 0, allowed: 0, wins: 0, losses: 0, forfeits: 0 };
+          current.played += 1;
           current.losses += 1;
+          current.forfeits += 1;
+          map.set(homeKey, current);
         }
-        map.set(homeKey, current);
-      }
+        if (awayKey && selectedTeamIds.has(awayKey)) {
+          const current = map.get(awayKey) ?? { played: 0, scored: 0, allowed: 0, wins: 0, losses: 0, forfeits: 0 };
+          current.played += 1;
+          current.losses += 1;
+          current.forfeits += 1;
+          map.set(awayKey, current);
+        }
+      } else {
+        // Regular game
+        if (typeof homeScore !== "number" || typeof awayScore !== "number") {
+          return;
+        }
 
-      if (awayKey && selectedTeamIds.has(awayKey)) {
-        const current = map.get(awayKey) ?? { played: 0, scored: 0, allowed: 0, wins: 0, losses: 0 };
-        current.played += 1;
-        current.scored += awayScore;
-        current.allowed += homeScore;
-        if (awayScore > homeScore) {
-          current.wins += 1;
-        } else {
-          current.losses += 1;
+        if (homeKey && selectedTeamIds.has(homeKey)) {
+          const current = map.get(homeKey) ?? { played: 0, scored: 0, allowed: 0, wins: 0, losses: 0, forfeits: 0 };
+          current.played += 1;
+          current.scored += homeScore;
+          current.allowed += awayScore;
+          if (homeScore > awayScore) {
+            current.wins += 1;
+          } else {
+            current.losses += 1;
+          }
+          map.set(homeKey, current);
         }
-        map.set(awayKey, current);
+
+        if (awayKey && selectedTeamIds.has(awayKey)) {
+          const current = map.get(awayKey) ?? { played: 0, scored: 0, allowed: 0, wins: 0, losses: 0, forfeits: 0 };
+          current.played += 1;
+          current.scored += awayScore;
+          current.allowed += homeScore;
+          if (awayScore > homeScore) {
+            current.wins += 1;
+          } else {
+            current.losses += 1;
+          }
+          map.set(awayKey, current);
+        }
       }
     });
 
@@ -396,6 +426,7 @@ export default function ClassementPage() {
         allowed: 0,
         wins: 0,
         losses: 0,
+        forfeits: 0,
       };
 
       const useLiveGameTotals = gameStats.played > 0;
@@ -415,6 +446,7 @@ export default function ClassementPage() {
         allowed: 0,
         wins: 0,
         losses: 0,
+        forfeits: 0,
       };
       const bStats = scoreStatsByTeam.get(b.teamId) ?? {
         played: 0,
@@ -422,6 +454,7 @@ export default function ClassementPage() {
         allowed: 0,
         wins: 0,
         losses: 0,
+        forfeits: 0,
       };
 
       if (b.wins !== a.wins) return b.wins - a.wins;
@@ -572,7 +605,7 @@ export default function ClassementPage() {
 
         <div className="mt-2 w-full overflow-x-auto">
             <div className="max-h-[1080px] overflow-y-auto">
-              <table className="w-full min-w-[980px] md:min-w-[1320px] border-collapse text-left text-sm md:text-base">
+              <table className="w-full min-w-[900px] border-collapse text-left text-sm md:text-base">
               <thead className="sticky top-0 z-20 bg-slate-950/70 backdrop-blur-xl border-y border-white/15 text-slate-300">
                 <tr>
                   <th className="sticky left-0 z-30 w-10 min-w-10 bg-slate-950 px-1.5 py-2 text-center whitespace-nowrap md:static md:w-auto md:min-w-0 md:px-2 md:py-3">{t.seed}</th>
@@ -581,75 +614,11 @@ export default function ClassementPage() {
                   <th className="px-2 py-2 text-center whitespace-nowrap md:px-3 md:py-3">{t.gamesPlayed}</th>
                   <th className="px-2 py-2 text-center whitespace-nowrap md:px-3 md:py-3">{t.wins}</th>
                   <th className="px-2 py-2 text-center whitespace-nowrap md:px-3 md:py-3">{t.losses}</th>
-                  <th className="px-2 py-2 text-center align-middle md:px-3 md:py-3">
-                    <span className="inline-flex flex-col items-center leading-tight">
-                      {language === "fr" ? (
-                        <>
-                          <span>Points</span>
-                          <span>marqués</span>
-                          <span>(total)</span>
-                        </>
-                      ) : (
-                        <>
-                          <span>Points</span>
-                          <span>Scored</span>
-                          <span>(Total)</span>
-                        </>
-                      )}
-                    </span>
-                  </th>
-                  <th className="px-2 py-2 text-center align-middle md:px-3 md:py-3">
-                    <span className="inline-flex flex-col items-center leading-tight">
-                      {language === "fr" ? (
-                        <>
-                          <span>Points</span>
-                          <span>marqués</span>
-                          <span>(moy)</span>
-                        </>
-                      ) : (
-                        <>
-                          <span>Points</span>
-                          <span>Scored</span>
-                          <span>(Avg)</span>
-                        </>
-                      )}
-                    </span>
-                  </th>
-                  <th className="px-2 py-2 text-center align-middle md:px-3 md:py-3">
-                    <span className="inline-flex flex-col items-center leading-tight">
-                      {language === "fr" ? (
-                        <>
-                          <span>Points</span>
-                          <span>encaissés</span>
-                          <span>(total)</span>
-                        </>
-                      ) : (
-                        <>
-                          <span>Points</span>
-                          <span>Allowed</span>
-                          <span>(Total)</span>
-                        </>
-                      )}
-                    </span>
-                  </th>
-                  <th className="px-2 py-2 text-center align-middle md:px-3 md:py-3">
-                    <span className="inline-flex flex-col items-center leading-tight">
-                      {language === "fr" ? (
-                        <>
-                          <span>Points</span>
-                          <span>encaissés</span>
-                          <span>(moyenne)</span>
-                        </>
-                      ) : (
-                        <>
-                          <span>Points</span>
-                          <span>Allowed</span>
-                          <span>(Avg)</span>
-                        </>
-                      )}
-                    </span>
-                  </th>
+                  <th className="px-2 py-2 text-center whitespace-nowrap md:px-3 md:py-3">{t.forfeits}</th>
+                  <th className="px-2 py-2 text-center whitespace-nowrap md:px-3 md:py-3">{t.pointsScored}</th>
+                  <th className="px-2 py-2 text-center whitespace-nowrap md:px-3 md:py-3">{t.pointsAllowed}</th>
                   <th className="px-2 py-2 text-center whitespace-nowrap md:px-3 md:py-3">{t.difference}</th>
+                  <th className="px-2 py-2 text-center whitespace-nowrap font-bold md:px-3 md:py-3 bg-emerald-950/30">{t.standingsPts}</th>
                 </tr>
               </thead>
               <tbody>
@@ -661,13 +630,13 @@ export default function ClassementPage() {
                     : franchise
                       ? formatFranchiseName(franchise)
                       : normalizeTeamName(row.team);
-                  const rawTeamStats = scoreStatsByTeam.get(row.teamId) ?? { played: 0, scored: 0, allowed: 0, wins: 0, losses: 0 };
+                  const rawTeamStats = scoreStatsByTeam.get(row.teamId) ?? { played: 0, scored: 0, allowed: 0, wins: 0, losses: 0, forfeits: 0 };
                   const teamStats = rawTeamStats;
                   const wins = row.wins;
                   const losses = row.losses;
-                  const scoredAvg = teamStats.played > 0 ? (teamStats.scored / teamStats.played).toFixed(1) : "0.0";
-                  const allowedAvg = teamStats.played > 0 ? (teamStats.allowed / teamStats.played).toFixed(1) : "0.0";
                   const difference = teamStats.scored - teamStats.allowed;
+                  // PTS calculation: 2 points for win, 1 for loss
+                  const standingsPts = (wins * 2) + (losses * 1);
                   const teamLogo = currentTeam
                     ? resolveTeamLogo(currentTeam)
                     : franchise
@@ -683,7 +652,7 @@ export default function ClassementPage() {
                   const teamHref = `/team/${encodeURIComponent(displayName)}?gender=${gender}`;
 
                   return (
-                    <tr key={`${gender}-${row.teamId}`} className="border-b border-white/10">
+                    <tr key={`${gender}-${row.teamId}`} className="border-b border-white/10 hover:bg-white/5 transition-colors">
                       <td className="sticky left-0 z-20 w-10 min-w-10 bg-slate-950 px-1.5 py-1.5 text-center text-slate-300 tabular-nums md:static md:w-auto md:min-w-0 md:px-2 md:py-3">{index + 1}</td>
                       <td className="px-1 py-1.5 text-center text-xs font-semibold uppercase text-slate-300 md:px-2 md:py-3">
                         {row.rankChange === "up" ? (
@@ -716,13 +685,13 @@ export default function ClassementPage() {
                         </Link>
                       </td>
                       <td className="px-2 py-1.5 text-center tabular-nums md:px-3 md:py-3">{teamStats.played}</td>
-                      <td className="px-2 py-1.5 text-center tabular-nums md:px-3 md:py-3">{wins}</td>
-                      <td className="px-2 py-1.5 text-center tabular-nums md:px-3 md:py-3">{losses}</td>
-                      <td className="px-2 py-1.5 text-center tabular-nums md:px-3 md:py-3">{row.totalPoints}</td>
-                      <td className="px-2 py-1.5 text-center tabular-nums md:px-3 md:py-3">{scoredAvg}</td>
+                      <td className="px-2 py-1.5 text-center tabular-nums text-emerald-400 md:px-3 md:py-3">{wins}</td>
+                      <td className="px-2 py-1.5 text-center tabular-nums text-rose-400 md:px-3 md:py-3">{losses}</td>
+                      <td className="px-2 py-1.5 text-center tabular-nums text-amber-400 md:px-3 md:py-3">{teamStats.forfeits}</td>
+                      <td className="px-2 py-1.5 text-center tabular-nums md:px-3 md:py-3">{teamStats.scored}</td>
                       <td className="px-2 py-1.5 text-center tabular-nums md:px-3 md:py-3">{teamStats.allowed}</td>
-                      <td className="px-2 py-1.5 text-center tabular-nums md:px-3 md:py-3">{allowedAvg}</td>
                       <td className="px-2 py-1.5 text-center font-semibold tabular-nums md:px-3 md:py-3">{difference > 0 ? `+${difference}` : difference}</td>
+                      <td className="px-2 py-1.5 text-center font-bold tabular-nums text-white md:px-3 md:py-3 bg-emerald-950/30">{standingsPts}</td>
                     </tr>
                   );
                 })}

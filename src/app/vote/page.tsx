@@ -20,27 +20,6 @@ import { normalizeTeamGender, type TeamGender } from "@/lib/team-gender";
 const MAX_PLAYERS = 30;
 
 const tr = {
-  en: {
-    title: "All-Star Vote",
-    men: "Men",
-    women: "Women",
-    players: "Players",
-    selected: "selected",
-    yourTeam: "Your All-Star Team",
-    voteLeaders: "Vote Leaders",
-    myVote: "My Vote",
-    submit: "Submit Vote",
-    update: "Update Vote",
-    submitting: "Submitting...",
-    success: "Vote submitted!",
-    loading: "Loading players...",
-    instructions: "Search and select up to 30 players for your All-Star team.",
-    searchPlaceholder: "Search a player…",
-    remove: "Remove",
-    votes: "votes",
-    topPlayers: "Top 15 Players",
-    rank: "Rank",
-  },
   fr: {
     title: "Vote All-Star",
     men: "Hommes",
@@ -61,6 +40,27 @@ const tr = {
     votes: "votes",
     topPlayers: "Top 15 joueurs",
     rank: "Rang",
+  },
+  en: {
+    title: "All-Star Vote",
+    men: "Men",
+    women: "Women",
+    players: "Players",
+    selected: "selected",
+    yourTeam: "Your All-Star Team",
+    voteLeaders: "Vote Leaders",
+    myVote: "My Vote",
+    submit: "Submit Vote",
+    update: "Update Vote",
+    submitting: "Submitting...",
+    success: "Vote submitted!",
+    loading: "Loading players...",
+    instructions: "Search and select up to 30 players for your All-Star team.",
+    searchPlaceholder: "Search a player…",
+    remove: "Remove",
+    votes: "votes",
+    topPlayers: "Top 15 Players",
+    rank: "Rank",
   },
 };
 
@@ -438,7 +438,7 @@ export default function VotePage() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              onFocus={() => setSearchFocused(true)}
+              onFocus={(e) => { setSearchFocused(true); setTimeout(() => e.target.scrollIntoView({ behavior: "smooth", block: "start" }), 100); }}
               onBlur={() => setTimeout(() => setSearchFocused(false), 150)}
               placeholder={t.searchPlaceholder}
               className="w-full bg-slate-800 border border-white/10 rounded-xl pl-9 pr-9 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
@@ -452,9 +452,9 @@ export default function VotePage() {
             )}
           </div>
 
-          {/* Dropdown results */}
+          {/* Dropdown results — fixed so the mobile keyboard can't push it off screen */}
           {searchFocused && q && searchResults.length > 0 && (
-            <div className="absolute z-30 top-full left-0 right-0 mt-1 bg-slate-800 border border-white/10 rounded-xl overflow-hidden shadow-xl max-h-96 overflow-y-auto animate-scale-in">
+            <div className="fixed z-50 top-[112px] left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-xl bg-slate-800 border border-white/10 rounded-xl overflow-hidden shadow-2xl max-h-[50dvh] overflow-y-auto animate-scale-in">
               <div className="px-3 py-1.5 text-[10px] uppercase text-slate-500 tracking-widest border-b border-white/5 sticky top-0 bg-slate-800 backdrop-blur">
                 {t.players}
               </div>

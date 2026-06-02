@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { doc, getDoc } from "firebase/firestore";
+import { firebaseDB } from "@/lib/firebase";
 
 const translations = {
   en: {
@@ -27,9 +29,29 @@ export default function AllStarVoteBanner() {
 
   const [isOpen, setIsOpen] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [allStarEnabled, setAllStarEnabled] = useState(true);
+  const [checkingSettings, setCheckingSettings] = useState(true);
+
+  // Check if All-Star is enabled in Firebase
+  useEffect(() => {
+    const checkSettings = async () => {
+      try {
+        const settingsDoc = await getDoc(doc(firebaseDB, "settings", "allStar"));
+        const enabled = settingsDoc.exists() ? settingsDoc.data().enabled : true;
+        setAllStarEnabled(enabled);
+      } catch (error) {
+        console.error("Error checking All-Star settings:", error);
+        setAllStarEnabled(true);
+      } finally {
+        setCheckingSettings(false);
+      }
+    };
+    checkSettings();
+  }, []);
 
   useEffect(() => {
     if (pathname.startsWith("/admin") || pathname.startsWith("/vote")) return;
+    if (!allStarEnabled || checkingSettings) return;
     const BANNER_KEY = "allstar_banner_views";
     const views = parseInt(localStorage.getItem(BANNER_KEY) ?? "0", 10);
     if (views >= 2) return; // already shown twice
@@ -39,7 +61,7 @@ export default function AllStarVoteBanner() {
       setTimeout(() => setIsAnimating(true), 50);
     }, 2000);
     return () => clearTimeout(timer);
-  }, []);
+  }, [allStarEnabled, checkingSettings, pathname]);
 
   useEffect(() => {
     if (pathname.startsWith("/admin") || pathname.startsWith("/vote")) {
@@ -61,7 +83,7 @@ export default function AllStarVoteBanner() {
     setTimeout(() => setIsOpen(false), 300);
   };
 
-  if (!isOpen) return null;
+  if (!isOpen || !allStarEnabled) return null;
 
   return (
     <>

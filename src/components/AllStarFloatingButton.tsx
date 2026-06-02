@@ -1,11 +1,31 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { doc, getDoc } from "firebase/firestore";
+import { firebaseDB } from "@/lib/firebase";
 
 export default function AllStarFloatingButton() {
   const pathname = usePathname();
-  if (pathname.startsWith("/admin") || pathname.startsWith("/vote")) return null;
+  const [allStarEnabled, setAllStarEnabled] = useState(true);
+
+  // Check if All-Star is enabled in Firebase
+  useEffect(() => {
+    const checkSettings = async () => {
+      try {
+        const settingsDoc = await getDoc(doc(firebaseDB, "settings", "allStar"));
+        const enabled = settingsDoc.exists() ? settingsDoc.data().enabled : true;
+        setAllStarEnabled(enabled);
+      } catch (error) {
+        console.error("Error checking All-Star settings:", error);
+        setAllStarEnabled(true);
+      }
+    };
+    checkSettings();
+  }, []);
+
+  if (pathname.startsWith("/admin") || pathname.startsWith("/vote") || !allStarEnabled) return null;
 
   return (
     <Link

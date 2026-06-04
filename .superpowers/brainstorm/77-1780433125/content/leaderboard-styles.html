@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>All-Star Leaderboard — Design Options</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0e1a;
+    color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    min-height: 100vh;
+    padding: 24px 16px 60px;
+  }
+
+  h1 {
+    text-align: center;
+    font-size: 22px;
+    font-weight: 900;
+    background: linear-gradient(135deg, #f59e0b, #ef4444, #8b5cf6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 6px;
+  }
+  .subtitle {
+    text-align: center;
+    color: #64748b;
+    font-size: 13px;
+    margin-bottom: 32px;
+  }
+
+  .designs {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    gap: 24px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .design-card {
+    background: #0f172a;
+    border: 2px solid #1e293b;
+    border-radius: 20px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+    position: relative;
+  }
+  .design-card:hover { transform: translateY(-3px); border-color: #334155; }
+  .design-card.selected { border-color: #f59e0b; box-shadow: 0 0 30px rgba(245,158,11,0.25); }
+  .design-card.selected::after {
+    content: '✓ Selected';
+    position: absolute;
+    top: 12px; right: 12px;
+    background: #f59e0b;
+    color: #000;
+    font-size: 11px;
+    font-weight: 800;
+    padding: 4px 10px;
+    border-radius: 20px;
+    letter-spacing: 0.05em;
+    z-index: 10;
+  }
+
+  .card-label {
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid #1e293b;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .card-label .letter {
+    width: 28px; height: 28px;
+    background: #1e293b;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 900; color: #f59e0b;
+  }
+  .card-label h3 { font-size: 14px; font-weight: 800; color: #f1f5f9; }
+  .card-label p { font-size: 11px; color: #64748b; margin-top: 1px; }
+
+  .preview { padding: 20px; min-height: 380px; }
+
+  /* ── OPTION A: Horizontal Race Bars ── */
+  .race-bar-item {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 10px;
+  }
+  .race-rank {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 900;
+    flex-shrink: 0;
+  }
+  .rank-1 { background: linear-gradient(135deg,#fbbf24,#f59e0b); color: #000; width:36px; height:36px; font-size:14px; }
+  .rank-2 { background: linear-gradient(135deg,#e2e8f0,#94a3b8); color: #000; }
+  .rank-3 { background: linear-gradient(135deg,#cd7f32,#a0522d); color: #fff; }
+  .rank-rest { background: #1e293b; color: #64748b; font-size:10px; }
+
+  .race-info { min-width: 90px; flex-shrink: 0; }
+  .race-name { font-size: 12px; font-weight: 700; color: #f1f5f9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 90px; }
+  .race-team { font-size: 10px; color: #475569; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 90px; }
+
+  .race-track { flex: 1; height: 22px; background: #1e293b; border-radius: 11px; overflow: hidden; position: relative; }
+  .race-fill {
+    height: 100%;
+    border-radius: 11px;
+    display: flex; align-items: center; justify-content: flex-end; padding-right: 8px;
+    font-size: 10px; font-weight: 800;
+    min-width: 30px;
+    transition: width 1.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .fill-1 { background: linear-gradient(90deg,#f59e0b,#ef4444); width: 0; }
+  .fill-2 { background: linear-gradient(90deg,#3b82f6,#6366f1); width: 0; }
+  .fill-3 { background: linear-gradient(90deg,#10b981,#059669); width: 0; }
+  .fill-4, .fill-5, .fill-6, .fill-7, .fill-8, .fill-9, .fill-10 { background: #334155; width: 0; }
+
+  .goal-line {
+    position: absolute; right: 0; top: 0; bottom: 0;
+    width: 2px; background: rgba(245,158,11,0.4);
+  }
+  .goal-label {
+    font-size: 9px; color: #f59e0b; text-align: right;
+    margin-top: 2px; margin-right: 2px;
+  }
+
+  /* ── OPTION B: Podium + Shrinking Cards ── */
+  .podium-section { margin-bottom: 16px; }
+  .podium-top3 { display: flex; gap: 8px; align-items: flex-end; margin-bottom: 14px; }
+
+  .podium-card {
+    flex: 1;
+    border-radius: 14px;
+    padding: 12px 10px;
+    text-align: center;
+    position: relative;
+    border: 1px solid transparent;
+    transition: transform 0.4s ease;
+  }
+  .podium-card.p1 {
+    background: linear-gradient(180deg,rgba(251,191,36,0.15),rgba(245,158,11,0.05));
+    border-color: rgba(251,191,36,0.3);
+    transform: scale(1.08);
+    padding: 16px 10px;
+  }
+  .podium-card.p2 {
+    background: linear-gradient(180deg,rgba(148,163,184,0.1),rgba(100,116,139,0.05));
+    border-color: rgba(148,163,184,0.2);
+  }
+  .podium-card.p3 {
+    background: linear-gradient(180deg,rgba(180,83,9,0.1),rgba(120,53,15,0.05));
+    border-color: rgba(180,83,9,0.2);
+  }
+
+  .podium-avatar {
+    width: 48px; height: 48px;
+    border-radius: 50%; margin: 0 auto 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 900;
+  }
+  .p1 .podium-avatar { background: linear-gradient(135deg,#fbbf24,#f59e0b); color: #000; width:56px; height:56px; font-size:22px; }
+  .p2 .podium-avatar { background: linear-gradient(135deg,#e2e8f0,#94a3b8); color: #000; }
+  .p3 .podium-avatar { background: linear-gradient(135deg,#cd7f32,#a0522d); color: #fff; }
+
+  .podium-name { font-size: 11px; font-weight: 800; color: #f1f5f9; margin-bottom: 3px; }
+  .p1 .podium-name { font-size: 12px; }
+  .podium-team { font-size: 9px; color: #475569; }
+  .podium-votes {
+    font-size: 20px; font-weight: 900; margin-top: 6px;
+  }
+  .p1 .podium-votes { font-size: 26px; color: #fbbf24; }
+  .p2 .podium-votes { font-size: 20px; color: #94a3b8; }
+  .p3 .podium-votes { font-size: 17px; color: #cd7f32; }
+  .podium-votes-label { font-size: 8px; color: #475569; text-transform: uppercase; letter-spacing: 0.1em; }
+
+  .podium-crown { font-size: 16px; position: absolute; top: -10px; left: 50%; transform: translateX(-50%); }
+
+  .mini-list-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 10px;
+    background: #1e293b;
+    border-radius: 10px; margin-bottom: 5px;
+    border: 1px solid #263148;
+    transition: transform 0.3s ease;
+  }
+  .mini-rank { width: 20px; text-align: center; font-size: 10px; color: #475569; font-weight: 700; }
+  .mini-name { flex: 1; font-size: 11px; font-weight: 700; color: #cbd5e1; }
+  .mini-votes { font-size: 13px; font-weight: 900; color: #f59e0b; }
+  .mini-bar-wrap { width: 60px; height: 4px; background: #0f172a; border-radius: 2px; overflow: hidden; }
+  .mini-bar { height: 100%; border-radius: 2px; background: linear-gradient(90deg,#f59e0b,#ef4444); transition: width 1s ease; }
+
+  /* ── OPTION C: Spotlight Stack ── */
+  .spotlight-first {
+    background: linear-gradient(135deg,rgba(245,158,11,0.12),rgba(239,68,68,0.06));
+    border: 1px solid rgba(245,158,11,0.25);
+    border-radius: 18px; padding: 20px;
+    display: flex; align-items: center; gap: 16px;
+    margin-bottom: 10px;
+    position: relative; overflow: hidden;
+  }
+  .spotlight-first::before {
+    content: '';
+    position: absolute; top: -30px; left: -30px;
+    width: 120px; height: 120px;
+    background: radial-gradient(circle,rgba(245,158,11,0.2),transparent 70%);
+    pointer-events: none;
+  }
+  .spot-number {
+    font-size: 48px; font-weight: 900; line-height: 1;
+    background: linear-gradient(135deg,#fbbf24,#f59e0b);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    flex-shrink: 0;
+  }
+  .spot-divider { width: 2px; height: 60px; background: rgba(245,158,11,0.2); flex-shrink: 0; }
+  .spot-info { flex: 1; }
+  .spot-name { font-size: 18px; font-weight: 900; color: #f1f5f9; margin-bottom: 3px; }
+  .spot-team { font-size: 11px; color: #64748b; margin-bottom: 8px; }
+  .spot-votes-row { display: flex; align-items: baseline; gap: 6px; }
+  .spot-votes-num { font-size: 32px; font-weight: 900; color: #f59e0b; line-height: 1; }
+  .spot-votes-label { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.1em; }
+  .spot-progress { margin-top: 10px; height: 6px; background: #1e293b; border-radius: 3px; overflow: hidden; }
+  .spot-progress-fill { height: 100%; background: linear-gradient(90deg,#f59e0b,#ef4444); border-radius: 3px; width: 0; transition: width 1.3s cubic-bezier(0.34,1.56,0.64,1); }
+  .spot-badge { position: absolute; top: 12px; right: 14px; font-size: 10px; color: #f59e0b; font-weight: 800; letter-spacing: 0.1em; opacity: 0.7; }
+
+  .spotlight-rest {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+  .spot-small {
+    background: #141d2e;
+    border: 1px solid #1e293b;
+    border-radius: 12px; padding: 10px 12px;
+    display: flex; align-items: center; gap: 10px;
+    position: relative;
+  }
+  .spot-small-rank {
+    font-size: 11px; font-weight: 900; color: #334155;
+    width: 20px; flex-shrink: 0; text-align: center;
+  }
+  .spot-small.r2 { border-color: rgba(148,163,184,0.2); }
+  .spot-small.r3 { border-color: rgba(180,83,9,0.15); }
+  .spot-small-name { font-size: 11px; font-weight: 700; color: #94a3b8; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .spot-small-votes { font-size: 14px; font-weight: 900; }
+  .r2 .spot-small-votes { color: #94a3b8; }
+  .r3 .spot-small-votes { color: #cd7f32; }
+  .spot-small-votes-rest { color: #475569; }
+
+  .spot-bottom-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+  .spot-tiny {
+    background: #0d1420; border: 1px solid #1a2235; border-radius: 10px;
+    padding: 8px; text-align: center;
+  }
+  .spot-tiny-rank { font-size: 9px; color: #334155; font-weight: 700; margin-bottom: 2px; }
+  .spot-tiny-name { font-size: 10px; font-weight: 700; color: #475569; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .spot-tiny-votes { font-size: 13px; font-weight: 900; color: #334155; }
+
+  /* Selection footer */
+  .selection-bar {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: #0a0e1a; border-top: 1px solid #1e293b;
+    padding: 14px 24px;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px;
+  }
+  .selection-text { font-size: 13px; color: #64748b; }
+  .selection-text strong { color: #f1f5f9; }
+  .confirm-btn {
+    padding: 10px 24px; background: #f59e0b; color: #000;
+    font-weight: 800; font-size: 13px; border: none; border-radius: 10px;
+    cursor: pointer; transition: background 0.2s;
+    display: none;
+  }
+  .confirm-btn:hover { background: #fbbf24; }
+  .confirm-btn.visible { display: block; }
+
+  /* Goal marker */
+  .goal-marker {
+    text-align: right;
+    font-size: 10px;
+    color: rgba(245,158,11,0.6);
+    margin-bottom: 6px;
+    padding-right: 4px;
+  }
+</style>
+</head>
+<body>
+
+<h1>⭐ All-Star Leaderboard — Design Options</h1>
+<p class="subtitle">Which visual style do you prefer for the "Vote Leaders" section?</p>
+
+<div class="designs">
+
+  <!-- OPTION A -->
+  <div class="design-card" id="card-a" onclick="selectCard('a')">
+    <div class="card-label">
+      <div class="letter">A</div>
+      <div>
+        <h3>Horizontal Race Bars</h3>
+        <p>Animated bars racing toward a goal line — pure momentum</p>
+      </div>
+    </div>
+    <div class="preview">
+      <div class="goal-marker">Goal: 10 votes →</div>
+      <div id="race-bars">
+        <!-- Rank 1 — Big -->
+        <div class="race-bar-item" style="margin-bottom:14px">
+          <div class="race-rank rank-1">1</div>
+          <div class="race-info">
+            <div class="race-name">J. Mbala</div>
+            <div class="race-team">Raptors BK</div>
+          </div>
+          <div class="race-track" style="height:30px;border-radius:15px">
+            <div class="race-fill fill-1" id="bar1" style="font-size:12px;font-weight:900">9</div>
+          </div>
+        </div>
+        <!-- Rank 2 -->
+        <div class="race-bar-item">
+          <div class="race-rank rank-2">2</div>
+          <div class="race-info">
+            <div class="race-name">K. Luyeye</div>
+            <div class="race-team">Lions</div>
+          </div>
+          <div class="race-track">
+            <div class="race-fill fill-2" id="bar2">7</div>
+          </div>
+        </div>
+        <!-- Rank 3 -->
+        <div class="race-bar-item">
+          <div class="race-rank rank-3">3</div>
+          <div class="race-info">
+            <div class="race-name">T. Bosembe</div>
+            <div class="race-team">Warriors</div>
+          </div>
+          <div class="race-track">
+            <div class="race-fill fill-3" id="bar3">6</div>
+          </div>
+        </div>
+        <!-- Ranks 4–10 smaller -->
+        <div class="race-bar-item" style="margin-top:8px;opacity:0.7">
+          <div class="race-rank rank-rest">4</div>
+          <div class="race-info"><div class="race-name">A. Mputu</div><div class="race-team">Eagles</div></div>
+          <div class="race-track"><div class="race-fill fill-4" id="bar4">5</div></div>
+        </div>
+        <div class="race-bar-item" style="opacity:0.6">
+          <div class="race-rank rank-rest">5</div>
+          <div class="race-info"><div class="race-name">B. Nsimba</div><div class="race-team">Cobras</div></div>
+          <div class="race-track"><div class="race-fill fill-5" id="bar5">4</div></div>
+        </div>
+        <div class="race-bar-item" style="opacity:0.55">
+          <div class="race-rank rank-rest">6</div>
+          <div class="race-info"><div class="race-name">E. Kalala</div><div class="race-team">Tigers</div></div>
+          <div class="race-track"><div class="race-fill fill-6" id="bar6">4</div></div>
+        </div>
+        <div class="race-bar-item" style="opacity:0.5">
+          <div class="race-rank rank-rest">7</div>
+          <div class="race-info"><div class="race-name">D. Mutombo</div><div class="race-team">Bears</div></div>
+          <div class="race-track"><div class="race-fill fill-7" id="bar7">3</div></div>
+        </div>
+        <div class="race-bar-item" style="opacity:0.45">
+          <div class="race-rank rank-rest">8</div>
+          <div class="race-info"><div class="race-name">F. Ilunga</div><div class="race-team">Wolves</div></div>
+          <div class="race-track"><div class="race-fill fill-8" id="bar8">3</div></div>
+        </div>
+        <div class="race-bar-item" style="opacity:0.4">
+          <div class="race-rank rank-rest">9</div>
+          <div class="race-info"><div class="race-name">C. Kayembe</div><div class="race-team">Hawks</div></div>
+          <div class="race-track"><div class="race-fill fill-9" id="bar9">2</div></div>
+        </div>
+        <div class="race-bar-item" style="opacity:0.35">
+          <div class="race-rank rank-rest">10</div>
+          <div class="race-info"><div class="race-name">G. Banza</div><div class="race-team">Panthers</div></div>
+          <div class="race-track"><div class="race-fill fill-10" id="bar10">1</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- OPTION B -->
+  <div class="design-card" id="card-b" onclick="selectCard('b')">
+    <div class="card-label">
+      <div class="letter">B</div>
+      <div>
+        <h3>Podium + Shrinking List</h3>
+        <p>#1 large in centre, #2 & #3 flanking, rest compact below</p>
+      </div>
+    </div>
+    <div class="preview">
+      <div class="podium-section">
+        <div class="podium-top3">
+          <!-- 2nd place left -->
+          <div class="podium-card p2" style="animation: fadeUp 0.6s 0.2s both">
+            <div class="podium-avatar">K</div>
+            <div class="podium-name">K. Luyeye</div>
+            <div class="podium-team">Lions</div>
+            <div class="podium-votes">7</div>
+            <div class="podium-votes-label">votes</div>
+          </div>
+          <!-- 1st place centre -->
+          <div class="podium-card p1" style="animation: fadeUp 0.6s 0.05s both; position:relative">
+            <div class="podium-crown">👑</div>
+            <div class="podium-avatar">J</div>
+            <div class="podium-name">J. Mbala</div>
+            <div class="podium-team">Raptors BK</div>
+            <div class="podium-votes">9</div>
+            <div class="podium-votes-label">votes</div>
+          </div>
+          <!-- 3rd place right -->
+          <div class="podium-card p3" style="animation: fadeUp 0.6s 0.3s both">
+            <div class="podium-avatar">T</div>
+            <div class="podium-name">T. Bosembe</div>
+            <div class="podium-team">Warriors</div>
+            <div class="podium-votes">6</div>
+            <div class="podium-votes-label">votes</div>
+          </div>
+        </div>
+        <!-- 4–10 mini list -->
+        <div class="mini-list-item"><span class="mini-rank">4</span><span class="mini-name">A. Mputu</span><div class="mini-bar-wrap"><div class="mini-bar" style="width:55%"></div></div><span class="mini-votes">5</span></div>
+        <div class="mini-list-item"><span class="mini-rank">5</span><span class="mini-name">B. Nsimba</span><div class="mini-bar-wrap"><div class="mini-bar" style="width:44%"></div></div><span class="mini-votes">4</span></div>
+        <div class="mini-list-item"><span class="mini-rank">6</span><span class="mini-name">E. Kalala</span><div class="mini-bar-wrap"><div class="mini-bar" style="width:44%"></div></div><span class="mini-votes">4</span></div>
+        <div class="mini-list-item"><span class="mini-rank">7</span><span class="mini-name">D. Mutombo</span><div class="mini-bar-wrap"><div class="mini-bar" style="width:33%"></div></div><span class="mini-votes">3</span></div>
+        <div class="mini-list-item"><span class="mini-rank">8</span><span class="mini-name">F. Ilunga</span><div class="mini-bar-wrap"><div class="mini-bar" style="width:33%"></div></div><span class="mini-votes">3</span></div>
+        <div class="mini-list-item"><span class="mini-rank">9</span><span class="mini-name">C. Kayembe</span><div class="mini-bar-wrap"><div class="mini-bar" style="width:22%"></div></div><span class="mini-votes">2</span></div>
+        <div class="mini-list-item"><span class="mini-rank">10</span><span class="mini-name">G. Banza</span><div class="mini-bar-wrap"><div class="mini-bar" style="width:11%"></div></div><span class="mini-votes">1</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- OPTION C -->
+  <div class="design-card" id="card-c" onclick="selectCard('c')">
+    <div class="card-label">
+      <div class="letter">C</div>
+      <div>
+        <h3>Spotlight Stack</h3>
+        <p>#1 dominates full-width, rest shrink progressively</p>
+      </div>
+    </div>
+    <div class="preview">
+      <!-- #1 big spotlight card -->
+      <div class="spotlight-first" id="spotFirst">
+        <div class="spot-number">1</div>
+        <div class="spot-divider"></div>
+        <div class="spot-info">
+          <div style="font-size:10px;color:#f59e0b;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:4px">🏆 Leading</div>
+          <div class="spot-name">J. Mbala</div>
+          <div class="spot-team">Raptors BK</div>
+          <div class="spot-votes-row">
+            <span class="spot-votes-num">9</span>
+            <span class="spot-votes-label">votes</span>
+          </div>
+          <div class="spot-progress"><div class="spot-progress-fill" id="spot-fill" style="width:0"></div></div>
+        </div>
+        <div class="spot-badge">LEADER</div>
+      </div>
+      <!-- #2, #3 two-column -->
+      <div class="spotlight-rest">
+        <div class="spot-small r2">
+          <span class="spot-small-rank">2</span>
+          <span class="spot-small-name">K. Luyeye</span>
+          <span class="spot-small-votes">7</span>
+        </div>
+        <div class="spot-small r3">
+          <span class="spot-small-rank">3</span>
+          <span class="spot-small-name">T. Bosembe</span>
+          <span class="spot-small-votes r3">6</span>
+        </div>
+      </div>
+      <!-- #4-#7 two-column smaller -->
+      <div class="spotlight-rest" style="opacity:0.8">
+        <div class="spot-small"><span class="spot-small-rank">4</span><span class="spot-small-name">A. Mputu</span><span class="spot-small-votes spot-small-votes-rest">5</span></div>
+        <div class="spot-small"><span class="spot-small-rank">5</span><span class="spot-small-name">B. Nsimba</span><span class="spot-small-votes spot-small-votes-rest">4</span></div>
+      </div>
+      <!-- #8-10 three-column tiny -->
+      <div class="spot-bottom-row" style="opacity:0.55">
+        <div class="spot-tiny"><div class="spot-tiny-rank">8</div><div class="spot-tiny-name">F. Ilunga</div><div class="spot-tiny-votes">3</div></div>
+        <div class="spot-tiny"><div class="spot-tiny-rank">9</div><div class="spot-tiny-name">C. Kayembe</div><div class="spot-tiny-votes">2</div></div>
+        <div class="spot-tiny"><div class="spot-tiny-rank">10</div><div class="spot-tiny-name">G. Banza</div><div class="spot-tiny-votes">1</div></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="selection-bar">
+  <div class="selection-text" id="selText">Click a design to select it</div>
+  <button class="confirm-btn" id="confirmBtn" onclick="confirm()">Confirm selection →</button>
+</div>
+
+<script>
+  let selected = null;
+
+  function selectCard(id) {
+    document.querySelectorAll('.design-card').forEach(c => c.classList.remove('selected'));
+    document.getElementById('card-' + id).classList.add('selected');
+    selected = id;
+    const names = { a: 'Horizontal Race Bars', b: 'Podium + Shrinking List', c: 'Spotlight Stack' };
+    document.getElementById('selText').innerHTML = 'Selected: <strong>Option ' + id.toUpperCase() + ' — ' + names[id] + '</strong>';
+    document.getElementById('confirmBtn').classList.add('visible');
+
+    // Record selection
+    try {
+      fetch('/__select', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({choice: id, text: 'Option ' + id.toUpperCase() + ' — ' + names[id]}) }).catch(()=>{});
+    } catch(e) {}
+  }
+
+  function confirm() {
+    if (!selected) return;
+    selectCard(selected);
+  }
+
+  // Animate race bars on load
+  setTimeout(() => {
+    const bars = [
+      { id: 'bar1', pct: 90, goal: 10 },
+      { id: 'bar2', pct: 70, goal: 10 },
+      { id: 'bar3', pct: 60, goal: 10 },
+      { id: 'bar4', pct: 50, goal: 10 },
+      { id: 'bar5', pct: 40, goal: 10 },
+      { id: 'bar6', pct: 40, goal: 10 },
+      { id: 'bar7', pct: 30, goal: 10 },
+      { id: 'bar8', pct: 30, goal: 10 },
+      { id: 'bar9', pct: 20, goal: 10 },
+      { id: 'bar10', pct: 10, goal: 10 },
+    ];
+    bars.forEach((b, i) => {
+      setTimeout(() => {
+        const el = document.getElementById(b.id);
+        if (el) el.style.width = b.pct + '%';
+      }, i * 80);
+    });
+
+    // Spotlight fill
+    setTimeout(() => {
+      const fill = document.getElementById('spot-fill');
+      if (fill) fill.style.width = '90%';
+    }, 300);
+  }, 400);
+</script>
+</body>
+</html>

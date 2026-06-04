@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin All-Star — Layout Options</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0e1a;
+    color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    min-height: 100vh;
+    padding: 24px 16px 80px;
+  }
+  h1 {
+    text-align: center;
+    font-size: 20px;
+    font-weight: 900;
+    background: linear-gradient(135deg, #f59e0b, #ef4444, #8b5cf6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 6px;
+  }
+  .subtitle { text-align: center; color: #64748b; font-size: 13px; margin-bottom: 28px; }
+
+  .designs {
+    display: flex; flex-direction: column; gap: 28px;
+    max-width: 960px; margin: 0 auto;
+  }
+
+  .design-card {
+    background: #0f172a;
+    border: 2px solid #1e293b;
+    border-radius: 20px; overflow: hidden;
+    cursor: pointer;
+    transition: border-color 0.2s, transform 0.15s, box-shadow 0.2s;
+    position: relative;
+  }
+  .design-card:hover { border-color: #334155; transform: translateY(-2px); }
+  .design-card.selected { border-color: #f59e0b; box-shadow: 0 0 32px rgba(245,158,11,0.2); }
+  .design-card.selected::after {
+    content: '✓ Selected';
+    position: absolute; top: 14px; right: 14px;
+    background: #f59e0b; color: #000;
+    font-size: 11px; font-weight: 800;
+    padding: 4px 12px; border-radius: 20px;
+    z-index: 10;
+  }
+
+  .card-label {
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid #1e293b;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .letter {
+    width: 30px; height: 30px; border-radius: 8px;
+    background: #1e293b; display: flex; align-items: center;
+    justify-content: center; font-size: 13px; font-weight: 900; color: #f59e0b;
+    flex-shrink: 0;
+  }
+  .card-label h3 { font-size: 14px; font-weight: 800; color: #f1f5f9; }
+  .card-label p { font-size: 11px; color: #64748b; margin-top: 2px; }
+
+  .preview { padding: 20px; }
+
+  /* ── Shared mini UI elements ── */
+  .mini-stat-row {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+    margin-bottom: 14px;
+  }
+  .mini-stat {
+    background: #0d1420; border: 1px solid #1e293b;
+    border-radius: 10px; padding: 10px 12px;
+  }
+  .mini-stat-label { font-size: 9px; color: #475569; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }
+  .mini-stat-value { font-size: 20px; font-weight: 900; color: #f1f5f9; line-height: 1; }
+  .mini-stat-sub { font-size: 9px; color: #334155; margin-top: 2px; }
+  .orange { color: #f59e0b; }
+  .blue { color: #3b82f6; }
+  .green { color: #10b981; }
+  .purple { color: #8b5cf6; }
+
+  .mini-tabs {
+    display: flex; gap: 4px; margin-bottom: 12px;
+  }
+  .mini-tab {
+    padding: 5px 10px; border-radius: 8px;
+    font-size: 10px; font-weight: 700;
+    background: #1e293b; color: #64748b;
+    cursor: default;
+  }
+  .mini-tab.active { background: #f59e0b; color: #000; }
+
+  /* Table shared */
+  .mini-table { width: 100%; border-collapse: collapse; }
+  .mini-table th {
+    font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: #475569; padding: 6px 8px; text-align: left;
+    border-bottom: 1px solid #1e293b; cursor: pointer;
+    white-space: nowrap;
+  }
+  .mini-table th:hover { color: #94a3b8; }
+  .mini-table th.sorted { color: #f59e0b; }
+  .mini-table th .sort-icon { font-size: 8px; margin-left: 3px; }
+  .mini-table td { padding: 7px 8px; border-bottom: 1px solid #0d1420; font-size: 11px; vertical-align: middle; }
+  .mini-table tr:last-child td { border-bottom: none; }
+  .mini-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+  .rank-badge {
+    width: 22px; height: 22px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 9px; font-weight: 900;
+  }
+  .rb-1 { background: linear-gradient(135deg,#fbbf24,#f59e0b); color: #000; }
+  .rb-2 { background: linear-gradient(135deg,#e2e8f0,#94a3b8); color: #000; }
+  .rb-3 { background: linear-gradient(135deg,#cd7f32,#a0522d); color: #fff; }
+  .rb-n { background: #1e293b; color: #64748b; }
+
+  .pct-cell { white-space: nowrap; }
+  .pct-bar-wrap { display: inline-block; width: 48px; height: 4px; background: #1e293b; border-radius: 2px; vertical-align: middle; margin-right: 4px; }
+  .pct-bar { height: 100%; border-radius: 2px; }
+  .pct-bar.gold { background: linear-gradient(90deg,#f59e0b,#fbbf24); }
+  .pct-bar.blue { background: #3b82f6; }
+  .pct-bar.green { background: #10b981; }
+  .pct-bar.gray { background: #334155; }
+  .pct-text { font-size: 10px; font-weight: 700; color: #64748b; }
+
+  /* voter profiles strip */
+  .voter-strip {
+    background: #0d1420; border: 1px solid #1e293b; border-radius: 10px;
+    padding: 10px 14px; margin-bottom: 12px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .voter-strip-label { font-size: 10px; color: #475569; text-transform: uppercase; letter-spacing: 0.08em; flex-shrink: 0; }
+  .voter-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: #1e293b; border-radius: 20px; padding: 4px 10px;
+    font-size: 10px; color: #94a3b8; white-space: nowrap;
+  }
+  .voter-pill .dot { width: 6px; height: 6px; border-radius: 50%; background: #475569; flex-shrink: 0; }
+  .voter-pill .dot.active { background: #10b981; }
+  .voter-count-badge { margin-left: auto; font-size: 11px; font-weight: 800; color: #f59e0b; flex-shrink: 0; }
+
+  /* ── OPTION A: Tabs layout ── */
+  .section-label {
+    font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em;
+    color: #334155; font-weight: 700; margin-bottom: 6px;
+  }
+
+  /* ── OPTION B: Split layout ── */
+  .split-layout { display: grid; grid-template-columns: 200px 1fr; gap: 12px; }
+  .left-panel { display: flex; flex-direction: column; gap: 8px; }
+  .left-stat-card {
+    background: #0d1420; border: 1px solid #1e293b; border-radius: 10px;
+    padding: 12px;
+  }
+  .left-stat-card .v { font-size: 24px; font-weight: 900; line-height: 1; margin-bottom: 2px; }
+  .left-stat-card .l { font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: #475569; }
+  .left-cat-list { margin-top: 8px; }
+  .left-cat-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 6px 0; border-bottom: 1px solid #1a2235;
+    font-size: 10px;
+  }
+  .left-cat-item:last-child { border-bottom: none; }
+  .left-cat-name { color: #94a3b8; }
+  .left-cat-count { font-weight: 800; color: #f1f5f9; }
+
+  /* ── OPTION C: Dashboard ── */
+  .dash-header-row {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .dash-title { font-size: 13px; font-weight: 800; color: #f1f5f9; }
+  .dash-actions { display: flex; gap: 6px; }
+  .dash-btn {
+    padding: 4px 10px; border-radius: 7px;
+    font-size: 10px; font-weight: 700;
+    background: #1e293b; color: #64748b; border: 1px solid #263148;
+    cursor: default;
+  }
+  .dash-btn.primary { background: rgba(245,158,11,0.15); color: #f59e0b; border-color: rgba(245,158,11,0.3); }
+
+  .voter-card-grid {
+    display: grid; grid-template-columns: repeat(3,1fr); gap: 6px;
+    margin-bottom: 12px;
+  }
+  .voter-mini-card {
+    background: #0d1420; border: 1px solid #1e293b; border-radius: 10px;
+    padding: 10px;
+  }
+  .voter-mini-card .v { font-size: 18px; font-weight: 900; color: #f1f5f9; }
+  .voter-mini-card .l { font-size: 9px; color: #475569; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; }
+  .voter-mini-card .trend { font-size: 9px; margin-top: 4px; }
+  .trend-up { color: #10b981; }
+  .trend-down { color: #ef4444; }
+
+  /* selection bar */
+  .selection-bar {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: #0a0e1a; border-top: 1px solid #1e293b;
+    padding: 14px 24px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .sel-text { font-size: 13px; color: #64748b; }
+  .sel-text strong { color: #f1f5f9; }
+  .confirm-btn {
+    padding: 10px 24px; background: #f59e0b; color: #000;
+    font-weight: 800; font-size: 13px; border: none; border-radius: 10px;
+    cursor: pointer; display: none;
+  }
+  .confirm-btn.vis { display: block; }
+</style>
+</head>
+<body>
+
+<h1>⭐ Admin All-Star Module — Layout Options</h1>
+<p class="subtitle">How should stats + leaderboard be organized?</p>
+
+<div class="designs">
+
+  <!-- OPTION A: Tabs, stats on top, table below -->
+  <div class="design-card" id="card-a" onclick="selectCard('a')">
+    <div class="card-label">
+      <div class="letter">A</div>
+      <div>
+        <h3>Stats Bar + Category Tabs + Table</h3>
+        <p>Summary on top, pick a category tab, full sortable table below</p>
+      </div>
+    </div>
+    <div class="preview">
+      <!-- Stats row -->
+      <div class="section-label">Summary</div>
+      <div class="mini-stat-row">
+        <div class="mini-stat"><div class="mini-stat-label">Total Voters</div><div class="mini-stat-value orange">247</div><div class="mini-stat-sub">+12 today</div></div>
+        <div class="mini-stat"><div class="mini-stat-label">Total Votes</div><div class="mini-stat-value blue">1 840</div><div class="mini-stat-sub">across all cat.</div></div>
+        <div class="mini-stat"><div class="mini-stat-label">Men Players</div><div class="mini-stat-value green">94</div><div class="mini-stat-sub">nominees</div></div>
+        <div class="mini-stat"><div class="mini-stat-label">Women Players</div><div class="mini-stat-value purple">78</div><div class="mini-stat-sub">nominees</div></div>
+      </div>
+      <!-- Voter profiles placeholder -->
+      <div class="voter-strip">
+        <span class="voter-strip-label">Voter Profiles</span>
+        <span class="voter-pill"><span class="dot active"></span>247 registered</span>
+        <span class="voter-pill"><span class="dot"></span>Email / Phone (coming soon)</span>
+        <span class="voter-count-badge">→ Profile analytics</span>
+      </div>
+      <!-- Tabs -->
+      <div class="section-label">Category</div>
+      <div class="mini-tabs">
+        <div class="mini-tab active">🏀 Men — Players</div>
+        <div class="mini-tab">🏀 Women — Players</div>
+        <div class="mini-tab">📋 Men — Coaches</div>
+        <div class="mini-tab">📋 Women — Coaches</div>
+      </div>
+      <!-- Sortable table -->
+      <div style="background:#0d1420;border:1px solid #1e293b;border-radius:12px;overflow:hidden">
+        <table class="mini-table">
+          <thead>
+            <tr>
+              <th style="width:32px">#</th>
+              <th class="sorted">Name <span class="sort-icon">↑</span></th>
+              <th>Team</th>
+              <th>Votes <span class="sort-icon">↕</span></th>
+              <th class="pct-cell">% of Voters <span class="sort-icon">↕</span></th>
+              <th>% of Category <span class="sort-icon">↕</span></th>
+              <th>Share <span class="sort-icon">↕</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td><span class="rank-badge rb-1">1</span></td><td style="font-weight:700;color:#f1f5f9">J. Mbala</td><td style="color:#64748b;font-size:10px">Raptors BK</td><td style="font-weight:900;color:#f59e0b">89</td><td class="pct-cell"><div class="pct-bar-wrap"><div class="pct-bar gold" style="width:90%"></div></div><span class="pct-text" style="color:#f59e0b">36%</span></td><td class="pct-cell"><div class="pct-bar-wrap"><div class="pct-bar gold" style="width:90%"></div></div><span class="pct-text" style="color:#f59e0b">4.8%</span></td><td style="font-size:10px;color:#475569">↑ +5 today</td></tr>
+            <tr><td><span class="rank-badge rb-2">2</span></td><td style="font-weight:700;color:#f1f5f9">K. Luyeye</td><td style="color:#64748b;font-size:10px">Lions</td><td style="font-weight:900;color:#94a3b8">72</td><td class="pct-cell"><div class="pct-bar-wrap"><div class="pct-bar blue" style="width:73%"></div></div><span class="pct-text">29%</span></td><td class="pct-cell"><div class="pct-bar-wrap"><div class="pct-bar blue" style="width:73%"></div></div><span class="pct-text">3.9%</span></td><td style="font-size:10px;color:#475569">↑ +3 today</td></tr>
+            <tr><td><span class="rank-badge rb-3">3</span></td><td style="font-weight:700;color:#f1f5f9">T. Bosembe</td><td style="color:#64748b;font-size:10px">Warriors</td><td style="font-weight:900;color:#cd7f32">61</td><td class="pct-cell"><div class="pct-bar-wrap"><div class="pct-bar green" style="width:62%"></div></div><span class="pct-text">24%</span></td><td class="pct-cell"><div class="pct-bar-wrap"><div class="pct-bar green" style="width:62%"></div></div><span class="pct-text">3.3%</span></td><td style="font-size:10px;color:#475569">— same</td></tr>
+            <tr><td><span class="rank-badge rb-n">4</span></td><td style="color:#94a3b8">A. Mputu</td><td style="color:#64748b;font-size:10px">Eagles</td><td style="font-weight:900;color:#64748b">44</td><td class="pct-cell"><div class="pct-bar-wrap"><div class="pct-bar gray" style="width:45%"></div></div><span class="pct-text">17%</span></td><td class="pct-cell"><div class="pct-bar-wrap"><div class="pct-bar gray" style="width:45%"></div></div><span class="pct-text">2.3%</span></td><td style="font-size:10px;color:#475569">↓ -1 today</td></tr>
+            <tr><td><span class="rank-badge rb-n">5</span></td><td style="color:#94a3b8">B. Nsimba</td><td style="color:#64748b;font-size:10px">Cobras</td><td style="font-weight:900;color:#64748b">38</td><td class="pct-cell"><div class="pct-bar-wrap"><div class="pct-bar gray" style="width:38%"></div></div><span class="pct-text">15%</span></td><td class="pct-cell"><div class="pct-bar-wrap"><div class="pct-bar gray" style="width:38%"></div></div><span class="pct-text">2.0%</span></td><td style="font-size:10px;color:#475569">— same</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- OPTION B: Split panel -->
+  <div class="design-card" id="card-b" onclick="selectCard('b')">
+    <div class="card-label">
+      <div class="letter">B</div>
+      <div>
+        <h3>Split Panel — Stats Left, Table Right</h3>
+        <p>Persistent sidebar with totals, full table always visible alongside</p>
+      </div>
+    </div>
+    <div class="preview">
+      <div class="split-layout">
+        <!-- Left panel -->
+        <div class="left-panel">
+          <div class="left-stat-card">
+            <div class="l">Total Voters</div>
+            <div class="v orange">247</div>
+          </div>
+          <div class="left-stat-card">
+            <div class="l">Total Votes</div>
+            <div class="v blue">1 840</div>
+          </div>
+          <div class="left-stat-card">
+            <div class="l">By Category</div>
+            <div class="left-cat-list">
+              <div class="left-cat-item"><span class="left-cat-name">Men Players</span><span class="left-cat-count green">986</span></div>
+              <div class="left-cat-item"><span class="left-cat-name">Women Players</span><span class="left-cat-count purple">521</span></div>
+              <div class="left-cat-item"><span class="left-cat-name">Men Coaches</span><span class="left-cat-count orange">221</span></div>
+              <div class="left-cat-item"><span class="left-cat-name">Women Coaches</span><span class="left-cat-count" style="color:#64748b">112</span></div>
+            </div>
+          </div>
+          <div class="left-stat-card">
+            <div class="l">Voter Profiles</div>
+            <div class="v" style="color:#475569;font-size:14px">Coming soon</div>
+            <div style="font-size:9px;color:#334155;margin-top:4px">Email & phone auth</div>
+          </div>
+        </div>
+        <!-- Right table -->
+        <div>
+          <div class="mini-tabs" style="margin-bottom:8px">
+            <div class="mini-tab active">Men — Players</div>
+            <div class="mini-tab">Women</div>
+            <div class="mini-tab">Coaches</div>
+          </div>
+          <div style="background:#0d1420;border:1px solid #1e293b;border-radius:12px;overflow:hidden">
+            <table class="mini-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th class="sorted">Name ↑</th>
+                  <th>Votes ↕</th>
+                  <th>% Voters ↕</th>
+                  <th>% Cat. ↕</th>
+                  <th>Trend</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td><span class="rank-badge rb-1">1</span></td><td style="font-weight:700;color:#f1f5f9">J. Mbala</td><td style="font-weight:900;color:#f59e0b">89</td><td class="pct-cell"><div class="pct-bar-wrap"><div class="pct-bar gold" style="width:90%"></div></div><span class="pct-text" style="color:#f59e0b">36%</span></td><td class="pct-cell"><div class="pct-bar-wrap"><div class="pct-bar gold" style="width:90%"></div></div><span class="pct-text" style="color:#f59e0b">4.8%</span></td><td style="font-size:10px;color:#10b981">↑ +5</td></tr>
+                <tr><td><span class="rank-badge rb-2">2</span></td><td style="font-weight:700;color:#f1f5f9">K. Luyeye</td><td style="font-weight:900;color:#94a3b8">72</td><td class="pct-cell"><div class="pct-bar-wrap"><div class="pct-bar blue" style="width:73%"></div></div><span class="pct-text">29%</span></td><td class="pct-cell"><div class="pct-bar-wrap"><div class="pct-bar blue" style="width:73%"></div></div><span class="pct-text">3.9%</span></td><td style="font-size:10px;color:#10b981">↑ +3</td></tr>
+                <tr><td><span class="rank-badge rb-3">3</span></td><td style="font-weight:700;color:#f1f5f9">T. Bosembe</td><td style="font-weight:900;color:#cd7f32">61</td><td class="pct-cell"><div class="pct-bar-wrap"><div class="pct-bar green" style="width:62%"></div></div><span class="pct-text">24%</span></td><td class="pct-cell"><div class="pct-bar-wrap"><div class="pct-bar green" style="width:62%"></div></div><span class="pct-text">3.3%</span></td><td style="font-size:10px;color:#64748b">—</td></tr>
+                <tr><td><span class="rank-badge rb-n">4</span></td><td style="color:#94a3b8">A. Mputu</td><td style="font-weight:900;color:#64748b">44</td><td class="pct-cell"><div class="pct-bar-wrap"><div class="pct-bar gray" style="width:45%"></div></div><span class="pct-text">17%</span></td><td class="pct-cell"><div class="pct-bar-wrap"><div class="pct-bar gray" style="width:45%"></div></div><span class="pct-text">2.3%</span></td><td style="font-size:10px;color:#ef4444">↓ -1</td></tr>
+                <tr><td><span class="rank-badge rb-n">5</span></td><td style="color:#94a3b8">B. Nsimba</td><td style="font-weight:900;color:#64748b">38</td><td class="pct-cell"><div class="pct-bar-wrap"><div class="pct-bar gray" style="width:38%"></div></div><span class="pct-text">15%</span></td><td class="pct-cell"><div class="pct-bar-wrap"><div class="pct-bar gray" style="width:38%"></div></div><span class="pct-text">2.0%</span></td><td style="font-size:10px;color:#64748b">—</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- OPTION C: Dashboard cards -->
+  <div class="design-card" id="card-c" onclick="selectCard('c')">
+    <div class="card-label">
+      <div class="letter">C</div>
+      <div>
+        <h3>Dashboard Cards + Full-Width Table</h3>
+        <p>Rich voter stat cards on top, full-width analytical table below with export button</p>
+      </div>
+    </div>
+    <div class="preview">
+      <div class="dash-header-row">
+        <div class="dash-title">⭐ All-Star Control Center</div>
+        <div class="dash-actions">
+          <div class="dash-btn">↻ Refresh</div>
+          <div class="dash-btn primary">⬇ Export CSV</div>
+        </div>
+      </div>
+
+      <!-- Voter profile cards -->
+      <div class="voter-card-grid">
+        <div class="voter-mini-card">
+          <div class="v orange">247</div>
+          <div class="l">Total Voters</div>
+          <div class="trend trend-up">↑ +12 today</div>
+        </div>
+        <div class="voter-mini-card">
+          <div class="v blue">1 840</div>
+          <div class="l">Total Votes Cast</div>
+          <div class="trend trend-up">↑ +94 today</div>
+        </div>
+        <div class="voter-mini-card">
+          <div class="v green">7.4</div>
+          <div class="l">Avg votes / voter</div>
+          <div class="trend" style="color:#64748b">— stable</div>
+        </div>
+        <div class="voter-mini-card">
+          <div class="v" style="color:#8b5cf6">94</div>
+          <div class="l">Men Players nominees</div>
+          <div class="trend" style="color:#64748b">986 votes total</div>
+        </div>
+        <div class="voter-mini-card">
+          <div class="v purple">78</div>
+          <div class="l">Women nominees</div>
+          <div class="trend" style="color:#64748b">521 votes total</div>
+        </div>
+        <div class="voter-mini-card">
+          <div class="v" style="color:#475569">—</div>
+          <div class="l">Voter Profiles</div>
+          <div class="trend" style="color:#334155">Email/phone soon</div>
+        </div>
+      </div>
+
+      <!-- Category tabs -->
+      <div class="mini-tabs">
+        <div class="mini-tab active">🏀 Men — Players</div>
+        <div class="mini-tab">🏀 Women — Players</div>
+        <div class="mini-tab">📋 Men — Coaches</div>
+        <div class="mini-tab">📋 Women — Coaches</div>
+      </div>
+
+      <!-- Full-width table with more columns -->
+      <div style="background:#0d1420;border:1px solid #1e293b;border-radius:12px;overflow:hidden">
+        <table class="mini-table">
+          <thead>
+            <tr>
+              <th style="width:28px">#</th>
+              <th class="sorted">Name ↑</th>
+              <th>Team</th>
+              <th>Votes ↕</th>
+              <th>% of Voters ↕</th>
+              <th>% of Category ↕</th>
+              <th>Share of Total ↕</th>
+              <th>Today ↕</th>
+              <th>Trend</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td><span class="rank-badge rb-1">1</span></td><td style="font-weight:800;color:#f1f5f9">J. Mbala</td><td style="color:#64748b;font-size:10px">Raptors BK</td><td style="font-weight:900;color:#f59e0b">89</td><td class="pct-cell"><div class="pct-bar-wrap"><div class="pct-bar gold" style="width:90%"></div></div><span class="pct-text" style="color:#f59e0b">36.0%</span></td><td class="pct-cell"><div class="pct-bar-wrap"><div class="pct-bar gold" style="width:90%"></div></div><span class="pct-text" style="color:#f59e0b">9.0%</span></td><td style="font-size:10px;color:#f59e0b">4.8%</td><td style="font-size:10px;color:#10b981;font-weight:700">+5</td><td style="font-size:10px;color:#10b981">↑↑</td></tr>
+            <tr><td><span class="rank-badge rb-2">2</span></td><td style="font-weight:700;color:#f1f5f9">K. Luyeye</td><td style="color:#64748b;font-size:10px">Lions</td><td style="font-weight:900;color:#94a3b8">72</td><td class="pct-cell"><div class="pct-bar-wrap"><div class="pct-bar blue" style="width:73%"></div></div><span class="pct-text">29.1%</span></td><td class="pct-cell"><div class="pct-bar-wrap"><div class="pct-bar blue" style="width:73%"></div></div><span class="pct-text">7.3%</span></td><td style="font-size:10px;color:#64748b">3.9%</td><td style="font-size:10px;color:#10b981;font-weight:700">+3</td><td style="font-size:10px;color:#10b981">↑</td></tr>
+            <tr><td><span class="rank-badge rb-3">3</span></td><td style="font-weight:700;color:#f1f5f9">T. Bosembe</td><td style="color:#64748b;font-size:10px">Warriors</td><td style="font-weight:900;color:#cd7f32">61</td><td class="pct-cell"><div class="pct-bar-wrap"><div class="pct-bar green" style="width:62%"></div></div><span class="pct-text">24.7%</span></td><td class="pct-cell"><div class="pct-bar-wrap"><div class="pct-bar green" style="width:62%"></div></div><span class="pct-text">6.2%</span></td><td style="font-size:10px;color:#64748b">3.3%</td><td style="font-size:10px;color:#64748b;font-weight:700">0</td><td style="font-size:10px;color:#64748b">—</td></tr>
+            <tr><td><span class="rank-badge rb-n">4</span></td><td style="color:#94a3b8">A. Mputu</td><td style="color:#64748b;font-size:10px">Eagles</td><td style="font-weight:900;color:#64748b">44</td><td class="pct-cell"><div class="pct-bar-wrap"><div class="pct-bar gray" style="width:45%"></div></div><span class="pct-text">17.8%</span></td><td class="pct-cell"><div class="pct-bar-wrap"><div class="pct-bar gray" style="width:45%"></div></div><span class="pct-text">4.5%</span></td><td style="font-size:10px;color:#64748b">2.3%</td><td style="font-size:10px;color:#ef4444;font-weight:700">-1</td><td style="font-size:10px;color:#ef4444">↓</td></tr>
+            <tr><td><span class="rank-badge rb-n">5</span></td><td style="color:#94a3b8">B. Nsimba</td><td style="color:#64748b;font-size:10px">Cobras</td><td style="font-weight:900;color:#64748b">38</td><td class="pct-cell"><div class="pct-bar-wrap"><div class="pct-bar gray" style="width:38%"></div></div><span class="pct-text">15.3%</span></td><td class="pct-cell"><div class="pct-bar-wrap"><div class="pct-bar gray" style="width:38%"></div></div><span class="pct-text">3.8%</span></td><td style="font-size:10px;color:#64748b">2.0%</td><td style="font-size:10px;color:#64748b;font-weight:700">0</td><td style="font-size:10px;color:#64748b">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="selection-bar">
+  <div class="sel-text" id="selText">Click a layout to select it</div>
+  <button class="confirm-btn" id="confirmBtn">Confirm →</button>
+</div>
+
+<script>
+  let selected = null;
+  function selectCard(id) {
+    document.querySelectorAll('.design-card').forEach(c => c.classList.remove('selected'));
+    document.getElementById('card-' + id).classList.add('selected');
+    selected = id;
+    const names = { a: 'Stats Bar + Tabs + Table', b: 'Split Panel', c: 'Dashboard Cards + Full Table' };
+    document.getElementById('selText').innerHTML = 'Selected: <strong>Option ' + id.toUpperCase() + ' — ' + names[id] + '</strong>';
+    document.getElementById('confirmBtn').classList.add('vis');
+    try { fetch('/__select',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({choice:id,text:names[id]})}).catch(()=>{}); } catch(e){}
+  }
+</script>
+</body>
+</html>

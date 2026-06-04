@@ -15,7 +15,7 @@ import {
 import { firebaseDB } from "@/lib/firebase";
 import { normalizeTeamGender, type TeamGender } from "@/lib/team-gender";
 
-const MAX_PLAYERS = 30;
+const MAX_PLAYERS = 15;
 const SESSION_KEY = "allstar_voter_phone";
 
 const tr = {
@@ -31,8 +31,9 @@ const tr = {
     submit: "Soumettre le vote",
     submitting: "Envoi en cours...",
     success: "Vote soumis! 🎉",
+    switchToWomen: "15 hommes sélectionnés! Choisissez maintenant vos 15 femmes ⭐",
     loading: "Chargement des joueurs...",
-    instructions: "Recherchez et sélectionnez jusqu'à 30 joueurs pour votre équipe All-Star.",
+    instructions: "Sélectionnez 15 hommes et 15 femmes pour votre équipe All-Star.",
     searchPlaceholder: "Chercher un joueur…",
     remove: "Retirer",
     votes: "votes",
@@ -54,8 +55,9 @@ const tr = {
     submit: "Submit Vote",
     submitting: "Submitting...",
     success: "Vote submitted! 🎉",
+    switchToWomen: "15 men picked! Now choose your 15 women ⭐",
     loading: "Loading players...",
-    instructions: "Search and select up to 30 players for your All-Star team.",
+    instructions: "Select 15 men and 15 women for your All-Star team.",
     searchPlaceholder: "Search a player…",
     remove: "Remove",
     votes: "votes",
@@ -129,6 +131,7 @@ export default function VotePage() {
   const [shakeId, setShakeId] = useState<string | null>(null);
   const [hasVoted, setHasVoted] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
+  const [switchMsg, setSwitchMsg] = useState("");
 
   // Check if All-Star voting is enabled
   useEffect(() => {
@@ -207,7 +210,16 @@ export default function VotePage() {
       const cur = prev[gender];
       if (cur.includes(id)) return { ...prev, [gender]: cur.filter((x) => x !== id) };
       if (cur.length >= MAX_PLAYERS) { triggerShake(id); return prev; }
-      return { ...prev, [gender]: [...cur, id] };
+      const next = { ...prev, [gender]: [...cur, id] };
+      // Auto-switch to women after 15th male pick
+      if (gender === "men" && next.men.length === MAX_PLAYERS) {
+        setTimeout(() => {
+          setGender("women");
+          setSwitchMsg(t.switchToWomen);
+          setTimeout(() => setSwitchMsg(""), 3500);
+        }, 300);
+      }
+      return next;
     });
   };
 
@@ -632,6 +644,11 @@ export default function VotePage() {
       {/* ── Sticky submit / locked bar ── */}
       {viewMode === "vote" && (
         <div className="fixed bottom-0 inset-x-0 p-4 bg-slate-950/95 backdrop-blur border-t border-white/10 z-20">
+          {switchMsg && (
+            <div className="text-center text-amber-400 text-sm mb-2 font-bold animate-scale-in flex items-center justify-center gap-2">
+              <span>⭐</span>{switchMsg}<span>⭐</span>
+            </div>
+          )}
           {successMsg && <p className="text-center text-emerald-400 text-sm mb-2 font-semibold">{successMsg}</p>}
           {hasVoted ? (
             <div className="w-full max-w-md mx-auto flex items-center justify-center gap-2 bg-emerald-600/15 border border-emerald-500/30 text-emerald-400 font-bold py-4 rounded-xl">

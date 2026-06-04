@@ -26,8 +26,10 @@ export default function AllStarThemeProvider() {
     getAllStarSettings().then((settings) => {
       if (settings.allStarTheme) {
         document.documentElement.setAttribute("data-theme", "allstar");
+        try { localStorage.setItem("allstar_theme", "true"); } catch {}
       } else {
         document.documentElement.removeAttribute("data-theme");
+        try { localStorage.removeItem("allstar_theme"); } catch {}
       }
     });
   }, []);

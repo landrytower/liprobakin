@@ -139,6 +139,8 @@ export default function RootLayout({
         <link rel="preconnect" href="https://www.googleapis.com" />
         <link rel="preconnect" href="https://firebase.googleapis.com" />
         <link rel="preconnect" href="https://firebasestorage.googleapis.com" />
+        {/* Apply cached All-Star theme instantly — eliminates flash on every page load */}
+        <script dangerouslySetInnerHTML={{ __html: `(function(){try{if(localStorage.getItem('allstar_theme')==='true')document.documentElement.setAttribute('data-theme','allstar');}catch(e){}})();` }} />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-transparent`}

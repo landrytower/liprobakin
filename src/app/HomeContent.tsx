@@ -3038,8 +3038,7 @@ export default function Home() {
   useEffect(() => {
     // Real-time listener for news articles
     const newsRef = collection(firebaseDB, "news");
-    // Fetch last 10 news articles
-    const newsQuery = query(newsRef, orderBy("createdAt", "desc"), limit(10));
+    const newsQuery = query(newsRef, orderBy("createdAt", "desc"));
     
     const unsubscribe = onSnapshot(newsQuery, (snapshot) => {
       const articles: NewsArticle[] = snapshot.docs.map((doc) => {

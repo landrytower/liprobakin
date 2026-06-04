@@ -91,9 +91,22 @@ export default function AllStarVoteBanner() {
         }`}
       >
         <div className="relative bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-2xl overflow-hidden shadow-2xl border border-white/10">
-          {/* Decorative Background Pattern */}
-          <div className="absolute inset-0 opacity-10">
-            <div className="absolute inset-0 bg-[url('/patterns/basketball.svg')] bg-repeat opacity-20" />
+          {/* Basketball Icon Background */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="w-64 h-64 opacity-20">
+              <svg
+                className="w-full h-full text-orange-500"
+                fill="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <circle cx="12" cy="12" r="10" fill="currentColor" opacity="0.9" />
+                <path
+                  d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zM12 20c-1.46 0-2.82-.4-4-1.08V17.5c0-.83.67-1.5 1.5-1.5h5c.83 0 1.5.67 1.5 1.5v1.42c-1.18.68-2.54 1.08-4 1.08zm6-3.25c0-1.38-1.12-2.5-2.5-2.5h-5c-1.38 0-2.5 1.12-2.5 2.5V17c-1.82-1.47-3-3.72-3-6.25 0-4.41 3.59-8 8-8s8 3.59 8 8c0 2.53-1.18 4.78-3 6.25v-.5z"
+                  fill="white"
+                  opacity="0.3"
+                />
+              </svg>
+            </div>
           </div>
 
           {/* Content */}
@@ -118,24 +131,6 @@ export default function AllStarVoteBanner() {
                 />
               </svg>
             </button>
-
-            {/* Basketball Icon */}
-            <div className="flex justify-center mb-6">
-              <div className="w-20 h-20 bg-gradient-to-br from-orange-500 to-orange-600 rounded-full flex items-center justify-center shadow-lg">
-                <svg
-                  className="w-12 h-12 text-white"
-                  fill="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <circle cx="12" cy="12" r="10" fill="currentColor" opacity="0.9" />
-                  <path
-                    d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zM12 20c-1.46 0-2.82-.4-4-1.08V17.5c0-.83.67-1.5 1.5-1.5h5c.83 0 1.5.67 1.5 1.5v1.42c-1.18.68-2.54 1.08-4 1.08zm6-3.25c0-1.38-1.12-2.5-2.5-2.5h-5c-1.38 0-2.5 1.12-2.5 2.5V17c-1.82-1.47-3-3.72-3-6.25 0-4.41 3.59-8 8-8s8 3.59 8 8c0 2.53-1.18 4.78-3 6.25v-.5z"
-                    fill="white"
-                    opacity="0.3"
-                  />
-                </svg>
-              </div>
-            </div>
 
             {/* Title */}
             <h2 className="text-3xl md:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 text-center mb-4">
@@ -162,11 +157,6 @@ export default function AllStarVoteBanner() {
                 {t.dismiss}
               </button>
             </div>
-
-            {/* Decorative Stars */}
-            <div className="absolute top-8 left-8 w-3 h-3 bg-yellow-400 rounded-full animate-pulse" />
-            <div className="absolute top-12 right-12 w-2 h-2 bg-blue-400 rounded-full animate-pulse delay-75" />
-            <div className="absolute bottom-12 left-16 w-2 h-2 bg-purple-400 rounded-full animate-pulse delay-150" />
           </div>
         </div>
       </div>

@@ -91,6 +91,25 @@ const PersonPlaceholder = ({ size }: { size: number }) => (
   </svg>
 );
 
+async function loadRostersForGender(teams: TeamEntry[], g: TeamGender): Promise<PlayerEntry[]> {
+  const genderTeams = teams.filter((tm) => tm.gender === g);
+  const results = await Promise.all(
+    genderTeams.map(async (team) => {
+      const displayName = [team.city, team.name].filter(Boolean).join(" ");
+      const snap = await getDocs(collection(firebaseDB, "teams", team.id, "roster"));
+      return snap.docs.map((d) => {
+        const data = d.data();
+        return {
+          id: d.id, teamId: team.id, teamName: displayName,
+          name: `${data.firstName || ""} ${data.lastName || ""}`.trim() || data.name || "Unknown",
+          headshot: data.headshot, position: data.position,
+        };
+      });
+    })
+  );
+  return results.flat().sort((a, b) => a.name.localeCompare(b.name));
+}
+
 function toDocId(countryCode: string, localNumber: string): string {
   const cc = countryCode.replace(/\D/g, "") || "243";
   const local = localNumber.replace(/\D/g, "");
@@ -129,6 +148,7 @@ export default function VotePage() {
   const [search, setSearch] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
+  const playersCacheRef = useRef<Partial<Record<string, PlayerEntry[]>>>({});
   const [shakeId, setShakeId] = useState<string | null>(null);
   const [hasVoted, setHasVoted] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
@@ -169,23 +189,30 @@ export default function VotePage() {
     });
   }, []);
 
-  // Fetch rosters
+  // Fetch rosters — cache per gender so switching never re-fetches
   useEffect(() => {
     if (!teams.length) return;
+
+    // Cache hit: render immediately, no Firestore round-trip
+    if (playersCacheRef.current[gender]) {
+      setPlayers(playersCacheRef.current[gender]!);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setPlayers([]);
-    Promise.all(
-      teams.filter((tm) => tm.gender === gender).map(async (team) => {
-        const displayName = [team.city, team.name].filter(Boolean).join(" ");
-        const snap = await getDocs(collection(firebaseDB, "teams", team.id, "roster"));
-        return snap.docs.map((d) => {
-          const data = d.data();
-          return { id: d.id, teamId: team.id, teamName: displayName, name: `${data.firstName || ""} ${data.lastName || ""}`.trim() || data.name || "Unknown", headshot: data.headshot, position: data.position };
-        });
-      })
-    ).then((results) => {
-      setPlayers(results.flat().sort((a, b) => a.name.localeCompare(b.name)));
+    loadRostersForGender(teams, gender).then((sorted) => {
+      playersCacheRef.current[gender] = sorted;
+      setPlayers(sorted);
       setLoading(false);
+      // Silently preload the other gender while the user is reading/selecting
+      const other: TeamGender = gender === "men" ? "women" : "men";
+      if (!playersCacheRef.current[other]) {
+        loadRostersForGender(teams, other)
+          .then((os) => { playersCacheRef.current[other] = os; })
+          .catch(() => {});
+      }
     });
   }, [teams, gender]);
 

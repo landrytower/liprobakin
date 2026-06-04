@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { doc, onSnapshot } from "firebase/firestore";
-import { firebaseDB } from "@/lib/firebase";
+import { getAllStarSettings } from "@/lib/allstar-settings";
 
 const STARS = [
   { id: 1,  char: "★", left: "7%",  top: "9%",  size: 12, delay: 0,    dur: 3.2 },
@@ -24,19 +23,13 @@ const STARS = [
 
 export default function AllStarThemeProvider() {
   useEffect(() => {
-    const unsub = onSnapshot(
-      doc(firebaseDB, "settings", "allStar"),
-      (snap) => {
-        const active = snap.exists() ? snap.data().allStarTheme === true : false;
-        if (active) {
-          document.documentElement.setAttribute("data-theme", "allstar");
-        } else {
-          document.documentElement.removeAttribute("data-theme");
-        }
-      },
-      () => {}
-    );
-    return () => unsub();
+    getAllStarSettings().then((settings) => {
+      if (settings.allStarTheme) {
+        document.documentElement.setAttribute("data-theme", "allstar");
+      } else {
+        document.documentElement.removeAttribute("data-theme");
+      }
+    });
   }, []);
 
   return (
@@ -56,7 +49,6 @@ export default function AllStarThemeProvider() {
           {s.char}
         </span>
       ))}
-      {/* Shooting stars */}
       <span className="allstar-shoot" />
       <span className="allstar-shoot" />
       <span className="allstar-shoot" />

@@ -4,7 +4,7 @@ import { useParams, usePathname, useRouter, useSearchParams } from "next/navigat
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { collection, getDocs, onSnapshot, doc, getDoc } from "firebase/firestore";
+import { collection, getDocs, onSnapshot, doc, getDoc, query, where } from "firebase/firestore";
 import { firebaseDB } from "@/lib/firebase";
 import { normalizeTeamGender, type TeamGender } from "@/lib/team-gender";
 import { formatTeamDisplayName, normalizeTeamName } from "@/lib/team-name";
@@ -335,49 +335,64 @@ export default function TeamPage() {
         setIsTransitioning(true);
         setLoading(true);
         
-        // Search for team by name
+        // Fast path: try direct doc lookup by ID first (URL usually carries the Firestore ID)
         const teamsRef = collection(firebaseDB, "teams");
-        const teamsSnapshot = await getDocs(teamsRef);
-        
-        // Get all teams for navigation - include ID for uniqueness when names are duplicated
-        const allTeamsList = teamsSnapshot.docs.map((doc) => {
-          const data = doc.data();
-          const fullName = formatTeamDisplayName(data.city, data.name);
-          return { id: doc.id, name: data.name, fullName };
-        }).sort((a, b) => a.fullName.localeCompare(b.fullName) || a.id.localeCompare(b.id));
-        
-        setAllTeams(allTeamsList);
-        
-        // Find team by ID first, then by name. If multiple teams share a name, use requested gender when provided.
-        const teamDocById = teamsSnapshot.docs.find((doc) => doc.id === teamName);
-        const matchingByName = teamsSnapshot.docs.filter((doc) => {
-          const data = doc.data();
-          const fullName = formatTeamDisplayName(data.city, data.name);
-          return fullName === teamName || data.name === teamName;
-        });
+        let teamDoc: import("firebase/firestore").QueryDocumentSnapshot | import("firebase/firestore").DocumentSnapshot | null = null;
 
-        let teamDoc = teamDocById ?? null;
+        const directSnap = await getDoc(doc(firebaseDB, "teams", teamName));
+        if (directSnap.exists()) {
+          teamDoc = directSnap;
+        } else {
+          // Fallback: fetch all teams and search by display name
+          const teamsSnapshot = await getDocs(teamsRef);
 
-        if (!teamDoc) {
+          // Build navigation list while we have all teams
+          const allTeamsList = teamsSnapshot.docs.map((d) => {
+            const data = d.data();
+            const fullName = formatTeamDisplayName(data.city, data.name);
+            return { id: d.id, name: data.name, fullName };
+          }).sort((a, b) => a.fullName.localeCompare(b.fullName) || a.id.localeCompare(b.id));
+          setAllTeams(allTeamsList);
+
+          const matchingByName = teamsSnapshot.docs.filter((d) => {
+            const data = d.data();
+            const fullName = formatTeamDisplayName(data.city, data.name);
+            return fullName === teamName || data.name === teamName;
+          });
+
           if (matchingByName.length === 1) {
             teamDoc = matchingByName[0];
           } else if (matchingByName.length > 1) {
             if (requestedGender) {
-              teamDoc =
-                matchingByName.find((doc) => {
-                  const data = doc.data();
-                  return normalizeTeamGender(data?.gender, data?.logo, "men") === requestedGender;
-                }) ?? null;
+              teamDoc = matchingByName.find((d) => {
+                const data = d.data();
+                return normalizeTeamGender(data?.gender, data?.logo, "men") === requestedGender;
+              }) ?? null;
             }
-
             if (!teamDoc) {
-              teamDoc =
-                matchingByName.find((doc) => {
-                  const data = doc.data();
-                  return normalizeTeamGender(data?.gender, data?.logo, "men") === "men";
-                }) ?? matchingByName[0];
+              teamDoc = matchingByName.find((d) => {
+                const data = d.data();
+                return normalizeTeamGender(data?.gender, data?.logo, "men") === "men";
+              }) ?? matchingByName[0];
             }
           }
+        }
+
+        // When we found the team via direct getDoc, still load the nav list in the background
+        if (directSnap.exists()) {
+          getDocs(teamsRef).then((teamsSnapshot) => {
+            const list = teamsSnapshot.docs.map((d) => {
+              const data = d.data();
+              const fullName = formatTeamDisplayName(data.city, data.name);
+              return { id: d.id, name: data.name, fullName };
+            }).sort((a, b) => a.fullName.localeCompare(b.fullName) || a.id.localeCompare(b.id));
+            setAllTeams(list);
+            const currentIndex = list.findIndex(t => t.id === teamName);
+            if (currentIndex !== -1 && list.length > 1) {
+              setNextTeam(list[(currentIndex + 1) % list.length]);
+              setPreviousTeam(list[(currentIndex - 1 + list.length) % list.length]);
+            }
+          });
         }
         
         if (!teamDoc) {
@@ -385,25 +400,12 @@ export default function TeamPage() {
           return;
         }
         
-        // Find current team index and next team - use ID for exact match
-        const currentTeamData = teamDoc.data();
+        // Navigation is set asynchronously (see background getDocs above)
+        const currentTeamData = teamDoc.data()!;
         const currentFullName = formatTeamDisplayName(currentTeamData.city, currentTeamData.name);
-        const currentTeamId = teamDoc.id;
-        const currentIndex = allTeamsList.findIndex(t => t.id === currentTeamId);
-        
-        // Always set next and previous teams - wrap around for continuous navigation
-        if (currentIndex !== -1 && allTeamsList.length > 1) {
-          const nextIndex = (currentIndex + 1) % allTeamsList.length;
-          const prevIndex = (currentIndex - 1 + allTeamsList.length) % allTeamsList.length;
-          setNextTeam(allTeamsList[nextIndex]);
-          setPreviousTeam(allTeamsList[prevIndex]);
-        } else {
-          setNextTeam(null);
-          setPreviousTeam(null);
-        }
-        
-        const data = teamDoc.data();
         const foundTeamId = teamDoc.id;
+
+        const data = currentTeamData;
         const foundTeam: TeamData = {
           id: teamDoc.id,
           name: data.name,
@@ -501,7 +503,18 @@ export default function TeamPage() {
         setTeamStaff(staffOnly);
 
         const gamesRef = collection(firebaseDB, "games");
-        const gamesSnapshot = await getDocs(gamesRef);
+        // Fetch only games involving this team (by ID) instead of all games
+        const [homeGamesSnap, awayGamesSnap] = await Promise.all([
+          getDocs(query(gamesRef, where("homeTeamId", "==", foundTeamId))),
+          getDocs(query(gamesRef, where("awayTeamId", "==", foundTeamId))),
+        ]);
+        const seenIds = new Set<string>();
+        const mergedGameDocs = [...homeGamesSnap.docs, ...awayGamesSnap.docs].filter((d) => {
+          if (seenIds.has(d.id)) return false;
+          seenIds.add(d.id);
+          return true;
+        });
+        const gamesSnapshot = { docs: mergedGameDocs };
         const teamNameKeys = new Set([
           normalizeTeamKey(data.name || ""),
           normalizeTeamKey(currentFullName),

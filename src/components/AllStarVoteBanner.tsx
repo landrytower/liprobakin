@@ -3,8 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { doc, getDoc } from "firebase/firestore";
-import { firebaseDB } from "@/lib/firebase";
+import { getAllStarSettings } from "@/lib/allstar-settings";
 
 const translations = {
   en: {
@@ -32,21 +31,11 @@ export default function AllStarVoteBanner() {
   const [allStarEnabled, setAllStarEnabled] = useState(true);
   const [checkingSettings, setCheckingSettings] = useState(true);
 
-  // Check if All-Star is enabled in Firebase
   useEffect(() => {
-    const checkSettings = async () => {
-      try {
-        const settingsDoc = await getDoc(doc(firebaseDB, "settings", "allStar"));
-        const enabled = settingsDoc.exists() ? settingsDoc.data().enabled : true;
-        setAllStarEnabled(enabled);
-      } catch (error) {
-        console.error("Error checking All-Star settings:", error);
-        setAllStarEnabled(true);
-      } finally {
-        setCheckingSettings(false);
-      }
-    };
-    checkSettings();
+    getAllStarSettings().then((s) => {
+      setAllStarEnabled(s.enabled);
+      setCheckingSettings(false);
+    });
   }, []);
 
   useEffect(() => {

@@ -828,3 +828,161 @@ body {
   outline-color: rgba(201, 162, 39, 0.3) !important;
   box-shadow: 0 0 0 2px rgba(201, 162, 39, 0.15) !important;
 }
+
+/* ─── ⭐ All-Star Stars Overlay ──────────────────────────────────────────── */
+
+.allstar-stars {
+  display: none;
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  overflow: hidden;
+}
+
+[data-theme="allstar"] .allstar-stars {
+  display: block;
+}
+
+/* Sparkle dot field — layer 1 (small, fast twinkle) */
+[data-theme="allstar"] .allstar-stars::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0;
+  width: 1px; height: 1px;
+  background: transparent;
+  box-shadow:
+    73px  45px  0 0 rgba(255, 215, 0,  0.55),
+    189px 112px 0 0 rgba(255, 205, 40, 0.45),
+    312px  67px 0 0 rgba(255, 220, 50, 0.60),
+    445px 180px 0 0 rgba(255, 210, 35, 0.40),
+    567px  35px 0 0 rgba(255, 215, 45, 0.55),
+    623px 250px 0 0 rgba(255, 205, 30, 0.35),
+    756px  98px 0 0 rgba(255, 220, 55, 0.50),
+    878px 165px 0 0 rgba(255, 215, 42, 0.45),
+    934px 310px 0 0 rgba(255, 200, 38, 0.40),
+   1045px  78px 0 0 rgba(255, 218, 50, 0.55),
+   1123px 220px 0 0 rgba(255, 208, 40, 0.45),
+   1267px  55px 0 0 rgba(255, 215, 48, 0.60),
+   1389px 140px 0 0 rgba(255, 210, 35, 0.40),
+   1456px 280px 0 0 rgba(255, 220, 52, 0.50),
+   1567px  95px 0 0 rgba(255, 205, 38, 0.45),
+   1678px 195px 0 0 rgba(255, 215, 45, 0.55),
+   1789px 350px 0 0 rgba(255, 210, 40, 0.35),
+   1890px 120px 0 0 rgba(255, 220, 50, 0.50),
+     89px 380px 0 0 rgba(255, 215, 42, 0.40),
+    234px 450px 0 0 rgba(255, 205, 38, 0.45),
+    467px 520px 0 0 rgba(255, 218, 50, 0.50),
+    678px 600px 0 0 rgba(255, 210, 40, 0.35),
+    890px 480px 0 0 rgba(255, 215, 45, 0.40),
+   1123px 550px 0 0 rgba(255, 205, 38, 0.45),
+   1345px 620px 0 0 rgba(255, 220, 52, 0.50),
+    156px 700px 0 0 rgba(255, 215, 42, 0.40),
+    389px 760px 0 0 rgba(255, 205, 36, 0.35),
+    612px 820px 0 0 rgba(255, 218, 50, 0.45),
+    845px 750px 0 0 rgba(255, 210, 40, 0.40),
+   1067px 810px 0 0 rgba(255, 215, 45, 0.35);
+  animation: starsTwinkle1 3.5s ease-in-out infinite alternate;
+}
+
+/* Sparkle dot field — layer 2 (slightly larger, slower) */
+[data-theme="allstar"] .allstar-stars::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0;
+  width: 2px; height: 2px;
+  background: transparent;
+  box-shadow:
+    156px  155px 0 1px rgba(255, 215, 0,  0.40),
+    378px  290px 0 1px rgba(255, 200, 38, 0.35),
+    512px  410px 0 0  rgba(255, 218, 52, 0.50),
+    689px  130px 0 1px rgba(255, 210, 42, 0.40),
+    845px  375px 0 0  rgba(255, 215, 48, 0.45),
+   1034px  480px 0 1px rgba(255, 205, 36, 0.35),
+   1189px  320px 0 0  rgba(255, 220, 52, 0.50),
+   1367px  415px 0 1px rgba(255, 210, 40, 0.40),
+   1534px  235px 0 0  rgba(255, 215, 45, 0.45),
+   1712px  495px 0 1px rgba(255, 205, 38, 0.35),
+    267px  590px 0 0  rgba(255, 218, 50, 0.40),
+    478px  670px 0 1px rgba(255, 210, 42, 0.35),
+    734px  730px 0 0  rgba(255, 215, 48, 0.45),
+    956px  680px 0 1px rgba(255, 205, 36, 0.40),
+   1189px  750px 0 0  rgba(255, 220, 52, 0.45),
+   1423px  695px 0 1px rgba(255, 210, 40, 0.35),
+   1645px  760px 0 0  rgba(255, 215, 45, 0.40),
+     89px  720px 0 1px rgba(255, 205, 38, 0.35),
+   1823px  630px 0 0  rgba(255, 218, 52, 0.45),
+   1945px  720px 0 1px rgba(255, 210, 40, 0.40);
+  animation: starsTwinkle2 4.8s ease-in-out 1.2s infinite alternate;
+}
+
+@keyframes starsTwinkle1 {
+  0%   { opacity: 0.3; }
+  45%  { opacity: 1;   }
+  100% { opacity: 0.5; }
+}
+
+@keyframes starsTwinkle2 {
+  0%   { opacity: 0.5; }
+  55%  { opacity: 1;   }
+  100% { opacity: 0.3; }
+}
+
+/* Character stars (★ ✦) */
+.allstar-star-char {
+  display: none;
+}
+
+[data-theme="allstar"] .allstar-star-char {
+  display: block;
+  position: absolute;
+  color: rgba(255, 210, 40, 0.50);
+  text-shadow: 0 0 8px rgba(255, 200, 0, 0.55), 0 0 18px rgba(255, 180, 0, 0.25);
+  animation: starCharTwinkle linear infinite alternate;
+  line-height: 1;
+}
+
+@keyframes starCharTwinkle {
+  0%   { opacity: 0.15; transform: scale(0.80) rotate(-5deg); }
+  40%  { opacity: 0.85; transform: scale(1.15) rotate(4deg);  }
+  70%  { opacity: 0.65; transform: scale(1.05) rotate(-2deg); }
+  100% { opacity: 0.30; transform: scale(0.90) rotate(6deg);  }
+}
+
+/* Shooting stars */
+@keyframes shootingStar {
+  0%   { transform: translateX(0)   translateY(0)   scaleX(1); opacity: 0; }
+  5%   { opacity: 1; }
+  100% { transform: translateX(550px) translateY(280px) scaleX(6); opacity: 0; }
+}
+
+[data-theme="allstar"] .allstar-stars .allstar-shoot {
+  display: block;
+  position: absolute;
+  width: 2px;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(255, 220, 60, 0.9), transparent);
+  border-radius: 999px;
+  animation: shootingStar 8s ease-in infinite;
+}
+
+[data-theme="allstar"] .allstar-stars .allstar-shoot:nth-child(16) {
+  top: 8%;
+  left: 12%;
+  animation-delay: 0s;
+  animation-duration: 8s;
+}
+
+[data-theme="allstar"] .allstar-stars .allstar-shoot:nth-child(17) {
+  top: 18%;
+  left: 58%;
+  animation-delay: 3.5s;
+  animation-duration: 9s;
+}
+
+[data-theme="allstar"] .allstar-stars .allstar-shoot:nth-child(18) {
+  top: 4%;
+  left: 38%;
+  animation-delay: 6s;
+  animation-duration: 7.5s;
+}

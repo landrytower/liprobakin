@@ -71,6 +71,12 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Pre-computed leaders snapshot — written by admin Refresh, read publicly for instant display
+    match /allStarLeaders/{document} {
+      allow read:  if true;
+      allow write: if isAdmin();
+    }
+
 
     // ── Teams & rosters ──────────────────────────────────────────────────────
     // Public read. Admin-only write.

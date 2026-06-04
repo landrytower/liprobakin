@@ -273,10 +273,18 @@ export default function AllStarVotesPage() {
         }))
         .sort((a, b) => b.votes - a.votes);
 
-    setResults({
-      menPlayers:   resolve(counts.menPlayers,   todayCounts.menPlayers,   playerMap, catTotals.menPlayers),
-      womenPlayers: resolve(counts.womenPlayers,  todayCounts.womenPlayers, playerMap, catTotals.womenPlayers),
-    });
+    const computedMen   = resolve(counts.menPlayers,   todayCounts.menPlayers,   playerMap, catTotals.menPlayers);
+    const computedWomen = resolve(counts.womenPlayers,  todayCounts.womenPlayers, playerMap, catTotals.womenPlayers);
+    setResults({ menPlayers: computedMen, womenPlayers: computedWomen });
+
+    // Write a denormalised leaders snapshot so the vote page can display instantly
+    try {
+      await setDoc(doc(firebaseDB, "allStarLeaders", "snapshot"), {
+        men:   computedMen.slice(0, 15).map(({ id, name, teamName, votes }) => ({ id, name, teamName, votes })),
+        women: computedWomen.slice(0, 15).map(({ id, name, teamName, votes }) => ({ id, name, teamName, votes })),
+        lastUpdated: new Date(),
+      });
+    } catch { /* non-critical */ }
 
     // 4. Fetch voter details with user profiles
     const voterDetailsData: VoterDetail[] = [];

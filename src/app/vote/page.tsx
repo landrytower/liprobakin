@@ -91,11 +91,11 @@ const PersonPlaceholder = ({ size }: { size: number }) => (
   </svg>
 );
 
-function toDocId(rawPhone: string): string {
-  const digits = rawPhone.replace(/\D/g, "");
-  if (digits.startsWith("243")) return digits;
-  if (digits.startsWith("0")) return "243" + digits.slice(1);
-  return "243" + digits;
+function toDocId(countryCode: string, localNumber: string): string {
+  const cc = countryCode.replace(/\D/g, "") || "243";
+  const local = localNumber.replace(/\D/g, "");
+  if (cc === "243" && local.startsWith("0")) return cc + local.slice(1);
+  return cc + local;
 }
 
 export default function VotePage() {
@@ -113,6 +113,7 @@ export default function VotePage() {
   const [modalFirstName, setModalFirstName] = useState("");
   const [modalLastName, setModalLastName] = useState("");
   const [modalPhone, setModalPhone] = useState("");
+  const [modalCountryCode, setModalCountryCode] = useState("243");
   const [modalSubmitting, setModalSubmitting] = useState(false);
   const [modalError, setModalError] = useState("");
   const [alreadyVoted, setAlreadyVoted] = useState(false);
@@ -133,6 +134,8 @@ export default function VotePage() {
   const [successMsg, setSuccessMsg] = useState("");
   const [switchMsg, setSwitchMsg] = useState("");
   const [voteBanners, setVoteBanners] = useState<Array<{ url: string; enabled: boolean }> | null>(null);
+  type SnapLeader = { id: string; name: string; teamName: string; votes: number };
+  const [leadersSnap, setLeadersSnap] = useState<{ men: SnapLeader[]; women: SnapLeader[] } | null>(null);
 
   // Check if All-Star voting is enabled
   useEffect(() => {
@@ -194,6 +197,19 @@ export default function VotePage() {
     })).then((entries) => setVoteCounts(Object.fromEntries(entries)));
   }, []);
 
+  // Fetch pre-computed leaders snapshot for instant display
+  useEffect(() => {
+    getDoc(doc(firebaseDB, "allStarLeaders", "snapshot")).then((snap) => {
+      if (snap.exists()) {
+        const d = snap.data();
+        setLeadersSnap({
+          men: (d.men || []) as SnapLeader[],
+          women: (d.women || []) as SnapLeader[],
+        });
+      }
+    }).catch(() => {});
+  }, []);
+
   // Fetch vote-page banner images
   useEffect(() => {
     getDoc(doc(firebaseDB, "settings", "allStarBanners"))
@@ -251,7 +267,7 @@ export default function VotePage() {
     e.preventDefault();
     setModalError("");
 
-    const docId = toDocId(modalPhone);
+    const docId = toDocId(modalCountryCode, modalPhone);
     if (docId.length < 9) {
       setModalError(language === "fr" ? "Numéro invalide." : "Invalid phone number.");
       return;
@@ -297,7 +313,16 @@ export default function VotePage() {
   const curPlayers = selectedPlayers[gender];
   const playerVotes = voteCounts[gender === "men" ? "menPlayers" : "womenPlayers"] || {};
 
-  const rankedLeaders = players.map((p) => ({ ...p, voteCount: playerVotes[p.id] || 0 })).filter((p) => p.voteCount > 0).sort((a, b) => b.voteCount - a.voteCount).slice(0, 10);
+  const snapKey = gender === "men" ? "men" : "women";
+  const freshLeaders = !loading && players.length > 0
+    ? players.map((p) => ({ ...p, voteCount: playerVotes[p.id] || 0 })).filter((p) => p.voteCount > 0).sort((a, b) => b.voteCount - a.voteCount).slice(0, 10)
+    : null;
+  const rankedLeaders = freshLeaders ?? (leadersSnap?.[snapKey] ?? []).map((s) => ({
+    id: s.id, name: s.name, teamName: s.teamName,
+    teamId: "", headshot: undefined as string | undefined, position: undefined as string | undefined,
+    voteCount: s.votes,
+  }));
+  const leadersLoading = loading && rankedLeaders.length === 0;
   const leaderTopVotes = rankedLeaders[0]?.voteCount ?? 1;
   const podiumOrder = [rankedLeaders[1], rankedLeaders[0], rankedLeaders[2]].filter((p): p is (typeof rankedLeaders)[0] => Boolean(p));
   const restLeaders = rankedLeaders.slice(3);
@@ -389,20 +414,32 @@ export default function VotePage() {
                   <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
                     {language === "fr" ? "Numéro de téléphone" : "Phone number"}
                   </label>
-                  <div className="flex items-center bg-slate-800 border border-white/10 rounded-xl px-3 py-2.5 focus-within:border-emerald-500 transition-colors">
-                    <span className="text-base mr-1.5 select-none">🇨🇩</span>
-                    <span className="text-slate-400 text-sm mr-1 shrink-0">+243</span>
+                  <div className="flex items-center bg-slate-800 border border-white/10 rounded-xl px-3 py-2.5 focus-within:border-emerald-500 transition-colors gap-1.5">
+                    <span className="text-base select-none shrink-0">{modalCountryCode === "243" ? "🇨🇩" : "🌍"}</span>
+                    <span className="text-slate-400 text-sm shrink-0">+</span>
+                    <input
+                      type="tel"
+                      value={modalCountryCode}
+                      onChange={(e) => setModalCountryCode(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                      inputMode="numeric"
+                      aria-label="Country code"
+                      className="w-10 bg-transparent text-sm text-white focus:outline-none border-r border-white/15 pr-1.5 mr-0.5 shrink-0"
+                    />
                     <input
                       type="tel"
                       value={modalPhone}
                       onChange={(e) => setModalPhone(e.target.value.replace(/\D/g, ""))}
-                      placeholder="812 345 678"
+                      placeholder={modalCountryCode === "243" ? "812 345 678" : "Phone number"}
                       required
                       inputMode="numeric"
                       className="flex-1 bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none min-w-0"
                     />
                   </div>
-                  <p className="text-[10px] text-slate-600 mt-1">{language === "fr" ? "Vodacom · Airtel · Africel · Orange" : "Vodacom · Airtel · Africel · Orange"}</p>
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    {modalCountryCode === "243"
+                      ? "Vodacom · Airtel · Africel · Orange"
+                      : (language === "fr" ? "Modifiez le code pays si besoin" : "Change the country code if needed")}
+                  </p>
                 </div>
 
                 {modalError && (
@@ -607,7 +644,7 @@ export default function VotePage() {
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-600 to-blue-400 flex items-center justify-center text-xl shrink-0">🏆</div>
               <h2 className="font-bold text-xl text-blue-400">{t.topPlayers}</h2>
             </div>
-            {loading ? (
+            {leadersLoading ? (
               <div className="flex items-center justify-center h-32 text-slate-500 text-sm gap-2">
                 <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                 {t.loading}
@@ -696,15 +733,37 @@ export default function VotePage() {
               <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
               {t.voteLocked}
             </div>
-          ) : (
-            <button
-              onClick={handleSubmitClick}
-              disabled={curPlayers.length === 0}
-              className="w-full max-w-md mx-auto block bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 disabled:opacity-40 text-white font-bold py-4 rounded-xl shadow-lg shadow-emerald-600/30 transition-all"
-            >
-              {t.submit}
-            </button>
-          )}
+          ) : (() => {
+            const menDone = selectedPlayers.men.length >= MAX_PLAYERS;
+            const womenDone = selectedPlayers.women.length >= MAX_PLAYERS;
+            const ready = menDone && womenDone;
+            const hint = !menDone && !womenDone
+              ? (language === "fr" ? `Sélectionnez ${MAX_PLAYERS - selectedPlayers.men.length} hommes et ${MAX_PLAYERS - selectedPlayers.women.length} femmes` : `Select ${MAX_PLAYERS - selectedPlayers.men.length} men and ${MAX_PLAYERS - selectedPlayers.women.length} women`)
+              : !menDone
+              ? (language === "fr" ? `Encore ${MAX_PLAYERS - selectedPlayers.men.length} homme(s) à choisir` : `${MAX_PLAYERS - selectedPlayers.men.length} more men needed`)
+              : !womenDone
+              ? (language === "fr" ? `Encore ${MAX_PLAYERS - selectedPlayers.women.length} femme(s) à choisir` : `${MAX_PLAYERS - selectedPlayers.women.length} more women needed`)
+              : null;
+            return (
+              <>
+                {hint && (
+                  <p className="text-center text-xs text-slate-400 mb-2 font-medium">
+                    <span className={menDone ? "text-emerald-400" : "text-slate-400"}>♂ {selectedPlayers.men.length}/{MAX_PLAYERS}</span>
+                    <span className="mx-2 text-slate-600">·</span>
+                    <span className={womenDone ? "text-emerald-400" : "text-slate-400"}>♀ {selectedPlayers.women.length}/{MAX_PLAYERS}</span>
+                    <span className="ml-2 text-slate-500">— {hint}</span>
+                  </p>
+                )}
+                <button
+                  onClick={handleSubmitClick}
+                  disabled={!ready}
+                  className="w-full max-w-md mx-auto block bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 disabled:opacity-40 text-white font-bold py-4 rounded-xl shadow-lg shadow-emerald-600/30 transition-all"
+                >
+                  {t.submit}
+                </button>
+              </>
+            );
+          })()}
         </div>
       )}
     </div>

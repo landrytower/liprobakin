@@ -11,6 +11,7 @@ import {
   getDoc,
   setDoc,
   serverTimestamp,
+  increment,
 } from "firebase/firestore";
 import { firebaseDB } from "@/lib/firebase";
 import { normalizeTeamGender, type TeamGender } from "@/lib/team-gender";
@@ -330,6 +331,22 @@ export default function VotePage() {
       setShowModal(false);
       setSuccessMsg(t.success);
       setTimeout(() => setSuccessMsg(""), 4000);
+
+      // Update public vote-count aggregates (fire-and-forget)
+      if (selectedPlayers.men.length > 0) {
+        setDoc(
+          doc(firebaseDB, "allStarVoteResults", "menPlayers"),
+          Object.fromEntries(selectedPlayers.men.map((id) => [id, increment(1)])),
+          { merge: true }
+        ).catch(() => {});
+      }
+      if (selectedPlayers.women.length > 0) {
+        setDoc(
+          doc(firebaseDB, "allStarVoteResults", "womenPlayers"),
+          Object.fromEntries(selectedPlayers.women.map((id) => [id, increment(1)])),
+          { merge: true }
+        ).catch(() => {});
+      }
     } catch {
       setModalError(language === "fr" ? "Erreur, réessayez." : "Something went wrong. Please try again.");
     } finally {
@@ -344,11 +361,16 @@ export default function VotePage() {
   const freshLeaders = !loading && players.length > 0
     ? players.map((p) => ({ ...p, voteCount: playerVotes[p.id] || 0 })).filter((p) => p.voteCount > 0).sort((a, b) => b.voteCount - a.voteCount).slice(0, 10)
     : null;
-  const rankedLeaders = freshLeaders ?? (leadersSnap?.[snapKey] ?? []).map((s) => ({
+  const snapLeaders = (leadersSnap?.[snapKey] ?? []).map((s) => ({
     id: s.id, name: s.name, teamName: s.teamName,
     teamId: "", headshot: undefined as string | undefined, position: undefined as string | undefined,
     voteCount: s.votes,
   }));
+  // Use fresh (from allStarVoteResults) only when it actually has results;
+  // otherwise fall through to the admin-written snapshot.
+  const rankedLeaders = (freshLeaders !== null && freshLeaders.length > 0)
+    ? freshLeaders
+    : snapLeaders;
   const leadersLoading = loading && rankedLeaders.length === 0;
   const leaderTopVotes = rankedLeaders[0]?.voteCount ?? 1;
   const podiumOrder = [rankedLeaders[1], rankedLeaders[0], rankedLeaders[2]].filter((p): p is (typeof rankedLeaders)[0] => Boolean(p));

@@ -3105,20 +3105,19 @@ export default function Home() {
 
   // Fetch All-Star vote leaders and enabled state
   useEffect(() => {
-    // Check if All-Star voting is enabled
-    const checkAllStarEnabled = async () => {
-      try {
-        const settingsDocRef = doc(firebaseDB, "settings", "allStar");
-        const settingsDoc = await getDoc(settingsDocRef);
-        if (settingsDoc.exists()) {
-          const data = settingsDoc.data();
-          setAllStarEnabled(data.enabled !== false);
-        }
-      } catch (error) {
-        console.error("Error checking All-Star enabled status:", error);
+    // Real-time listener for All-Star enabled status
+    const settingsDocRef = doc(firebaseDB, "settings", "allStar");
+    const unsubscribeSettings = onSnapshot(settingsDocRef, (docSnapshot) => {
+      if (docSnapshot.exists()) {
+        const data = docSnapshot.data();
+        setAllStarEnabled(data.enabled !== false);
+      } else {
+        setAllStarEnabled(false);
       }
-    };
-    checkAllStarEnabled();
+    }, (error) => {
+      console.error("Error listening to All-Star settings:", error);
+      setAllStarEnabled(false);
+    });
 
     // Fetch and aggregate All-Star vote leaders
     const fetchAllStarLeaders = async () => {
@@ -3200,7 +3199,11 @@ export default function Home() {
     
     // Refresh every 2 minutes to keep leaders updated
     const interval = setInterval(fetchAllStarLeaders, 120000);
-    return () => clearInterval(interval);
+    
+    return () => {
+      unsubscribeSettings();
+      clearInterval(interval);
+    };
   }, []);
 
   useEffect(() => {

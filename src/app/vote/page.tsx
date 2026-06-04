@@ -132,6 +132,7 @@ export default function VotePage() {
   const [hasVoted, setHasVoted] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
   const [switchMsg, setSwitchMsg] = useState("");
+  const [voteBanners, setVoteBanners] = useState<Array<{ url: string; enabled: boolean }> | null>(null);
 
   // Check if All-Star voting is enabled
   useEffect(() => {
@@ -191,6 +192,18 @@ export default function VotePage() {
       const d = await getDoc(doc(firebaseDB, "allStarVoteResults", cat));
       return [cat, d.exists() ? (d.data() as Record<string, number>) : {}] as const;
     })).then((entries) => setVoteCounts(Object.fromEntries(entries)));
+  }, []);
+
+  // Fetch vote-page banner images
+  useEffect(() => {
+    getDoc(doc(firebaseDB, "settings", "allStarBanners"))
+      .then((snap) => {
+        const raw = snap.exists()
+          ? ((snap.data().banners || []) as Array<{ url: string; enabled: boolean }>)
+          : [];
+        setVoteBanners([0, 1, 2].map((i) => raw[i] ?? { url: "", enabled: true }));
+      })
+      .catch(() => setVoteBanners([{ url: "", enabled: true }, { url: "", enabled: true }, { url: "", enabled: true }]));
   }, []);
 
   // Bar animations on leaders tab
@@ -471,7 +484,19 @@ export default function VotePage() {
         </div>
       </div>
 
-      <div className="max-w-2xl mx-auto px-4 pt-5 pb-6 space-y-5">
+      {/* ── Banner + content 3-col layout (xl screens only) ── */}
+      <div className="xl:grid xl:grid-cols-[176px_minmax(0,1fr)_176px] xl:gap-5 xl:max-w-6xl xl:mx-auto xl:px-4 xl:items-start xl:pt-5">
+
+        {/* Left banner — hidden below 1280px */}
+        <aside className="hidden xl:block sticky top-[130px] h-fit">
+          {voteBanners?.[0]?.url && voteBanners[0].enabled && (
+            <div className="relative w-full rounded-xl overflow-hidden border border-white/10 shadow-lg shadow-black/50" style={{ aspectRatio: "9/21" }}>
+              <Image src={voteBanners[0].url} alt="Sponsor" fill className="object-cover" sizes="176px" />
+            </div>
+          )}
+        </aside>
+
+      <div className="max-w-2xl mx-auto px-4 xl:px-0 pt-5 xl:pt-0 pb-6 space-y-5">
 
         {viewMode === "vote" ? (
           <>
@@ -639,7 +664,23 @@ export default function VotePage() {
             )}
           </section>
         )}
-      </div>
+      </div>{/* end main content */}
+
+        {/* Right banners — hidden below 1280px */}
+        <aside className="hidden xl:flex flex-col sticky top-[130px] h-fit gap-3">
+          {voteBanners?.[1]?.url && voteBanners[1].enabled && (
+            <div className="relative w-full rounded-xl overflow-hidden border border-white/10 shadow-lg shadow-black/50" style={{ aspectRatio: "9/21" }}>
+              <Image src={voteBanners[1].url} alt="Sponsor" fill className="object-cover" sizes="176px" />
+            </div>
+          )}
+          {voteBanners?.[2]?.url && voteBanners[2].enabled && (
+            <div className="relative w-full rounded-xl overflow-hidden border border-white/10 shadow-lg shadow-black/50" style={{ aspectRatio: "9/16" }}>
+              <Image src={voteBanners[2].url} alt="Sponsor" fill className="object-cover" sizes="176px" />
+            </div>
+          )}
+        </aside>
+
+      </div>{/* end banner layout */}
 
       {/* ── Sticky submit / locked bar ── */}
       {viewMode === "vote" && (

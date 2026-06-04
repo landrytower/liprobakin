@@ -172,6 +172,8 @@ export default function AllStarVotesPage() {
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [allStarEnabled, setAllStarEnabled] = useState(true);
   const [toggling, setToggling] = useState(false);
+  const [allStarTheme, setAllStarTheme] = useState(false);
+  const [togglingTheme, setTogglingTheme] = useState(false);
   const [showVoterDetails, setShowVoterDetails] = useState(false);
   const [voterSearch, setVoterSearch] = useState("");
   const [voterDetails, setVoterDetails] = useState<VoterDetail[]>([]);
@@ -303,12 +305,13 @@ export default function AllStarVotesPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Load All-Star enabled/disabled setting
+  // Load All-Star settings (voting enabled + gold theme)
   useEffect(() => {
     const loadSetting = async () => {
       const settingsDoc = await getDoc(doc(firebaseDB, "settings", "allStar"));
       if (settingsDoc.exists()) {
         setAllStarEnabled(settingsDoc.data().enabled ?? true);
+        setAllStarTheme(settingsDoc.data().allStarTheme === true);
       }
     };
     loadSetting();
@@ -321,12 +324,27 @@ export default function AllStarVotesPage() {
       await setDoc(doc(firebaseDB, "settings", "allStar"), {
         enabled: newState,
         lastModified: new Date(),
-      });
+      }, { merge: true });
       setAllStarEnabled(newState);
     } catch (error) {
       console.error("Failed to toggle All-Star:", error);
     }
     setToggling(false);
+  };
+
+  const toggleTheme = async () => {
+    setTogglingTheme(true);
+    try {
+      const newState = !allStarTheme;
+      await setDoc(doc(firebaseDB, "settings", "allStar"), {
+        allStarTheme: newState,
+        lastModified: new Date(),
+      }, { merge: true });
+      setAllStarTheme(newState);
+    } catch (error) {
+      console.error("Failed to toggle All-Star theme:", error);
+    }
+    setTogglingTheme(false);
   };
 
   const toggleSort = (key: SortKey) => {
@@ -406,6 +424,64 @@ export default function AllStarVotesPage() {
             </svg>
             {refreshing ? t.refreshing : t.refresh}
           </button>
+        </div>
+      </div>
+
+      {/* ── All-Star Gold Theme Toggle ── */}
+      <div className="relative overflow-hidden rounded-2xl border border-yellow-500/20 bg-gradient-to-r from-yellow-950/60 via-amber-950/40 to-yellow-950/60 p-5">
+        {/* Shimmer strip */}
+        <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl">
+          <div className="absolute -left-24 top-0 h-full w-32 rotate-12 bg-gradient-to-r from-transparent via-yellow-400/6 to-transparent animate-shimmer" />
+        </div>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0 transition-all ${
+              allStarTheme
+                ? "bg-gradient-to-br from-yellow-500 to-amber-400 shadow-lg shadow-yellow-500/30"
+                : "bg-slate-800/80 border border-white/10"
+            }`}>
+              ⭐
+            </div>
+            <div>
+              <p className="text-sm font-bold text-yellow-300 tracking-wide uppercase">
+                {language === "fr" ? "Thème All-Star" : "All-Star Theme"}
+              </p>
+              <p className="text-xs text-yellow-600/80 mt-0.5 max-w-xs">
+                {language === "fr"
+                  ? "Applique le thème doré All-Star sur tout le site"
+                  : "Activates the gold All-Star theme across the entire site"}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 shrink-0">
+            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full tracking-wide ${
+              allStarTheme
+                ? "bg-yellow-500/15 text-yellow-400 border border-yellow-500/25"
+                : "bg-slate-700/60 text-slate-500 border border-white/5"
+            }`}>
+              {allStarTheme
+                ? (language === "fr" ? "● ACTIF" : "● ACTIVE")
+                : (language === "fr" ? "○ INACTIF" : "○ INACTIVE")}
+            </span>
+            <button
+              onClick={toggleTheme}
+              disabled={togglingTheme}
+              className={`relative inline-flex h-7 w-14 items-center rounded-full transition-all duration-300 disabled:opacity-50 ${
+                allStarTheme
+                  ? "bg-gradient-to-r from-yellow-600 to-amber-500 shadow-md shadow-yellow-600/40"
+                  : "bg-slate-700"
+              }`}
+              title={allStarTheme ? "Disable gold theme" : "Enable gold theme"}
+            >
+              <span
+                className={`inline-block h-5 w-5 transform rounded-full transition-transform duration-300 shadow-sm ${
+                  allStarTheme
+                    ? "translate-x-8 bg-yellow-100"
+                    : "translate-x-1 bg-slate-300"
+                }`}
+              />
+            </button>
+          </div>
         </div>
       </div>
 

@@ -17,9 +17,15 @@ const AllStarFloatingButton = dynamic(() => import("@/components/AllStarFloating
   loading: () => null,
 });
 
+const AllStarThemeProvider = dynamic(() => import("@/components/AllStarThemeProvider"), {
+  ssr: false,
+  loading: () => null,
+});
+
 export default function ClientWidgets() {
   return (
     <>
+      <AllStarThemeProvider />
       <LivePinnedScore />
       <LiprobakinAI />
       <AllStarFloatingButton />

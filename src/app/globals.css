@@ -639,3 +639,192 @@ body {
     box-shadow: none !important;
   }
 }
+
+/* ─── ⭐ All-Star Gold Theme ──────────────────────────────────────────────── */
+
+/* 1. CSS custom property overrides */
+[data-theme="allstar"] {
+  --background: #0D0900;
+  --foreground: #EDD880;
+  --surface:    #160F00;
+  --card:       #1E1500;
+  --accent:       #C9A227;
+  --accent-strong:#DDB83A;
+  --muted:        #8A7030;
+}
+
+/* 2. Body warm-dark gold background */
+[data-theme="allstar"] body {
+  background:
+    radial-gradient(ellipse at 15% 25%, rgba(180, 128, 12, 0.20), transparent 42%),
+    radial-gradient(ellipse at 85% 5%,  rgba(120, 78,  8, 0.15),  transparent 38%),
+    radial-gradient(ellipse at 50% 90%, rgba(150, 100, 8, 0.12),  transparent 40%),
+    #0D0900;
+  color: var(--foreground);
+}
+
+/* 3. Text selection */
+[data-theme="allstar"] ::selection {
+  background: rgba(201, 162, 39, 0.45);
+  color: #F5E8A0;
+}
+
+/* 4. Black backgrounds → warm dark */
+[data-theme="allstar"] .bg-black      { background-color: #0D0900 !important; }
+[data-theme="allstar"] .bg-black\/10  { background-color: rgba(13,  9, 0, 0.10) !important; }
+[data-theme="allstar"] .bg-black\/20  { background-color: rgba(13,  9, 0, 0.20) !important; }
+[data-theme="allstar"] .bg-black\/30  { background-color: rgba(13,  9, 0, 0.30) !important; }
+[data-theme="allstar"] .bg-black\/40  { background-color: rgba(13,  9, 0, 0.40) !important; }
+[data-theme="allstar"] .bg-black\/50  { background-color: rgba(13,  9, 0, 0.50) !important; }
+[data-theme="allstar"] .bg-black\/60  { background-color: rgba(13,  9, 0, 0.60) !important; }
+[data-theme="allstar"] .bg-black\/70  { background-color: rgba(13,  9, 0, 0.70) !important; }
+[data-theme="allstar"] .bg-black\/80  { background-color: rgba(13,  9, 0, 0.80) !important; }
+[data-theme="allstar"] .bg-black\/90  { background-color: rgba(13,  9, 0, 0.90) !important; }
+
+/* 5. Slate backgrounds → warm dark gold */
+[data-theme="allstar"] .bg-slate-950  { background-color: #100A00 !important; }
+[data-theme="allstar"] .bg-slate-900  { background-color: #160F00 !important; }
+[data-theme="allstar"] .bg-slate-800  { background-color: #1E1500 !important; }
+[data-theme="allstar"] .bg-slate-700  { background-color: #2A1E00 !important; }
+[data-theme="allstar"] .bg-slate-600  { background-color: #382800 !important; }
+
+[data-theme="allstar"] .bg-slate-950\/90 { background-color: rgba(16, 10,  0, 0.90) !important; }
+[data-theme="allstar"] .bg-slate-950\/80 { background-color: rgba(16, 10,  0, 0.80) !important; }
+[data-theme="allstar"] .bg-slate-950\/50 { background-color: rgba(16, 10,  0, 0.50) !important; }
+[data-theme="allstar"] .bg-slate-950\/35 { background-color: rgba(16, 10,  0, 0.35) !important; }
+[data-theme="allstar"] .bg-slate-900\/95 { background-color: rgba(22, 15,  0, 0.95) !important; }
+[data-theme="allstar"] .bg-slate-900\/90 { background-color: rgba(22, 15,  0, 0.90) !important; }
+[data-theme="allstar"] .bg-slate-900\/80 { background-color: rgba(22, 15,  0, 0.80) !important; }
+[data-theme="allstar"] .bg-slate-900\/70 { background-color: rgba(22, 15,  0, 0.70) !important; }
+[data-theme="allstar"] .bg-slate-900\/60 { background-color: rgba(22, 15,  0, 0.60) !important; }
+[data-theme="allstar"] .bg-slate-900\/50 { background-color: rgba(22, 15,  0, 0.50) !important; }
+[data-theme="allstar"] .bg-slate-800\/80 { background-color: rgba(30, 21,  0, 0.80) !important; }
+[data-theme="allstar"] .bg-slate-800\/60 { background-color: rgba(30, 21,  0, 0.60) !important; }
+[data-theme="allstar"] .bg-slate-800\/50 { background-color: rgba(30, 21,  0, 0.50) !important; }
+[data-theme="allstar"] .bg-slate-700\/50 { background-color: rgba(42, 30,  0, 0.50) !important; }
+[data-theme="allstar"] .bg-slate-700\/30 { background-color: rgba(42, 30,  0, 0.30) !important; }
+
+/* 6. Borders → gold tint */
+[data-theme="allstar"] .border-white\/5  { border-color: rgba(201, 162, 39, 0.08) !important; }
+[data-theme="allstar"] .border-white\/10 { border-color: rgba(201, 162, 39, 0.14) !important; }
+[data-theme="allstar"] .border-white\/15 { border-color: rgba(201, 162, 39, 0.18) !important; }
+[data-theme="allstar"] .border-white\/20 { border-color: rgba(201, 162, 39, 0.24) !important; }
+[data-theme="allstar"] .border-white\/30 { border-color: rgba(201, 162, 39, 0.34) !important; }
+
+[data-theme="allstar"] .border-slate-800      { border-color: rgba(201, 162, 39, 0.12) !important; }
+[data-theme="allstar"] .border-slate-700      { border-color: rgba(201, 162, 39, 0.20) !important; }
+[data-theme="allstar"] .border-slate-700\/70  { border-color: rgba(201, 162, 39, 0.15) !important; }
+[data-theme="allstar"] .border-slate-700\/50  { border-color: rgba(201, 162, 39, 0.12) !important; }
+[data-theme="allstar"] .border-slate-600      { border-color: rgba(201, 162, 39, 0.28) !important; }
+[data-theme="allstar"] .border-slate-500      { border-color: rgba(201, 162, 39, 0.42) !important; }
+
+/* 7. Text colors → gold tones */
+[data-theme="allstar"] .text-white     { color: #F0E0A0 !important; }
+[data-theme="allstar"] .text-slate-100 { color: #EDD880 !important; }
+[data-theme="allstar"] .text-slate-200 { color: #D8C060 !important; }
+[data-theme="allstar"] .text-slate-300 { color: #C0A840 !important; }
+[data-theme="allstar"] .text-slate-400 { color: #9A8030 !important; }
+[data-theme="allstar"] .text-slate-500 { color: #786020 !important; }
+
+/* 8. Blue / Sky / Cyan accent → gold */
+[data-theme="allstar"] .bg-blue-600     { background-color: #B8911E !important; }
+[data-theme="allstar"] .bg-blue-500     { background-color: #C9A227 !important; }
+[data-theme="allstar"] .bg-sky-600      { background-color: #B8911E !important; }
+[data-theme="allstar"] .bg-sky-500      { background-color: #C9A227 !important; }
+[data-theme="allstar"] .bg-cyan-600     { background-color: #B8911E !important; }
+[data-theme="allstar"] .bg-cyan-500     { background-color: #C9A227 !important; }
+
+[data-theme="allstar"] .text-blue-400   { color: #D4A827 !important; }
+[data-theme="allstar"] .text-blue-300   { color: #DDB83A !important; }
+[data-theme="allstar"] .text-sky-400    { color: #D4A827 !important; }
+[data-theme="allstar"] .text-sky-300    { color: #DDB83A !important; }
+[data-theme="allstar"] .text-cyan-400   { color: #D4A827 !important; }
+[data-theme="allstar"] .text-cyan-300   { color: #DDB83A !important; }
+
+[data-theme="allstar"] .border-blue-500\/30 { border-color: rgba(201, 162, 39, 0.30) !important; }
+[data-theme="allstar"] .border-blue-500     { border-color: rgba(201, 162, 39, 0.50) !important; }
+[data-theme="allstar"] .border-sky-500      { border-color: rgba(201, 162, 39, 0.50) !important; }
+[data-theme="allstar"] .border-sky-400      { border-color: rgba(201, 162, 39, 0.60) !important; }
+[data-theme="allstar"] .border-cyan-500     { border-color: rgba(201, 162, 39, 0.50) !important; }
+
+/* focus rings */
+[data-theme="allstar"] .focus\:ring-sky-500:focus   { --tw-ring-color: rgba(201, 162, 39, 0.5) !important; }
+[data-theme="allstar"] .focus\:ring-blue-500:focus  { --tw-ring-color: rgba(201, 162, 39, 0.5) !important; }
+[data-theme="allstar"] .focus\:border-sky-500:focus { border-color: rgba(201, 162, 39, 0.6) !important; }
+
+/* 9. Gradient from/via/to → gold */
+[data-theme="allstar"] .from-slate-900  { --tw-gradient-from: #160F00 !important; }
+[data-theme="allstar"] .from-slate-800  { --tw-gradient-from: #1E1500 !important; }
+[data-theme="allstar"] .via-slate-800   { --tw-gradient-via: #1E1500 !important; }
+[data-theme="allstar"] .to-slate-900    { --tw-gradient-to: #160F00 !important; }
+[data-theme="allstar"] .from-blue-400   { --tw-gradient-from: #C9A227 !important; }
+[data-theme="allstar"] .from-sky-400    { --tw-gradient-from: #C9A227 !important; }
+[data-theme="allstar"] .from-cyan-400   { --tw-gradient-from: #C9A227 !important; }
+[data-theme="allstar"] .to-purple-400   { --tw-gradient-to: #A07C1A !important; }
+[data-theme="allstar"] .via-purple-400  { --tw-gradient-via: #C9A227 !important; }
+[data-theme="allstar"] .to-pink-400     { --tw-gradient-to: #B88C20 !important; }
+
+/* 10. Animated send button → gold */
+[data-theme="allstar"] .animated-send-btn {
+  background: linear-gradient(135deg, rgba(201, 162, 39, 0.15), rgba(221, 184, 58, 0.10));
+  border-color: rgba(201, 162, 39, 0.30);
+  box-shadow: 0 4px 12px rgba(201, 162, 39, 0.10);
+}
+[data-theme="allstar"] .animated-send-btn:hover {
+  background: linear-gradient(135deg, rgba(201, 162, 39, 0.28), rgba(221, 184, 58, 0.18));
+  border-color: rgba(201, 162, 39, 0.55);
+  box-shadow: 0 6px 20px rgba(201, 162, 39, 0.22);
+}
+
+/* 11. Scrollbars → gold */
+[data-theme="allstar"] .teams-scroller { scrollbar-color: #C9A227 #1E1500; }
+[data-theme="allstar"] .teams-scroller::-webkit-scrollbar-track { background: #1E1500; }
+[data-theme="allstar"] .teams-scroller::-webkit-scrollbar-thumb { background: linear-gradient(90deg, #C9A227, #DDB83A); }
+[data-theme="allstar"] .teams-scroller::-webkit-scrollbar-thumb:hover { background: linear-gradient(90deg, #DDB83A, #F0C840); }
+[data-theme="allstar"] .custom-scrollbar::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #C9A227, #DDB83A); }
+[data-theme="allstar"] .custom-scrollbar { scrollbar-color: #C9A227 rgba(255,255,255,0.05); }
+
+/* 12. Gold shimmer utility */
+@keyframes goldSweep {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+
+.allstar-gold-shimmer {
+  background: linear-gradient(
+    90deg,
+    #C9A227 0%,
+    #F0D060 30%,
+    #C9A227 50%,
+    #ECC840 70%,
+    #C9A227 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: goldSweep 3s linear infinite;
+}
+
+/* 13. Nav bar gold glow border */
+[data-theme="allstar"] nav {
+  border-color: rgba(201, 162, 39, 0.18) !important;
+  box-shadow: 0 1px 0 0 rgba(201, 162, 39, 0.10);
+}
+
+/* 14. Backdrop/glass cards gold tint */
+[data-theme="allstar"] .backdrop-blur-xl,
+[data-theme="allstar"] .backdrop-blur-lg,
+[data-theme="allstar"] .backdrop-blur-md {
+  backdrop-filter: blur(12px) sepia(30%) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) sepia(30%) saturate(150%);
+}
+
+/* 15. Input fields gold focus */
+[data-theme="allstar"] input:focus,
+[data-theme="allstar"] textarea:focus,
+[data-theme="allstar"] select:focus {
+  border-color: rgba(201, 162, 39, 0.6) !important;
+  outline-color: rgba(201, 162, 39, 0.3) !important;
+  box-shadow: 0 0 0 2px rgba(201, 162, 39, 0.15) !important;
+}

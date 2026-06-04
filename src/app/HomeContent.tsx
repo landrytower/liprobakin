@@ -3038,8 +3038,8 @@ export default function Home() {
   useEffect(() => {
     // Real-time listener for news articles
     const newsRef = collection(firebaseDB, "news");
-    // Fetch ALL news articles (no limit)
-    const newsQuery = query(newsRef, orderBy("createdAt", "desc"));
+    // Fetch last 10 news articles
+    const newsQuery = query(newsRef, orderBy("createdAt", "desc"), limit(10));
     
     const unsubscribe = onSnapshot(newsQuery, (snapshot) => {
       const articles: NewsArticle[] = snapshot.docs.map((doc) => {
@@ -3082,7 +3082,7 @@ export default function Home() {
           isPaused: data.isPaused || false,
         };
       });
-      // Show ALL articles (no filtering or limiting)
+      // Show last 10 posted news articles
       setNewsArticles(articles);
       if (articles.length > 0 && !featuredArticleId) {
         setFeaturedArticleId(articles[0].id);

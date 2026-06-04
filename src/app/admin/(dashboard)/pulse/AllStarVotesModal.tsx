@@ -5,7 +5,7 @@ import { collection, getDocs } from "firebase/firestore";
 import { firebaseDB } from "@/lib/firebase";
 import { normalizeTeamGender } from "@/lib/team-gender";
 
-type Category = "menPlayers" | "womenPlayers" | "menCoaches" | "womenCoaches";
+type Category = "menPlayers" | "womenPlayers";
 
 type Entry = {
   id: string;
@@ -19,11 +19,9 @@ type Results = Record<Category, Entry[]>;
 const CATEGORY_LABELS: Record<Category, { en: string; fr: string }> = {
   menPlayers:   { en: "Men – Players",  fr: "Hommes – Joueurs" },
   womenPlayers: { en: "Women – Players", fr: "Femmes – Joueuses" },
-  menCoaches:   { en: "Men – Coaches",  fr: "Hommes – Entraîneurs" },
-  womenCoaches: { en: "Women – Coaches", fr: "Femmes – Entraîneures" },
 };
 
-const CATEGORIES: Category[] = ["menPlayers", "womenPlayers", "menCoaches", "womenCoaches"];
+const CATEGORIES: Category[] = ["menPlayers", "womenPlayers"];
 
 export default function AllStarVotesModal({
   onClose,
@@ -34,7 +32,7 @@ export default function AllStarVotesModal({
 }) {
   const [loading, setLoading] = useState(true);
   const [results, setResults] = useState<Results>({
-    menPlayers: [], womenPlayers: [], menCoaches: [], womenCoaches: [],
+    menPlayers: [], womenPlayers: [],
   });
   const [tab, setTab] = useState<Category>("menPlayers");
   const [totalVoters, setTotalVoters] = useState(0);
@@ -46,7 +44,7 @@ export default function AllStarVotesModal({
       setTotalVoters(votesSnap.size);
 
       const counts: Record<Category, Record<string, number>> = {
-        menPlayers: {}, womenPlayers: {}, menCoaches: {}, womenCoaches: {},
+        menPlayers: {}, womenPlayers: {},
       };
 
       for (const d of votesSnap.docs) {
@@ -60,7 +58,6 @@ export default function AllStarVotesModal({
       // 2. Build id → { name, teamName } lookup from all team rosters
       const teamsSnap = await getDocs(collection(firebaseDB, "teams"));
       const playerMap: Record<string, { name: string; teamName: string; gender: string }> = {};
-      const coachMap: Record<string, { name: string; teamName: string; gender: string }> = {};
 
       await Promise.all(
         teamsSnap.docs.map(async (teamDoc) => {
@@ -68,23 +65,12 @@ export default function AllStarVotesModal({
           const teamGender = normalizeTeamGender(td.gender, td.logo, "men");
           const teamName = [td.city, td.name].filter(Boolean).join(" ");
 
-          const [rosterSnap, coachSnap] = await Promise.all([
-            getDocs(collection(firebaseDB, "teams", teamDoc.id, "roster")),
-            getDocs(collection(firebaseDB, "teams", teamDoc.id, "coachStaff")),
-          ]);
+          const rosterSnap = await getDocs(collection(firebaseDB, "teams", teamDoc.id, "roster"));
 
           for (const p of rosterSnap.docs) {
             const pd = p.data();
             playerMap[p.id] = {
               name: `${pd.firstName || ""} ${pd.lastName || ""}`.trim() || pd.name || p.id,
-              teamName,
-              gender: teamGender,
-            };
-          }
-          for (const c of coachSnap.docs) {
-            const cd = c.data();
-            coachMap[c.id] = {
-              name: `${cd.firstName || ""} ${cd.lastName || ""}`.trim() || c.id,
               teamName,
               gender: teamGender,
             };
@@ -109,8 +95,6 @@ export default function AllStarVotesModal({
       setResults({
         menPlayers:   resolve(counts.menPlayers,   playerMap),
         womenPlayers: resolve(counts.womenPlayers,  playerMap),
-        menCoaches:   resolve(counts.menCoaches,    coachMap),
-        womenCoaches: resolve(counts.womenCoaches,  coachMap),
       });
       setLoading(false);
     };

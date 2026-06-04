@@ -7,7 +7,7 @@ import { firebaseDB } from "@/lib/firebase";
 import { normalizeTeamGender } from "@/lib/team-gender";
 import { useAdmin } from "../layout";
 
-type Category = "menPlayers" | "womenPlayers" | "menCoaches" | "womenCoaches";
+type Category = "menPlayers" | "womenPlayers";
 type SortKey = "votes" | "pctVoters" | "pctCategory" | "pctTotal" | "today";
 type SortDir = "asc" | "desc";
 
@@ -22,15 +22,22 @@ type Entry = {
   pctTotal: number;
 };
 
+type VoterDetail = {
+  voterId: string;
+  voterName: string;
+  voterContact: string;
+  menPlayers: Array<{ id: string; name: string }>;
+  womenPlayers: Array<{ id: string; name: string }>;
+  votedAt: Date | null;
+};
+
 type Results = Record<Category, Entry[]>;
 
-const CATEGORIES: Category[] = ["menPlayers", "womenPlayers", "menCoaches", "womenCoaches"];
+const CATEGORIES: Category[] = ["menPlayers", "womenPlayers"];
 
 const LABELS: Record<Category, { en: string; fr: string; icon: string }> = {
   menPlayers:   { en: "Men — Players",   fr: "Hommes — Joueurs",      icon: "🏀" },
   womenPlayers: { en: "Women — Players", fr: "Femmes — Joueuses",     icon: "🏀" },
-  menCoaches:   { en: "Men — Coaches",   fr: "Hommes — Entraîneurs",  icon: "📋" },
-  womenCoaches: { en: "Women — Coaches", fr: "Femmes — Entraîneures", icon: "📋" },
 };
 
 const tr = {
@@ -43,7 +50,16 @@ const tr = {
     womenNominees: "Women Nominees",
     voterProfiles: "Voter Profiles",
     voterProfilesDesc: "registered voters",
-    voterProfilesComingSoon: "Email / Phone auth — coming soon",
+    voterDetails: "Voter Details",
+    showVoters: "Show voters",
+    hideVoters: "Hide voters",
+    searchVoters: "Search voters by name, contact, or players...",
+    voterName: "Voter",
+    contact: "Contact",
+    votedFor: "Voted For",
+    votedAt: "Voted At",
+    noVoterData: "No voter profile data available",
+    noSearchResults: "No voters match your search",
     refresh: "Refresh",
     refreshing: "Refreshing…",
     lastRefreshed: "Refreshed",
@@ -69,7 +85,16 @@ const tr = {
     womenNominees: "Nominees Femmes",
     voterProfiles: "Profils Votants",
     voterProfilesDesc: "votants enregistrés",
-    voterProfilesComingSoon: "Auth Email / Téléphone — bientôt",
+    voterDetails: "Détails des Votants",
+    showVoters: "Afficher les votants",
+    hideVoters: "Masquer les votants",
+    searchVoters: "Rechercher par nom, contact ou joueurs...",
+    voterName: "Votant",
+    contact: "Contact",
+    votedFor: "A voté pour",
+    votedAt: "Date de vote",
+    noVoterData: "Aucune donnée de profil disponible",
+    noSearchResults: "Aucun votant ne correspond à votre recherche",
     refresh: "Actualiser",
     refreshing: "Actualisation…",
     lastRefreshed: "Actualisé",
@@ -147,8 +172,11 @@ export default function AllStarVotesPage() {
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [allStarEnabled, setAllStarEnabled] = useState(true);
   const [toggling, setToggling] = useState(false);
+  const [showVoterDetails, setShowVoterDetails] = useState(false);
+  const [voterSearch, setVoterSearch] = useState("");
+  const [voterDetails, setVoterDetails] = useState<VoterDetail[]>([]);
   const [results, setResults] = useState<Results>({
-    menPlayers: [], womenPlayers: [], menCoaches: [], womenCoaches: [],
+    menPlayers: [], womenPlayers: [],
   });
 
   const load = useCallback(async (isRefresh = false) => {
@@ -163,10 +191,10 @@ export default function AllStarVotesPage() {
     setTotalVoters(voterCount);
 
     const counts: Record<Category, Record<string, number>> = {
-      menPlayers: {}, womenPlayers: {}, menCoaches: {}, womenCoaches: {},
+      menPlayers: {}, womenPlayers: {},
     };
     const todayCounts: Record<Category, Record<string, number>> = {
-      menPlayers: {}, womenPlayers: {}, menCoaches: {}, womenCoaches: {},
+      menPlayers: {}, womenPlayers: {},
     };
     let totalCast = 0;
 
@@ -190,34 +218,21 @@ export default function AllStarVotesPage() {
     const catTotals: Record<Category, number> = {
       menPlayers:   Object.values(counts.menPlayers).reduce((a, b) => a + b, 0),
       womenPlayers: Object.values(counts.womenPlayers).reduce((a, b) => a + b, 0),
-      menCoaches:   Object.values(counts.menCoaches).reduce((a, b) => a + b, 0),
-      womenCoaches: Object.values(counts.womenCoaches).reduce((a, b) => a + b, 0),
     };
 
     // 2. Build name/team lookup from rosters
     const teamsSnap = await getDocs(collection(firebaseDB, "teams"));
     const playerMap: Record<string, { name: string; teamName: string }> = {};
-    const coachMap:  Record<string, { name: string; teamName: string }> = {};
 
     await Promise.all(
       teamsSnap.docs.map(async (teamDoc) => {
         const td = teamDoc.data();
         const teamName = [td.city, td.name].filter(Boolean).join(" ");
-        const [rosterSnap, coachSnap] = await Promise.all([
-          getDocs(collection(firebaseDB, "teams", teamDoc.id, "roster")),
-          getDocs(collection(firebaseDB, "teams", teamDoc.id, "coachStaff")),
-        ]);
+        const rosterSnap = await getDocs(collection(firebaseDB, "teams", teamDoc.id, "roster"));
         for (const p of rosterSnap.docs) {
           const pd = p.data();
           playerMap[p.id] = {
             name: `${pd.firstName || ""} ${pd.lastName || ""}`.trim() || pd.name || p.id,
-            teamName,
-          };
-        }
-        for (const c of coachSnap.docs) {
-          const cd = c.data();
-          coachMap[c.id] = {
-            name: `${cd.firstName || ""} ${cd.lastName || ""}`.trim() || c.id,
             teamName,
           };
         }
@@ -247,9 +262,39 @@ export default function AllStarVotesPage() {
     setResults({
       menPlayers:   resolve(counts.menPlayers,   todayCounts.menPlayers,   playerMap, catTotals.menPlayers),
       womenPlayers: resolve(counts.womenPlayers,  todayCounts.womenPlayers, playerMap, catTotals.womenPlayers),
-      menCoaches:   resolve(counts.menCoaches,    todayCounts.menCoaches,   coachMap,  catTotals.menCoaches),
-      womenCoaches: resolve(counts.womenCoaches,  todayCounts.womenCoaches, coachMap,  catTotals.womenCoaches),
     });
+
+    // 4. Fetch voter details with user profiles
+    const voterDetailsData: VoterDetail[] = [];
+    for (const voteDoc of votesSnap.docs) {
+      const voteData = voteDoc.data();
+      const voterId = voteDoc.id;
+      
+      // Fetch user profile
+      try {
+        const userDoc = await getDoc(doc(firebaseDB, "users", voterId));
+        const userData = userDoc.exists() ? userDoc.data() : null;
+        
+        const menPlayerIds = (voteData.menPlayers || []) as string[];
+        const womenPlayerIds = (voteData.womenPlayers || []) as string[];
+        
+        voterDetailsData.push({
+          voterId,
+          voterName: userData 
+            ? `${userData.firstName || ""} ${userData.lastName || ""}`.trim() || "Unknown"
+            : "Unknown",
+          voterContact: userData?.phoneNumber || userData?.email || "—",
+          menPlayers: menPlayerIds.map(id => ({ id, name: playerMap[id]?.name || id })),
+          womenPlayers: womenPlayerIds.map(id => ({ id, name: playerMap[id]?.name || id })),
+          votedAt: (voteData.lastModified as Timestamp | undefined)?.toDate?.() || null,
+        });
+      } catch (error) {
+        console.error(`Failed to fetch user profile for ${voterId}:`, error);
+      }
+    }
+    setVoterDetails(voterDetailsData.sort((a, b) => 
+      (b.votedAt?.getTime() || 0) - (a.votedAt?.getTime() || 0)
+    ));
 
     setLastRefreshed(new Date());
     setLoading(false);
@@ -395,12 +440,148 @@ export default function AllStarVotesPage() {
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
           {loading ? "—" : totalVoters.toLocaleString()} {t.voterProfilesDesc}
         </span>
-        <span className="flex items-center gap-1.5 bg-slate-700/50 rounded-full px-3 py-1 text-xs text-slate-500">
-          <span className="w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0" />
-          {t.voterProfilesComingSoon}
-        </span>
+        <button
+          onClick={() => setShowVoterDetails(!showVoterDetails)}
+          className="flex items-center gap-1.5 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 rounded-full px-3 py-1 text-xs text-blue-400 font-semibold transition-colors"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d={showVoterDetails ? "M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" : "M12 4v16m8-8H4"} />
+          </svg>
+          {showVoterDetails ? t.hideVoters : t.showVoters}
+        </button>
         <span className="ml-auto text-xs text-slate-600 hidden sm:block">→ {language === "fr" ? "Analytique de profil" : "Profile analytics"}</span>
       </div>
+
+      {/* ── Voter Details Table ── */}
+      {showVoterDetails && (
+        <div className="bg-slate-900 border border-white/5 rounded-2xl overflow-hidden">
+          <div className="px-4 py-3 bg-slate-800/80 border-b border-white/5 flex items-center justify-between gap-4">
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              👥 {t.voterDetails}
+              <span className="text-xs px-2 py-0.5 bg-blue-500/20 text-blue-400 rounded-full font-semibold">
+                {voterDetails.length}
+              </span>
+            </h3>
+            {/* Search Input */}
+            <div className="relative flex-1 max-w-md">
+              <input
+                type="text"
+                value={voterSearch}
+                onChange={(e) => setVoterSearch(e.target.value)}
+                placeholder={t.searchVoters}
+                className="w-full px-4 py-2 pl-10 bg-slate-900 border border-white/10 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
+              />
+              <svg
+                className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              {voterSearch && (
+                <button
+                  onClick={() => setVoterSearch("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors"
+                  title={language === "fr" ? "Effacer la recherche" : "Clear search"}
+                  aria-label={language === "fr" ? "Effacer la recherche" : "Clear search"}
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          </div>
+          {(() => {
+            // Filter voters based on search query
+            const searchLower = voterSearch.toLowerCase().trim();
+            const filteredVoters = searchLower
+              ? voterDetails.filter((voter) => {
+                  const nameMatch = voter.voterName.toLowerCase().includes(searchLower);
+                  const contactMatch = voter.voterContact.toLowerCase().includes(searchLower);
+                  const menPlayersMatch = voter.menPlayers.some(p => p.name.toLowerCase().includes(searchLower));
+                  const womenPlayersMatch = voter.womenPlayers.some(p => p.name.toLowerCase().includes(searchLower));
+                  return nameMatch || contactMatch || menPlayersMatch || womenPlayersMatch;
+                })
+              : voterDetails;
+
+            if (voterDetails.length === 0) {
+              return (
+                <div className="flex flex-col items-center justify-center py-12 text-slate-500 gap-2">
+                  <span className="text-3xl">👤</span>
+                  <p className="text-sm">{t.noVoterData}</p>
+                </div>
+              );
+            }
+
+            if (filteredVoters.length === 0) {
+              return (
+                <div className="flex flex-col items-center justify-center py-12 text-slate-500 gap-2">
+                  <span className="text-3xl">🔍</span>
+                  <p className="text-sm">{t.noSearchResults}</p>
+                  <button
+                    onClick={() => setVoterSearch("")}
+                    className="mt-2 text-xs text-blue-400 hover:text-blue-300 underline"
+                  >
+                    {language === "fr" ? "Effacer la recherche" : "Clear search"}
+                  </button>
+                </div>
+              );
+            }
+
+            return (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-800/60 border-b border-white/5">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs uppercase tracking-wider font-semibold text-slate-400">#</th>
+                      <th className="px-4 py-3 text-left text-xs uppercase tracking-wider font-semibold text-slate-400">{t.voterName}</th>
+                      <th className="px-4 py-3 text-left text-xs uppercase tracking-wider font-semibold text-slate-400">{t.contact}</th>
+                      <th className="px-4 py-3 text-left text-xs uppercase tracking-wider font-semibold text-slate-400">{t.votedFor}</th>
+                      <th className="px-4 py-3 text-left text-xs uppercase tracking-wider font-semibold text-slate-400">{t.votedAt}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredVoters.map((voter, idx) => (
+                      <tr key={voter.voterId} className="border-b border-white/5 hover:bg-slate-800/40 transition-colors">
+                        <td className="px-4 py-3 text-slate-500 font-mono text-xs">{idx + 1}</td>
+                        <td className="px-4 py-3 text-white font-medium">{voter.voterName}</td>
+                        <td className="px-4 py-3 text-slate-400 font-mono text-xs">{voter.voterContact}</td>
+                        <td className="px-4 py-3">
+                          <div className="space-y-1">
+                            {voter.menPlayers.length > 0 && (
+                              <div className="text-xs">
+                                <span className="text-blue-400 font-semibold">🏀 Hommes: </span>
+                                <span className="text-slate-300">{voter.menPlayers.map(p => p.name).join(", ")}</span>
+                              </div>
+                            )}
+                            {voter.womenPlayers.length > 0 && (
+                              <div className="text-xs">
+                                <span className="text-purple-400 font-semibold">🏀 Femmes: </span>
+                                <span className="text-slate-300">{voter.womenPlayers.map(p => p.name).join(", ")}</span>
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-slate-400 text-xs">
+                          {voter.votedAt ? voter.votedAt.toLocaleString(language === "fr" ? "fr-FR" : "en-US", {
+                            month: "short",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          }) : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()}
+        </div>
+      )}
 
       {/* ── Category tabs ── */}
       <div className="flex gap-2 flex-wrap">

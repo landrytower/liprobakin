@@ -18,8 +18,6 @@ async function aggregateVotes() {
     const voteCounts = {
       menPlayers: {},
       womenPlayers: {},
-      menCoaches: {},
-      womenCoaches: {},
     };
 
     // Fetch all votes
@@ -40,16 +38,6 @@ async function aggregateVotes() {
       (vote.womenPlayers || []).forEach((playerId) => {
         voteCounts.womenPlayers[playerId] = (voteCounts.womenPlayers[playerId] || 0) + 1;
       });
-
-      // Count men's coach votes
-      (vote.menCoaches || []).forEach((coachId) => {
-        voteCounts.menCoaches[coachId] = (voteCounts.menCoaches[coachId] || 0) + 1;
-      });
-
-      // Count women's coach votes
-      (vote.womenCoaches || []).forEach((coachId) => {
-        voteCounts.womenCoaches[coachId] = (voteCounts.womenCoaches[coachId] || 0) + 1;
-      });
     });
 
     // Write aggregated results to Firestore
@@ -57,16 +45,12 @@ async function aggregateVotes() {
 
     batch.set(db.collection("allStarVoteResults").doc("menPlayers"), voteCounts.menPlayers);
     batch.set(db.collection("allStarVoteResults").doc("womenPlayers"), voteCounts.womenPlayers);
-    batch.set(db.collection("allStarVoteResults").doc("menCoaches"), voteCounts.menCoaches);
-    batch.set(db.collection("allStarVoteResults").doc("womenCoaches"), voteCounts.womenCoaches);
 
     await batch.commit();
 
     console.log("\n✅ Vote aggregation complete!");
     console.log(`Men's Players: ${Object.keys(voteCounts.menPlayers).length} candidates received votes`);
     console.log(`Women's Players: ${Object.keys(voteCounts.womenPlayers).length} candidates received votes`);
-    console.log(`Men's Coaches: ${Object.keys(voteCounts.menCoaches).length} candidates received votes`);
-    console.log(`Women's Coaches: ${Object.keys(voteCounts.womenCoaches).length} candidates received votes`);
 
     // Show top 5 vote-getters in each category
     const sortedMenPlayers = Object.entries(voteCounts.menPlayers)

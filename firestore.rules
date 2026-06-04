@@ -48,12 +48,17 @@ service cloud.firestore {
 
 
     // ── All-Star votes ───────────────────────────────────────────────────────
-    // Each voter writes exactly their own document (keyed by uid).
-    // Admins can read all votes for analytics.
+    // No auth required. Doc ID = normalized phone digits (e.g. 243812345678).
+    // Public get for duplicate check before submit; list restricted to admins.
+    // Create allowed only if doc doesn't already exist (one vote per phone).
+    // Updates and deletes locked except for admins.
 
     match /allStarVotes/{voterId} {
-      allow read:   if isOwner(voterId) || isAdmin();
-      allow write:  if isOwner(voterId);
+      allow get:    if true;
+      allow list:   if isAdmin();
+      allow create: if !exists(/databases/$(database)/documents/allStarVotes/$(voterId));
+      allow update: if false;
+      allow delete: if isAdmin();
     }
 
 

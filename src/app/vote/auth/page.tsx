@@ -27,7 +27,7 @@ export default function VoteAuthPage() {
   const router = useRouter();
   const { signIn, signUp } = useAuth();
 
-  const [mode, setMode] = useState<Mode>("signin");
+  const [mode, setMode] = useState<Mode>("register");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -144,7 +144,7 @@ export default function VoteAuthPage() {
 
           {/* Mode tabs */}
           <div className="flex bg-slate-800/60 rounded-xl p-1 mb-6 border border-white/5">
-            {(["signin", "register"] as Mode[]).map((m) => (
+            {(["register", "signin"] as Mode[]).map((m) => (
               <button
                 key={m}
                 onClick={() => switchMode(m)}

@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import Image from "next/image";
 import { collection, getDocs, doc, getDoc, setDoc, deleteDoc, writeBatch } from "firebase/firestore";
 import type { Timestamp } from "firebase/firestore";
-import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+import type { UploadTask } from "firebase/storage";
+import { ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
 import { firebaseDB, firebaseStorage } from "@/lib/firebase";
 import { normalizeTeamGender } from "@/lib/team-gender";
 import { useAdmin } from "../layout";
@@ -187,6 +188,7 @@ export default function AllStarVotesPage() {
   const [homeBannerDeleting, setHomeBannerDeleting] = useState(false);
   const [homeBannerError, setHomeBannerError] = useState("");
   const homeBannerInputRef = useRef<HTMLInputElement | null>(null);
+  const uploadTaskRef = useRef<UploadTask | null>(null);
 
   // Reset votes
   const [showResetModal, setShowResetModal] = useState(false);
@@ -340,30 +342,39 @@ export default function AllStarVotesPage() {
   }, []);
 
   const uploadHomeBanner = async (file: File) => {
+    const MAX_MB = 8;
+    if (file.size > MAX_MB * 1024 * 1024) {
+      setHomeBannerError(
+        language === "fr"
+          ? `Fichier trop volumineux — maximum ${MAX_MB} MB. Veuillez compresser l'image.`
+          : `File too large — maximum ${MAX_MB} MB. Please compress the image first.`
+      );
+      return;
+    }
+
     setHomeBannerUploading(true);
     setHomeBannerError("");
-    
-    // Create timeout promise (30 seconds)
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error("Upload timeout - please try again with a smaller file")), 30000)
-    );
-    
+
     try {
-      // Race between upload and timeout
-      await Promise.race([
-        (async () => {
-          const sRef = storageRef(firebaseStorage, "allstar-banners/home-banner");
-          await uploadBytes(sRef, file, { contentType: file.type });
-          const url = await getDownloadURL(sRef);
-          await setDoc(doc(firebaseDB, "settings", "allStarBanner"), { url });
-          setHomeBannerUrl(url);
-        })(),
-        timeoutPromise
-      ]);
-    } catch (err) {
+      const sRef = storageRef(firebaseStorage, "allstar-banners/home-banner");
+      const task = uploadBytesResumable(sRef, file, { contentType: file.type });
+      uploadTaskRef.current = task;
+
+      await new Promise<void>((resolve, reject) => {
+        task.on("state_changed", null, reject, resolve);
+      });
+
+      uploadTaskRef.current = null;
+      const url = await getDownloadURL(sRef);
+      await setDoc(doc(firebaseDB, "settings", "allStarBanner"), { url });
+      setHomeBannerUrl(url);
+    } catch (err: unknown) {
+      uploadTaskRef.current = null;
+      if (err && typeof err === "object" && "code" in err && (err as { code: string }).code === "storage/cancelled") return;
       console.error("Banner upload failed:", err);
-      const errorMsg = err instanceof Error ? err.message : "Upload failed - please try again";
-      setHomeBannerError(errorMsg);
+      setHomeBannerError(
+        language === "fr" ? "Échec de l'import — veuillez réessayer." : "Upload failed — please try again."
+      );
     } finally {
       setHomeBannerUploading(false);
     }
@@ -686,7 +697,7 @@ export default function AllStarVotesPage() {
                 </span>
                 {homeBannerUploading && (
                   <button
-                    onClick={() => setHomeBannerUploading(false)}
+                    onClick={() => { uploadTaskRef.current?.cancel(); uploadTaskRef.current = null; }}
                     className="mt-2 px-3 py-1 bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-300 text-xs rounded-lg transition-colors"
                   >
                     {language === "fr" ? "Annuler" : "Cancel"}

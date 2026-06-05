@@ -231,7 +231,6 @@ export default function CalendrierPage() {
           refsMap.set(doc.id, name || "Referee");
         });
 
-        const now = new Date();
         const parsed: ScheduleGame[] = [];
 
         snapshot.docs.forEach((doc) => {
@@ -239,15 +238,11 @@ export default function CalendrierPage() {
           const dateObj = parseGameDateTime(data.date, data.time);
           if (!dateObj) return;
 
-          // Skip completed/cancelled/hidden
+          // Skip only explicitly completed/cancelled/hidden games
           if (data.completed) return;
           if (data.isHiddenFromPublic) return;
           const status = String(data.status || "").toLowerCase();
           if (status === "cancelled" || status === "completed") return;
-
-          // Only upcoming + a bit of grace
-          const minutesSinceStart = (now.getTime() - dateObj.getTime()) / (1000 * 60);
-          if (dateObj < now && minutesSinceStart > 120) return;
 
           const homeTeam = teamsMap.get(data.homeTeamId);
           const awayTeam = teamsMap.get(data.awayTeamId);

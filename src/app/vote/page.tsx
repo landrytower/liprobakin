@@ -481,14 +481,17 @@ export default function VotePage() {
       {showModal && (
         <>
           <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50" onClick={() => setShowModal(false)} />
-          <div className="fixed inset-x-4 top-1/2 -translate-y-1/2 max-w-sm mx-auto z-50">
-            <div className="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
-              <div className="px-6 pt-6 pb-4 border-b border-white/5">
+          {/* Outer: fills safe zone, flex-centers the card; card scrolls if taller than viewport */}
+          <div className="fixed inset-x-4 top-4 bottom-4 max-w-sm mx-auto z-50 flex flex-col justify-center">
+            <div className="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl flex flex-col max-h-full overflow-hidden">
+              {/* Sticky header */}
+              <div className="px-5 pt-5 pb-3.5 border-b border-white/5 shrink-0">
                 <h3 className="text-lg font-black text-white">{language === "fr" ? "Qui êtes-vous ?" : "Who are you?"}</h3>
                 <p className="text-xs text-slate-400 mt-0.5">{language === "fr" ? "Requis pour valider votre vote unique." : "Required to validate your one-time vote."}</p>
               </div>
-              <form onSubmit={handleModalSubmit} className="p-6 space-y-4">
-                <div className="grid grid-cols-2 gap-3">
+              {/* Scrollable form */}
+              <form onSubmit={handleModalSubmit} className="p-5 space-y-3 overflow-y-auto overscroll-contain">
+                <div className="grid grid-cols-2 gap-2.5">
                   <div>
                     <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
                       {language === "fr" ? "Prénom" : "First name"}
@@ -499,7 +502,7 @@ export default function VotePage() {
                       onChange={(e) => setModalFirstName(e.target.value)}
                       placeholder="Princesse"
                       required
-                      className="w-full bg-slate-800 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
+                      className="w-full bg-slate-800 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
                     />
                   </div>
                   <div>
@@ -512,7 +515,7 @@ export default function VotePage() {
                       onChange={(e) => setModalLastName(e.target.value)}
                       placeholder="Gafutshi"
                       required
-                      className="w-full bg-slate-800 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
+                      className="w-full bg-slate-800 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
                     />
                   </div>
                 </div>
@@ -521,7 +524,7 @@ export default function VotePage() {
                   <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
                     {language === "fr" ? "Numéro de téléphone" : "Phone number"}
                   </label>
-                  <div className="flex items-center bg-slate-800 border border-white/10 rounded-xl px-3 py-2.5 focus-within:border-emerald-500 transition-colors gap-1.5">
+                  <div className="flex items-center bg-slate-800 border border-white/10 rounded-xl px-3 py-2 focus-within:border-emerald-500 transition-colors gap-1.5">
                     <span className="text-base select-none shrink-0">{modalCountryCode === "243" ? "🇨🇩" : "🌍"}</span>
                     <span className="text-slate-400 text-sm shrink-0">+</span>
                     <input
@@ -563,7 +566,7 @@ export default function VotePage() {
                           key={r}
                           type="button"
                           onClick={() => setModalRole(r)}
-                          className={`py-2.5 rounded-xl text-sm font-bold transition-all border ${
+                          className={`py-2 rounded-xl text-sm font-bold transition-all border ${
                             active
                               ? "bg-emerald-600 border-emerald-500 text-white shadow shadow-emerald-600/30"
                               : "bg-slate-800 border-white/10 text-slate-300 hover:border-white/25"
@@ -587,7 +590,7 @@ export default function VotePage() {
                     onChange={(e) => setModalEmail(e.target.value)}
                     placeholder="princesse@exemple.com"
                     inputMode="email"
-                    className="w-full bg-slate-800 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
+                    className="w-full bg-slate-800 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
                   />
                 </div>
 
@@ -598,7 +601,7 @@ export default function VotePage() {
                 <button
                   type="submit"
                   disabled={modalSubmitting}
-                  className="w-full bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 disabled:opacity-50 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-emerald-600/30 transition-all"
+                  className="w-full bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl shadow-lg shadow-emerald-600/30 transition-all"
                 >
                   {modalSubmitting ? (
                     <span className="flex items-center justify-center gap-2">

@@ -143,5 +143,27 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+
+    // ── News articles ────────────────────────────────────────────────────────
+    // Public read. Admin-only write. Comments subcollection: anyone can read
+    // and create; only admins or the comment owner-token can delete.
+
+    match /news/{articleId} {
+      allow read: if true;
+      allow write: if isAdmin();
+
+      match /comments/{commentId} {
+        allow read: if true;
+        allow create: if true;
+        allow delete: if isAdmin();
+
+        match /replies/{replyId} {
+          allow read: if true;
+          allow create: if true;
+          allow delete: if isAdmin();
+        }
+      }
+    }
+
   }
 }

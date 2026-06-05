@@ -4335,15 +4335,11 @@ export default function Home() {
 
         // Fetch games, teams, and referees in PARALLEL instead of sequentially
         const gamesRef = collection(firebaseDB, "games");
-        const gamesQuery = query(
-          gamesRef,
-          orderBy("date", "asc")
-        );
         const teamsRef = collection(firebaseDB, "teams");
         const refereesRef = collection(firebaseDB, "referees");
-        
+
         const [snapshot, teamsSnapshot, refereesSnapshot] = await Promise.all([
-          getDocs(gamesQuery),
+          getDocs(gamesRef),
           getDocs(teamsRef),
           getDocs(refereesRef),
         ]);
@@ -4670,11 +4666,7 @@ export default function Home() {
         setWeeklyScheduleGames(allWeeklyGames);
         
         // Fetch completed games for Final Buzzer section (rolling last 25)
-        const completedGamesQuery = query(
-          gamesRef,
-          orderBy("date", "desc")
-        );
-        const completedSnapshot = await getDocs(completedGamesQuery);
+        const completedSnapshot = await getDocs(gamesRef);
         
         const completedGamesData = completedSnapshot.docs
           .map((doc) => {

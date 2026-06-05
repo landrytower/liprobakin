@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { collection, getDocs, orderBy, query } from "firebase/firestore";
+import { collection, getDocs } from "firebase/firestore";
 import { firebaseDB } from "@/lib/firebase";
 import { normalizeTeamGender } from "@/lib/team-gender";
 import { parseCongoDateTime } from "@/lib/congo-time";
@@ -203,9 +203,7 @@ export default function CalendrierPage() {
   useEffect(() => {
     const fetchGames = async () => {
       try {
-        const gamesRef = collection(firebaseDB, "games");
-        const gamesQuery = query(gamesRef, orderBy("date", "asc"));
-        const snapshot = await getDocs(gamesQuery);
+        const snapshot = await getDocs(collection(firebaseDB, "games"));
 
         // Fetch teams
         const teamsSnap = await getDocs(collection(firebaseDB, "teams"));

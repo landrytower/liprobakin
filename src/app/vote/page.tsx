@@ -295,6 +295,13 @@ export default function VotePage() {
     e.preventDefault();
     setModalError("");
 
+    const firstName = modalFirstName.trim();
+    const lastName = modalLastName.trim();
+    if (!firstName || !lastName) {
+      setModalError(language === "fr" ? "Prénom et nom requis pour voter." : "First and last name are required to vote.");
+      return;
+    }
+
     const docId = toDocId(modalCountryCode, modalPhone);
     if (docId.length < 9) {
       setModalError(language === "fr" ? "Numéro invalide." : "Invalid phone number.");
@@ -316,8 +323,8 @@ export default function VotePage() {
       }
 
       await setDoc(doc(firebaseDB, "allStarVotes", docId), {
-        firstName: modalFirstName.trim(),
-        lastName: modalLastName.trim(),
+        firstName,
+        lastName,
         phone: "+" + docId,
         menPlayers: selectedPlayers.men,
         womenPlayers: selectedPlayers.women,

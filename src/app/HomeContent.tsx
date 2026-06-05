@@ -1903,7 +1903,13 @@ export default function Home() {
   const [allStarLeaders, setAllStarLeaders] = useState<{
     men: Array<{ id: string; name: string; teamName: string; votes: number; headshot?: string }>;
     women: Array<{ id: string; name: string; teamName: string; votes: number; headshot?: string }>;
-  }>({ men: [], women: [] });
+  }>(() => {
+    try {
+      const cached = typeof window !== "undefined" && localStorage.getItem("allStarLeaders");
+      if (cached) return JSON.parse(cached);
+    } catch {}
+    return { men: [], women: [] };
+  });
   const [allStarEnabled, setAllStarEnabled] = useState(true);
 
   // Contact form state
@@ -3125,10 +3131,12 @@ export default function Home() {
         const snap = await getDoc(doc(firebaseDB, "allStarLeaders", "snapshot"));
         if (snap.exists()) {
           const data = snap.data();
-          setAllStarLeaders({
+          const leaders = {
             men:   (data.men   || []).slice(0, 10),
             women: (data.women || []).slice(0, 10),
-          });
+          };
+          setAllStarLeaders(leaders);
+          try { localStorage.setItem("allStarLeaders", JSON.stringify(leaders)); } catch {}
         }
       } catch (error) {
         console.error("Error fetching All-Star leaders:", error);

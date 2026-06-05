@@ -78,6 +78,20 @@ const tr = {
     loading: "Loading vote data…",
     justNow: "just now",
     minAgo: "min ago",
+    eligTitle: "Eligibility",
+    eligSubtitle: "Choose which players fans can vote for",
+    eligSelectTeam: "Select a team to set eligibility",
+    eligPickTeam: "Pick a team above to manage its eligible players.",
+    eligSelectAll: "Select all",
+    eligClearAll: "Clear all",
+    eligSave: "Save eligibility",
+    eligSaving: "Saving…",
+    eligSaved: "Saved!",
+    eligUnsaved: "Unsaved changes",
+    eligEligible: "eligible",
+    eligNoRoster: "No players on this team.",
+    eligRosterLoading: "Loading players…",
+    eligError: "Could not save. Please try again.",
   },
   fr: {
     title: "Votes All-Star",
@@ -113,6 +127,20 @@ const tr = {
     loading: "Chargement des votes…",
     justNow: "à l'instant",
     minAgo: "min",
+    eligTitle: "Éligibilité",
+    eligSubtitle: "Choisissez les joueurs que les fans peuvent voter",
+    eligSelectTeam: "Sélectionnez une équipe pour définir l'éligibilité",
+    eligPickTeam: "Choisissez une équipe ci-dessus pour gérer ses joueurs éligibles.",
+    eligSelectAll: "Tout sélectionner",
+    eligClearAll: "Tout effacer",
+    eligSave: "Enregistrer l'éligibilité",
+    eligSaving: "Enregistrement…",
+    eligSaved: "Enregistré !",
+    eligUnsaved: "Modifications non enregistrées",
+    eligEligible: "éligibles",
+    eligNoRoster: "Aucun joueur dans cette équipe.",
+    eligRosterLoading: "Chargement des joueurs…",
+    eligError: "Échec de l'enregistrement. Réessayez.",
   },
 };
 
@@ -202,6 +230,20 @@ export default function AllStarVotesPage() {
   // Reset banner activity
   const [resettingBanner, setResettingBanner] = useState(false);
   const [bannerResetSuccess, setBannerResetSuccess] = useState(false);
+
+  // ── Eligibility ──
+  type EligTeam = { id: string; name: string; gender: "men" | "women" };
+  type EligPlayer = { id: string; name: string };
+  const [eligTeams, setEligTeams] = useState<EligTeam[]>([]);
+  const [eligMap, setEligMap] = useState<Record<string, string[]>>({});
+  const [eligSelectedTeam, setEligSelectedTeam] = useState<string | null>(null);
+  const [eligRoster, setEligRoster] = useState<EligPlayer[]>([]);
+  const [eligRosterLoading, setEligRosterLoading] = useState(false);
+  const [eligDraft, setEligDraft] = useState<string[]>([]);
+  const [eligSaving, setEligSaving] = useState(false);
+  const [eligSavedFlash, setEligSavedFlash] = useState(false);
+  const [eligErrorFlag, setEligErrorFlag] = useState(false);
+  const eligRosterCache = useRef<Record<string, EligPlayer[]>>({});
 
   const load = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -340,6 +382,77 @@ export default function AllStarVotesPage() {
       .then((snap) => { if (snap.exists() && snap.data().url) setHomeBannerUrl(snap.data().url as string); })
       .catch(() => {});
   }, []);
+
+  // Load teams + current eligibility map for the Eligibility section
+  useEffect(() => {
+    (async () => {
+      const [teamsSnap, eligSnap] = await Promise.all([
+        getDocs(collection(firebaseDB, "teams")),
+        getDoc(doc(firebaseDB, "settings", "allStarEligibility")),
+      ]);
+      const teams: EligTeam[] = teamsSnap.docs
+        .map((d) => {
+          const data = d.data();
+          return {
+            id: d.id,
+            name: [data.city, data.name].filter(Boolean).join(" ") || d.id,
+            gender: normalizeTeamGender(data.gender, data.logo, "men") as "men" | "women",
+          };
+        })
+        .sort((a, b) => a.name.localeCompare(b.name));
+      setEligTeams(teams);
+      setEligMap(eligSnap.exists() ? ((eligSnap.data().teams as Record<string, string[]>) || {}) : {});
+    })().catch(() => {});
+  }, []);
+
+  const selectEligTeam = async (teamId: string) => {
+    setEligSelectedTeam(teamId);
+    setEligDraft(eligMap[teamId] ?? []);
+    setEligErrorFlag(false);
+    if (eligRosterCache.current[teamId]) {
+      setEligRoster(eligRosterCache.current[teamId]);
+      return;
+    }
+    setEligRosterLoading(true);
+    try {
+      const snap = await getDocs(collection(firebaseDB, "teams", teamId, "roster"));
+      const roster: EligPlayer[] = snap.docs
+        .map((d) => {
+          const pd = d.data();
+          return { id: d.id, name: `${pd.firstName || ""} ${pd.lastName || ""}`.trim() || pd.name || d.id };
+        })
+        .sort((a, b) => a.name.localeCompare(b.name));
+      eligRosterCache.current[teamId] = roster;
+      setEligRoster(roster);
+    } catch {
+      setEligRoster([]);
+    } finally {
+      setEligRosterLoading(false);
+    }
+  };
+
+  const toggleEligPlayer = (id: string) =>
+    setEligDraft((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
+  const saveEligibility = async () => {
+    if (!eligSelectedTeam) return;
+    setEligSaving(true);
+    setEligErrorFlag(false);
+    try {
+      await setDoc(
+        doc(firebaseDB, "settings", "allStarEligibility"),
+        { teams: { [eligSelectedTeam]: eligDraft } },
+        { merge: true },
+      );
+      setEligMap((prev) => ({ ...prev, [eligSelectedTeam]: eligDraft }));
+      setEligSavedFlash(true);
+      setTimeout(() => setEligSavedFlash(false), 2500);
+    } catch {
+      setEligErrorFlag(true);
+    } finally {
+      setEligSaving(false);
+    }
+  };
 
   const compressBannerImage = (file: File): Promise<Blob> =>
     new Promise((resolve, reject) => {
@@ -558,6 +671,16 @@ export default function AllStarVotesPage() {
     return `${mins} ${t.minAgo}`;
   })();
 
+  const eligSavedForTeam = eligSelectedTeam ? eligMap[eligSelectedTeam] ?? [] : [];
+  const eligDirty =
+    eligSelectedTeam !== null &&
+    (eligDraft.length !== eligSavedForTeam.length ||
+      eligDraft.some((id) => !eligSavedForTeam.includes(id)));
+  const eligGroups: { key: "men" | "women"; label: string }[] = [
+    { key: "men", label: language === "fr" ? "Hommes" : "Men" },
+    { key: "women", label: language === "fr" ? "Femmes" : "Women" },
+  ];
+
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-6">
 
@@ -670,6 +793,106 @@ export default function AllStarVotesPage() {
             </button>
           </div>
         </div>
+      </div>
+
+      {/* ── Eligibility ── */}
+      <div className="rounded-2xl border border-emerald-500/20 bg-emerald-950/20 p-5 space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center text-xl shrink-0">✅</div>
+          <div>
+            <p className="text-sm font-bold text-emerald-300 tracking-wide uppercase">{t.eligTitle}</p>
+            <p className="text-xs text-emerald-600/80 mt-0.5">{t.eligSubtitle}</p>
+          </div>
+        </div>
+
+        {/* Team picker grouped by gender */}
+        <div className="space-y-3">
+          {eligGroups.map((group) => {
+            const groupTeams = eligTeams.filter((tm) => tm.gender === group.key);
+            if (groupTeams.length === 0) return null;
+            return (
+              <div key={group.key}>
+                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest mb-1.5">{group.label}</p>
+                <div className="flex flex-wrap gap-2">
+                  {groupTeams.map((tm) => {
+                    const count = (eligMap[tm.id] ?? []).length;
+                    const active = eligSelectedTeam === tm.id;
+                    return (
+                      <button
+                        key={tm.id}
+                        onClick={() => selectEligTeam(tm.id)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${active ? "bg-emerald-600 text-white shadow-lg shadow-emerald-600/20" : "bg-slate-800 text-slate-300 hover:bg-slate-700 border border-white/5"}`}
+                      >
+                        {tm.name}
+                        {count > 0 && (
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${active ? "bg-white/20" : "bg-emerald-500/15 text-emerald-400"}`}>{count}</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Roster checkbox list */}
+        {eligSelectedTeam === null ? (
+          <div className="text-center py-8 text-slate-500 text-sm">{t.eligPickTeam}</div>
+        ) : eligRosterLoading ? (
+          <div className="flex items-center justify-center py-8 text-slate-500 text-sm gap-2">
+            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+            {t.eligRosterLoading}
+          </div>
+        ) : eligRoster.length === 0 ? (
+          <div className="text-center py-8 text-slate-500 text-sm">{t.eligNoRoster}</div>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <span className="text-xs font-bold text-emerald-400 tabular-nums">
+                {eligDraft.length} / {eligRoster.length} {t.eligEligible}
+              </span>
+              <div className="flex gap-2">
+                <button onClick={() => setEligDraft(eligRoster.map((p) => p.id))} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 text-emerald-400 transition-all">{t.eligSelectAll}</button>
+                <button onClick={() => setEligDraft([])} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-700/60 hover:bg-slate-700 border border-white/5 text-slate-300 transition-all">{t.eligClearAll}</button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+              {eligRoster.map((p) => {
+                const checked = eligDraft.includes(p.id);
+                return (
+                  <label key={p.id} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-all border ${checked ? "bg-emerald-500/10 border-emerald-500/30" : "bg-slate-800/50 border-white/5 hover:bg-slate-800"}`}>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleEligPlayer(p.id)}
+                      className="w-4 h-4 shrink-0 rounded accent-emerald-500"
+                    />
+                    <span className={`text-sm truncate ${checked ? "text-white font-medium" : "text-slate-300"}`}>{p.name}</span>
+                  </label>
+                );
+              })}
+            </div>
+
+            {/* Save bar */}
+            <div className="flex items-center justify-end gap-3 pt-1 flex-wrap">
+              {eligErrorFlag && <span className="text-xs text-red-400 mr-auto">{t.eligError}</span>}
+              {eligDirty && !eligSaving && <span className="text-xs text-amber-400 mr-auto">{t.eligUnsaved}</span>}
+              <button
+                onClick={saveEligibility}
+                disabled={!eligDirty || eligSaving}
+                className="px-5 py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-40 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white shadow-lg shadow-emerald-600/30"
+              >
+                {eligSaving ? (
+                  <span className="flex items-center gap-2"><svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>{t.eligSaving}</span>
+                ) : eligSavedFlash ? (
+                  <span className="flex items-center gap-2"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>{t.eligSaved}</span>
+                ) : t.eligSave}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── Home Page Vote Banner ── */}

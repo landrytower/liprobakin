@@ -469,38 +469,39 @@ export default function TeamPage() {
         setRoster(rosterData);
         
         // Fetch staff (using coachStaff collection to match admin)
-        const staffRef = collection(firebaseDB, "teams", foundTeamId, "coachStaff");
-        const staffSnapshot = await getDocs(staffRef);
-        
-        const staffData: StaffMember[] = staffSnapshot.docs.map((doc) => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            firstName: data.firstName || "",
-            lastName: data.lastName || "",
-            role: data.role || "staff",
-            position: data.position,
-            headshot: data.headshot,
-            showOnRoster: data.showOnRoster ?? true,
-          };
-        });
-        
-        // Sort staff by role (head coach first, then assistant coaches, then staff)
-        const roleOrder = { head_coach: 1, assistant_coach: 2, staff: 3 };
-        staffData.sort((a, b) => roleOrder[a.role] - roleOrder[b.role]);
-        
-        
-        // Separate coaches and staff
-        const coachesOnly = staffData.filter(member => 
-          member.role === "head_coach" || member.role === "assistant_coach"
-        );
-        const staffOnly = staffData.filter(member => 
-          member.role === "staff" && member.showOnRoster !== false
-        );
-        
-        setStaff(staffData);
-        setCoaches(coachesOnly);
-        setTeamStaff(staffOnly);
+        try {
+          const staffRef = collection(firebaseDB, "teams", foundTeamId, "coachStaff");
+          const staffSnapshot = await getDocs(staffRef);
+
+          const staffData: StaffMember[] = staffSnapshot.docs.map((doc) => {
+            const data = doc.data();
+            return {
+              id: doc.id,
+              firstName: data.firstName || "",
+              lastName: data.lastName || "",
+              role: data.role || "staff",
+              position: data.position,
+              headshot: data.headshot,
+              showOnRoster: data.showOnRoster ?? true,
+            };
+          });
+
+          const roleOrder = { head_coach: 1, assistant_coach: 2, staff: 3 };
+          staffData.sort((a, b) => roleOrder[a.role] - roleOrder[b.role]);
+
+          const coachesOnly = staffData.filter(member =>
+            member.role === "head_coach" || member.role === "assistant_coach"
+          );
+          const staffOnly = staffData.filter(member =>
+            member.role === "staff" && member.showOnRoster !== false
+          );
+
+          setStaff(staffData);
+          setCoaches(coachesOnly);
+          setTeamStaff(staffOnly);
+        } catch (staffError) {
+          console.warn("Could not load coaching staff:", staffError);
+        }
 
         const gamesRef = collection(firebaseDB, "games");
         // Fetch only games involving this team (by ID) instead of all games
@@ -604,6 +605,7 @@ export default function TeamPage() {
       } catch (error) {
         console.error("Error fetching team data:", error);
         setLoading(false);
+        setIsTransitioning(false);
       }
     };
 

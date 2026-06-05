@@ -16,6 +16,7 @@ import {
 } from "firebase/firestore";
 import { firebaseDB } from "@/lib/firebase";
 import { normalizeTeamGender, type TeamGender } from "@/lib/team-gender";
+import { getAllStarEligibility } from "@/lib/allstar-settings";
 
 const MAX_PLAYERS = 15;
 const SESSION_KEY = "allstar_voter_phone";
@@ -44,6 +45,7 @@ const tr = {
     voteLocked: "Votre vote est enregistré ✓",
     alreadyVoted: "Vous avez déjà voté",
     alreadyVotedSub: "Ce numéro a déjà soumis un vote.",
+    nonEligible: "Non éligible",
   },
   en: {
     title: "All-Star Vote",
@@ -68,6 +70,7 @@ const tr = {
     voteLocked: "Your vote is locked in ✓",
     alreadyVoted: "Already voted",
     alreadyVotedSub: "This phone number has already submitted a vote.",
+    nonEligible: "Non-eligible",
   },
 };
 
@@ -158,6 +161,8 @@ export default function VotePage() {
   const [switchMsg, setSwitchMsg] = useState("");
   type SnapLeader = { id: string; name: string; teamName: string; votes: number };
   const [leadersSnap, setLeadersSnap] = useState<{ men: SnapLeader[]; women: SnapLeader[] } | null>(null);
+  // null = not yet loaded (suppress tag to avoid a flash of "all non-eligible")
+  const [eligibleIds, setEligibleIds] = useState<Set<string> | null>(null);
 
   // Check if All-Star voting is enabled
   useEffect(() => {
@@ -240,6 +245,13 @@ export default function VotePage() {
   }, []);
 
 
+  // Fetch eligibility set (cached, parallel — must not block first paint)
+  useEffect(() => {
+    getAllStarEligibility()
+      .then(setEligibleIds)
+      .catch(() => setEligibleIds(new Set()));
+  }, []);
+
   // Bar animations on leaders tab
   useEffect(() => {
     if (viewMode === "leaders") {
@@ -253,6 +265,7 @@ export default function VotePage() {
   const triggerShake = (id: string) => { setShakeId(id); setTimeout(() => setShakeId(null), 500); };
 
   const togglePlayer = (id: string) => {
+    if (eligibleIds !== null && !eligibleIds.has(id)) return; // non-eligible: inert
     setSelectedPlayers((prev) => {
       const cur = prev[gender];
       if (cur.includes(id)) return { ...prev, [gender]: cur.filter((x) => x !== id) };
@@ -629,9 +642,13 @@ export default function VotePage() {
                   {searchResults.map((player) => {
                     const voteCount = playerVotes[player.id] || 0;
                     const isSelected = curPlayers.includes(player.id);
+                    const blocked = eligibleIds !== null && !eligibleIds.has(player.id);
                     return (
-                      <button key={player.id} onMouseDown={() => { togglePlayer(player.id); setSearch(""); }}
-                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-white/5 transition-all text-left ${isSelected ? "opacity-50" : ""} ${shakeId === player.id ? "animate-shake" : ""}`}>
+                      <button
+                        key={player.id}
+                        disabled={blocked}
+                        onMouseDown={blocked ? undefined : () => { togglePlayer(player.id); setSearch(""); }}
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-left ${blocked ? "opacity-40 cursor-not-allowed" : "hover:bg-white/5"} ${isSelected ? "opacity-50" : ""} ${shakeId === player.id ? "animate-shake" : ""}`}>
                         <div className="w-9 h-9 rounded-full bg-slate-700 overflow-hidden relative shrink-0 flex items-center justify-center">
                           {player.headshot ? <Image src={player.headshot} alt={player.name} fill className="object-cover object-top" sizes="36px" /> : <PersonPlaceholder size={20} />}
                         </div>
@@ -639,7 +656,13 @@ export default function VotePage() {
                           <p className="text-sm font-semibold text-white truncate">{player.name}</p>
                           <p className="text-xs text-slate-400 truncate">{player.teamName}</p>
                         </div>
-                        {voteCount > 0 && <span className="text-xs text-orange-400 font-bold shrink-0 px-2 py-0.5 rounded-full bg-orange-400/10">{voteCount}</span>}
+                        {blocked ? (
+                          <span className="text-[10px] font-bold shrink-0 px-2 py-0.5 rounded-full bg-slate-600/30 text-slate-400 border border-slate-500/30 uppercase tracking-wide whitespace-nowrap">
+                            {t.nonEligible}
+                          </span>
+                        ) : (
+                          voteCount > 0 && <span className="text-xs text-orange-400 font-bold shrink-0 px-2 py-0.5 rounded-full bg-orange-400/10">{voteCount}</span>
+                        )}
                       </button>
                     );
                   })}

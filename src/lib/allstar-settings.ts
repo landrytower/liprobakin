@@ -23,3 +23,31 @@ export function getAllStarSettings(): Promise<AllStarSettings> {
   }
   return _promise;
 }
+
+// Module-level promise cache — one Firestore read shared across all components per page load
+let _eligibilityPromise: Promise<Set<string>> | null = null;
+
+/**
+ * Returns the set of player IDs eligible for All-Star voting, flattened across
+ * all teams from settings/allStarEligibility { teams: { [teamId]: string[] } }.
+ * Fails closed: on error or missing doc, returns an empty set (nobody eligible).
+ */
+export function getAllStarEligibility(): Promise<Set<string>> {
+  if (!_eligibilityPromise) {
+    _eligibilityPromise = getDoc(doc(firebaseDB, "settings", "allStarEligibility"))
+      .then((snap) => {
+        const teams = (snap.exists() ? snap.data().teams : undefined) as
+          | Record<string, string[]>
+          | undefined;
+        const set = new Set<string>();
+        if (teams) {
+          for (const ids of Object.values(teams)) {
+            for (const id of ids || []) set.add(id);
+          }
+        }
+        return set;
+      })
+      .catch(() => new Set<string>());
+  }
+  return _eligibilityPromise;
+}

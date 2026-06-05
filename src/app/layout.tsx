@@ -132,7 +132,7 @@ export default function RootLayout({
   };
 
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         {/* Preconnect to Firebase/Firestore to reduce initial connection latency */}
         <link rel="preconnect" href="https://firestore.googleapis.com" />

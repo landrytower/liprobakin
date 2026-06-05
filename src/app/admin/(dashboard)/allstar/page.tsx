@@ -4,9 +4,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import Image from "next/image";
 import { collection, getDocs, doc, getDoc, setDoc, deleteDoc, writeBatch } from "firebase/firestore";
 import type { Timestamp } from "firebase/firestore";
-import type { UploadTask } from "firebase/storage";
-import { ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
-import { firebaseDB, firebaseStorage } from "@/lib/firebase";
+import { ref as storageRef, deleteObject } from "firebase/storage";
+import { firebaseDB, firebaseStorage, firebaseAuth } from "@/lib/firebase";
 import { normalizeTeamGender } from "@/lib/team-gender";
 import { useAdmin } from "../layout";
 
@@ -188,7 +187,7 @@ export default function AllStarVotesPage() {
   const [homeBannerDeleting, setHomeBannerDeleting] = useState(false);
   const [homeBannerError, setHomeBannerError] = useState("");
   const homeBannerInputRef = useRef<HTMLInputElement | null>(null);
-  const uploadTaskRef = useRef<UploadTask | null>(null);
+  const abortCtrlRef = useRef<AbortController | null>(null);
 
   // Reset votes
   const [showResetModal, setShowResetModal] = useState(false);
@@ -369,39 +368,55 @@ export default function AllStarVotesPage() {
     setHomeBannerUploading(true);
     setHomeBannerError("");
 
-    let timeoutId: ReturnType<typeof setTimeout> | null = null;
-
     try {
-      const blob = await compressBannerImage(file).catch(() => file);
+      const user = firebaseAuth.currentUser;
+      if (!user) {
+        setHomeBannerError(language === "fr" ? "Non authentifié — rechargez la page." : "Not authenticated — please refresh.");
+        return;
+      }
 
-      const sRef = storageRef(firebaseStorage, "allstar-banners/home-banner");
-      const task = uploadBytesResumable(sRef, blob, { contentType: "image/jpeg" });
-      uploadTaskRef.current = task;
+      const blob = await compressBannerImage(file).catch(() => file as Blob);
+      const token = await user.getIdToken(false);
+      const bucket = firebaseStorage.app.options.storageBucket!;
+      const objectName = "allstar-banners/home-banner";
+      const encodedName = encodeURIComponent(objectName);
+      const uploadUrl = `https://firebasestorage.googleapis.com/v0/b/${encodeURIComponent(bucket)}/o?uploadType=media&name=${encodedName}`;
 
-      await new Promise<void>((resolve, reject) => {
-        timeoutId = setTimeout(() => {
-          task.cancel();
-          reject(new Error("timeout"));
-        }, 60_000);
-        task.on("state_changed", null, reject, resolve);
-      });
+      const ctrl = new AbortController();
+      abortCtrlRef.current = ctrl;
+      const timeoutId = setTimeout(() => ctrl.abort(), 60_000);
 
-      uploadTaskRef.current = null;
-      const url = await getDownloadURL(sRef);
-      await setDoc(doc(firebaseDB, "settings", "allStarBanner"), { url });
-      setHomeBannerUrl(url);
+      let res: Response;
+      try {
+        res = await fetch(uploadUrl, {
+          method: "POST",
+          headers: { "Authorization": `Firebase ${token}`, "Content-Type": "image/jpeg" },
+          body: blob,
+          signal: ctrl.signal,
+        });
+      } finally {
+        clearTimeout(timeoutId);
+        abortCtrlRef.current = null;
+      }
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "");
+        throw new Error(`HTTP ${res.status} — ${errText}`);
+      }
+
+      const meta = await res.json() as { downloadTokens: string };
+      const downloadUrl = `https://firebasestorage.googleapis.com/v0/b/${encodeURIComponent(bucket)}/o/${encodedName}?alt=media&token=${meta.downloadTokens}`;
+      await setDoc(doc(firebaseDB, "settings", "allStarBanner"), { url: downloadUrl });
+      setHomeBannerUrl(downloadUrl);
     } catch (err: unknown) {
-      uploadTaskRef.current = null;
-      if (err && typeof err === "object" && "code" in err && (err as { code: string }).code === "storage/cancelled") return;
-      const isTimeout = err instanceof Error && err.message === "timeout";
+      abortCtrlRef.current = null;
+      if (err instanceof DOMException && err.name === "AbortError") return;
       console.error("Banner upload failed:", err);
+      const msg = err instanceof Error ? err.message : "Unknown error";
       setHomeBannerError(
-        isTimeout
-          ? (language === "fr" ? "Délai dépassé — veuillez réessayer." : "Upload timed out — please try again.")
-          : (language === "fr" ? "Échec de l'import — veuillez réessayer." : "Upload failed — please try again.")
+        language === "fr" ? `Échec de l'import: ${msg}` : `Upload failed: ${msg}`
       );
     } finally {
-      if (timeoutId) clearTimeout(timeoutId);
       setHomeBannerUploading(false);
     }
   };
@@ -723,7 +738,7 @@ export default function AllStarVotesPage() {
                 </span>
                 {homeBannerUploading && (
                   <button
-                    onClick={() => { uploadTaskRef.current?.cancel(); uploadTaskRef.current = null; }}
+                    onClick={() => { abortCtrlRef.current?.abort(); abortCtrlRef.current = null; }}
                     className="mt-2 px-3 py-1 bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-300 text-xs rounded-lg transition-colors"
                   >
                     {language === "fr" ? "Annuler" : "Cancel"}

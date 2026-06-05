@@ -46,6 +46,13 @@ const tr = {
     alreadyVoted: "Vous avez déjà voté",
     alreadyVotedSub: "Ce numéro a déjà soumis un vote.",
     nonEligible: "Non éligible",
+    emailLabel: "Email",
+    emailOptional: "(optionnel)",
+    roleLabel: "Rôle",
+    roleJoueur: "Joueur",
+    roleStaff: "Staff",
+    roleFan: "Fan",
+    roleRequired: "Veuillez sélectionner votre rôle.",
   },
   en: {
     title: "All-Star Vote",
@@ -71,6 +78,13 @@ const tr = {
     alreadyVoted: "Already voted",
     alreadyVotedSub: "This phone number has already submitted a vote.",
     nonEligible: "Non-eligible",
+    emailLabel: "Email",
+    emailOptional: "(optional)",
+    roleLabel: "Role",
+    roleJoueur: "Player",
+    roleStaff: "Staff",
+    roleFan: "Fan",
+    roleRequired: "Please select your role.",
   },
 };
 
@@ -139,6 +153,8 @@ export default function VotePage() {
   const [modalLastName, setModalLastName] = useState("");
   const [modalPhone, setModalPhone] = useState("");
   const [modalCountryCode, setModalCountryCode] = useState("243");
+  const [modalEmail, setModalEmail] = useState("");
+  const [modalRole, setModalRole] = useState<"joueur" | "staff" | "fan" | null>(null);
   const [modalSubmitting, setModalSubmitting] = useState(false);
   const [modalError, setModalError] = useState("");
   const [alreadyVoted, setAlreadyVoted] = useState(false);
@@ -151,6 +167,7 @@ export default function VotePage() {
   const [voteCounts, setVoteCounts] = useState<Record<string, Record<string, number>>>({});
   const [selectedPlayers, setSelectedPlayers] = useState<Record<TeamGender, string[]>>({ men: [], women: [] });
   const [barsVisible, setBarsVisible] = useState(false);
+  const [snapLoading, setSnapLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
@@ -241,7 +258,8 @@ export default function VotePage() {
           women: (d.women || []) as SnapLeader[],
         });
       }
-    }).catch(() => {});
+      setSnapLoading(false);
+    }).catch(() => { setSnapLoading(false); });
   }, []);
 
 
@@ -305,6 +323,11 @@ export default function VotePage() {
       return;
     }
 
+    if (!modalRole) {
+      setModalError(t.roleRequired);
+      return;
+    }
+
     const docId = toDocId(modalCountryCode, modalPhone);
     if (docId.length < 9) {
       setModalError(language === "fr" ? "Numéro invalide." : "Invalid phone number.");
@@ -334,6 +357,8 @@ export default function VotePage() {
         firstName,
         lastName,
         phone: "+" + docId,
+        email: modalEmail.trim() || null,
+        role: modalRole,
         menPlayers: menIds,
         womenPlayers: womenIds,
         submittedAt: serverTimestamp(),
@@ -404,7 +429,7 @@ export default function VotePage() {
   const rankedLeaders = (freshLeaders !== null && freshLeaders.length > 0)
     ? freshLeaders
     : snapLeaders;
-  const leadersLoading = loading && rankedLeaders.length === 0;
+  const leadersLoading = snapLoading && rankedLeaders.length === 0;
   const leaderTopVotes = rankedLeaders[0]?.voteCount ?? 1;
   const podiumOrder = [rankedLeaders[1], rankedLeaders[0], rankedLeaders[2]].filter((p): p is (typeof rankedLeaders)[0] => Boolean(p));
   const restLeaders = rankedLeaders.slice(3);
@@ -472,7 +497,7 @@ export default function VotePage() {
                       type="text"
                       value={modalFirstName}
                       onChange={(e) => setModalFirstName(e.target.value)}
-                      placeholder="Jean"
+                      placeholder="Princesse"
                       required
                       className="w-full bg-slate-800 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
                     />
@@ -485,7 +510,7 @@ export default function VotePage() {
                       type="text"
                       value={modalLastName}
                       onChange={(e) => setModalLastName(e.target.value)}
-                      placeholder="Lokwa"
+                      placeholder="Gafutshi"
                       required
                       className="w-full bg-slate-800 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
                     />
@@ -522,6 +547,48 @@ export default function VotePage() {
                       ? "Vodacom · Airtel · Africel · Orange"
                       : (language === "fr" ? "Modifiez le code pays si besoin" : "Change the country code if needed")}
                   </p>
+                </div>
+
+                {/* Role toggle */}
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+                    {t.roleLabel}
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(["joueur", "staff", "fan"] as const).map((r) => {
+                      const label = r === "joueur" ? t.roleJoueur : r === "staff" ? t.roleStaff : t.roleFan;
+                      const active = modalRole === r;
+                      return (
+                        <button
+                          key={r}
+                          type="button"
+                          onClick={() => setModalRole(r)}
+                          className={`py-2.5 rounded-xl text-sm font-bold transition-all border ${
+                            active
+                              ? "bg-emerald-600 border-emerald-500 text-white shadow shadow-emerald-600/30"
+                              : "bg-slate-800 border-white/10 text-slate-300 hover:border-white/25"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Email (optional) */}
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                    {t.emailLabel} <span className="normal-case font-normal text-slate-500">{t.emailOptional}</span>
+                  </label>
+                  <input
+                    type="email"
+                    value={modalEmail}
+                    onChange={(e) => setModalEmail(e.target.value)}
+                    placeholder="princesse@exemple.com"
+                    inputMode="email"
+                    className="w-full bg-slate-800 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
+                  />
                 </div>
 
                 {modalError && (
@@ -754,7 +821,6 @@ export default function VotePage() {
                         {/* Dark gradient overlay at bottom */}
                         <div className="absolute inset-0 bg-gradient-to-t from-slate-950/95 via-slate-950/30 to-transparent" />
                         {/* Crown for 1st */}
-                        {isFirst && <span className="absolute top-1.5 left-1/2 -translate-x-1/2 text-lg leading-none animate-bounce z-10" style={{ animationDuration: "2s" }}>👑</span>}
                         {/* Name + votes overlay */}
                         <div className="absolute bottom-0 left-0 right-0 p-2 text-center z-10">
                           <p className="font-bold text-white text-[11px] sm:text-xs leading-tight line-clamp-2 break-words">{player.name}</p>

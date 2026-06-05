@@ -246,9 +246,6 @@ export default function AllStarResultsPage() {
                         </div>
                       )}
                       <div className="absolute inset-0 bg-gradient-to-t from-slate-950/95 via-slate-950/20 to-transparent" />
-                      {isFirst && (
-                        <span className="absolute top-2 left-1/2 -translate-x-1/2 text-lg leading-none animate-bounce z-10" style={{ animationDuration: "2s" }}>👑</span>
-                      )}
                       <div className="absolute bottom-0 left-0 right-0 p-2 text-center z-10">
                         <p className="font-bold text-white text-[11px] sm:text-xs leading-tight line-clamp-2 break-words">{player.name}</p>
                         <p className={`font-black mt-0.5 leading-none ${rankVotesColor[rank]} text-xl sm:text-2xl`}>{player.votes}</p>

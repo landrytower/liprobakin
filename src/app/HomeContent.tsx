@@ -6519,34 +6519,41 @@ export default function Home() {
               {allStarLeaders[allStarLeadersGender].map((leader, idx) => (
                 <div
                   key={leader.id}
-                  className="relative rounded-xl sm:rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950/90 p-3 sm:p-4 hover:border-orange-500/30 transition-all group overflow-hidden"
+                  className="relative rounded-xl sm:rounded-2xl border border-white/10 hover:border-orange-500/30 transition-all group overflow-hidden bg-slate-900 bg-cover bg-center bg-no-repeat"
+                  style={leader.headshot ? { backgroundImage: `url(${leader.headshot})` } : undefined}
                 >
-                  {/* Rank Badge */}
-                  <div className="absolute top-1.5 sm:top-2 right-1.5 sm:right-2 flex items-center justify-center w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-orange-500/20 border border-orange-500/30">
-                    <span className="text-[10px] sm:text-xs font-bold text-orange-300">#{idx + 1}</span>
-                  </div>
+                  {/* Dark overlay so text stays readable over the photo */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-black/20" />
 
-                  {/* Player Headshot */}
-                  <div
-                    className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-2 sm:mb-3 rounded-full border-2 border-white/10 group-hover:border-orange-500/50 transition-all bg-slate-800 bg-cover bg-center bg-no-repeat flex items-center justify-center"
-                    style={leader.headshot ? { backgroundImage: `url(${leader.headshot})` } : undefined}
-                    role="img"
-                    aria-label={leader.name}
-                  >
-                    {!leader.headshot && <span className="text-2xl sm:text-3xl">🏀</span>}
-                  </div>
+                  {/* All content sits on top of the overlay */}
+                  <div className="relative p-3 sm:p-4">
+                    {/* Rank Badge */}
+                    <div className="absolute top-1.5 sm:top-2 right-1.5 sm:right-2 flex items-center justify-center w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-orange-500/20 border border-orange-500/30">
+                      <span className="text-[10px] sm:text-xs font-bold text-orange-300">#{idx + 1}</span>
+                    </div>
 
-                  {/* Player Info */}
-                  <div className="text-center space-y-0.5 sm:space-y-1">
-                    <h3 className="text-xs sm:text-sm font-bold text-white truncate px-1">{leader.name}</h3>
-                    <p className="text-[10px] sm:text-xs text-slate-400 truncate px-1">{leader.teamName}</p>
-                    <div className="flex items-center justify-center gap-1 pt-1 sm:pt-2">
-                      <svg className="w-3 h-3 sm:w-4 sm:h-4 text-orange-400" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                      </svg>
-                      <span className="text-base sm:text-lg font-black text-white">{leader.votes}</span>
+                    {/* Spacer — push info to the bottom */}
+                    <div className="h-16 sm:h-20" />
+
+                    {/* Player Info */}
+                    <div className="text-center space-y-0.5 sm:space-y-1">
+                      <h3 className="text-xs sm:text-sm font-bold text-white truncate px-1">{leader.name}</h3>
+                      <p className="text-[10px] sm:text-xs text-slate-300 truncate px-1">{leader.teamName}</p>
+                      <div className="flex items-center justify-center gap-1 pt-1 sm:pt-2">
+                        <svg className="w-3 h-3 sm:w-4 sm:h-4 text-orange-400" fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                        </svg>
+                        <span className="text-base sm:text-lg font-black text-white">{leader.votes}</span>
+                      </div>
                     </div>
                   </div>
+
+                  {/* Fallback when no photo */}
+                  {!leader.headshot && (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <span className="text-4xl opacity-20">🏀</span>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

@@ -3119,90 +3119,26 @@ export default function Home() {
       setAllStarEnabled(false);
     });
 
-    // Fetch and aggregate All-Star vote leaders
+    // Read pre-aggregated snapshot written by the admin allstar page (single doc, instant)
     const fetchAllStarLeaders = async () => {
       try {
-        const votesSnap = await getDocs(collection(firebaseDB, "allStarVotes"));
-        
-        const counts: {
-          menPlayers: Record<string, number>;
-          womenPlayers: Record<string, number>;
-        } = {
-          menPlayers: {},
-          womenPlayers: {},
-        };
-
-        // Aggregate votes
-        for (const voteDoc of votesSnap.docs) {
-          const voteData = voteDoc.data();
-          const menPlayerIds = (voteData.menPlayers || []) as string[];
-          const womenPlayerIds = (voteData.womenPlayers || []) as string[];
-
-          for (const playerId of menPlayerIds) {
-            counts.menPlayers[playerId] = (counts.menPlayers[playerId] || 0) + 1;
-          }
-
-          for (const playerId of womenPlayerIds) {
-            counts.womenPlayers[playerId] = (counts.womenPlayers[playerId] || 0) + 1;
-          }
+        const snap = await getDoc(doc(firebaseDB, "allStarLeaders", "snapshot"));
+        if (snap.exists()) {
+          const data = snap.data();
+          setAllStarLeaders({
+            men:   (data.men   || []).slice(0, 10),
+            women: (data.women || []).slice(0, 10),
+          });
         }
-
-        // Fetch player info from team rosters
-        const teamsSnap = await getDocs(collection(firebaseDB, "teams"));
-        const playerMap: Record<string, { name: string; teamName: string; headshot?: string }> = {};
-
-        for (const teamDoc of teamsSnap.docs) {
-          const teamData = teamDoc.data();
-          const teamName = [teamData.city, teamData.name].filter(Boolean).join(" ");
-          const rosterSnap = await getDocs(collection(firebaseDB, "teams", teamDoc.id, "roster"));
-          
-          for (const playerDoc of rosterSnap.docs) {
-            const playerData = playerDoc.data();
-            playerMap[playerDoc.id] = {
-              name: `${playerData.firstName || ""} ${playerData.lastName || ""}`.trim() || playerData.name || playerDoc.id,
-              teamName,
-              headshot: playerData.headshot,
-            };
-          }
-        }
-
-        // Create sorted leader arrays
-        const menLeaders = Object.entries(counts.menPlayers)
-          .map(([id, votes]) => ({
-            id,
-            name: playerMap[id]?.name || id,
-            teamName: playerMap[id]?.teamName || "—",
-            votes,
-            headshot: playerMap[id]?.headshot,
-          }))
-          .sort((a, b) => b.votes - a.votes)
-          .slice(0, 10); // Top 10
-
-        const womenLeaders = Object.entries(counts.womenPlayers)
-          .map(([id, votes]) => ({
-            id,
-            name: playerMap[id]?.name || id,
-            teamName: playerMap[id]?.teamName || "—",
-            votes,
-            headshot: playerMap[id]?.headshot,
-          }))
-          .sort((a, b) => b.votes - a.votes)
-          .slice(0, 10); // Top 10
-
-        setAllStarLeaders({ men: menLeaders, women: womenLeaders });
       } catch (error) {
         console.error("Error fetching All-Star leaders:", error);
       }
     };
 
     fetchAllStarLeaders();
-    
-    // Refresh every 2 minutes to keep leaders updated
-    const interval = setInterval(fetchAllStarLeaders, 120000);
-    
+
     return () => {
       unsubscribeSettings();
-      clearInterval(interval);
     };
   }, []);
 

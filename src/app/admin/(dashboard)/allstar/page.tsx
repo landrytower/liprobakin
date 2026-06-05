@@ -18,6 +18,7 @@ type Entry = {
   id: string;
   name: string;
   teamName: string;
+  headshot?: string;
   votes: number;
   today: number;
   pctVoters: number;
@@ -286,7 +287,7 @@ export default function AllStarVotesPage() {
 
     // 2. Build name/team lookup from rosters
     const teamsSnap = await getDocs(collection(firebaseDB, "teams"));
-    const playerMap: Record<string, { name: string; teamName: string }> = {};
+    const playerMap: Record<string, { name: string; teamName: string; headshot?: string }> = {};
 
     await Promise.all(
       teamsSnap.docs.map(async (teamDoc) => {
@@ -298,6 +299,7 @@ export default function AllStarVotesPage() {
           playerMap[p.id] = {
             name: `${pd.firstName || ""} ${pd.lastName || ""}`.trim() || pd.name || p.id,
             teamName,
+            headshot: pd.headshot || undefined,
           };
         }
       })
@@ -307,7 +309,7 @@ export default function AllStarVotesPage() {
     const resolve = (
       countMap: Record<string, number>,
       todayMap: Record<string, number>,
-      lookup: Record<string, { name: string; teamName: string }>,
+      lookup: Record<string, { name: string; teamName: string; headshot?: string }>,
       catTotal: number,
     ): Entry[] =>
       Object.entries(countMap)
@@ -315,6 +317,7 @@ export default function AllStarVotesPage() {
           id,
           name: lookup[id]?.name ?? id,
           teamName: lookup[id]?.teamName ?? "—",
+          headshot: lookup[id]?.headshot,
           votes,
           today: todayMap[id] ?? 0,
           pctVoters:   voterCount > 0  ? parseFloat(((votes / voterCount)  * 100).toFixed(1)) : 0,
@@ -330,8 +333,8 @@ export default function AllStarVotesPage() {
     // Write a denormalised leaders snapshot so the vote page can display instantly
     try {
       await setDoc(doc(firebaseDB, "allStarLeaders", "snapshot"), {
-        men:   computedMen.slice(0, 15).map(({ id, name, teamName, votes }) => ({ id, name, teamName, votes })),
-        women: computedWomen.slice(0, 15).map(({ id, name, teamName, votes }) => ({ id, name, teamName, votes })),
+        men:   computedMen.slice(0, 15).map(({ id, name, teamName, votes, headshot }) => ({ id, name, teamName, votes, headshot: headshot ?? null })),
+        women: computedWomen.slice(0, 15).map(({ id, name, teamName, votes, headshot }) => ({ id, name, teamName, votes, headshot: headshot ?? null })),
         lastUpdated: new Date(),
       });
     } catch { /* non-critical */ }

@@ -185,6 +185,7 @@ export default function AllStarVotesPage() {
   const [homeBannerUrl, setHomeBannerUrl] = useState("");
   const [homeBannerUploading, setHomeBannerUploading] = useState(false);
   const [homeBannerDeleting, setHomeBannerDeleting] = useState(false);
+  const [homeBannerError, setHomeBannerError] = useState("");
   const homeBannerInputRef = useRef<HTMLInputElement | null>(null);
 
   // Reset votes
@@ -340,14 +341,29 @@ export default function AllStarVotesPage() {
 
   const uploadHomeBanner = async (file: File) => {
     setHomeBannerUploading(true);
+    setHomeBannerError("");
+    
+    // Create timeout promise (30 seconds)
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error("Upload timeout - please try again with a smaller file")), 30000)
+    );
+    
     try {
-      const sRef = storageRef(firebaseStorage, "allstar-banners/home-banner");
-      await uploadBytes(sRef, file, { contentType: file.type });
-      const url = await getDownloadURL(sRef);
-      await setDoc(doc(firebaseDB, "settings", "allStarBanner"), { url });
-      setHomeBannerUrl(url);
+      // Race between upload and timeout
+      await Promise.race([
+        (async () => {
+          const sRef = storageRef(firebaseStorage, "allstar-banners/home-banner");
+          await uploadBytes(sRef, file, { contentType: file.type });
+          const url = await getDownloadURL(sRef);
+          await setDoc(doc(firebaseDB, "settings", "allStarBanner"), { url });
+          setHomeBannerUrl(url);
+        })(),
+        timeoutPromise
+      ]);
     } catch (err) {
       console.error("Banner upload failed:", err);
+      const errorMsg = err instanceof Error ? err.message : "Upload failed - please try again";
+      setHomeBannerError(errorMsg);
     } finally {
       setHomeBannerUploading(false);
     }
@@ -668,6 +684,14 @@ export default function AllStarVotesPage() {
                     ? (language === "fr" ? "Import en cours…" : "Uploading…")
                     : (language === "fr" ? "Suppression…" : "Deleting…")}
                 </span>
+                {homeBannerUploading && (
+                  <button
+                    onClick={() => setHomeBannerUploading(false)}
+                    className="mt-2 px-3 py-1 bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-300 text-xs rounded-lg transition-colors"
+                  >
+                    {language === "fr" ? "Annuler" : "Cancel"}
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -710,6 +734,26 @@ export default function AllStarVotesPage() {
               }}
             />
           </div>
+          
+          {/* Error message */}
+          {homeBannerError && (
+            <div className="px-3 pb-3">
+              <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
+                <svg className="w-4 h-4 text-red-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                </svg>
+                <div className="flex-1">
+                  <p className="text-xs text-red-300">{homeBannerError}</p>
+                  <button
+                    onClick={() => setHomeBannerError("")}
+                    className="text-xs text-red-400 hover:text-red-300 underline mt-1"
+                  >
+                    {language === "fr" ? "Fermer" : "Dismiss"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

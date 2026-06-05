@@ -202,6 +202,7 @@ const translations = {
     totalGames: "Total Games",
     completed: "Completed",
     upcoming: "Upcoming",
+    missingScore: "Missing Final Score",
     createMatchday: "Create Matchday",
     editMatchday: "Edit Matchday",
     matchdayNumber: "Matchday Number",
@@ -305,6 +306,7 @@ const translations = {
     totalGames: "Total des Matchs",
     completed: "Terminés",
     upcoming: "À Venir",
+    missingScore: "Score Manquant",
     createMatchday: "Créer une Journée",
     editMatchday: "Modifier la Journée",
     matchdayNumber: "Numéro de Journée",
@@ -739,10 +741,17 @@ export default function GamesPage() {
 
   // Stats always reflect the real game count, regardless of matchday linkage
   const stats = useMemo(() => {
+    const hasFinalScore = (g: Game) =>
+      typeof g.homeScore === "number" && Number.isFinite(g.homeScore) &&
+      typeof g.awayScore === "number" && Number.isFinite(g.awayScore);
+    const today = new Date().toISOString().split("T")[0];
     const total = games.length;
     const completed = games.filter((g) => g.status === "completed").length;
-    const upcoming = games.filter((g) => g.status === "scheduled").length;
-    return { total, completed, upcoming };
+    // Past games (date already happened) that have no final score entered
+    const upcoming = games.filter((g) => g.date <= today && !hasFinalScore(g)).length;
+    // All games with no final score
+    const missingScore = games.filter((g) => !hasFinalScore(g)).length;
+    return { total, completed, upcoming, missingScore };
   }, [games]);
 
   // ============================================================================
@@ -1862,6 +1871,10 @@ export default function GamesPage() {
           <div className="rounded-xl border border-blue-500/20 bg-blue-500/10 px-3 sm:px-4 py-2 text-center">
             <p className="text-lg sm:text-2xl font-bold text-blue-400">{stats.upcoming}</p>
             <p className="text-[10px] uppercase tracking-wider text-blue-500/70">{t.upcoming}</p>
+          </div>
+          <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 sm:px-4 py-2 text-center">
+            <p className="text-lg sm:text-2xl font-bold text-red-400">{stats.missingScore}</p>
+            <p className="text-[10px] uppercase tracking-wider text-red-500/70">{t.missingScore}</p>
           </div>
         </div>
       </div>

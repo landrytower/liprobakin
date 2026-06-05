@@ -6598,7 +6598,7 @@ export default function Home() {
                         alt={leader.name}
                         width={80}
                         height={80}
-                        className="object-cover w-full h-full"
+                        className="object-cover w-full h-full block"
                         unoptimized
                       />
                     ) : (

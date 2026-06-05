@@ -35,8 +35,6 @@ type VoterDetail = {
 
 type Results = Record<Category, Entry[]>;
 
-type Banner = { url: string; enabled: boolean };
-
 const CATEGORIES: Category[] = ["menPlayers", "womenPlayers"];
 
 const LABELS: Record<Category, { en: string; fr: string; icon: string }> = {
@@ -184,14 +182,10 @@ export default function AllStarVotesPage() {
   const [results, setResults] = useState<Results>({
     menPlayers: [], womenPlayers: [],
   });
-  const [banners, setBanners] = useState<Banner[]>([
-    { url: "", enabled: true },
-    { url: "", enabled: true },
-    { url: "", enabled: true },
-  ]);
-  const [bannerUploading, setBannerUploading] = useState([false, false, false]);
-  const [bannerDeleting, setBannerDeleting] = useState([false, false, false]);
-  const bannerInputsRef = useRef<(HTMLInputElement | null)[]>([null, null, null]);
+  const [homeBannerUrl, setHomeBannerUrl] = useState("");
+  const [homeBannerUploading, setHomeBannerUploading] = useState(false);
+  const [homeBannerDeleting, setHomeBannerDeleting] = useState(false);
+  const homeBannerInputRef = useRef<HTMLInputElement | null>(null);
 
   const load = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -325,63 +319,39 @@ export default function AllStarVotesPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const loadBanners = useCallback(async () => {
-    try {
-      const snap = await getDoc(doc(firebaseDB, "settings", "allStarBanners"));
-      const raw = snap.exists() ? ((snap.data().banners || []) as Banner[]) : [];
-      setBanners([0, 1, 2].map((i) => raw[i] ?? { url: "", enabled: true }));
-    } catch {
-      // keep default empty state
-    }
+  useEffect(() => {
+    getDoc(doc(firebaseDB, "settings", "allStarBanner"))
+      .then((snap) => { if (snap.exists() && snap.data().url) setHomeBannerUrl(snap.data().url as string); })
+      .catch(() => {});
   }, []);
 
-  useEffect(() => { loadBanners(); }, [loadBanners]);
-
-  const uploadBanner = async (idx: number, file: File) => {
-    const upd = [...bannerUploading];
-    upd[idx] = true;
-    setBannerUploading([...upd]);
+  const uploadHomeBanner = async (file: File) => {
+    setHomeBannerUploading(true);
     try {
-      const sRef = storageRef(firebaseStorage, `allstar-banners/banner-${idx}`);
+      const sRef = storageRef(firebaseStorage, "allstar-banners/home-banner");
       await uploadBytes(sRef, file, { contentType: file.type });
       const url = await getDownloadURL(sRef);
-      const next = banners.map((b, i) => (i === idx ? { ...b, url } : b));
-      await setDoc(doc(firebaseDB, "settings", "allStarBanners"), { banners: next });
-      setBanners(next);
+      await setDoc(doc(firebaseDB, "settings", "allStarBanner"), { url });
+      setHomeBannerUrl(url);
     } catch (err) {
       console.error("Banner upload failed:", err);
     } finally {
-      upd[idx] = false;
-      setBannerUploading([...upd]);
+      setHomeBannerUploading(false);
     }
   };
 
-  const deleteBanner = async (idx: number) => {
-    const del = [...bannerDeleting];
-    del[idx] = true;
-    setBannerDeleting([...del]);
+  const deleteHomeBanner = async () => {
+    setHomeBannerDeleting(true);
     try {
-      if (banners[idx]?.url) {
-        await deleteObject(storageRef(firebaseStorage, `allstar-banners/banner-${idx}`)).catch(() => {});
+      if (homeBannerUrl) {
+        await deleteObject(storageRef(firebaseStorage, "allstar-banners/home-banner")).catch(() => {});
       }
-      const next = banners.map((b, i) => (i === idx ? { url: "", enabled: b.enabled } : b));
-      await setDoc(doc(firebaseDB, "settings", "allStarBanners"), { banners: next });
-      setBanners(next);
+      await setDoc(doc(firebaseDB, "settings", "allStarBanner"), { url: "" });
+      setHomeBannerUrl("");
     } catch (err) {
       console.error("Banner delete failed:", err);
     } finally {
-      del[idx] = false;
-      setBannerDeleting([...del]);
-    }
-  };
-
-  const toggleBannerEnabled = async (idx: number) => {
-    try {
-      const next = banners.map((b, i) => (i === idx ? { ...b, enabled: !b.enabled } : b));
-      await setDoc(doc(firebaseDB, "settings", "allStarBanners"), { banners: next });
-      setBanners(next);
-    } catch (err) {
-      console.error("Banner toggle failed:", err);
+      setHomeBannerDeleting(false);
     }
   };
 
@@ -565,125 +535,108 @@ export default function AllStarVotesPage() {
         </div>
       </div>
 
-      {/* ── Vote Page Banners ── */}
+      {/* ── Home Page Vote Banner ── */}
       <div className="space-y-4">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-blue-500/15 border border-blue-500/20 flex items-center justify-center text-base shrink-0">🖼️</div>
           <div>
-            <p className="text-sm font-bold text-white">{language === "fr" ? "Bannières de la page de vote" : "Vote Page Banners"}</p>
+            <p className="text-sm font-bold text-white">
+              {language === "fr" ? "Bannière d'accueil — Vote All-Star" : "Home Page Vote Banner"}
+            </p>
             <p className="text-xs text-slate-500 mt-0.5">
-              {language === "fr" ? "Affichées à gauche et droite du formulaire de vote (écrans ≥ 1280 px)" : "Shown left & right of the voting form on wide screens (≥ 1280 px)"}
+              {language === "fr"
+                ? "Affichée dans le pop-up de vote sur la page d'accueil"
+                : "Shown inside the vote promotion pop-up on the home page"}
             </p>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {[
-            { label: language === "fr" ? "Gauche" : "Left", idx: 0 },
-            { label: language === "fr" ? "Droite — haut" : "Right — Top", idx: 1 },
-            { label: language === "fr" ? "Droite — bas" : "Right — Bottom", idx: 2 },
-          ].map(({ label, idx }) => {
-            const banner = banners[idx];
-            const isUploading = bannerUploading[idx];
-            const isDeleting = bannerDeleting[idx];
-            const busy = isUploading || isDeleting;
-            return (
-              <div key={idx} className="bg-slate-800/50 border border-white/10 rounded-2xl overflow-hidden">
-                {/* Preview */}
-                <div className="relative bg-slate-900 flex items-center justify-center" style={{ aspectRatio: "9/16" }}>
-                  {banner?.url ? (
-                    <Image src={banner.url} alt={label} fill className="object-cover" sizes="280px" />
-                  ) : (
-                    <div className="flex flex-col items-center gap-2 text-slate-600 select-none">
-                      <svg className="w-12 h-12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
-                        <rect x="3" y="3" width="18" height="18" rx="2" strokeDasharray="4 2" />
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16l5-5 4 4 3-3 6 6M14.5 8.5a1 1 0 110-2 1 1 0 010 2z" />
-                      </svg>
-                      <span className="text-xs font-medium text-center px-4">
-                        {language === "fr" ? "Aucune image" : "No image"}
-                      </span>
-                    </div>
-                  )}
-                  {/* Disabled overlay */}
-                  {banner?.url && !banner.enabled && (
-                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                      <span className="text-xs font-bold text-white bg-black/50 px-3 py-1 rounded-lg backdrop-blur-sm">
-                        {language === "fr" ? "Désactivé" : "Disabled"}
-                      </span>
-                    </div>
-                  )}
-                  {/* Busy spinner */}
-                  {busy && (
-                    <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center gap-2">
-                      <svg className="w-8 h-8 animate-spin text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
-                      <span className="text-xs text-slate-300">
-                        {isUploading ? (language === "fr" ? "Import en cours…" : "Uploading…") : (language === "fr" ? "Suppression…" : "Deleting…")}
-                      </span>
-                    </div>
-                  )}
-                </div>
+        {/* Dimension guide */}
+        <div className="flex items-start gap-2 bg-amber-500/8 border border-amber-500/20 rounded-xl px-4 py-3">
+          <span className="text-amber-400 text-base shrink-0 mt-0.5">📐</span>
+          <div>
+            <p className="text-xs font-bold text-amber-300">
+              {language === "fr" ? "Dimensions recommandées pour le graphiste" : "Recommended dimensions for the graphic designer"}
+            </p>
+            <p className="text-xs text-slate-400 mt-1">
+              <span className="font-mono font-bold text-white">1200 × 480 px</span>
+              {" "}({language === "fr" ? "ratio 2.5:1, paysage large" : "2.5:1 ratio, wide landscape"})
+            </p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {language === "fr"
+                ? "Format PNG ou JPG · Arrière-plan foncé recommandé pour s'intégrer au thème"
+                : "PNG or JPG format · Dark background recommended to match the site theme"}
+            </p>
+          </div>
+        </div>
 
-                {/* Controls */}
-                <div className="p-3 space-y-2.5">
-                  {/* Label + enable toggle */}
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-bold text-slate-300 uppercase tracking-wide">{label}</span>
-                    <button
-                      onClick={() => toggleBannerEnabled(idx)}
-                      disabled={busy}
-                      title={banner?.enabled ? "Disable" : "Enable"}
-                      className={`relative inline-flex h-5 w-10 shrink-0 items-center rounded-full transition-colors disabled:opacity-40 ${banner?.enabled ? "bg-emerald-600" : "bg-slate-600"}`}
-                    >
-                      <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${banner?.enabled ? "translate-x-5" : "translate-x-0.5"}`} />
-                    </button>
-                  </div>
-
-                  {/* Upload / Delete buttons */}
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => bannerInputsRef.current[idx]?.click()}
-                      disabled={busy}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/25 text-blue-400 font-semibold text-xs rounded-xl transition-all disabled:opacity-40"
-                    >
-                      <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-                      </svg>
-                      {banner?.url
-                        ? (language === "fr" ? "Remplacer" : "Replace")
-                        : (language === "fr" ? "Importer" : "Upload")}
-                    </button>
-                    {banner?.url && (
-                      <button
-                        onClick={() => deleteBanner(idx)}
-                        disabled={busy}
-                        title={language === "fr" ? "Supprimer l'image" : "Delete image"}
-                        className="px-2.5 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/25 text-red-400 rounded-xl transition-all disabled:opacity-40"
-                      >
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                        </svg>
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Hidden file input */}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    ref={(el) => { bannerInputsRef.current[idx] = el; }}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) uploadBanner(idx, file);
-                      e.target.value = "";
-                    }}
-                  />
-                </div>
+        {/* Single banner card */}
+        <div className="bg-slate-800/50 border border-white/10 rounded-2xl overflow-hidden max-w-sm">
+          {/* Preview at 2.5:1 */}
+          <div className="relative bg-slate-900 flex items-center justify-center" style={{ aspectRatio: "2.5/1" }}>
+            {homeBannerUrl ? (
+              <Image src={homeBannerUrl} alt="Home banner" fill className="object-cover" sizes="384px" />
+            ) : (
+              <div className="flex flex-col items-center gap-2 text-slate-600 select-none py-6">
+                <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+                  <rect x="3" y="3" width="18" height="18" rx="2" strokeDasharray="4 2" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16l5-5 4 4 3-3 6 6M14.5 8.5a1 1 0 110-2 1 1 0 010 2z" />
+                </svg>
+                <span className="text-xs font-medium">{language === "fr" ? "Aucune image" : "No image"}</span>
               </div>
-            );
-          })}
+            )}
+            {(homeBannerUploading || homeBannerDeleting) && (
+              <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center gap-2">
+                <svg className="w-7 h-7 animate-spin text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                <span className="text-xs text-slate-300">
+                  {homeBannerUploading
+                    ? (language === "fr" ? "Import en cours…" : "Uploading…")
+                    : (language === "fr" ? "Suppression…" : "Deleting…")}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Controls */}
+          <div className="p-3 flex gap-2">
+            <button
+              onClick={() => homeBannerInputRef.current?.click()}
+              disabled={homeBannerUploading || homeBannerDeleting}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/25 text-blue-400 font-semibold text-xs rounded-xl transition-all disabled:opacity-40"
+            >
+              <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+              </svg>
+              {homeBannerUrl
+                ? (language === "fr" ? "Remplacer" : "Replace")
+                : (language === "fr" ? "Importer" : "Upload")}
+            </button>
+            {homeBannerUrl && (
+              <button
+                onClick={deleteHomeBanner}
+                disabled={homeBannerUploading || homeBannerDeleting}
+                title={language === "fr" ? "Supprimer l'image" : "Delete image"}
+                className="px-2.5 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/25 text-red-400 rounded-xl transition-all disabled:opacity-40"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                </svg>
+              </button>
+            )}
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              ref={homeBannerInputRef}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) uploadHomeBanner(file);
+                e.target.value = "";
+              }}
+            />
+          </div>
         </div>
       </div>
 

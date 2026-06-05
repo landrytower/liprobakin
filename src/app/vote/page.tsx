@@ -733,26 +733,34 @@ export default function VotePage() {
               <div className="text-center py-12 text-slate-500 text-sm">{language === "fr" ? "Aucun vote pour le moment" : "No votes yet"}</div>
             ) : (
               <>
-                <div className="flex items-end justify-center gap-3 mb-6">
+                <div className="flex items-end justify-center gap-1.5 sm:gap-2 mb-6">
                   {podiumOrder.map((player, podiumIdx) => {
                     const voteRank = podiumIdx === 1 ? 1 : podiumIdx === 0 ? 2 : 3;
                     const isFirst = voteRank === 1;
                     const animDelays = [120, 0, 200];
-                    const cardStyle = {
-                      1: { border: "border-yellow-400/40", bg: "bg-gradient-to-b from-yellow-500/10 to-yellow-600/5", avatarBg: "bg-gradient-to-br from-yellow-400 to-yellow-600 text-black", votesColor: "text-yellow-400", votesSize: "text-3xl", avatarSize: "w-14 h-14 text-2xl", scale: "scale-[1.08]" },
-                      2: { border: "border-slate-400/20", bg: "bg-gradient-to-b from-slate-400/8 to-slate-500/3", avatarBg: "bg-gradient-to-br from-slate-300 to-slate-400 text-black", votesColor: "text-slate-300", votesSize: "text-2xl", avatarSize: "w-12 h-12 text-xl", scale: "" },
-                      3: { border: "border-orange-800/25", bg: "bg-gradient-to-b from-orange-900/8 to-orange-950/3", avatarBg: "bg-gradient-to-br from-orange-600 to-orange-800 text-white", votesColor: "text-orange-500", votesSize: "text-xl", avatarSize: "w-12 h-12 text-xl", scale: "" },
+                    const rankStyle = {
+                      1: { border: "border-yellow-400/50", votesColor: "text-yellow-300", placeholderBg: "bg-gradient-to-br from-yellow-500/30 to-yellow-700/20", scale: "scale-[1.06] sm:scale-[1.08]", height: "h-44 sm:h-52" },
+                      2: { border: "border-slate-400/25", votesColor: "text-slate-300", placeholderBg: "bg-gradient-to-br from-slate-500/20 to-slate-700/10", scale: "", height: "h-36 sm:h-44" },
+                      3: { border: "border-orange-700/30", votesColor: "text-orange-400", placeholderBg: "bg-gradient-to-br from-orange-700/20 to-orange-900/10", scale: "", height: "h-36 sm:h-44" },
                     }[voteRank]!;
                     return (
-                      <div key={player.id} className={`flex-1 flex flex-col items-center ${cardStyle.bg} border ${cardStyle.border} rounded-2xl p-4 animate-podium-in ${cardStyle.scale} relative`} style={{ animationDelay: `${animDelays[podiumIdx]}ms` }}>
-                        {isFirst && <span className="text-xl leading-none mb-1 animate-bounce" style={{ animationDuration: "2s" }}>👑</span>}
-                        <div className={`${cardStyle.avatarSize} rounded-full overflow-hidden relative shrink-0 flex items-center justify-center font-black ${cardStyle.avatarBg} mb-2 shadow-lg`}>
-                          {player.headshot ? <Image src={player.headshot} alt={player.name} fill className="object-cover object-top" sizes="56px" /> : player.name.charAt(0)}
+                      <div key={player.id} className={`flex-1 relative overflow-hidden border ${rankStyle.border} rounded-xl sm:rounded-2xl animate-podium-in ${rankStyle.scale} min-w-0 ${rankStyle.height}`} style={{ animationDelay: `${animDelays[podiumIdx]}ms` }}>
+                        {/* Full-bleed player photo */}
+                        {player.headshot ? (
+                          <Image src={player.headshot} alt={player.name} fill className="object-cover object-top" sizes="(max-width: 640px) 33vw, 180px" />
+                        ) : (
+                          <div className={`absolute inset-0 flex items-center justify-center font-black text-3xl text-white/60 ${rankStyle.placeholderBg}`}>{player.name.charAt(0)}</div>
+                        )}
+                        {/* Dark gradient overlay at bottom */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/95 via-slate-950/30 to-transparent" />
+                        {/* Crown for 1st */}
+                        {isFirst && <span className="absolute top-1.5 left-1/2 -translate-x-1/2 text-lg leading-none animate-bounce z-10" style={{ animationDuration: "2s" }}>👑</span>}
+                        {/* Name + votes overlay */}
+                        <div className="absolute bottom-0 left-0 right-0 p-2 text-center z-10">
+                          <p className="font-bold text-white text-[11px] sm:text-xs leading-tight line-clamp-2 break-words">{player.name}</p>
+                          <p className={`font-black mt-0.5 leading-none ${rankStyle.votesColor} text-xl sm:text-2xl`}>{player.voteCount}</p>
+                          <p className="text-[9px] text-slate-500 uppercase tracking-wider">{t.votes}</p>
                         </div>
-                        <p className={`font-bold text-center text-white leading-tight ${isFirst ? "text-sm" : "text-xs"} w-full truncate`}>{player.name}</p>
-                        <p className="text-xs text-slate-500 text-center truncate w-full mt-0.5">{player.teamName}</p>
-                        <p className={`font-black mt-2 leading-none ${cardStyle.votesColor} ${cardStyle.votesSize}`}>{player.voteCount}</p>
-                        <p className="text-[10px] text-slate-600 uppercase tracking-wider mt-0.5">{t.votes}</p>
                       </div>
                     );
                   })}
@@ -785,7 +793,7 @@ export default function VotePage() {
 
       {/* ── Sticky submit / locked bar ── */}
       {viewMode === "vote" && (
-        <div className="fixed bottom-0 inset-x-0 p-4 bg-slate-950/95 backdrop-blur border-t border-white/10 z-20">
+        <div className="fixed bottom-0 inset-x-0 px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] bg-slate-950/95 backdrop-blur border-t border-white/10 z-20">
           {switchMsg && (
             <div className="text-center text-amber-400 text-sm mb-2 font-bold animate-scale-in flex items-center justify-center gap-2">
               <span>⭐</span>{switchMsg}<span>⭐</span>
@@ -811,12 +819,10 @@ export default function VotePage() {
             return (
               <>
                 {hint && (
-                  <p className="text-center text-xs text-slate-400 mb-2 font-medium">
-                    <span className={menDone ? "text-emerald-400" : "text-slate-400"}>♂ {selectedPlayers.men.length}/{MAX_PLAYERS}</span>
-                    <span className="mx-2 text-slate-600">·</span>
-                    <span className={womenDone ? "text-emerald-400" : "text-slate-400"}>♀ {selectedPlayers.women.length}/{MAX_PLAYERS}</span>
-                    <span className="ml-2 text-slate-500">— {hint}</span>
-                  </p>
+                  <div className="flex items-center justify-center gap-3 mb-1.5">
+                    <span className={`text-xs font-bold ${menDone ? "text-emerald-400" : "text-slate-400"}`}>♂ {selectedPlayers.men.length}/{MAX_PLAYERS}</span>
+                    <span className={`text-xs font-bold ${womenDone ? "text-emerald-400" : "text-slate-400"}`}>♀ {selectedPlayers.women.length}/{MAX_PLAYERS}</span>
+                  </div>
                 )}
                 <button
                   onClick={handleSubmitClick}

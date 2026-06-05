@@ -4447,19 +4447,12 @@ export default function Home() {
           })
           .filter((game): game is UpcomingGameEntry => {
             if (game.completed) return false;
-
             if (game.data?.isHiddenFromPublic === true) return false;
-
             const status = String(game.data?.status || "").toLowerCase();
             if (status === "cancelled" || status === "postponed" || status === "completed") return false;
             if (status === "live") return false;
             if (!game.dateObj) return false;
-
-            const gameNotStarted = now < game.dateObj;
-            const minutesSinceStart = (now.getTime() - game.dateObj.getTime()) / (1000 * 60);
-            const nonLiveGraceWindow = minutesSinceStart >= 0 && minutesSinceStart <= 30;
-
-            return gameNotStarted || nonLiveGraceWindow;
+            return true;
           })
           .sort((a, b) => a.dateObj.getTime() - b.dateObj.getTime());
         

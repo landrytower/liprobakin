@@ -2923,7 +2923,7 @@ export default function GamesPage() {
                       }
 
                       const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-                      const dayGames = gamesLinkedToMatchdays.filter((g) => g.date === dateStr);
+                      const dayGames = games.filter((g) => g.date === dateStr);
                       const isSelected = selectedDate === dateStr;
 
                       return (
@@ -2966,7 +2966,7 @@ export default function GamesPage() {
                   </div>
 
                   {(() => {
-                    const dateGames = gamesLinkedToMatchdays.filter((g) => g.date === selectedDate);
+                    const dateGames = games.filter((g) => g.date === selectedDate);
                     return dateGames.length === 0 ? (
                       <div className="rounded-lg border border-white/10 bg-slate-800/40 p-8 text-center">
                         <p className="text-slate-400">{t.noGamesForDate}</p>

@@ -327,6 +327,24 @@ export default function VotePage() {
       setSuccessMsg(t.success);
       setTimeout(() => setSuccessMsg(""), 4000);
 
+      // Send SMS confirmation (fire-and-forget)
+      {
+        const cache = playersCacheRef.current;
+        const resolve = (ids: string[], g: string) =>
+          ids.map((id) => (cache[g] as typeof players | undefined)?.find((p) => p.id === id)?.name ?? id);
+        fetch("/api/vote/send-confirmation", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            phone: "+" + docId,
+            firstName,
+            lastName,
+            menPlayers:   resolve(selectedPlayers.men,   "men"),
+            womenPlayers: resolve(selectedPlayers.women, "women"),
+          }),
+        }).catch(() => {});
+      }
+
       // Update public vote-count aggregates (fire-and-forget)
       if (selectedPlayers.men.length > 0) {
         setDoc(

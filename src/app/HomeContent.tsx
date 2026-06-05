@@ -6527,14 +6527,14 @@ export default function Home() {
                   </div>
 
                   {/* Player Headshot */}
-                  <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-2 sm:mb-3 rounded-full overflow-hidden border-2 border-white/10 group-hover:border-orange-500/50 transition-all">
+                  <div className="relative w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-2 sm:mb-3 rounded-full overflow-hidden border-2 border-white/10 group-hover:border-orange-500/50 transition-all [transform:translateZ(0)]">
                     {leader.headshot ? (
                       <Image
                         src={leader.headshot}
                         alt={leader.name}
-                        width={80}
-                        height={80}
-                        className="object-cover w-full h-full block"
+                        fill
+                        sizes="(max-width: 640px) 64px, 80px"
+                        className="object-cover"
                         unoptimized
                       />
                     ) : (

@@ -30,6 +30,8 @@ type VoterDetail = {
   voterId: string;
   voterName: string;
   voterContact: string;
+  voterRole: string;
+  voterEmail: string;
   menPlayers: Array<{ id: string; name: string }>;
   womenPlayers: Array<{ id: string; name: string }>;
   votedAt: Date | null;
@@ -339,33 +341,26 @@ export default function AllStarVotesPage() {
       });
     } catch { /* non-critical */ }
 
-    // 4. Fetch voter details with user profiles
+    // 4. Build voter details directly from vote documents (name/phone/role stored on the vote doc itself)
     const voterDetailsData: VoterDetail[] = [];
     for (const voteDoc of votesSnap.docs) {
       const voteData = voteDoc.data();
       const voterId = voteDoc.id;
-      
-      // Fetch user profile
-      try {
-        const userDoc = await getDoc(doc(firebaseDB, "users", voterId));
-        const userData = userDoc.exists() ? userDoc.data() : null;
-        
-        const menPlayerIds = (voteData.menPlayers || []) as string[];
-        const womenPlayerIds = (voteData.womenPlayers || []) as string[];
-        
-        voterDetailsData.push({
-          voterId,
-          voterName: userData 
-            ? `${userData.firstName || ""} ${userData.lastName || ""}`.trim() || "Unknown"
-            : "Unknown",
-          voterContact: userData?.phoneNumber || userData?.email || "—",
-          menPlayers: menPlayerIds.map(id => ({ id, name: playerMap[id]?.name || id })),
-          womenPlayers: womenPlayerIds.map(id => ({ id, name: playerMap[id]?.name || id })),
-          votedAt: (voteData.lastModified as Timestamp | undefined)?.toDate?.() || null,
-        });
-      } catch (error) {
-        console.error(`Failed to fetch user profile for ${voterId}:`, error);
-      }
+      const menPlayerIds = (voteData.menPlayers || []) as string[];
+      const womenPlayerIds = (voteData.womenPlayers || []) as string[];
+      const firstName = (voteData.firstName || "").trim();
+      const lastName  = (voteData.lastName  || "").trim();
+      voterDetailsData.push({
+        voterId,
+        voterName:    `${firstName} ${lastName}`.trim() || voteData.name || "Unknown",
+        voterContact: voteData.phone || "—",
+        voterRole:    voteData.role  || "—",
+        voterEmail:   voteData.email || "",
+        menPlayers:   menPlayerIds.map(id => ({ id, name: playerMap[id]?.name || id })),
+        womenPlayers: womenPlayerIds.map(id => ({ id, name: playerMap[id]?.name || id })),
+        votedAt: (voteData.submittedAt as Timestamp | undefined)?.toDate?.() ||
+                 (voteData.lastModified as Timestamp | undefined)?.toDate?.() || null,
+      });
     }
     setVoterDetails(voterDetailsData.sort((a, b) => 
       (b.votedAt?.getTime() || 0) - (a.votedAt?.getTime() || 0)
@@ -1119,11 +1114,13 @@ export default function AllStarVotesPage() {
             const searchLower = voterSearch.toLowerCase().trim();
             const filteredVoters = searchLower
               ? voterDetails.filter((voter) => {
-                  const nameMatch = voter.voterName.toLowerCase().includes(searchLower);
+                  const nameMatch    = voter.voterName.toLowerCase().includes(searchLower);
                   const contactMatch = voter.voterContact.toLowerCase().includes(searchLower);
-                  const menPlayersMatch = voter.menPlayers.some(p => p.name.toLowerCase().includes(searchLower));
+                  const roleMatch    = voter.voterRole.toLowerCase().includes(searchLower);
+                  const emailMatch   = voter.voterEmail.toLowerCase().includes(searchLower);
+                  const menPlayersMatch   = voter.menPlayers.some(p => p.name.toLowerCase().includes(searchLower));
                   const womenPlayersMatch = voter.womenPlayers.some(p => p.name.toLowerCase().includes(searchLower));
-                  return nameMatch || contactMatch || menPlayersMatch || womenPlayersMatch;
+                  return nameMatch || contactMatch || roleMatch || emailMatch || menPlayersMatch || womenPlayersMatch;
                 })
               : voterDetails;
 
@@ -1167,8 +1164,16 @@ export default function AllStarVotesPage() {
                     {filteredVoters.map((voter, idx) => (
                       <tr key={voter.voterId} className="border-b border-white/5 hover:bg-slate-800/40 transition-colors">
                         <td className="px-4 py-3 text-slate-500 font-mono text-xs">{idx + 1}</td>
-                        <td className="px-4 py-3 text-white font-medium">{voter.voterName}</td>
-                        <td className="px-4 py-3 text-slate-400 font-mono text-xs">{voter.voterContact}</td>
+                        <td className="px-4 py-3">
+                          <div className="font-medium text-white">{voter.voterName}</div>
+                          {voter.voterRole && voter.voterRole !== "—" && (
+                            <div className="text-[10px] font-semibold uppercase tracking-wider mt-0.5 text-amber-400">{voter.voterRole}</div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-slate-400 font-mono text-xs">
+                          <div>{voter.voterContact}</div>
+                          {voter.voterEmail && <div className="text-slate-500 text-[10px] mt-0.5">{voter.voterEmail}</div>}
+                        </td>
                         <td className="px-4 py-3">
                           <div className="space-y-1">
                             {voter.menPlayers.length > 0 && (

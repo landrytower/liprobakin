@@ -726,13 +726,24 @@ export default function GamesPage() {
     return grouped;
   }, [filteredGames]);
 
-  // Stats
+  // All games grouped by week (fallback when no matchdays exist)
+  const allGamesByWeek = useMemo(() => {
+    const grouped: Record<number, Game[]> = {};
+    games.forEach((game) => {
+      const w = game.week || 0;
+      if (!grouped[w]) grouped[w] = [];
+      grouped[w].push(game);
+    });
+    return grouped;
+  }, [games]);
+
+  // Stats always reflect the real game count, regardless of matchday linkage
   const stats = useMemo(() => {
-    const total = gamesLinkedToMatchdays.length;
-    const completed = gamesLinkedToMatchdays.filter((g) => g.status === "completed").length;
-    const upcoming = gamesLinkedToMatchdays.filter((g) => g.status === "scheduled").length;
+    const total = games.length;
+    const completed = games.filter((g) => g.status === "completed").length;
+    const upcoming = games.filter((g) => g.status === "scheduled").length;
     return { total, completed, upcoming };
-  }, [gamesLinkedToMatchdays]);
+  }, [games]);
 
   // ============================================================================
   // HANDLERS
@@ -2520,21 +2531,68 @@ export default function GamesPage() {
             <>
               {/* Matchday Grid */}
               {matchdays.length === 0 ? (
-                <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-12 text-center">
-                  <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-indigo-500/20">
-                    <svg className="w-8 h-8 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
+                games.length > 0 ? (
+                  <div className="space-y-4">
+                    <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      <p className="text-sm font-medium text-amber-300">
+                        {language === "fr"
+                          ? `${games.length} match(s) trouvé(s) sans journée associée. Créez des journées pour les organiser.`
+                          : `${games.length} game(s) found without a matchday. Create matchdays to organize them.`}
+                      </p>
+                      <button
+                        onClick={() => setMatchdayFormVisible(true)}
+                        className="shrink-0 rounded-lg bg-indigo-500 px-4 py-1.5 text-xs font-medium text-white hover:bg-indigo-600 transition"
+                      >
+                        + {t.createMatchday}
+                      </button>
+                    </div>
+                    {Object.entries(allGamesByWeek)
+                      .sort(([a], [b]) => Number(a) - Number(b))
+                      .map(([week, weekGames]) => (
+                        <div key={week} className="space-y-3">
+                          <h3 className="text-sm font-bold text-indigo-400 uppercase tracking-wider">
+                            {t.week} {week}
+                          </h3>
+                          <div className="space-y-2">
+                            {weekGames.map((game) => (
+                              <GameCard
+                                key={game.id}
+                                game={game}
+                                t={t}
+                                formatDate={formatDate}
+                                getStatusBadge={getStatusBadge}
+                                onEdit={handleEditGame}
+                                onDelete={handleDeleteGame}
+                                onEnterScore={() => {
+                                  setScoreEntryGame(game);
+                                  setScoreForm({
+                                    homeScore: game.homeScore?.toString() || "",
+                                    awayScore: game.awayScore?.toString() || "",
+                                  });
+                                }}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      ))}
                   </div>
-                  <h3 className="text-lg font-semibold text-white mb-2">{t.noMatchdays}</h3>
-                  <p className="text-slate-400 mb-4">{t.createMatchdayDesc}</p>
-                  <button
-                    onClick={() => setMatchdayFormVisible(true)}
-                    className="rounded-lg bg-indigo-500 px-6 py-2 text-sm font-medium text-white hover:bg-indigo-600 transition"
-                  >
-                    + {t.createMatchday}
-                  </button>
-                </div>
+                ) : (
+                  <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-12 text-center">
+                    <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-indigo-500/20">
+                      <svg className="w-8 h-8 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-lg font-semibold text-white mb-2">{t.noMatchdays}</h3>
+                    <p className="text-slate-400 mb-4">{t.createMatchdayDesc}</p>
+                    <button
+                      onClick={() => setMatchdayFormVisible(true)}
+                      className="rounded-lg bg-indigo-500 px-6 py-2 text-sm font-medium text-white hover:bg-indigo-600 transition"
+                    >
+                      + {t.createMatchday}
+                    </button>
+                  </div>
+                )
               ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
                   {matchdays

@@ -6,6 +6,7 @@ import { collection, getDocs, doc, getDoc, setDoc, deleteDoc, writeBatch } from 
 import type { Timestamp } from "firebase/firestore";
 import { ref as storageRef, deleteObject } from "firebase/storage";
 import { firebaseDB, firebaseStorage, firebaseAuth } from "@/lib/firebase";
+// firebaseStorage used by deleteHomeBanner; firebaseAuth used by uploadHomeBanner
 import { normalizeTeamGender } from "@/lib/team-gender";
 import { useAdmin } from "../layout";
 
@@ -377,10 +378,6 @@ export default function AllStarVotesPage() {
 
       const blob = await compressBannerImage(file).catch(() => file as Blob);
       const token = await user.getIdToken(false);
-      const bucket = firebaseStorage.app.options.storageBucket!;
-      const objectName = "allstar-banners/home-banner";
-      const encodedName = encodeURIComponent(objectName);
-      const uploadUrl = `https://firebasestorage.googleapis.com/v0/b/${encodeURIComponent(bucket)}/o?uploadType=media&name=${encodedName}`;
 
       const ctrl = new AbortController();
       abortCtrlRef.current = ctrl;
@@ -388,9 +385,9 @@ export default function AllStarVotesPage() {
 
       let res: Response;
       try {
-        res = await fetch(uploadUrl, {
+        res = await fetch("/api/admin/upload-banner", {
           method: "POST",
-          headers: { "Authorization": `Firebase ${token}`, "Content-Type": "image/jpeg" },
+          headers: { "Authorization": `Bearer ${token}`, "Content-Type": "image/jpeg" },
           body: blob,
           signal: ctrl.signal,
         });
@@ -404,10 +401,9 @@ export default function AllStarVotesPage() {
         throw new Error(`HTTP ${res.status} — ${errText}`);
       }
 
-      const meta = await res.json() as { downloadTokens: string };
-      const downloadUrl = `https://firebasestorage.googleapis.com/v0/b/${encodeURIComponent(bucket)}/o/${encodedName}?alt=media&token=${meta.downloadTokens}`;
-      await setDoc(doc(firebaseDB, "settings", "allStarBanner"), { url: downloadUrl });
-      setHomeBannerUrl(downloadUrl);
+      const { url } = await res.json() as { url: string };
+      await setDoc(doc(firebaseDB, "settings", "allStarBanner"), { url });
+      setHomeBannerUrl(url);
     } catch (err: unknown) {
       abortCtrlRef.current = null;
       if (err instanceof DOMException && err.name === "AbortError") return;

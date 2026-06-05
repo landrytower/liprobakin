@@ -1324,12 +1324,14 @@ export default function GamesPage() {
     }
 
     setSavingScoreMode("complete");
-    try {
-      const winnerId = homeScore > awayScore ? scoreEntryGame.homeTeamId : scoreEntryGame.awayTeamId;
-      const loserId = winnerId === scoreEntryGame.homeTeamId ? scoreEntryGame.awayTeamId : scoreEntryGame.homeTeamId;
-      const winnerScore = winnerId === scoreEntryGame.homeTeamId ? homeScore : awayScore;
-      const loserScore = winnerId === scoreEntryGame.homeTeamId ? awayScore : homeScore;
 
+    const winnerId = homeScore > awayScore ? scoreEntryGame.homeTeamId : scoreEntryGame.awayTeamId;
+    const loserId = winnerId === scoreEntryGame.homeTeamId ? scoreEntryGame.awayTeamId : scoreEntryGame.homeTeamId;
+    const winnerScore = winnerId === scoreEntryGame.homeTeamId ? homeScore : awayScore;
+    const loserScore = winnerId === scoreEntryGame.homeTeamId ? awayScore : homeScore;
+
+    // 1. Save the score. A failure HERE is a real save failure.
+    try {
       await updateDoc(doc(firebaseDB, "games", scoreEntryGame.id), {
         homeScore,
         awayScore,
@@ -1345,43 +1347,48 @@ export default function GamesPage() {
         updatedAt: serverTimestamp(),
         archivedAt: serverTimestamp(),
       });
-
-      await Promise.all([recalculateLeagueStatsFromGames(), recomputeHomeProjectorCache()]);
-
-      // Audit log for score update
-      const winnerName = winnerId === scoreEntryGame.homeTeamId ? scoreEntryGame.homeTeamName : scoreEntryGame.awayTeamName;
-      const loserName = winnerId === scoreEntryGame.homeTeamId ? scoreEntryGame.awayTeamName : scoreEntryGame.homeTeamName;
-      try {
-        await logAuditAction(
-          "game_stats_updated", 
-          currentAdminUser?.id || "unknown", 
-          currentAdminUser?.email || "unknown", 
-          "game", 
-          scoreEntryGame.id, 
-          `${scoreEntryGame.homeTeamName} vs ${scoreEntryGame.awayTeamName}`, 
-          {
-            homeTeam: scoreEntryGame.homeTeamName,
-            awayTeam: scoreEntryGame.awayTeamName,
-            homeScore,
-            awayScore,
-            winner: winnerName,
-            loser: loserName,
-            gameDate: scoreEntryGame.date
-          }
-        );
-      } catch (auditError) {
-        console.error("Score saved but audit log failed:", auditError);
-      }
-
-      setScoreEntryGame(null);
-      setScoreForm({ homeScore: "", awayScore: "" });
-      setStatusMessage({ type: "success", message: "Score saved and game archived" });
     } catch (error) {
       console.error("Error saving score:", error);
       setStatusMessage({ type: "error", message: "Failed to save score" });
-    } finally {
       setSavingScoreMode(null);
+      return;
     }
+
+    // 2. Post-save side-effects. Failures here must NOT report the save as failed.
+    try {
+      await Promise.all([recalculateLeagueStatsFromGames(), recomputeHomeProjectorCache()]);
+    } catch (recalcError) {
+      console.error("Score saved but stats recalculation failed:", recalcError);
+    }
+
+    const winnerName = winnerId === scoreEntryGame.homeTeamId ? scoreEntryGame.homeTeamName : scoreEntryGame.awayTeamName;
+    const loserName = winnerId === scoreEntryGame.homeTeamId ? scoreEntryGame.awayTeamName : scoreEntryGame.homeTeamName;
+    try {
+      await logAuditAction(
+        "game_stats_updated",
+        currentAdminUser?.id || "unknown",
+        currentAdminUser?.email || "unknown",
+        "game",
+        scoreEntryGame.id,
+        `${scoreEntryGame.homeTeamName} vs ${scoreEntryGame.awayTeamName}`,
+        {
+          homeTeam: scoreEntryGame.homeTeamName,
+          awayTeam: scoreEntryGame.awayTeamName,
+          homeScore,
+          awayScore,
+          winner: winnerName,
+          loser: loserName,
+          gameDate: scoreEntryGame.date,
+        },
+      );
+    } catch (auditError) {
+      console.error("Score saved but audit log failed:", auditError);
+    }
+
+    setScoreEntryGame(null);
+    setScoreForm({ homeScore: "", awayScore: "" });
+    setStatusMessage({ type: "success", message: "Score saved and game archived" });
+    setSavingScoreMode(null);
   };
 
   const handleSaveLiveScore = async () => {

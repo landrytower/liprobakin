@@ -6527,21 +6527,13 @@ export default function Home() {
                   </div>
 
                   {/* Player Headshot */}
-                  <div className="relative w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-2 sm:mb-3 rounded-full overflow-hidden border-2 border-white/10 group-hover:border-orange-500/50 transition-all [transform:translateZ(0)]">
-                    {leader.headshot ? (
-                      <Image
-                        src={leader.headshot}
-                        alt={leader.name}
-                        fill
-                        sizes="(max-width: 640px) 64px, 80px"
-                        className="object-cover"
-                        unoptimized
-                      />
-                    ) : (
-                      <div className="w-full h-full bg-slate-800 flex items-center justify-center">
-                        <span className="text-2xl sm:text-3xl">🏀</span>
-                      </div>
-                    )}
+                  <div
+                    className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-2 sm:mb-3 rounded-full border-2 border-white/10 group-hover:border-orange-500/50 transition-all bg-slate-800 bg-cover bg-center bg-no-repeat flex items-center justify-center"
+                    style={leader.headshot ? { backgroundImage: `url(${leader.headshot})` } : undefined}
+                    role="img"
+                    aria-label={leader.name}
+                  >
+                    {!leader.headshot && <span className="text-2xl sm:text-3xl">🏀</span>}
                   </div>
 
                   {/* Player Info */}

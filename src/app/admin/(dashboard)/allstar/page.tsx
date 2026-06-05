@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import Image from "next/image";
-import { collection, getDocs, doc, getDoc, setDoc } from "firebase/firestore";
+import { collection, getDocs, doc, getDoc, setDoc, deleteDoc, writeBatch } from "firebase/firestore";
 import type { Timestamp } from "firebase/firestore";
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { firebaseDB, firebaseStorage } from "@/lib/firebase";
@@ -187,6 +187,19 @@ export default function AllStarVotesPage() {
   const [homeBannerDeleting, setHomeBannerDeleting] = useState(false);
   const homeBannerInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Reset votes
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetPwd1, setResetPwd1] = useState("");
+  const [resetPwd2, setResetPwd2] = useState("");
+  const [resetCountdown, setResetCountdown] = useState<number | null>(null);
+  const [resetRunning, setResetRunning] = useState(false);
+  const [resetError, setResetError] = useState("");
+  const [resetSuccess, setResetSuccess] = useState(false);
+
+  // Reset banner activity
+  const [resettingBanner, setResettingBanner] = useState(false);
+  const [bannerResetSuccess, setBannerResetSuccess] = useState(false);
+
   const load = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
 
@@ -352,6 +365,66 @@ export default function AllStarVotesPage() {
       console.error("Banner delete failed:", err);
     } finally {
       setHomeBannerDeleting(false);
+    }
+  };
+
+  // Countdown: start 5-min timer when both passwords match; reset when they diverge
+  const pwdMatch = resetPwd1.length >= 1 && resetPwd1 === resetPwd2;
+  useEffect(() => {
+    if (!pwdMatch || !showResetModal) { setResetCountdown(null); return; }
+    setResetCountdown(300);
+    const iv = setInterval(() => {
+      setResetCountdown((prev) => {
+        if (prev === null || prev <= 1) { clearInterval(iv); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(iv);
+  }, [pwdMatch, showResetModal]);
+
+  const resetAllVotes = async () => {
+    setResetRunning(true);
+    setResetError("");
+    try {
+      const votesSnap = await getDocs(collection(firebaseDB, "allStarVotes"));
+      // Batch-delete in chunks of 500
+      for (let i = 0; i < votesSnap.docs.length; i += 500) {
+        const batch = writeBatch(firebaseDB);
+        votesSnap.docs.slice(i, i + 500).forEach((d) => batch.delete(d.ref));
+        await batch.commit();
+      }
+      await setDoc(doc(firebaseDB, "allStarVoteResults", "menPlayers"), {});
+      await setDoc(doc(firebaseDB, "allStarVoteResults", "womenPlayers"), {});
+      await setDoc(doc(firebaseDB, "allStarLeaders", "snapshot"), { men: [], women: [], lastUpdated: new Date() });
+      setTotalVoters(0);
+      setTotalVotes(0);
+      setResults({ menPlayers: [], womenPlayers: [] });
+      setVoterDetails([]);
+      setResetSuccess(true);
+      setTimeout(() => {
+        setShowResetModal(false);
+        setResetSuccess(false);
+        setResetPwd1("");
+        setResetPwd2("");
+        setResetCountdown(null);
+      }, 2000);
+    } catch {
+      setResetError(language === "fr" ? "Erreur lors de la réinitialisation." : "Reset failed. Please try again.");
+    } finally {
+      setResetRunning(false);
+    }
+  };
+
+  const resetBannerActivity = async () => {
+    setResettingBanner(true);
+    try {
+      const snap = await getDoc(doc(firebaseDB, "settings", "allStarBanner"));
+      const v = snap.exists() ? ((snap.data().version as number) ?? 0) : 0;
+      await setDoc(doc(firebaseDB, "settings", "allStarBanner"), { url: homeBannerUrl, version: v + 1 });
+      setBannerResetSuccess(true);
+      setTimeout(() => setBannerResetSuccess(false), 3000);
+    } catch { /* non-critical */ } finally {
+      setResettingBanner(false);
     }
   };
 
@@ -949,6 +1022,191 @@ export default function AllStarVotesPage() {
           </div>
         )}
       </div>
+
+      {/* ── Danger Zone ── */}
+      <div className="space-y-4 pt-2">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-red-500/15 border border-red-500/25 flex items-center justify-center text-base shrink-0">⚠️</div>
+          <div>
+            <p className="text-sm font-bold text-red-400">{language === "fr" ? "Zone dangereuse" : "Danger Zone"}</p>
+            <p className="text-xs text-slate-500 mt-0.5">{language === "fr" ? "Actions irréversibles — procéder avec précaution" : "Irreversible actions — proceed with caution"}</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Reset all votes */}
+          <div className="bg-red-950/30 border border-red-500/20 rounded-2xl p-5 space-y-3">
+            <div className="flex items-start gap-3">
+              <span className="text-2xl shrink-0">🗑️</span>
+              <div>
+                <p className="text-sm font-bold text-red-300">{language === "fr" ? "Réinitialiser tous les votes" : "Reset All Votes"}</p>
+                <p className="text-xs text-slate-400 mt-1">
+                  {language === "fr"
+                    ? "Supprime tous les bulletins, remet les compteurs à 0 et efface le classement. Action irréversible."
+                    : "Deletes every ballot, resets all vote counts to 0, and clears the leaderboard. Cannot be undone."}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => { setShowResetModal(true); setResetPwd1(""); setResetPwd2(""); setResetCountdown(null); setResetError(""); setResetSuccess(false); }}
+              className="w-full py-2.5 bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 text-red-400 font-bold text-sm rounded-xl transition-all"
+            >
+              {language === "fr" ? "Commencer la procédure" : "Start Reset Procedure"}
+            </button>
+          </div>
+
+          {/* Reset banner activity */}
+          <div className="bg-amber-950/30 border border-amber-500/20 rounded-2xl p-5 space-y-3">
+            <div className="flex items-start gap-3">
+              <span className="text-2xl shrink-0">🔔</span>
+              <div>
+                <p className="text-sm font-bold text-amber-300">{language === "fr" ? "Réinitialiser l'activité bannière" : "Reset Banner Activity"}</p>
+                <p className="text-xs text-slate-400 mt-1">
+                  {language === "fr"
+                    ? "La bannière sera à nouveau affichée 3 fois pour tous les visiteurs qui ne l'ont pas encore vue."
+                    : "The banner will be shown 3 more times to all visitors, as if they had never seen it."}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={resetBannerActivity}
+              disabled={resettingBanner}
+              className="w-full py-2.5 bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/30 text-amber-400 font-bold text-sm rounded-xl transition-all disabled:opacity-40"
+            >
+              {resettingBanner ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                  {language === "fr" ? "Réinitialisation…" : "Resetting…"}
+                </span>
+              ) : bannerResetSuccess ? (
+                <span className="flex items-center justify-center gap-2 text-emerald-400">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                  {language === "fr" ? "Réinitialisé !" : "Reset!"}
+                </span>
+              ) : (language === "fr" ? "Réinitialiser la bannière" : "Reset Banner")}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Reset Votes Modal ── */}
+      {showResetModal && (
+        <>
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50" onClick={() => !resetRunning && setShowResetModal(false)} />
+          <div className="fixed inset-x-4 top-1/2 -translate-y-1/2 max-w-md mx-auto z-50">
+            <div className="bg-slate-900 border border-red-500/30 rounded-2xl shadow-2xl overflow-hidden">
+              <div className="px-6 pt-6 pb-4 border-b border-white/5 bg-red-950/30">
+                <div className="flex items-center gap-3 mb-2">
+                  <span className="text-2xl">⚠️</span>
+                  <h3 className="text-lg font-black text-red-300">
+                    {language === "fr" ? "Réinitialisation des votes" : "Reset All Votes"}
+                  </h3>
+                </div>
+                <p className="text-xs text-slate-400">
+                  {language === "fr"
+                    ? "Cette action supprimera DÉFINITIVEMENT tous les bulletins et remettra les compteurs à zéro. Elle ne peut pas être annulée."
+                    : "This will PERMANENTLY delete every ballot and reset all vote counts to zero. This cannot be undone."}
+                </p>
+              </div>
+
+              <div className="p-6 space-y-5">
+                {resetSuccess ? (
+                  <div className="text-center py-4">
+                    <div className="text-4xl mb-3">✅</div>
+                    <p className="text-emerald-400 font-bold">{language === "fr" ? "Votes réinitialisés avec succès." : "Votes reset successfully."}</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-3">
+                      <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                        {language === "fr" ? "Étape 1 — Entrez votre mot de passe deux fois" : "Step 1 — Enter your password twice"}
+                      </p>
+                      <input
+                        type="password"
+                        value={resetPwd1}
+                        onChange={(e) => setResetPwd1(e.target.value)}
+                        placeholder={language === "fr" ? "Mot de passe" : "Password"}
+                        disabled={resetRunning}
+                        className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-red-500 transition-colors disabled:opacity-50"
+                      />
+                      <input
+                        type="password"
+                        value={resetPwd2}
+                        onChange={(e) => setResetPwd2(e.target.value)}
+                        placeholder={language === "fr" ? "Répétez le mot de passe" : "Repeat password"}
+                        disabled={resetRunning}
+                        className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-red-500 transition-colors disabled:opacity-50"
+                      />
+                      {resetPwd1.length > 0 && resetPwd2.length > 0 && (
+                        <p className={`text-xs font-semibold flex items-center gap-1.5 ${pwdMatch ? "text-emerald-400" : "text-red-400"}`}>
+                          <span>{pwdMatch ? "✓" : "✗"}</span>
+                          {pwdMatch
+                            ? (language === "fr" ? "Mots de passe identiques — minuterie lancée" : "Passwords match — timer started")
+                            : (language === "fr" ? "Les mots de passe ne correspondent pas" : "Passwords do not match")}
+                        </p>
+                      )}
+                    </div>
+
+                    {resetCountdown !== null && (
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                          {language === "fr" ? "Étape 2 — Délai de sécurité (5 min)" : "Step 2 — Security wait (5 min)"}
+                        </p>
+                        {resetCountdown > 0 ? (
+                          <div className="bg-slate-800/60 border border-white/5 rounded-xl px-4 py-3 flex items-center gap-3">
+                            <svg className="w-5 h-5 text-amber-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2m6-2a10 10 0 11-20 0 10 10 0 0120 0z" />
+                            </svg>
+                            <div>
+                              <p className="text-xl font-black text-amber-400 tabular-nums">
+                                {String(Math.floor(resetCountdown / 60)).padStart(2, "0")}:{String(resetCountdown % 60).padStart(2, "0")}
+                              </p>
+                              <p className="text-xs text-slate-500">
+                                {language === "fr" ? "Temps restant avant autorisation" : "Time remaining before deletion is allowed"}
+                              </p>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-emerald-400 font-semibold flex items-center gap-1.5">
+                            <span>✓</span>
+                            {language === "fr" ? "Délai écoulé — vous pouvez maintenant confirmer." : "Wait complete — you may now confirm."}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {resetError && (
+                      <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{resetError}</p>
+                    )}
+
+                    <div className="flex gap-3 pt-1">
+                      <button
+                        onClick={() => setShowResetModal(false)}
+                        disabled={resetRunning}
+                        className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl transition-all disabled:opacity-40"
+                      >
+                        {language === "fr" ? "Annuler" : "Cancel"}
+                      </button>
+                      <button
+                        onClick={resetAllVotes}
+                        disabled={!pwdMatch || resetCountdown !== 0 || resetRunning}
+                        className="flex-1 py-3 bg-red-600 hover:bg-red-500 disabled:opacity-40 text-white font-black rounded-xl transition-all shadow-lg shadow-red-600/30"
+                      >
+                        {resetRunning ? (
+                          <span className="flex items-center justify-center gap-2">
+                            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                            {language === "fr" ? "Suppression…" : "Deleting…"}
+                          </span>
+                        ) : (language === "fr" ? "Supprimer définitivement" : "Delete Permanently")}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
     </div>
   );

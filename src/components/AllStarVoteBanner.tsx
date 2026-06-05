@@ -8,9 +8,10 @@ import { getAllStarSettings } from "@/lib/allstar-settings";
 import { doc, getDoc } from "firebase/firestore";
 import { firebaseDB } from "@/lib/firebase";
 
-const VOTE_KEY  = "allstar_voter_phone";   // set by vote page on submit
-const COUNT_KEY = "allstar_banner_count";  // number of times banner has been shown
-const DAY_KEY   = "allstar_banner_last_day"; // ISO date (YYYY-MM-DD) of last show
+const VOTE_KEY    = "allstar_voter_phone";    // set by vote page on submit
+const COUNT_KEY   = "allstar_banner_count";   // number of times banner has been shown
+const DAY_KEY     = "allstar_banner_last_day"; // ISO date (YYYY-MM-DD) of last show
+const VERSION_KEY = "allstar_banner_version"; // tracks admin reset token
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
 
@@ -48,7 +49,18 @@ export default function AllStarVoteBanner() {
     });
     getDoc(doc(firebaseDB, "settings", "allStarBanner"))
       .then((snap) => {
-        if (snap.exists() && snap.data().url) setBannerImageUrl(snap.data().url as string);
+        if (!snap.exists()) return;
+        const data = snap.data();
+        if (data.url) setBannerImageUrl(data.url as string);
+        // If admin incremented the version, reset the local banner counter
+        const serverVersion = String(data.version ?? 0);
+        try {
+          if (localStorage.getItem(VERSION_KEY) !== serverVersion) {
+            localStorage.removeItem(COUNT_KEY);
+            localStorage.removeItem(DAY_KEY);
+            localStorage.setItem(VERSION_KEY, serverVersion);
+          }
+        } catch {}
       })
       .catch(() => {});
   }, []);

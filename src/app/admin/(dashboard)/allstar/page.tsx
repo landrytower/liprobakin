@@ -208,6 +208,7 @@ export default function AllStarVotesPage() {
   const [togglingTheme, setTogglingTheme] = useState(false);
   const [showVoterDetails, setShowVoterDetails] = useState(false);
   const [voterSearch, setVoterSearch] = useState("");
+  const [voterRoleFilter, setVoterRoleFilter] = useState<"all" | "joueur" | "staff" | "fan">("all");
   const [voterDetails, setVoterDetails] = useState<VoterDetail[]>([]);
   const [results, setResults] = useState<Results>({
     menPlayers: [], womenPlayers: [],
@@ -1070,13 +1071,33 @@ export default function AllStarVotesPage() {
       {/* ── Voter Details Table ── */}
       {showVoterDetails && (
         <div className="bg-slate-900 border border-white/5 rounded-2xl overflow-hidden">
-          <div className="px-4 py-3 bg-slate-800/80 border-b border-white/5 flex items-center justify-between gap-4">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+          <div className="px-4 py-3 bg-slate-800/80 border-b border-white/5 flex flex-wrap items-center gap-3">
+            <h3 className="text-sm font-bold text-white flex items-center gap-2 shrink-0">
               👥 {t.voterDetails}
               <span className="text-xs px-2 py-0.5 bg-blue-500/20 text-blue-400 rounded-full font-semibold">
-                {voterDetails.length}
+                {voterRoleFilter === "all" ? voterDetails.length : voterDetails.filter(v => v.voterRole === voterRoleFilter).length}
               </span>
             </h3>
+            {/* Role filter pills */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              {(["all", "joueur", "staff", "fan"] as const).map((role) => {
+                const label = role === "all" ? (language === "fr" ? "Tous" : "All") : role === "joueur" ? (language === "fr" ? "Joueur" : "Player") : role === "staff" ? "Staff" : "Fan";
+                const active = voterRoleFilter === role;
+                return (
+                  <button
+                    key={role}
+                    onClick={() => setVoterRoleFilter(role)}
+                    className={`px-3 py-1 rounded-full text-xs font-semibold transition-all border ${
+                      active
+                        ? "bg-amber-500/20 border-amber-500/50 text-amber-300"
+                        : "bg-slate-700/60 border-white/10 text-slate-400 hover:border-white/25 hover:text-slate-200"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
             {/* Search Input */}
             <div className="relative flex-1 max-w-md">
               <input
@@ -1110,10 +1131,13 @@ export default function AllStarVotesPage() {
             </div>
           </div>
           {(() => {
-            // Filter voters based on search query
+            // Filter voters by role then search query
             const searchLower = voterSearch.toLowerCase().trim();
+            const roleFiltered = voterRoleFilter === "all"
+              ? voterDetails
+              : voterDetails.filter(v => v.voterRole === voterRoleFilter);
             const filteredVoters = searchLower
-              ? voterDetails.filter((voter) => {
+              ? roleFiltered.filter((voter) => {
                   const nameMatch    = voter.voterName.toLowerCase().includes(searchLower);
                   const contactMatch = voter.voterContact.toLowerCase().includes(searchLower);
                   const roleMatch    = voter.voterRole.toLowerCase().includes(searchLower);
@@ -1122,7 +1146,7 @@ export default function AllStarVotesPage() {
                   const womenPlayersMatch = voter.womenPlayers.some(p => p.name.toLowerCase().includes(searchLower));
                   return nameMatch || contactMatch || roleMatch || emailMatch || menPlayersMatch || womenPlayersMatch;
                 })
-              : voterDetails;
+              : roleFiltered;
 
             if (voterDetails.length === 0) {
               return (

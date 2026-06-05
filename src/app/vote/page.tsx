@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -120,6 +121,7 @@ function toDocId(countryCode: string, localNumber: string): string {
 
 export default function VotePage() {
   const { language } = useLanguage();
+  const router = useRouter();
   const t = tr[language];
 
   const [allStarEnabled, setAllStarEnabled] = useState(true);
@@ -325,7 +327,7 @@ export default function VotePage() {
       setHasVoted(true);
       setShowModal(false);
       setSuccessMsg(t.success);
-      setTimeout(() => setSuccessMsg(""), 4000);
+      setTimeout(() => router.push("/allstar-results"), 2500);
 
       // Send SMS confirmation (fire-and-forget)
       {

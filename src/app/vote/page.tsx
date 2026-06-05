@@ -311,6 +311,11 @@ export default function VotePage() {
       return;
     }
 
+    // Safety net: never submit a player who became non-eligible after selection.
+    // Only filter once eligibility is known (null = still loading → submit as-is).
+    const menIds = eligibleIds ? selectedPlayers.men.filter((id) => eligibleIds.has(id)) : selectedPlayers.men;
+    const womenIds = eligibleIds ? selectedPlayers.women.filter((id) => eligibleIds.has(id)) : selectedPlayers.women;
+
     setModalSubmitting(true);
     try {
       const existing = await getDoc(doc(firebaseDB, "allStarVotes", docId));
@@ -329,8 +334,8 @@ export default function VotePage() {
         firstName,
         lastName,
         phone: "+" + docId,
-        menPlayers: selectedPlayers.men,
-        womenPlayers: selectedPlayers.women,
+        menPlayers: menIds,
+        womenPlayers: womenIds,
         submittedAt: serverTimestamp(),
         lastModified: serverTimestamp(),
       });
@@ -354,24 +359,24 @@ export default function VotePage() {
             phone: "+" + docId,
             firstName,
             lastName,
-            menPlayers:   resolve(selectedPlayers.men,   "men"),
-            womenPlayers: resolve(selectedPlayers.women, "women"),
+            menPlayers:   resolve(menIds,   "men"),
+            womenPlayers: resolve(womenIds, "women"),
           }),
         }).catch(() => {});
       }
 
       // Update public vote-count aggregates (fire-and-forget)
-      if (selectedPlayers.men.length > 0) {
+      if (menIds.length > 0) {
         setDoc(
           doc(firebaseDB, "allStarVoteResults", "menPlayers"),
-          Object.fromEntries(selectedPlayers.men.map((id) => [id, increment(1)])),
+          Object.fromEntries(menIds.map((id) => [id, increment(1)])),
           { merge: true }
         ).catch(() => {});
       }
-      if (selectedPlayers.women.length > 0) {
+      if (womenIds.length > 0) {
         setDoc(
           doc(firebaseDB, "allStarVoteResults", "womenPlayers"),
-          Object.fromEntries(selectedPlayers.women.map((id) => [id, increment(1)])),
+          Object.fromEntries(womenIds.map((id) => [id, increment(1)])),
           { merge: true }
         ).catch(() => {});
       }

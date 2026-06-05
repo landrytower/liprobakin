@@ -480,21 +480,31 @@ export default function VotePage() {
       {/* ── Voter identity modal ── */}
       {showModal && (
         <>
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50" onClick={() => setShowModal(false)} />
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50" />
           {/* Outer: fills safe zone, flex-centers the card; card scrolls if taller than viewport */}
           <div className="fixed inset-x-4 top-4 bottom-4 max-w-sm mx-auto z-50 flex flex-col justify-center">
             <div className="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl flex flex-col max-h-full overflow-hidden">
               {/* Sticky header */}
-              <div className="px-5 pt-5 pb-3.5 border-b border-white/5 shrink-0">
-                <h3 className="text-lg font-black text-white">{language === "fr" ? "Qui êtes-vous ?" : "Who are you?"}</h3>
-                <p className="text-xs text-slate-400 mt-0.5">{language === "fr" ? "Requis pour valider votre vote unique." : "Required to validate your one-time vote."}</p>
+              <div className="px-5 pt-5 pb-3.5 border-b border-white/5 shrink-0 flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-lg font-black text-white">{language === "fr" ? "Qui êtes-vous ?" : "Who are you?"}</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">{language === "fr" ? "Requis pour valider votre vote unique." : "Required to validate your one-time vote."}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="text-slate-500 hover:text-white transition-colors shrink-0 mt-0.5"
+                  aria-label="Close"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
               </div>
               {/* Scrollable form */}
               <form onSubmit={handleModalSubmit} className="p-5 space-y-3 overflow-y-auto overscroll-contain">
                 <div className="grid grid-cols-2 gap-2.5">
                   <div>
                     <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                      {language === "fr" ? "Prénom" : "First name"}
+                      {language === "fr" ? "Prénom" : "First name"} <span className="text-red-400">*</span>
                     </label>
                     <input
                       type="text"
@@ -507,7 +517,7 @@ export default function VotePage() {
                   </div>
                   <div>
                     <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                      {language === "fr" ? "Nom" : "Last name"}
+                      {language === "fr" ? "Nom" : "Last name"} <span className="text-red-400">*</span>
                     </label>
                     <input
                       type="text"
@@ -522,7 +532,7 @@ export default function VotePage() {
 
                 <div>
                   <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                    {language === "fr" ? "Numéro de téléphone" : "Phone number"}
+                    {language === "fr" ? "Numéro de téléphone" : "Phone number"} <span className="text-red-400">*</span>
                   </label>
                   <div className="flex items-center bg-slate-800 border border-white/10 rounded-xl px-3 py-2 focus-within:border-emerald-500 transition-colors gap-1.5">
                     <span className="text-base select-none shrink-0">{modalCountryCode === "243" ? "🇨🇩" : "🌍"}</span>

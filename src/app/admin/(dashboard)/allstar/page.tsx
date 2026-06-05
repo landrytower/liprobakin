@@ -341,26 +341,48 @@ export default function AllStarVotesPage() {
       .catch(() => {});
   }, []);
 
-  const uploadHomeBanner = async (file: File) => {
-    const MAX_MB = 8;
-    if (file.size > MAX_MB * 1024 * 1024) {
-      setHomeBannerError(
-        language === "fr"
-          ? `Fichier trop volumineux — maximum ${MAX_MB} MB. Veuillez compresser l'image.`
-          : `File too large — maximum ${MAX_MB} MB. Please compress the image first.`
-      );
-      return;
-    }
+  const compressBannerImage = (file: File): Promise<Blob> =>
+    new Promise((resolve, reject) => {
+      const img = new window.Image();
+      const objectUrl = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        const MAX_W = 1400;
+        const scale = Math.min(1, MAX_W / img.width);
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { reject(new Error("canvas")); return; }
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(
+          (blob) => blob ? resolve(blob) : reject(new Error("toBlob")),
+          "image/jpeg",
+          0.85,
+        );
+      };
+      img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error("load")); };
+      img.src = objectUrl;
+    });
 
+  const uploadHomeBanner = async (file: File) => {
     setHomeBannerUploading(true);
     setHomeBannerError("");
 
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
     try {
+      const blob = await compressBannerImage(file).catch(() => file);
+
       const sRef = storageRef(firebaseStorage, "allstar-banners/home-banner");
-      const task = uploadBytesResumable(sRef, file, { contentType: file.type });
+      const task = uploadBytesResumable(sRef, blob, { contentType: "image/jpeg" });
       uploadTaskRef.current = task;
 
       await new Promise<void>((resolve, reject) => {
+        timeoutId = setTimeout(() => {
+          task.cancel();
+          reject(new Error("timeout"));
+        }, 60_000);
         task.on("state_changed", null, reject, resolve);
       });
 
@@ -371,11 +393,15 @@ export default function AllStarVotesPage() {
     } catch (err: unknown) {
       uploadTaskRef.current = null;
       if (err && typeof err === "object" && "code" in err && (err as { code: string }).code === "storage/cancelled") return;
+      const isTimeout = err instanceof Error && err.message === "timeout";
       console.error("Banner upload failed:", err);
       setHomeBannerError(
-        language === "fr" ? "Échec de l'import — veuillez réessayer." : "Upload failed — please try again."
+        isTimeout
+          ? (language === "fr" ? "Délai dépassé — veuillez réessayer." : "Upload timed out — please try again.")
+          : (language === "fr" ? "Échec de l'import — veuillez réessayer." : "Upload failed — please try again.")
       );
     } finally {
+      if (timeoutId) clearTimeout(timeoutId);
       setHomeBannerUploading(false);
     }
   };

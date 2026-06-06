@@ -10,9 +10,6 @@ import {
   getDocs,
   doc,
   getDoc,
-  setDoc,
-  serverTimestamp,
-  increment,
 } from "firebase/firestore";
 import { firebaseDB } from "@/lib/firebase";
 import { normalizeTeamGender, type TeamGender } from "@/lib/team-gender";
@@ -335,46 +332,57 @@ export default function VotePage() {
       return;
     }
 
-    // Safety net: never submit a player who became non-eligible after selection.
-    // Only filter once eligibility is known (null = still loading → submit as-is).
+    // Filter to eligible only; if eligibility not yet loaded submit as-is
     const menIds = eligibleIds ? selectedPlayers.men.filter((id) => eligibleIds.has(id)) : selectedPlayers.men;
     const womenIds = eligibleIds ? selectedPlayers.women.filter((id) => eligibleIds.has(id)) : selectedPlayers.women;
 
     if (menIds.length < MAX_PLAYERS || womenIds.length < MAX_PLAYERS) {
       setModalError(
         language === "fr"
-          ? `Vous devez sélectionner ${MAX_PLAYERS} hommes et ${MAX_PLAYERS} femmes. (${menIds.length} hommes, ${womenIds.length} femmes)`
-          : `You must select ${MAX_PLAYERS} men and ${MAX_PLAYERS} women. (${menIds.length} men, ${womenIds.length} women selected)`
+          ? `Vous devez sélectionner ${MAX_PLAYERS} hommes et ${MAX_PLAYERS} femmes.`
+          : `You must select ${MAX_PLAYERS} men and ${MAX_PLAYERS} women.`
       );
       return;
     }
 
     setModalSubmitting(true);
     try {
-      const existing = await getDoc(doc(firebaseDB, "allStarVotes", docId));
-      if (existing.exists()) {
+      const res = await fetch("/api/vote/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          firstName,
+          lastName,
+          phone: docId,
+          email: modalEmail.trim() || null,
+          role: modalRole,
+          menPlayers: menIds,
+          womenPlayers: womenIds,
+        }),
+      });
+
+      if (res.status === 409) {
+        // Phone already voted — restore their selections
         setAlreadyVoted(true);
         setShowModal(false);
         setVoterPhone(docId);
         sessionStorage.setItem(SESSION_KEY, docId);
-        const data = existing.data();
         setHasVoted(true);
-        setSelectedPlayers({ men: data.menPlayers || [], women: data.womenPlayers || [] });
+        const snap = await getDoc(doc(firebaseDB, "allStarVotes", docId));
+        if (snap.exists()) {
+          const data = snap.data();
+          setSelectedPlayers({ men: data.menPlayers || [], women: data.womenPlayers || [] });
+        }
         return;
       }
 
-      await setDoc(doc(firebaseDB, "allStarVotes", docId), {
-        firstName,
-        lastName,
-        phone: "+" + docId,
-        email: modalEmail.trim() || null,
-        role: modalRole,
-        menPlayers: menIds,
-        womenPlayers: womenIds,
-        submittedAt: serverTimestamp(),
-        lastModified: serverTimestamp(),
-      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setModalError(data.error || (language === "fr" ? "Erreur, réessayez." : "Something went wrong. Please try again."));
+        return;
+      }
 
+      // Success
       setVoterPhone(docId);
       sessionStorage.setItem(SESSION_KEY, docId);
       setHasVoted(true);
@@ -383,38 +391,20 @@ export default function VotePage() {
       setTimeout(() => router.push("/allstar-results"), 2500);
 
       // Send SMS confirmation (fire-and-forget)
-      {
-        const cache = playersCacheRef.current;
-        const resolve = (ids: string[], g: string) =>
-          ids.map((id) => (cache[g] as typeof players | undefined)?.find((p) => p.id === id)?.name ?? id);
-        fetch("/api/vote/send-confirmation", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            phone: "+" + docId,
-            firstName,
-            lastName,
-            menPlayers:   resolve(menIds,   "men"),
-            womenPlayers: resolve(womenIds, "women"),
-          }),
-        }).catch(() => {});
-      }
-
-      // Update public vote-count aggregates (fire-and-forget)
-      if (menIds.length > 0) {
-        setDoc(
-          doc(firebaseDB, "allStarVoteResults", "menPlayers"),
-          Object.fromEntries(menIds.map((id) => [id, increment(1)])),
-          { merge: true }
-        ).catch(() => {});
-      }
-      if (womenIds.length > 0) {
-        setDoc(
-          doc(firebaseDB, "allStarVoteResults", "womenPlayers"),
-          Object.fromEntries(womenIds.map((id) => [id, increment(1)])),
-          { merge: true }
-        ).catch(() => {});
-      }
+      const cache = playersCacheRef.current;
+      const resolveName = (ids: string[], g: string) =>
+        ids.map((id) => (cache[g] as typeof players | undefined)?.find((p) => p.id === id)?.name ?? id);
+      fetch("/api/vote/send-confirmation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phone: "+" + docId,
+          firstName,
+          lastName,
+          menPlayers:   resolveName(menIds,   "men"),
+          womenPlayers: resolveName(womenIds, "women"),
+        }),
+      }).catch(() => {});
     } catch {
       setModalError(language === "fr" ? "Erreur, réessayez." : "Something went wrong. Please try again.");
     } finally {

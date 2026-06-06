@@ -233,6 +233,13 @@ export default function AllStarVotesPage() {
   const [resettingBanner, setResettingBanner] = useState(false);
   const [bannerResetSuccess, setBannerResetSuccess] = useState(false);
 
+  // Cleanup fake votes
+  const [cleanupScanning, setCleanupScanning] = useState(false);
+  const [cleanupRunning, setCleanupRunning] = useState(false);
+  const [cleanupPreview, setCleanupPreview] = useState<{ fakeCount: number; total: number } | null>(null);
+  const [cleanupResult, setCleanupResult] = useState<{ deleted: number; remaining: number } | null>(null);
+  const [cleanupError, setCleanupError] = useState("");
+
   // ── Eligibility ──
   type EligTeam = { id: string; name: string; gender: "men" | "women" };
   type EligPlayer = { id: string; name: string };
@@ -628,6 +635,50 @@ export default function AllStarVotesPage() {
       setResetError(language === "fr" ? "Erreur lors de la réinitialisation." : "Reset failed. Please try again.");
     } finally {
       setResetRunning(false);
+    }
+  };
+
+  const scanFakeVotes = async () => {
+    setCleanupScanning(true);
+    setCleanupError("");
+    setCleanupResult(null);
+    try {
+      const { firebaseAuth } = await import("@/lib/firebase");
+      const token = await firebaseAuth.currentUser?.getIdToken(false);
+      if (!token) throw new Error("Not authenticated");
+      const res = await fetch("/api/admin/cleanup-fake-votes", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json() as { fakeCount: number; total: number };
+      setCleanupPreview(data);
+    } catch (err) {
+      setCleanupError(err instanceof Error ? err.message : "Scan failed");
+    } finally {
+      setCleanupScanning(false);
+    }
+  };
+
+  const deleteFakeVotes = async () => {
+    setCleanupRunning(true);
+    setCleanupError("");
+    try {
+      const { firebaseAuth } = await import("@/lib/firebase");
+      const token = await firebaseAuth.currentUser?.getIdToken(false);
+      if (!token) throw new Error("Not authenticated");
+      const res = await fetch("/api/admin/cleanup-fake-votes", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json() as { deleted: number; remaining: number };
+      setCleanupResult(data);
+      setCleanupPreview(null);
+      load(true); // Refresh vote counts
+    } catch (err) {
+      setCleanupError(err instanceof Error ? err.message : "Cleanup failed");
+    } finally {
+      setCleanupRunning(false);
     }
   };
 
@@ -1473,6 +1524,86 @@ export default function AllStarVotesPage() {
               ) : (language === "fr" ? "Réinitialiser la bannière" : "Reset Banner")}
             </button>
           </div>
+        </div>
+
+        {/* ── Clean up fake votes ── */}
+        <div className="bg-orange-950/30 border border-orange-500/20 rounded-2xl p-5 space-y-3">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl shrink-0">🤖</span>
+            <div>
+              <p className="text-sm font-bold text-orange-300">
+                {language === "fr" ? "Supprimer les faux votes (bots)" : "Remove Fake Votes (Bots)"}
+              </p>
+              <p className="text-xs text-slate-400 mt-1">
+                {language === "fr"
+                  ? "Supprime tous les votes avec moins de 15 joueurs par catégorie. Les vrais votes (15H + 15F) sont conservés."
+                  : "Deletes every ballot that has fewer than 15 players per category. Real votes (15M + 15W) are kept and recounted."}
+              </p>
+            </div>
+          </div>
+
+          {cleanupError && (
+            <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{cleanupError}</p>
+          )}
+
+          {cleanupResult && (
+            <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">
+              <svg className="w-4 h-4 text-emerald-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+              <p className="text-xs text-emerald-300 font-semibold">
+                {language === "fr"
+                  ? `${cleanupResult.deleted} faux votes supprimés — ${cleanupResult.remaining} votes valides conservés.`
+                  : `${cleanupResult.deleted} fake votes deleted — ${cleanupResult.remaining} real votes kept.`}
+              </p>
+            </div>
+          )}
+
+          {cleanupPreview && !cleanupResult && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 bg-orange-500/10 border border-orange-500/20 rounded-lg px-3 py-2">
+                <svg className="w-4 h-4 text-orange-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
+                <p className="text-xs text-orange-300 font-semibold">
+                  {language === "fr"
+                    ? `${cleanupPreview.fakeCount} faux votes détectés sur ${cleanupPreview.total} total.`
+                    : `${cleanupPreview.fakeCount} fake votes found out of ${cleanupPreview.total} total.`}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setCleanupPreview(null)}
+                  className="flex-1 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 font-semibold text-xs rounded-xl transition-all"
+                >
+                  {language === "fr" ? "Annuler" : "Cancel"}
+                </button>
+                <button
+                  onClick={deleteFakeVotes}
+                  disabled={cleanupRunning}
+                  className="flex-1 py-2 bg-orange-600/30 hover:bg-orange-600/50 border border-orange-500/40 text-orange-300 font-bold text-xs rounded-xl transition-all disabled:opacity-40"
+                >
+                  {cleanupRunning ? (
+                    <span className="flex items-center justify-center gap-1.5">
+                      <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                      {language === "fr" ? "Suppression…" : "Deleting…"}
+                    </span>
+                  ) : (language === "fr" ? `Confirmer (supprimer ${cleanupPreview.fakeCount})` : `Confirm (delete ${cleanupPreview.fakeCount})`)}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {!cleanupPreview && !cleanupResult && (
+            <button
+              onClick={scanFakeVotes}
+              disabled={cleanupScanning}
+              className="w-full py-2.5 bg-orange-600/20 hover:bg-orange-600/30 border border-orange-500/30 text-orange-400 font-bold text-sm rounded-xl transition-all disabled:opacity-40"
+            >
+              {cleanupScanning ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                  {language === "fr" ? "Analyse en cours…" : "Scanning…"}
+                </span>
+              ) : (language === "fr" ? "Analyser et supprimer les faux votes" : "Scan & Remove Fake Votes")}
+            </button>
+          )}
         </div>
       </div>
 

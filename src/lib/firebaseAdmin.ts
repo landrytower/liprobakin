@@ -28,7 +28,7 @@ function initializeFirebaseAdmin() {
             privateKey,
           }),
           projectId,
-          storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET?.trim(),
+          storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET?.trim() || `${projectId}.firebasestorage.app`,
         });
         console.log("Firebase Admin initialized successfully");
       } catch (error) {

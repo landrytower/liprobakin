@@ -17,7 +17,9 @@ export async function POST(req: NextRequest) {
     }
 
     const storage = getAdminStorage();
-    const bucket = storage.bucket();
+    const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET?.trim()
+      || `${process.env.FIREBASE_PROJECT_ID?.trim()}.firebasestorage.app`;
+    const bucket = storage.bucket(bucketName);
     const fileRef = bucket.file("allstar-banners/home-banner");
 
     await fileRef.save(buffer, {

@@ -308,6 +308,7 @@ export default function VotePage() {
   // Open voter modal to collect name + phone before first submit
   const handleSubmitClick = () => {
     if (hasVoted) return;
+    if (selectedPlayers.men.length < MAX_PLAYERS || selectedPlayers.women.length < MAX_PLAYERS) return;
     setModalError("");
     setShowModal(true);
   };
@@ -338,6 +339,15 @@ export default function VotePage() {
     // Only filter once eligibility is known (null = still loading → submit as-is).
     const menIds = eligibleIds ? selectedPlayers.men.filter((id) => eligibleIds.has(id)) : selectedPlayers.men;
     const womenIds = eligibleIds ? selectedPlayers.women.filter((id) => eligibleIds.has(id)) : selectedPlayers.women;
+
+    if (menIds.length < MAX_PLAYERS || womenIds.length < MAX_PLAYERS) {
+      setModalError(
+        language === "fr"
+          ? `Vous devez sélectionner ${MAX_PLAYERS} hommes et ${MAX_PLAYERS} femmes. (${menIds.length} hommes, ${womenIds.length} femmes)`
+          : `You must select ${MAX_PLAYERS} men and ${MAX_PLAYERS} women. (${menIds.length} men, ${womenIds.length} women selected)`
+      );
+      return;
+    }
 
     setModalSubmitting(true);
     try {

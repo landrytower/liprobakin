@@ -178,6 +178,17 @@ export default function VotePage() {
   // null = not yet loaded (suppress tag to avoid a flash of "all non-eligible")
   const [eligibleIds, setEligibleIds] = useState<Set<string> | null>(null);
 
+  // Timing token — fetched once on mount, included in the vote submission
+  const [voteToken, setVoteToken] = useState<string | null>(null);
+
+  // Fetch timing token on mount (must be ≥45s old when submitted)
+  useEffect(() => {
+    fetch("/api/vote/token")
+      .then((r) => r.json())
+      .then((d) => { if (d.token) setVoteToken(d.token); })
+      .catch(() => {});
+  }, []);
+
   // Check if All-Star voting is enabled
   useEffect(() => {
     getDoc(doc(firebaseDB, "settings", "allStar")).then((d) => {
@@ -358,6 +369,7 @@ export default function VotePage() {
           role: modalRole,
           menPlayers: menIds,
           womenPlayers: womenIds,
+          token: voteToken,
         }),
       });
 

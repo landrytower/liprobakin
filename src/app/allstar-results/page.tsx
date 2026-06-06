@@ -51,8 +51,8 @@ export default function AllStarResultsPage() {
       ]);
 
       const counts: Record<Category, Record<string, number>> = {
-        menPlayers:   menDoc.exists()   ? (menDoc.data()   as Record<string, number>) : {},
-        womenPlayers: womenDoc.exists() ? (womenDoc.data() as Record<string, number>) : {},
+        menPlayers:   menDoc.exists()   ? { ...(menDoc.data()   as Record<string, number>) } : {},
+        womenPlayers: womenDoc.exists() ? { ...(womenDoc.data() as Record<string, number>) } : {},
       };
 
       const teamsSnap = await getDocs(collection(firebaseDB, "teams"));
@@ -76,16 +76,39 @@ export default function AllStarResultsPage() {
         })
       );
 
-      const resolve = (countMap: Record<string, number>): Entry[] =>
-        Object.entries(countMap)
-          .map(([id, votes]) => ({
-            id,
-            name: playerMap[id]?.name ?? id,
-            teamName: playerMap[id]?.teamName ?? "—",
-            headshot: playerMap[id]?.headshot,
-            votes,
-          }))
-          .sort((a, b) => b.votes - a.votes);
+      // Move votes to the correct category based on the player's actual team gender
+      for (const [id, info] of Object.entries(playerMap)) {
+        if (info.gender === "women" && counts.menPlayers[id] !== undefined) {
+          counts.womenPlayers[id] = (counts.womenPlayers[id] || 0) + counts.menPlayers[id];
+          delete counts.menPlayers[id];
+        } else if (info.gender === "men" && counts.womenPlayers[id] !== undefined) {
+          counts.menPlayers[id] = (counts.menPlayers[id] || 0) + counts.womenPlayers[id];
+          delete counts.womenPlayers[id];
+        }
+      }
+
+      const resolve = (countMap: Record<string, number>): Entry[] => {
+        const rawEntries = Object.entries(countMap).map(([id, votes]) => ({
+          id,
+          name: playerMap[id]?.name ?? id,
+          teamName: playerMap[id]?.teamName ?? "—",
+          headshot: playerMap[id]?.headshot,
+          votes,
+        }));
+
+        // Merge entries with the same name (player appears in multiple rosters)
+        const byName = new Map<string, Entry>();
+        for (const entry of rawEntries) {
+          const existing = byName.get(entry.name);
+          if (existing) {
+            existing.votes += entry.votes;
+            if (!existing.headshot && entry.headshot) existing.headshot = entry.headshot;
+          } else {
+            byName.set(entry.name, { ...entry });
+          }
+        }
+        return [...byName.values()].sort((a, b) => b.votes - a.votes);
+      };
 
       setResults({ menPlayers: resolve(counts.menPlayers), womenPlayers: resolve(counts.womenPlayers) });
       setLoading(false);

@@ -253,11 +253,36 @@ export default function AllStarVotesPage() {
     const now = Date.now();
     const ONE_DAY = 86_400_000;
 
-    // 1. Aggregate all votes
-    const votesSnap = await getDocs(collection(firebaseDB, "allStarVotes"));
+    // 1. Fetch votes and teams in parallel
+    const [votesSnap, teamsSnap] = await Promise.all([
+      getDocs(collection(firebaseDB, "allStarVotes")),
+      getDocs(collection(firebaseDB, "teams")),
+    ]);
     const voterCount = votesSnap.size;
     setTotalVoters(voterCount);
 
+    // 2. Build name/team/gender lookup from rosters
+    const playerMap: Record<string, { name: string; teamName: string; gender: string; headshot?: string }> = {};
+
+    await Promise.all(
+      teamsSnap.docs.map(async (teamDoc) => {
+        const td = teamDoc.data();
+        const teamGender = normalizeTeamGender(td.gender, td.logo, "men");
+        const teamName = [td.city, td.name].filter(Boolean).join(" ");
+        const rosterSnap = await getDocs(collection(firebaseDB, "teams", teamDoc.id, "roster"));
+        for (const p of rosterSnap.docs) {
+          const pd = p.data();
+          playerMap[p.id] = {
+            name: `${pd.firstName || ""} ${pd.lastName || ""}`.trim() || pd.name || p.id,
+            teamName,
+            gender: teamGender,
+            headshot: pd.headshot || undefined,
+          };
+        }
+      })
+    );
+
+    // 3. Aggregate all votes
     const counts: Record<Category, Record<string, number>> = {
       menPlayers: {}, womenPlayers: {},
     };
@@ -282,52 +307,69 @@ export default function AllStarVotesPage() {
     }
     setTotalVotes(totalCast);
 
-    // Category totals for % of category
+    // Fix gender mismatches: move votes to the correct category based on the player's team
+    for (const [id, info] of Object.entries(playerMap)) {
+      if (info.gender === "women" && counts.menPlayers[id] !== undefined) {
+        counts.womenPlayers[id] = (counts.womenPlayers[id] || 0) + counts.menPlayers[id];
+        delete counts.menPlayers[id];
+        if (todayCounts.menPlayers[id] !== undefined) {
+          todayCounts.womenPlayers[id] = (todayCounts.womenPlayers[id] || 0) + todayCounts.menPlayers[id];
+          delete todayCounts.menPlayers[id];
+        }
+      } else if (info.gender === "men" && counts.womenPlayers[id] !== undefined) {
+        counts.menPlayers[id] = (counts.menPlayers[id] || 0) + counts.womenPlayers[id];
+        delete counts.womenPlayers[id];
+        if (todayCounts.womenPlayers[id] !== undefined) {
+          todayCounts.menPlayers[id] = (todayCounts.menPlayers[id] || 0) + todayCounts.womenPlayers[id];
+          delete todayCounts.womenPlayers[id];
+        }
+      }
+    }
+
+    // Category totals for % of category (recalculated after gender correction)
     const catTotals: Record<Category, number> = {
       menPlayers:   Object.values(counts.menPlayers).reduce((a, b) => a + b, 0),
       womenPlayers: Object.values(counts.womenPlayers).reduce((a, b) => a + b, 0),
     };
 
-    // 2. Build name/team lookup from rosters
-    const teamsSnap = await getDocs(collection(firebaseDB, "teams"));
-    const playerMap: Record<string, { name: string; teamName: string; headshot?: string }> = {};
-
-    await Promise.all(
-      teamsSnap.docs.map(async (teamDoc) => {
-        const td = teamDoc.data();
-        const teamName = [td.city, td.name].filter(Boolean).join(" ");
-        const rosterSnap = await getDocs(collection(firebaseDB, "teams", teamDoc.id, "roster"));
-        for (const p of rosterSnap.docs) {
-          const pd = p.data();
-          playerMap[p.id] = {
-            name: `${pd.firstName || ""} ${pd.lastName || ""}`.trim() || pd.name || p.id,
-            teamName,
-            headshot: pd.headshot || undefined,
-          };
-        }
-      })
-    );
-
     // 3. Resolve entries with all computed stats
     const resolve = (
       countMap: Record<string, number>,
       todayMap: Record<string, number>,
-      lookup: Record<string, { name: string; teamName: string; headshot?: string }>,
+      lookup: Record<string, { name: string; teamName: string; gender?: string; headshot?: string }>,
       catTotal: number,
-    ): Entry[] =>
-      Object.entries(countMap)
-        .map(([id, votes]) => ({
-          id,
-          name: lookup[id]?.name ?? id,
-          teamName: lookup[id]?.teamName ?? "—",
-          headshot: lookup[id]?.headshot,
-          votes,
-          today: todayMap[id] ?? 0,
-          pctVoters:   voterCount > 0  ? parseFloat(((votes / voterCount)  * 100).toFixed(1)) : 0,
-          pctCategory: catTotal > 0    ? parseFloat(((votes / catTotal)    * 100).toFixed(1)) : 0,
-          pctTotal:    totalCast > 0   ? parseFloat(((votes / totalCast)   * 100).toFixed(1)) : 0,
+    ): Entry[] => {
+      const rawEntries = Object.entries(countMap).map(([id, votes]) => ({
+        id,
+        name: lookup[id]?.name ?? id,
+        teamName: lookup[id]?.teamName ?? "—",
+        headshot: lookup[id]?.headshot,
+        votes,
+        today: todayMap[id] ?? 0,
+      }));
+
+      // Merge entries with the same name (player appears in multiple rosters)
+      const byName = new Map<string, typeof rawEntries[0]>();
+      for (const entry of rawEntries) {
+        const existing = byName.get(entry.name);
+        if (existing) {
+          existing.votes += entry.votes;
+          existing.today += entry.today;
+          if (!existing.headshot && entry.headshot) existing.headshot = entry.headshot;
+        } else {
+          byName.set(entry.name, { ...entry });
+        }
+      }
+
+      return [...byName.values()]
+        .map((e) => ({
+          ...e,
+          pctVoters:   voterCount > 0 ? parseFloat(((e.votes / voterCount) * 100).toFixed(1)) : 0,
+          pctCategory: catTotal > 0   ? parseFloat(((e.votes / catTotal)   * 100).toFixed(1)) : 0,
+          pctTotal:    totalCast > 0  ? parseFloat(((e.votes / totalCast)  * 100).toFixed(1)) : 0,
         }))
         .sort((a, b) => b.votes - a.votes);
+    };
 
     const computedMen   = resolve(counts.menPlayers,   todayCounts.menPlayers,   playerMap, catTotals.menPlayers);
     const computedWomen = resolve(counts.womenPlayers,  todayCounts.womenPlayers, playerMap, catTotals.womenPlayers);

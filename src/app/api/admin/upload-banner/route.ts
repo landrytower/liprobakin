@@ -26,8 +26,6 @@ export async function POST(req: NextRequest) {
       metadata: { contentType: "image/jpeg" },
       resumable: false,
     });
-
-    const bucketName = bucket.name;
     const encodedPath = encodeURIComponent("allstar-banners/home-banner");
     const url = `https://firebasestorage.googleapis.com/v0/b/${encodeURIComponent(bucketName)}/o/${encodedPath}?alt=media`;
 

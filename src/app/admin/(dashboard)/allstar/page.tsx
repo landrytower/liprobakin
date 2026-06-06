@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import Image from "next/image";
-import { collection, getDocs, doc, getDoc, setDoc, deleteDoc, writeBatch } from "firebase/firestore";
+import { collection, getDocs, doc, getDoc, setDoc, deleteDoc, writeBatch, onSnapshot, query, orderBy, limit } from "firebase/firestore";
 import type { Timestamp } from "firebase/firestore";
 import { ref as storageRef, deleteObject } from "firebase/storage";
 import { firebaseDB, firebaseStorage, firebaseAuth } from "@/lib/firebase";
@@ -233,6 +233,30 @@ export default function AllStarVotesPage() {
   const [resettingBanner, setResettingBanner] = useState(false);
   const [bannerResetSuccess, setBannerResetSuccess] = useState(false);
 
+  // Suspicious attempt alerts
+  type SuspectAttempt = {
+    id: string;
+    ip: string;
+    country: string | null;
+    city: string | null;
+    region: string | null;
+    userAgent: string | null;
+    reason: string;
+    detectedAt: Date | null;
+    phone?: string | null;
+    menCount?: number | null;
+    womenCount?: number | null;
+    name?: string | null;
+    ageMs?: number | null;
+  };
+  const [suspectAttempts, setSuspectAttempts] = useState<SuspectAttempt[]>([]);
+  const [showSuspects, setShowSuspects] = useState(false);
+  const [suspectLastSeen, setSuspectLastSeen] = useState<Date>(() => {
+    if (typeof window === "undefined") return new Date(0);
+    const s = localStorage.getItem("allstar_suspects_last_seen");
+    return s ? new Date(s) : new Date(0);
+  });
+
   // Cleanup fake votes
   type FakeVoteEntry = { id: string; men: number; women: number; phone: string; name: string };
   const [cleanupScanning, setCleanupScanning] = useState(false);
@@ -424,6 +448,36 @@ export default function AllStarVotesPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // Real-time listener for suspicious vote attempts
+  useEffect(() => {
+    const q = query(
+      collection(firebaseDB, "allStarSuspectAttempts"),
+      orderBy("detectedAt", "desc"),
+      limit(100)
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      setSuspectAttempts(snap.docs.map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          ip:         data.ip         ?? "—",
+          country:    data.country    ?? null,
+          city:       data.city       ?? null,
+          region:     data.region     ?? null,
+          userAgent:  data.userAgent  ?? null,
+          reason:     data.reason     ?? "UNKNOWN",
+          detectedAt: (data.detectedAt as Timestamp | undefined)?.toDate?.() ?? null,
+          phone:      data.phone      ?? null,
+          menCount:   data.menCount   ?? null,
+          womenCount: data.womenCount ?? null,
+          name:       data.name       ?? null,
+          ageMs:      data.ageMs      ?? null,
+        };
+      }));
+    }, () => { /* permission denied — admin not yet logged in */ });
+    return () => unsub();
+  }, []);
 
   useEffect(() => {
     getDoc(doc(firebaseDB, "settings", "allStarBanner"))
@@ -774,6 +828,25 @@ export default function AllStarVotesPage() {
     { key: "women", label: language === "fr" ? "Femmes" : "Women" },
   ];
 
+  const SUSPECT_LABELS: Record<string, { fr: string; en: string; color: string }> = {
+    TOKEN_MISSING:   { fr: "Token manquant — bot direct",         en: "No token — direct bot",            color: "text-red-400" },
+    TOKEN_INVALID:   { fr: "Signature falsifiée — tentative hack", en: "Forged token — signature mismatch", color: "text-red-400" },
+    TOKEN_TOO_YOUNG: { fr: "Soumis trop vite — automation",       en: "Submitted too fast — automation",   color: "text-orange-400" },
+    TOKEN_REPLAY:    { fr: "Token rejoué — attaque replay",       en: "Token replayed — replay attack",    color: "text-red-400" },
+    PLAYER_COUNT:    { fr: "Nombre de joueurs modifié",           en: "Player count tampered",             color: "text-orange-400" },
+    RATE_LIMITED:    { fr: "Soumissions répétées — IP flooding",  en: "Repeated submissions — IP flooding", color: "text-yellow-400" },
+  };
+
+  const newSuspectCount = suspectAttempts.filter(
+    (a) => a.detectedAt && a.detectedAt > suspectLastSeen
+  ).length;
+
+  const markSuspectsAsSeen = () => {
+    const now = new Date();
+    setSuspectLastSeen(now);
+    localStorage.setItem("allstar_suspects_last_seen", now.toISOString());
+  };
+
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-6">
 
@@ -786,6 +859,35 @@ export default function AllStarVotesPage() {
           <p className="text-xs text-slate-400 uppercase tracking-widest mt-1">{t.subtitle}</p>
         </div>
         <div className="flex items-center gap-3 self-start flex-wrap">
+          {/* Suspicious attempts alert bell */}
+          <button
+            onClick={() => {
+              setShowSuspects((v) => !v);
+              if (!showSuspects) markSuspectsAsSeen();
+            }}
+            className={`relative flex items-center gap-2 px-3 py-2 rounded-xl border font-bold text-sm transition-all ${
+              newSuspectCount > 0
+                ? "bg-red-500/15 border-red-500/40 text-red-400 animate-pulse"
+                : suspectAttempts.length > 0
+                ? "bg-slate-800/60 border-white/10 text-slate-400 hover:border-white/20"
+                : "bg-slate-800/40 border-white/5 text-slate-600"
+            }`}
+            title={language === "fr" ? "Tentatives suspectes" : "Suspicious attempts"}
+          >
+            <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
+            </svg>
+            {newSuspectCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-lg shadow-red-500/50">
+                {newSuspectCount > 9 ? "9+" : newSuspectCount}
+              </span>
+            )}
+            {language === "fr" ? "Alertes" : "Alerts"}
+            {suspectAttempts.length > 0 && (
+              <span className="text-[10px] opacity-60">({suspectAttempts.length})</span>
+            )}
+          </button>
+
           {/* All-Star Enable/Disable Toggle */}
           <div className="flex items-center gap-2 px-4 py-2 bg-slate-800/60 border border-white/10 rounded-xl">
             <span className="text-xs font-semibold text-slate-400">
@@ -829,6 +931,125 @@ export default function AllStarVotesPage() {
           </button>
         </div>
       </div>
+
+      {/* ── Suspicious Attempts Panel ── */}
+      {showSuspects && (
+        <div className="rounded-2xl border border-red-500/30 bg-red-950/20 overflow-hidden">
+          <div className="px-5 py-3.5 bg-red-950/40 border-b border-red-500/20 flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <span className="text-lg shrink-0">🚨</span>
+              <div>
+                <p className="text-sm font-black text-red-300 uppercase tracking-wide">
+                  {language === "fr" ? "Tentatives suspectes" : "Suspicious Attempts"}
+                </p>
+                <p className="text-xs text-red-600/80 mt-0.5">
+                  {language === "fr"
+                    ? "Requêtes bloquées par les protections anti-bot — en temps réel"
+                    : "Requests blocked by anti-bot protections — live"}
+                </p>
+              </div>
+            </div>
+            <span className="shrink-0 text-xs font-bold px-2.5 py-1 rounded-full bg-red-500/15 border border-red-500/25 text-red-400">
+              {suspectAttempts.length} {language === "fr" ? "enregistrées" : "logged"}
+            </span>
+          </div>
+
+          {suspectAttempts.length === 0 ? (
+            <div className="text-center py-10 text-slate-500 text-sm">
+              {language === "fr" ? "Aucune tentative suspecte détectée." : "No suspicious attempts detected."}
+            </div>
+          ) : (
+            <div className="overflow-x-auto max-h-[480px] overflow-y-auto">
+              <table className="w-full text-xs min-w-[700px]">
+                <thead className="bg-red-950/50 border-b border-red-500/15 sticky top-0 z-10">
+                  <tr>
+                    <th className="px-3 py-2.5 text-left text-[10px] uppercase tracking-wider font-semibold text-red-400/70">
+                      {language === "fr" ? "Date / Heure" : "Date / Time"}
+                    </th>
+                    <th className="px-3 py-2.5 text-left text-[10px] uppercase tracking-wider font-semibold text-red-400/70">IP</th>
+                    <th className="px-3 py-2.5 text-left text-[10px] uppercase tracking-wider font-semibold text-red-400/70">
+                      {language === "fr" ? "Lieu" : "Location"}
+                    </th>
+                    <th className="px-3 py-2.5 text-left text-[10px] uppercase tracking-wider font-semibold text-red-400/70">
+                      {language === "fr" ? "Raison" : "Reason"}
+                    </th>
+                    <th className="px-3 py-2.5 text-left text-[10px] uppercase tracking-wider font-semibold text-red-400/70">
+                      {language === "fr" ? "Détails" : "Details"}
+                    </th>
+                    <th className="px-3 py-2.5 text-left text-[10px] uppercase tracking-wider font-semibold text-red-400/70">
+                      {language === "fr" ? "Navigateur / Bot" : "Browser / Bot"}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {suspectAttempts.map((a, idx) => {
+                    const label = SUSPECT_LABELS[a.reason] ?? { fr: a.reason, en: a.reason, color: "text-slate-400" };
+                    const isNew = a.detectedAt && a.detectedAt > suspectLastSeen;
+                    return (
+                      <tr key={a.id} className={`border-b border-white/5 hover:bg-white/[0.02] transition-colors ${isNew ? "bg-red-500/5" : ""}`}>
+                        {/* Time */}
+                        <td className="px-3 py-2.5 text-slate-400 whitespace-nowrap">
+                          {isNew && (
+                            <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500 mr-1.5 mb-0.5 align-middle" />
+                          )}
+                          {a.detectedAt
+                            ? a.detectedAt.toLocaleString(language === "fr" ? "fr-FR" : "en-US", {
+                                month: "short", day: "numeric",
+                                hour: "2-digit", minute: "2-digit", second: "2-digit",
+                              })
+                            : "—"}
+                        </td>
+                        {/* IP */}
+                        <td className="px-3 py-2.5">
+                          <span className="font-mono text-red-300 font-bold select-all">{a.ip}</span>
+                        </td>
+                        {/* Location */}
+                        <td className="px-3 py-2.5 text-slate-300 whitespace-nowrap">
+                          {[a.city, a.region, a.country].filter(Boolean).join(", ") || "—"}
+                        </td>
+                        {/* Reason */}
+                        <td className="px-3 py-2.5 whitespace-nowrap">
+                          <span className={`font-bold ${label.color}`}>
+                            {language === "fr" ? label.fr : label.en}
+                          </span>
+                        </td>
+                        {/* Details */}
+                        <td className="px-3 py-2.5 text-slate-400 whitespace-nowrap">
+                          {a.phone && <span className="font-mono mr-2">{a.phone}</span>}
+                          {(a.menCount !== null && a.menCount !== undefined) && (
+                            <span className={`mr-1 ${a.menCount < 15 ? "text-red-400 font-bold" : "text-emerald-400"}`}>♂{a.menCount}</span>
+                          )}
+                          {(a.womenCount !== null && a.womenCount !== undefined) && (
+                            <span className={a.womenCount < 15 ? "text-red-400 font-bold" : "text-emerald-400"}>♀{a.womenCount}</span>
+                          )}
+                          {a.ageMs !== null && a.ageMs !== undefined && (
+                            <span className="text-orange-400 ml-1">{(a.ageMs / 1000).toFixed(1)}s</span>
+                          )}
+                          {a.name && <span className="ml-1 text-slate-500">{a.name}</span>}
+                          {!a.phone && a.menCount === null && a.womenCount === null && "—"}
+                        </td>
+                        {/* User agent */}
+                        <td className="px-3 py-2.5 max-w-[240px]">
+                          <span
+                            className="text-slate-500 truncate block max-w-full"
+                            title={a.userAgent ?? ""}
+                          >
+                            {a.userAgent
+                              ? a.userAgent.length > 60
+                                ? a.userAgent.slice(0, 60) + "…"
+                                : a.userAgent
+                              : (language === "fr" ? "Inconnu" : "Unknown")}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── All-Star Gold Theme Toggle ── */}
       <div className="relative overflow-hidden rounded-2xl border border-yellow-500/20 bg-gradient-to-r from-yellow-950/60 via-amber-950/40 to-yellow-950/60 p-5">

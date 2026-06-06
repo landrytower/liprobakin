@@ -1,0 +1,188 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Admin check: uid must exist in adminUsers collection
+    function isAdmin() {
+      return isSignedIn() &&
+             exists(/databases/$(database)/documents/adminUsers/$(request.auth.uid));
+    }
+
+    // Validate a user write (only safe fields allowed — no role escalation)
+    function validUserWrite() {
+      let allowed = ['uid', 'email', 'phoneNumber', 'firstName', 'lastName',
+                     'phoneVerified', 'createdAt', 'updatedAt',
+                     'verificationSubmittedAt', 'verificationReviewedAt'];
+      return request.resource.data.keys().hasOnly(allowed);
+    }
+
+
+    // ── Users collection ─────────────────────────────────────────────────────
+
+    match /users/{userId} {
+      allow read:   if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && validUserWrite();
+      allow update: if isOwner(userId) && validUserWrite();
+      allow delete: if isAdmin();
+    }
+
+
+    // ── Admin users collection ───────────────────────────────────────────────
+
+    match /adminUsers/{userId} {
+      allow read, write: if isAdmin();
+    }
+
+
+    // ── All-Star votes ───────────────────────────────────────────────────────
+    // Client reads allowed so the vote page can restore a voter's selections.
+    // All writes are blocked for clients — only the Admin SDK (server-side
+    // API route) may create or modify votes. Admin SDK bypasses these rules.
+
+    match /allStarVotes/{voterId} {
+      allow get:    if true;
+      allow list:   if isAdmin();
+      allow create: if false;
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+
+
+    // ── Aggregated vote results ──────────────────────────────────────────────
+    // Public read for the leaderboard. Writes blocked for clients —
+    // only the Admin SDK updates these documents.
+
+    match /allStarVoteResults/{document} {
+      allow read:           if true;
+      allow create, update: if false;
+      allow delete:         if isAdmin();
+    }
+
+    // Pre-computed leaders snapshot — written by admin Refresh, read publicly
+    match /allStarLeaders/{document} {
+      allow read:  if true;
+      allow write: if isAdmin();
+    }
+
+    // ── All-Star rate limits (server-only) ───────────────────────────────────
+    // Written by the server to enforce per-IP cooldowns. No client access.
+
+    match /allStarRateLimits/{document} {
+      allow read, write: if false;
+    }
+
+    // ── All-Star used tokens (server-only) ───────────────────────────────────
+    // Stores consumed timing tokens to prevent replay attacks. No client access.
+
+    match /allStarUsedTokens/{document} {
+      allow read, write: if false;
+    }
+
+    // ── All-Star suspicious attempts (admin read, server write) ──────────────
+    // Written by the server when bot/cheat attempts are detected.
+    // Admins can read to review attackers. No client writes ever.
+
+    match /allStarSuspectAttempts/{document} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
+
+    // ── Teams & rosters ──────────────────────────────────────────────────────
+
+    match /teams/{teamId} {
+      allow read: if true;
+      allow write: if isAdmin();
+
+      match /roster/{playerId} {
+        allow read: if true;
+        allow write: if isAdmin();
+      }
+
+      match /coachStaff/{staffId} {
+        allow read: if true;
+        allow write: if isAdmin();
+      }
+    }
+
+
+    // ── Games ────────────────────────────────────────────────────────────────
+
+    match /games/{gameId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+
+    // ── Standings ────────────────────────────────────────────────────────────
+
+    match /standings/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+
+    // ── Schedules ────────────────────────────────────────────────────────────
+
+    match /schedules/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+
+    // ── Players (top-level, if any) ──────────────────────────────────────────
+
+    match /players/{playerId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+
+    // ── App config / public content ──────────────────────────────────────────
+
+    match /config/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+
+    // ── App settings (feature flags, toggles) ────────────────────────────────
+
+    match /settings/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+
+    // ── News articles ────────────────────────────────────────────────────────
+
+    match /news/{articleId} {
+      allow read: if true;
+      allow write: if isAdmin();
+
+      match /comments/{commentId} {
+        allow read: if true;
+        allow create: if true;
+        allow delete: if isAdmin();
+
+        match /replies/{replyId} {
+          allow read: if true;
+          allow create: if true;
+          allow delete: if isAdmin();
+        }
+      }
+    }
+
+  }
+}

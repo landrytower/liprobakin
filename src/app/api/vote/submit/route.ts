@@ -8,6 +8,30 @@ export const runtime = "nodejs";
 const MAX_PLAYERS = 15;
 const RATE_LIMIT_MS = 30_000; // 30s cooldown per IP
 
+// Fire-and-forget: write a suspicious attempt to Firestore for admin review
+function logSuspect(
+  ip: string,
+  req: NextRequest,
+  reason: string,
+  extra: Record<string, unknown> = {}
+) {
+  try {
+    const db = getAdminFirestore();
+    const rawCity = req.headers.get("x-vercel-ip-city");
+    void db.collection("allStarSuspectAttempts").add({
+      ip,
+      country:   req.headers.get("x-vercel-ip-country") ?? null,
+      city:      rawCity ? (() => { try { return decodeURIComponent(rawCity); } catch { return rawCity; } })() : null,
+      region:    req.headers.get("x-vercel-ip-region") ?? null,
+      userAgent: req.headers.get("user-agent") ?? null,
+      reason,
+      ...extra,
+      detectedAt: FieldValue.serverTimestamp(),
+      seen: false,
+    });
+  } catch { /* never block the response */ }
+}
+
 export async function POST(req: NextRequest) {
   try {
     // Identify client IP
@@ -24,20 +48,37 @@ export async function POST(req: NextRequest) {
 
     // ── Timing token validation ──────────────────────────────────────────────
     if (!token || typeof token !== "string") {
+      logSuspect(ip, req, "TOKEN_MISSING", {
+        phone: String(phone || "").replace(/\D/g, "").slice(0, 15) || null,
+        menCount:   Array.isArray(menPlayers)   ? menPlayers.length   : null,
+        womenCount: Array.isArray(womenPlayers) ? womenPlayers.length : null,
+      });
       return NextResponse.json(
         { error: "Session token missing. Please refresh the page and try again." },
         { status: 400 }
       );
     }
+
     const tokenPayload = verifyVoteToken(token);
     if (!tokenPayload) {
+      logSuspect(ip, req, "TOKEN_INVALID", {
+        phone: String(phone || "").replace(/\D/g, "").slice(0, 15) || null,
+        tokenPrefix: token.slice(0, 24),
+      });
       return NextResponse.json(
         { error: "Invalid session token. Please refresh the page." },
         { status: 400 }
       );
     }
+
     const tokenAge = Date.now() - tokenPayload.ts;
     if (tokenAge < TOKEN_MIN_AGE_MS) {
+      logSuspect(ip, req, "TOKEN_TOO_YOUNG", {
+        ageMs: tokenAge,
+        phone: String(phone || "").replace(/\D/g, "").slice(0, 15) || null,
+        menCount:   Array.isArray(menPlayers)   ? menPlayers.length   : null,
+        womenCount: Array.isArray(womenPlayers) ? womenPlayers.length : null,
+      });
       return NextResponse.json(
         { error: "Please take more time to review your selections before submitting." },
         { status: 400 }
@@ -63,15 +104,18 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Player count validation ──────────────────────────────────────────────
-    if (!Array.isArray(menPlayers) || menPlayers.length !== MAX_PLAYERS) {
+    const menCount   = Array.isArray(menPlayers)   ? menPlayers.length   : -1;
+    const womenCount = Array.isArray(womenPlayers) ? womenPlayers.length : -1;
+
+    if (menCount !== MAX_PLAYERS || womenCount !== MAX_PLAYERS) {
+      logSuspect(ip, req, "PLAYER_COUNT", {
+        phone: docId || null,
+        menCount,
+        womenCount,
+        name: `${String(firstName || "").trim()} ${String(lastName || "").trim()}`.trim() || null,
+      });
       return NextResponse.json(
-        { error: `Must select exactly ${MAX_PLAYERS} men (got ${Array.isArray(menPlayers) ? menPlayers.length : 0})` },
-        { status: 400 }
-      );
-    }
-    if (!Array.isArray(womenPlayers) || womenPlayers.length !== MAX_PLAYERS) {
-      return NextResponse.json(
-        { error: `Must select exactly ${MAX_PLAYERS} women (got ${Array.isArray(womenPlayers) ? womenPlayers.length : 0})` },
+        { error: `Must select exactly ${MAX_PLAYERS} men and ${MAX_PLAYERS} women` },
         { status: 400 }
       );
     }
@@ -94,6 +138,11 @@ export async function POST(req: NextRequest) {
     if (rateLimitSnap.exists) {
       const last: number = rateLimitSnap.data()?.lastVote?.toMillis?.() ?? 0;
       if (Date.now() - last < RATE_LIMIT_MS) {
+        logSuspect(ip, req, "RATE_LIMITED", {
+          phone: docId || null,
+          name: `${firstName.trim()} ${lastName.trim()}`.trim() || null,
+          cooldownMs: RATE_LIMIT_MS - (Date.now() - last),
+        });
         return NextResponse.json(
           { error: "Too many requests. Please wait a moment before trying again." },
           { status: 429 }
@@ -102,6 +151,11 @@ export async function POST(req: NextRequest) {
     }
 
     if (usedTokenSnap.exists) {
+      logSuspect(ip, req, "TOKEN_REPLAY", {
+        jti: tokenPayload.jti,
+        phone: docId || null,
+        name: `${firstName.trim()} ${lastName.trim()}`.trim() || null,
+      });
       return NextResponse.json(
         { error: "This session has already been used. Please refresh the page to vote again." },
         { status: 400 }
@@ -152,7 +206,7 @@ export async function POST(req: NextRequest) {
       lastModified: FieldValue.serverTimestamp(),
     });
 
-    // Mark token as used + update rate limit (parallel, non-blocking on failure)
+    // Mark token as used + update rate limit
     await Promise.all([
       usedTokenRef.set({ usedAt: FieldValue.serverTimestamp(), phone: docId }),
       rateLimitRef.set({ lastVote: FieldValue.serverTimestamp() }, { merge: true }),

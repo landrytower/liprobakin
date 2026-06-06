@@ -6,9 +6,8 @@ import { verifyVoteToken, TOKEN_MIN_AGE_MS, TOKEN_MAX_AGE_MS } from "@/lib/vote-
 export const runtime = "nodejs";
 
 const MAX_PLAYERS = 15;
-const RATE_LIMIT_MS = 30_000; // 30s cooldown per IP
+const RATE_LIMIT_MS = 30_000;
 
-// Fire-and-forget: write a suspicious attempt to Firestore for admin review
 function logSuspect(
   ip: string,
   req: NextRequest,
@@ -24,6 +23,7 @@ function logSuspect(
       city:      rawCity ? (() => { try { return decodeURIComponent(rawCity); } catch { return rawCity; } })() : null,
       region:    req.headers.get("x-vercel-ip-region") ?? null,
       userAgent: req.headers.get("user-agent") ?? null,
+      language:  req.headers.get("accept-language") ?? null,
       reason,
       ...extra,
       detectedAt: FieldValue.serverTimestamp(),
@@ -34,7 +34,6 @@ function logSuspect(
 
 export async function POST(req: NextRequest) {
   try {
-    // Identify client IP
     const ip = (
       req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
       req.headers.get("x-real-ip") ||
@@ -46,12 +45,20 @@ export async function POST(req: NextRequest) {
 
     const { firstName, lastName, phone, email, role, menPlayers, womenPlayers, token } = body;
 
+    const safePhone = String(phone || "").replace(/\D/g, "").slice(0, 15) || null;
+    const safeMen   = Array.isArray(menPlayers)   ? (menPlayers   as string[]).slice(0, 15) : null;
+    const safeWomen = Array.isArray(womenPlayers) ? (womenPlayers as string[]).slice(0, 15) : null;
+    const safeName  = `${String(firstName || "").trim()} ${String(lastName || "").trim()}`.trim() || null;
+
     // ── Timing token validation ──────────────────────────────────────────────
     if (!token || typeof token !== "string") {
       logSuspect(ip, req, "TOKEN_MISSING", {
-        phone: String(phone || "").replace(/\D/g, "").slice(0, 15) || null,
-        menCount:   Array.isArray(menPlayers)   ? menPlayers.length   : null,
-        womenCount: Array.isArray(womenPlayers) ? womenPlayers.length : null,
+        phone: safePhone,
+        name: safeName,
+        menCount:    safeMen   ? safeMen.length   : null,
+        womenCount:  safeWomen ? safeWomen.length : null,
+        menPlayers:  safeMen,
+        womenPlayers: safeWomen,
       });
       return NextResponse.json(
         { error: "Session token missing. Please refresh the page and try again." },
@@ -62,8 +69,11 @@ export async function POST(req: NextRequest) {
     const tokenPayload = verifyVoteToken(token);
     if (!tokenPayload) {
       logSuspect(ip, req, "TOKEN_INVALID", {
-        phone: String(phone || "").replace(/\D/g, "").slice(0, 15) || null,
+        phone: safePhone,
+        name: safeName,
         tokenPrefix: token.slice(0, 24),
+        menPlayers:  safeMen,
+        womenPlayers: safeWomen,
       });
       return NextResponse.json(
         { error: "Invalid session token. Please refresh the page." },
@@ -75,9 +85,12 @@ export async function POST(req: NextRequest) {
     if (tokenAge < TOKEN_MIN_AGE_MS) {
       logSuspect(ip, req, "TOKEN_TOO_YOUNG", {
         ageMs: tokenAge,
-        phone: String(phone || "").replace(/\D/g, "").slice(0, 15) || null,
-        menCount:   Array.isArray(menPlayers)   ? menPlayers.length   : null,
-        womenCount: Array.isArray(womenPlayers) ? womenPlayers.length : null,
+        phone: safePhone,
+        name: safeName,
+        menCount:    safeMen   ? safeMen.length   : null,
+        womenCount:  safeWomen ? safeWomen.length : null,
+        menPlayers:  safeMen,
+        womenPlayers: safeWomen,
       });
       return NextResponse.json(
         { error: "Please take more time to review your selections before submitting." },
@@ -110,9 +123,11 @@ export async function POST(req: NextRequest) {
     if (menCount !== MAX_PLAYERS || womenCount !== MAX_PLAYERS) {
       logSuspect(ip, req, "PLAYER_COUNT", {
         phone: docId || null,
+        name: safeName,
         menCount,
         womenCount,
-        name: `${String(firstName || "").trim()} ${String(lastName || "").trim()}`.trim() || null,
+        menPlayers:  safeMen,
+        womenPlayers: safeWomen,
       });
       return NextResponse.json(
         { error: `Must select exactly ${MAX_PLAYERS} men and ${MAX_PLAYERS} women` },
@@ -140,8 +155,10 @@ export async function POST(req: NextRequest) {
       if (Date.now() - last < RATE_LIMIT_MS) {
         logSuspect(ip, req, "RATE_LIMITED", {
           phone: docId || null,
-          name: `${firstName.trim()} ${lastName.trim()}`.trim() || null,
+          name: safeName,
           cooldownMs: RATE_LIMIT_MS - (Date.now() - last),
+          menPlayers:  safeMen,
+          womenPlayers: safeWomen,
         });
         return NextResponse.json(
           { error: "Too many requests. Please wait a moment before trying again." },
@@ -154,7 +171,9 @@ export async function POST(req: NextRequest) {
       logSuspect(ip, req, "TOKEN_REPLAY", {
         jti: tokenPayload.jti,
         phone: docId || null,
-        name: `${firstName.trim()} ${lastName.trim()}`.trim() || null,
+        name: safeName,
+        menPlayers:  safeMen,
+        womenPlayers: safeWomen,
       });
       return NextResponse.json(
         { error: "This session has already been used. Please refresh the page to vote again." },
@@ -206,13 +225,11 @@ export async function POST(req: NextRequest) {
       lastModified: FieldValue.serverTimestamp(),
     });
 
-    // Mark token as used + update rate limit
     await Promise.all([
       usedTokenRef.set({ usedAt: FieldValue.serverTimestamp(), phone: docId }),
       rateLimitRef.set({ lastVote: FieldValue.serverTimestamp() }, { merge: true }),
     ]);
 
-    // ── Update public vote-count aggregates ──────────────────────────────────
     const menInc   = Object.fromEntries(menPlayers.map((id: string)   => [id, FieldValue.increment(1)]));
     const womenInc = Object.fromEntries(womenPlayers.map((id: string) => [id, FieldValue.increment(1)]));
     await Promise.all([

@@ -241,6 +241,7 @@ export default function AllStarVotesPage() {
     city: string | null;
     region: string | null;
     userAgent: string | null;
+    language: string | null;
     reason: string;
     detectedAt: Date | null;
     phone?: string | null;
@@ -248,14 +249,18 @@ export default function AllStarVotesPage() {
     womenCount?: number | null;
     name?: string | null;
     ageMs?: number | null;
+    menPlayers?: string[] | null;
+    womenPlayers?: string[] | null;
   };
   const [suspectAttempts, setSuspectAttempts] = useState<SuspectAttempt[]>([]);
   const [showSuspects, setShowSuspects] = useState(false);
+  const [expandedSuspectId, setExpandedSuspectId] = useState<string | null>(null);
   const [suspectLastSeen, setSuspectLastSeen] = useState<Date>(() => {
     if (typeof window === "undefined") return new Date(0);
     const s = localStorage.getItem("allstar_suspects_last_seen");
     return s ? new Date(s) : new Date(0);
   });
+  const [playerMapState, setPlayerMapState] = useState<Record<string, { name: string; teamName: string }>>({});
 
   // Cleanup fake votes
   type FakeVoteEntry = { id: string; men: number; women: number; phone: string; name: string };
@@ -407,6 +412,9 @@ export default function AllStarVotesPage() {
     const computedMen   = resolve(counts.menPlayers,   todayCounts.menPlayers,   playerMap, catTotals.menPlayers);
     const computedWomen = resolve(counts.womenPlayers,  todayCounts.womenPlayers, playerMap, catTotals.womenPlayers);
     setResults({ menPlayers: computedMen, womenPlayers: computedWomen });
+    setPlayerMapState(Object.fromEntries(
+      Object.entries(playerMap).map(([id, v]) => [id, { name: v.name, teamName: v.teamName }])
+    ));
 
     // Write a denormalised leaders snapshot so the vote page can display instantly
     try {
@@ -461,18 +469,21 @@ export default function AllStarVotesPage() {
         const data = d.data();
         return {
           id: d.id,
-          ip:         data.ip         ?? "—",
-          country:    data.country    ?? null,
-          city:       data.city       ?? null,
-          region:     data.region     ?? null,
-          userAgent:  data.userAgent  ?? null,
-          reason:     data.reason     ?? "UNKNOWN",
-          detectedAt: (data.detectedAt as Timestamp | undefined)?.toDate?.() ?? null,
-          phone:      data.phone      ?? null,
-          menCount:   data.menCount   ?? null,
-          womenCount: data.womenCount ?? null,
-          name:       data.name       ?? null,
-          ageMs:      data.ageMs      ?? null,
+          ip:          data.ip          ?? "—",
+          country:     data.country     ?? null,
+          city:        data.city        ?? null,
+          region:      data.region      ?? null,
+          userAgent:   data.userAgent   ?? null,
+          language:    data.language    ?? null,
+          reason:      data.reason      ?? "UNKNOWN",
+          detectedAt:  (data.detectedAt as Timestamp | undefined)?.toDate?.() ?? null,
+          phone:       data.phone       ?? null,
+          menCount:    data.menCount    ?? null,
+          womenCount:  data.womenCount  ?? null,
+          name:        data.name        ?? null,
+          ageMs:       data.ageMs       ?? null,
+          menPlayers:  Array.isArray(data.menPlayers)   ? data.menPlayers   : null,
+          womenPlayers: Array.isArray(data.womenPlayers) ? data.womenPlayers : null,
         };
       }));
     }, () => { /* permission denied — admin not yet logged in */ });
@@ -959,10 +970,11 @@ export default function AllStarVotesPage() {
               {language === "fr" ? "Aucune tentative suspecte détectée." : "No suspicious attempts detected."}
             </div>
           ) : (
-            <div className="overflow-x-auto max-h-[480px] overflow-y-auto">
+            <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
               <table className="w-full text-xs min-w-[700px]">
                 <thead className="bg-red-950/50 border-b border-red-500/15 sticky top-0 z-10">
                   <tr>
+                    <th className="px-3 py-2.5 text-left text-[10px] uppercase tracking-wider font-semibold text-red-400/70 w-8" />
                     <th className="px-3 py-2.5 text-left text-[10px] uppercase tracking-wider font-semibold text-red-400/70">
                       {language === "fr" ? "Date / Heure" : "Date / Time"}
                     </th>
@@ -974,74 +986,166 @@ export default function AllStarVotesPage() {
                       {language === "fr" ? "Raison" : "Reason"}
                     </th>
                     <th className="px-3 py-2.5 text-left text-[10px] uppercase tracking-wider font-semibold text-red-400/70">
-                      {language === "fr" ? "Détails" : "Details"}
+                      {language === "fr" ? "Identité soumise" : "Submitted Identity"}
                     </th>
                     <th className="px-3 py-2.5 text-left text-[10px] uppercase tracking-wider font-semibold text-red-400/70">
-                      {language === "fr" ? "Navigateur / Bot" : "Browser / Bot"}
+                      {language === "fr" ? "Appareil" : "Device"}
                     </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {suspectAttempts.map((a, idx) => {
+                  {suspectAttempts.map((a) => {
                     const label = SUSPECT_LABELS[a.reason] ?? { fr: a.reason, en: a.reason, color: "text-slate-400" };
                     const isNew = a.detectedAt && a.detectedAt > suspectLastSeen;
+                    const isExpanded = expandedSuspectId === a.id;
+                    const hasPlayers = (a.menPlayers && a.menPlayers.length > 0) || (a.womenPlayers && a.womenPlayers.length > 0);
                     return (
-                      <tr key={a.id} className={`border-b border-white/5 hover:bg-white/[0.02] transition-colors ${isNew ? "bg-red-500/5" : ""}`}>
-                        {/* Time */}
-                        <td className="px-3 py-2.5 text-slate-400 whitespace-nowrap">
-                          {isNew && (
-                            <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500 mr-1.5 mb-0.5 align-middle" />
-                          )}
-                          {a.detectedAt
-                            ? a.detectedAt.toLocaleString(language === "fr" ? "fr-FR" : "en-US", {
-                                month: "short", day: "numeric",
-                                hour: "2-digit", minute: "2-digit", second: "2-digit",
-                              })
-                            : "—"}
-                        </td>
-                        {/* IP */}
-                        <td className="px-3 py-2.5">
-                          <span className="font-mono text-red-300 font-bold select-all">{a.ip}</span>
-                        </td>
-                        {/* Location */}
-                        <td className="px-3 py-2.5 text-slate-300 whitespace-nowrap">
-                          {[a.city, a.region, a.country].filter(Boolean).join(", ") || "—"}
-                        </td>
-                        {/* Reason */}
-                        <td className="px-3 py-2.5 whitespace-nowrap">
-                          <span className={`font-bold ${label.color}`}>
-                            {language === "fr" ? label.fr : label.en}
-                          </span>
-                        </td>
-                        {/* Details */}
-                        <td className="px-3 py-2.5 text-slate-400 whitespace-nowrap">
-                          {a.phone && <span className="font-mono mr-2">{a.phone}</span>}
-                          {(a.menCount !== null && a.menCount !== undefined) && (
-                            <span className={`mr-1 ${a.menCount < 15 ? "text-red-400 font-bold" : "text-emerald-400"}`}>♂{a.menCount}</span>
-                          )}
-                          {(a.womenCount !== null && a.womenCount !== undefined) && (
-                            <span className={a.womenCount < 15 ? "text-red-400 font-bold" : "text-emerald-400"}>♀{a.womenCount}</span>
-                          )}
-                          {a.ageMs !== null && a.ageMs !== undefined && (
-                            <span className="text-orange-400 ml-1">{(a.ageMs / 1000).toFixed(1)}s</span>
-                          )}
-                          {a.name && <span className="ml-1 text-slate-500">{a.name}</span>}
-                          {!a.phone && a.menCount === null && a.womenCount === null && "—"}
-                        </td>
-                        {/* User agent */}
-                        <td className="px-3 py-2.5 max-w-[240px]">
-                          <span
-                            className="text-slate-500 truncate block max-w-full"
-                            title={a.userAgent ?? ""}
-                          >
-                            {a.userAgent
-                              ? a.userAgent.length > 60
-                                ? a.userAgent.slice(0, 60) + "…"
-                                : a.userAgent
-                              : (language === "fr" ? "Inconnu" : "Unknown")}
-                          </span>
-                        </td>
-                      </tr>
+                      <>
+                        <tr
+                          key={a.id}
+                          onClick={() => setExpandedSuspectId(isExpanded ? null : a.id)}
+                          className={`border-b border-white/5 cursor-pointer transition-colors ${isNew ? "bg-red-500/5" : ""} ${isExpanded ? "bg-white/[0.04]" : "hover:bg-white/[0.02]"}`}
+                        >
+                          {/* Expand chevron */}
+                          <td className="px-3 py-2.5 text-slate-600">
+                            <svg className={`w-3 h-3 transition-transform ${isExpanded ? "rotate-90" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                            </svg>
+                          </td>
+                          {/* Time */}
+                          <td className="px-3 py-2.5 text-slate-400 whitespace-nowrap">
+                            {isNew && <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500 mr-1.5 mb-0.5 align-middle" />}
+                            {a.detectedAt
+                              ? a.detectedAt.toLocaleString(language === "fr" ? "fr-FR" : "en-US", {
+                                  month: "short", day: "numeric",
+                                  hour: "2-digit", minute: "2-digit", second: "2-digit",
+                                })
+                              : "—"}
+                          </td>
+                          {/* IP + lookup */}
+                          <td className="px-3 py-2.5">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-mono text-red-300 font-bold select-all">{a.ip}</span>
+                              <a
+                                href={`https://ipinfo.io/${a.ip}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="text-slate-600 hover:text-blue-400 transition-colors"
+                                title="Look up IP details (ISP, carrier, VPN)"
+                              >
+                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                </svg>
+                              </a>
+                            </div>
+                          </td>
+                          {/* Location */}
+                          <td className="px-3 py-2.5 text-slate-300 whitespace-nowrap">
+                            {[a.city, a.country].filter(Boolean).join(", ") || "—"}
+                          </td>
+                          {/* Reason */}
+                          <td className="px-3 py-2.5 whitespace-nowrap">
+                            <span className={`font-bold ${label.color}`}>
+                              {language === "fr" ? label.fr : label.en}
+                            </span>
+                          </td>
+                          {/* Identity */}
+                          <td className="px-3 py-2.5 text-slate-400">
+                            {a.name && <span className="text-slate-200 font-medium mr-2">{a.name}</span>}
+                            {a.phone && <span className="font-mono text-slate-500">{a.phone}</span>}
+                            {a.ageMs !== null && a.ageMs !== undefined && (
+                              <span className="text-orange-400 ml-2">{(a.ageMs / 1000).toFixed(1)}s</span>
+                            )}
+                          </td>
+                          {/* Device */}
+                          <td className="px-3 py-2.5 max-w-[200px]">
+                            <span className="text-slate-500 truncate block" title={a.userAgent ?? ""}>
+                              {a.userAgent ? (a.userAgent.length > 45 ? a.userAgent.slice(0, 45) + "…" : a.userAgent) : "—"}
+                            </span>
+                          </td>
+                        </tr>
+
+                        {/* ── Expanded detail row ── */}
+                        {isExpanded && (
+                          <tr key={`${a.id}-detail`} className="bg-slate-900/80 border-b border-red-500/10">
+                            <td colSpan={7} className="px-4 py-4">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+                                {/* Left: identity + device */}
+                                <div className="space-y-3">
+                                  <p className="text-[10px] uppercase tracking-widest font-semibold text-slate-500">
+                                    {language === "fr" ? "Empreinte appareil" : "Device fingerprint"}
+                                  </p>
+                                  <div className="space-y-1.5 text-xs">
+                                    <div><span className="text-slate-500 w-24 inline-block">IP</span><span className="font-mono text-red-300">{a.ip}</span></div>
+                                    <div><span className="text-slate-500 w-24 inline-block">{language === "fr" ? "Lieu" : "Location"}</span><span className="text-slate-300">{[a.city, a.region, a.country].filter(Boolean).join(", ") || "—"}</span></div>
+                                    <div><span className="text-slate-500 w-24 inline-block">{language === "fr" ? "Langue" : "Language"}</span><span className="text-slate-300">{a.language ?? "—"}</span></div>
+                                    <div className="flex gap-2">
+                                      <span className="text-slate-500 w-24 inline-block shrink-0">User-Agent</span>
+                                      <span className="text-slate-400 break-all leading-relaxed">{a.userAgent ?? "—"}</span>
+                                    </div>
+                                  </div>
+                                  <a
+                                    href={`https://ipinfo.io/${a.ip}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/25 text-blue-400 text-xs font-semibold rounded-lg transition-all"
+                                  >
+                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                                    {language === "fr" ? "Voir FAI / opérateur sur ipinfo.io" : "View ISP / carrier on ipinfo.io"}
+                                  </a>
+                                </div>
+
+                                {/* Right: players voted for */}
+                                {hasPlayers && (
+                                  <div className="space-y-3">
+                                    <p className="text-[10px] uppercase tracking-widest font-semibold text-slate-500">
+                                      {language === "fr" ? "Joueurs pour lesquels ils ont voté" : "Players they tried to vote for"}
+                                    </p>
+                                    {a.menPlayers && a.menPlayers.length > 0 && (
+                                      <div>
+                                        <p className="text-[10px] text-blue-400 font-semibold mb-1">♂ {language === "fr" ? "Hommes" : "Men"} ({a.menPlayers.length})</p>
+                                        <div className="flex flex-wrap gap-1">
+                                          {a.menPlayers.map((pid) => (
+                                            <span key={pid} className="px-2 py-0.5 bg-blue-500/10 border border-blue-500/20 rounded text-[10px] text-blue-300">
+                                              {playerMapState[pid]?.name ?? pid}
+                                              {playerMapState[pid]?.teamName && (
+                                                <span className="text-slate-500 ml-1">· {playerMapState[pid].teamName}</span>
+                                              )}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                    {a.womenPlayers && a.womenPlayers.length > 0 && (
+                                      <div>
+                                        <p className="text-[10px] text-purple-400 font-semibold mb-1">♀ {language === "fr" ? "Femmes" : "Women"} ({a.womenPlayers.length})</p>
+                                        <div className="flex flex-wrap gap-1">
+                                          {a.womenPlayers.map((pid) => (
+                                            <span key={pid} className="px-2 py-0.5 bg-purple-500/10 border border-purple-500/20 rounded text-[10px] text-purple-300">
+                                              {playerMapState[pid]?.name ?? pid}
+                                              {playerMapState[pid]?.teamName && (
+                                                <span className="text-slate-500 ml-1">· {playerMapState[pid].teamName}</span>
+                                              )}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+
+                                {!hasPlayers && (
+                                  <div className="flex items-center text-xs text-slate-600">
+                                    {language === "fr" ? "Aucune sélection de joueurs soumise." : "No player selection submitted."}
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </>
                     );
                   })}
                 </tbody>

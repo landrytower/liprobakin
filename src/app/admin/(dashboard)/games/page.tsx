@@ -372,6 +372,7 @@ export default function GamesPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("matchday");
   const [filterGender, setFilterGender] = useState<FilterGender>("all");
   const [statsCollectionFilter, setStatsCollectionFilter] = useState<StatsCollectionFilter>("all");
+  const [statCardFilter, setStatCardFilter] = useState<"all" | "completed" | "upcoming" | "missingScore">("all");
   const [selectedWeek, ] = useState<number>(1);
   const [selectedMatchday, setSelectedMatchday] = useState<Matchday | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -669,10 +670,22 @@ export default function GamesPage() {
 
   // Filter games based on current view and filters
   const filteredGames = useMemo(() => {
-    let result = gamesLinkedToMatchdays;
     const hasFinalScore = (game: Game) =>
       typeof game.homeScore === "number" && Number.isFinite(game.homeScore) &&
       typeof game.awayScore === "number" && Number.isFinite(game.awayScore);
+
+    // When a stat card filter is active, bypass matchday linking and work from all games
+    let result = statCardFilter !== "all" ? [...games] : gamesLinkedToMatchdays;
+
+    // Apply stat card filter
+    if (statCardFilter === "completed") {
+      result = result.filter((g) => g.status === "completed");
+    } else if (statCardFilter === "upcoming") {
+      const today = new Date().toISOString().split("T")[0];
+      result = result.filter((g) => g.date <= today && !hasFinalScore(g));
+    } else if (statCardFilter === "missingScore") {
+      result = result.filter((g) => !hasFinalScore(g));
+    }
 
     // Filter by gender
     if (filterGender !== "all") {
@@ -685,24 +698,23 @@ export default function GamesPage() {
       result = result.filter((g) => !hasFinalScore(g));
     }
 
-    // Filter by week in matchday view (when viewing games list)
-    if (viewMode === "matchday" && selectedMatchday) {
-      // Filter games by date range of the selected matchday
-      result = result.filter((g) => {
-        const gameDate = g.date;
-        return gameDate >= selectedMatchday.startDate && gameDate <= selectedMatchday.endDate;
-      });
-      // Also filter by matchday gender if not "all"
-      if (selectedMatchday.gender !== "all") {
-        result = result.filter((g) => g.gender === selectedMatchday.gender);
+    // Only apply matchday/week filters when no stat card filter is active
+    if (statCardFilter === "all") {
+      if (viewMode === "matchday" && selectedMatchday) {
+        result = result.filter((g) => {
+          const gameDate = g.date;
+          return gameDate >= selectedMatchday.startDate && gameDate <= selectedMatchday.endDate;
+        });
+        if (selectedMatchday.gender !== "all") {
+          result = result.filter((g) => g.gender === selectedMatchday.gender);
+        }
+      } else if (viewMode === "matchday" && !selectedMatchday) {
+        result = result.filter((g) => g.week === selectedWeek);
       }
-    } else if (viewMode === "matchday" && !selectedMatchday) {
-      // If no matchday is selected, filter by selected week number
-      result = result.filter((g) => g.week === selectedWeek);
     }
 
     return result;
-  }, [gamesLinkedToMatchdays, filterGender, statsCollectionFilter, viewMode, selectedWeek, selectedMatchday]);
+  }, [games, gamesLinkedToMatchdays, statCardFilter, filterGender, statsCollectionFilter, viewMode, selectedWeek, selectedMatchday]);
 
   // Group games by date (for schedule view)
   const gamesByDate = useMemo(() => {
@@ -1860,22 +1872,50 @@ export default function GamesPage() {
 
         {/* Stats Cards */}
         <div className="flex gap-2 sm:gap-3 flex-wrap">
-          <div className="rounded-xl border border-white/10 bg-slate-900/60 px-3 sm:px-4 py-2 text-center">
+          <button
+            onClick={() => { setStatCardFilter("all"); }}
+            className={`rounded-xl border px-3 sm:px-4 py-2 text-center transition-all cursor-pointer ${
+              statCardFilter === "all"
+                ? "border-white/40 bg-slate-700/80 ring-2 ring-white/30"
+                : "border-white/10 bg-slate-900/60 hover:border-white/25"
+            }`}
+          >
             <p className="text-lg sm:text-2xl font-bold text-white">{stats.total}</p>
             <p className="text-[10px] uppercase tracking-wider text-slate-500">{t.totalGames}</p>
-          </div>
-          <div className="rounded-xl border border-green-500/20 bg-green-500/10 px-3 sm:px-4 py-2 text-center">
+          </button>
+          <button
+            onClick={() => { setStatCardFilter(statCardFilter === "completed" ? "all" : "completed"); setViewMode("schedule"); }}
+            className={`rounded-xl border px-3 sm:px-4 py-2 text-center transition-all cursor-pointer ${
+              statCardFilter === "completed"
+                ? "border-green-400/60 bg-green-500/20 ring-2 ring-green-400/40"
+                : "border-green-500/20 bg-green-500/10 hover:border-green-500/40"
+            }`}
+          >
             <p className="text-lg sm:text-2xl font-bold text-green-400">{stats.completed}</p>
             <p className="text-[10px] uppercase tracking-wider text-green-500/70">{t.completed}</p>
-          </div>
-          <div className="rounded-xl border border-blue-500/20 bg-blue-500/10 px-3 sm:px-4 py-2 text-center">
+          </button>
+          <button
+            onClick={() => { setStatCardFilter(statCardFilter === "upcoming" ? "all" : "upcoming"); setViewMode("schedule"); }}
+            className={`rounded-xl border px-3 sm:px-4 py-2 text-center transition-all cursor-pointer ${
+              statCardFilter === "upcoming"
+                ? "border-blue-400/60 bg-blue-500/20 ring-2 ring-blue-400/40"
+                : "border-blue-500/20 bg-blue-500/10 hover:border-blue-500/40"
+            }`}
+          >
             <p className="text-lg sm:text-2xl font-bold text-blue-400">{stats.upcoming}</p>
             <p className="text-[10px] uppercase tracking-wider text-blue-500/70">{t.upcoming}</p>
-          </div>
-          <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 sm:px-4 py-2 text-center">
+          </button>
+          <button
+            onClick={() => { setStatCardFilter(statCardFilter === "missingScore" ? "all" : "missingScore"); setViewMode("schedule"); }}
+            className={`rounded-xl border px-3 sm:px-4 py-2 text-center transition-all cursor-pointer ${
+              statCardFilter === "missingScore"
+                ? "border-red-400/60 bg-red-500/20 ring-2 ring-red-400/40"
+                : "border-red-500/20 bg-red-500/10 hover:border-red-500/40"
+            }`}
+          >
             <p className="text-lg sm:text-2xl font-bold text-red-400">{stats.missingScore}</p>
             <p className="text-[10px] uppercase tracking-wider text-red-500/70">{t.missingScore}</p>
-          </div>
+          </button>
         </div>
       </div>
 
@@ -2533,6 +2573,27 @@ export default function GamesPage() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Active stat card filter banner */}
+      {statCardFilter !== "all" && (
+        <div className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-2.5 text-sm font-semibold ${
+          statCardFilter === "completed" ? "border-green-500/30 bg-green-500/10 text-green-300"
+          : statCardFilter === "upcoming"  ? "border-blue-500/30 bg-blue-500/10 text-blue-300"
+          : "border-red-500/30 bg-red-500/10 text-red-300"
+        }`}>
+          <span>
+            {statCardFilter === "completed" && (language === "fr" ? `Affichage : ${stats.completed} matchs terminés` : `Showing: ${stats.completed} completed games`)}
+            {statCardFilter === "upcoming"  && (language === "fr" ? `Affichage : ${stats.upcoming} matchs joués sans score` : `Showing: ${stats.upcoming} played games missing score`)}
+            {statCardFilter === "missingScore" && (language === "fr" ? `Affichage : ${stats.missingScore} matchs sans score final` : `Showing: ${stats.missingScore} games missing final score`)}
+          </span>
+          <button
+            onClick={() => setStatCardFilter("all")}
+            className="text-xs font-bold uppercase tracking-wider opacity-70 hover:opacity-100 transition"
+          >
+            ✕ {language === "fr" ? "Effacer" : "Clear"}
+          </button>
         </div>
       )}
 

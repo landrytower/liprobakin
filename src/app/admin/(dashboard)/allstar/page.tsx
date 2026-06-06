@@ -234,11 +234,13 @@ export default function AllStarVotesPage() {
   const [bannerResetSuccess, setBannerResetSuccess] = useState(false);
 
   // Cleanup fake votes
+  type FakeVoteEntry = { id: string; men: number; women: number; phone: string; name: string };
   const [cleanupScanning, setCleanupScanning] = useState(false);
   const [cleanupRunning, setCleanupRunning] = useState(false);
-  const [cleanupPreview, setCleanupPreview] = useState<{ fakeCount: number; total: number } | null>(null);
+  const [cleanupPreview, setCleanupPreview] = useState<{ fakeCount: number; total: number; fake: FakeVoteEntry[] } | null>(null);
   const [cleanupResult, setCleanupResult] = useState<{ deleted: number; remaining: number } | null>(null);
   const [cleanupError, setCleanupError] = useState("");
+  const [showFakeList, setShowFakeList] = useState(false);
 
   // ── Eligibility ──
   type EligTeam = { id: string; name: string; gender: "men" | "women" };
@@ -650,8 +652,9 @@ export default function AllStarVotesPage() {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error(await res.text());
-      const data = await res.json() as { fakeCount: number; total: number };
+      const data = await res.json() as { fakeCount: number; total: number; fake: FakeVoteEntry[] };
       setCleanupPreview(data);
+      setShowFakeList(false);
     } catch (err) {
       setCleanupError(err instanceof Error ? err.message : "Scan failed");
     } finally {
@@ -1561,15 +1564,53 @@ export default function AllStarVotesPage() {
             <div className="space-y-2">
               <div className="flex items-center gap-2 bg-orange-500/10 border border-orange-500/20 rounded-lg px-3 py-2">
                 <svg className="w-4 h-4 text-orange-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
-                <p className="text-xs text-orange-300 font-semibold">
+                <p className="text-xs text-orange-300 font-semibold flex-1">
                   {language === "fr"
                     ? `${cleanupPreview.fakeCount} faux votes détectés sur ${cleanupPreview.total} total.`
                     : `${cleanupPreview.fakeCount} fake votes found out of ${cleanupPreview.total} total.`}
                 </p>
+                {cleanupPreview.fake.length > 0 && (
+                  <button
+                    onClick={() => setShowFakeList((v) => !v)}
+                    className="shrink-0 text-xs text-orange-400 underline hover:text-orange-200 transition-colors"
+                  >
+                    {showFakeList
+                      ? (language === "fr" ? "Masquer" : "Hide list")
+                      : (language === "fr" ? "Voir la liste" : "View list")}
+                  </button>
+                )}
               </div>
+
+              {showFakeList && cleanupPreview.fake.length > 0 && (
+                <div className="rounded-xl border border-orange-500/20 overflow-hidden">
+                  <div className="px-3 py-2 bg-orange-950/40 border-b border-orange-500/15 flex items-center gap-2">
+                    <span className="text-[10px] uppercase tracking-widest font-semibold text-orange-400">
+                      {language === "fr" ? "Faux votes à supprimer" : "Fake votes to delete"}
+                    </span>
+                    <span className="ml-auto text-[10px] text-slate-500">
+                      {language === "fr" ? "Nom · Téléphone · Hommes · Femmes" : "Name · Phone · Men · Women"}
+                    </span>
+                  </div>
+                  <div className="max-h-56 overflow-y-auto divide-y divide-white/5">
+                    {cleanupPreview.fake.map((v) => (
+                      <div key={v.id} className="flex items-center gap-3 px-3 py-2 text-xs hover:bg-white/[0.03]">
+                        <span className="text-slate-300 font-medium truncate flex-1">{v.name || "—"}</span>
+                        <span className="text-slate-500 font-mono shrink-0">{v.phone}</span>
+                        <span className={`shrink-0 px-1.5 py-0.5 rounded font-bold tabular-nums ${v.men < 15 ? "bg-red-500/15 text-red-400" : "bg-emerald-500/10 text-emerald-400"}`}>
+                          ♂ {v.men}
+                        </span>
+                        <span className={`shrink-0 px-1.5 py-0.5 rounded font-bold tabular-nums ${v.women < 15 ? "bg-red-500/15 text-red-400" : "bg-emerald-500/10 text-emerald-400"}`}>
+                          ♀ {v.women}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="flex gap-2">
                 <button
-                  onClick={() => setCleanupPreview(null)}
+                  onClick={() => { setCleanupPreview(null); setShowFakeList(false); }}
                   className="flex-1 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 font-semibold text-xs rounded-xl transition-all"
                 >
                   {language === "fr" ? "Annuler" : "Cancel"}

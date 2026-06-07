@@ -190,6 +190,26 @@ function SortHeader({
   );
 }
 
+function useCountUp(target: number, duration = 700) {
+  const [value, setValue] = useState(0);
+  const rafRef = useRef<number>(0);
+  useEffect(() => {
+    cancelAnimationFrame(rafRef.current);
+    if (target <= 0) { setValue(0); return; }
+    let start: number | null = null;
+    const step = (ts: number) => {
+      if (start === null) start = ts;
+      const progress = Math.min((ts - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setValue(Math.round(target * eased));
+      if (progress < 1) rafRef.current = requestAnimationFrame(step);
+    };
+    rafRef.current = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [target, duration]);
+  return value;
+}
+
 export default function AllStarVotesPage() {
   const { language } = useAdmin();
   const t = tr[language as "en" | "fr"] ?? tr.en;
@@ -199,6 +219,7 @@ export default function AllStarVotesPage() {
   const [tab, setTab] = useState<Category>("menPlayers");
   const [totalVoters, setTotalVoters] = useState(0);
   const [totalVotes, setTotalVotes] = useState(0);
+
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("votes");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -262,14 +283,29 @@ export default function AllStarVotesPage() {
   });
   const [playerMapState, setPlayerMapState] = useState<Record<string, { name: string; teamName: string }>>({});
 
-  // Cleanup fake votes
+  // Cleanup fake votes + clone detection
   type FakeVoteEntry = { id: string; men: number; women: number; phone: string; name: string };
+  type CloneGroup = {
+    count: number;
+    ids: string[];
+    windowMs: number;
+    sampleVotes: { id: string; name: string; phone: string }[];
+    sampleMen: string[];
+    sampleWomen: string[];
+  };
   const [cleanupScanning, setCleanupScanning] = useState(false);
   const [cleanupRunning, setCleanupRunning] = useState(false);
-  const [cleanupPreview, setCleanupPreview] = useState<{ fakeCount: number; total: number; fake: FakeVoteEntry[] } | null>(null);
-  const [cleanupResult, setCleanupResult] = useState<{ deleted: number; remaining: number } | null>(null);
+  const [cleanupPreview, setCleanupPreview] = useState<{
+    fakeCount: number;
+    cloneCount: number;
+    total: number;
+    fake: FakeVoteEntry[];
+    cloneGroups: CloneGroup[];
+  } | null>(null);
+  const [cleanupResult, setCleanupResult] = useState<{ deleted: number; deletedFake: number; deletedClone: number; remaining: number } | null>(null);
   const [cleanupError, setCleanupError] = useState("");
   const [showFakeList, setShowFakeList] = useState(false);
+  const [showCloneList, setShowCloneList] = useState(false);
 
   // ── Eligibility ──
   type EligTeam = { id: string; name: string; gender: "men" | "women" };
@@ -717,9 +753,10 @@ export default function AllStarVotesPage() {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error(await res.text());
-      const data = await res.json() as { fakeCount: number; total: number; fake: FakeVoteEntry[] };
+      const data = await res.json() as { fakeCount: number; cloneCount: number; total: number; fake: FakeVoteEntry[]; cloneGroups: CloneGroup[] };
       setCleanupPreview(data);
       setShowFakeList(false);
+      setShowCloneList(false);
     } catch (err) {
       setCleanupError(err instanceof Error ? err.message : "Scan failed");
     } finally {
@@ -739,7 +776,7 @@ export default function AllStarVotesPage() {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error(await res.text());
-      const data = await res.json() as { deleted: number; remaining: number };
+      const data = await res.json() as { deleted: number; deletedFake: number; deletedClone: number; remaining: number };
       setCleanupResult(data);
       setCleanupPreview(null);
       load(true); // Refresh vote counts
@@ -857,6 +894,12 @@ export default function AllStarVotesPage() {
     setSuspectLastSeen(now);
     localStorage.setItem("allstar_suspects_last_seen", now.toISOString());
   };
+
+  // Count-up animations — fire once data loads, no impact on fetch timing
+  const animVoters = useCountUp(loading ? 0 : totalVoters);
+  const animVotes  = useCountUp(loading ? 0 : totalVotes);
+  const animMen    = useCountUp(loading ? 0 : results.menPlayers.length);
+  const animWomen  = useCountUp(loading ? 0 : results.womenPlayers.length);
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-6">
@@ -1450,20 +1493,20 @@ export default function AllStarVotesPage() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="bg-slate-800/60 border border-white/5 rounded-2xl p-4">
           <p className="text-xs text-slate-400 uppercase tracking-widest">{t.totalVoters}</p>
-          <p className="text-3xl font-black text-orange-400 mt-1">{loading ? "—" : totalVoters.toLocaleString()}</p>
+          <p className="text-3xl font-black text-orange-400 mt-1">{loading ? "—" : animVoters.toLocaleString()}</p>
         </div>
         <div className="bg-slate-800/60 border border-white/5 rounded-2xl p-4">
           <p className="text-xs text-slate-400 uppercase tracking-widest">{t.totalVotes}</p>
-          <p className="text-3xl font-black text-blue-400 mt-1">{loading ? "—" : totalVotes.toLocaleString()}</p>
+          <p className="text-3xl font-black text-blue-400 mt-1">{loading ? "—" : animVotes.toLocaleString()}</p>
         </div>
         <div className="bg-slate-800/60 border border-white/5 rounded-2xl p-4">
           <p className="text-xs text-slate-400 uppercase tracking-widest">{t.menNominees}</p>
-          <p className="text-3xl font-black text-emerald-400 mt-1">{loading ? "—" : results.menPlayers.length}</p>
+          <p className="text-3xl font-black text-emerald-400 mt-1">{loading ? "—" : animMen}</p>
           <p className="text-xs text-slate-500 mt-0.5">{language === "fr" ? "candidats" : "nominees"}</p>
         </div>
         <div className="bg-slate-800/60 border border-white/5 rounded-2xl p-4">
           <p className="text-xs text-slate-400 uppercase tracking-widest">{t.womenNominees}</p>
-          <p className="text-3xl font-black text-purple-400 mt-1">{loading ? "—" : results.womenPlayers.length}</p>
+          <p className="text-3xl font-black text-purple-400 mt-1">{loading ? "—" : animWomen}</p>
           <p className="text-xs text-slate-500 mt-0.5">{language === "fr" ? "candidates" : "nominees"}</p>
         </div>
       </div>
@@ -1864,8 +1907,8 @@ export default function AllStarVotesPage() {
               </p>
               <p className="text-xs text-slate-400 mt-1">
                 {language === "fr"
-                  ? "Supprime tous les votes avec moins de 15 joueurs par catégorie. Les vrais votes (15H + 15F) sont conservés."
-                  : "Deletes every ballot that has fewer than 15 players per category. Real votes (15M + 15W) are kept and recounted."}
+                  ? "Détecte les votes incomplets (< 15 joueurs) ET les votes clonés identiques soumis en rafale. Les vrais votes sont conservés."
+                  : "Detects incomplete ballots (< 15 players) AND clone votes with identical selections submitted in bursts. Real votes are kept."}
               </p>
             </div>
           </div>
@@ -1875,47 +1918,42 @@ export default function AllStarVotesPage() {
           )}
 
           {cleanupResult && (
-            <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">
-              <svg className="w-4 h-4 text-emerald-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-              <p className="text-xs text-emerald-300 font-semibold">
-                {language === "fr"
-                  ? `${cleanupResult.deleted} faux votes supprimés — ${cleanupResult.remaining} votes valides conservés.`
-                  : `${cleanupResult.deleted} fake votes deleted — ${cleanupResult.remaining} real votes kept.`}
-              </p>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">
+                <svg className="w-4 h-4 text-emerald-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                <p className="text-xs text-emerald-300 font-semibold">
+                  {language === "fr"
+                    ? `${cleanupResult.deleted} votes supprimés (${cleanupResult.deletedFake} incomplets + ${cleanupResult.deletedClone} clonés) — ${cleanupResult.remaining} votes valides conservés.`
+                    : `${cleanupResult.deleted} votes deleted (${cleanupResult.deletedFake} incomplete + ${cleanupResult.deletedClone} clones) — ${cleanupResult.remaining} real votes kept.`}
+                </p>
+              </div>
             </div>
           )}
 
           {cleanupPreview && !cleanupResult && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 bg-orange-500/10 border border-orange-500/20 rounded-lg px-3 py-2">
-                <svg className="w-4 h-4 text-orange-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
-                <p className="text-xs text-orange-300 font-semibold flex-1">
-                  {language === "fr"
-                    ? `${cleanupPreview.fakeCount} faux votes détectés sur ${cleanupPreview.total} total.`
-                    : `${cleanupPreview.fakeCount} fake votes found out of ${cleanupPreview.total} total.`}
-                </p>
-                {cleanupPreview.fake.length > 0 && (
-                  <button
-                    onClick={() => setShowFakeList((v) => !v)}
-                    className="shrink-0 text-xs text-orange-400 underline hover:text-orange-200 transition-colors"
-                  >
-                    {showFakeList
-                      ? (language === "fr" ? "Masquer" : "Hide list")
-                      : (language === "fr" ? "Voir la liste" : "View list")}
-                  </button>
-                )}
-              </div>
+            <div className="space-y-3">
 
-              {showFakeList && cleanupPreview.fake.length > 0 && (
-                <div className="rounded-xl border border-orange-500/20 overflow-hidden">
-                  <div className="px-3 py-2 bg-orange-950/40 border-b border-orange-500/15 flex items-center gap-2">
-                    <span className="text-[10px] uppercase tracking-widest font-semibold text-orange-400">
-                      {language === "fr" ? "Faux votes à supprimer" : "Fake votes to delete"}
-                    </span>
-                    <span className="ml-auto text-[10px] text-slate-500">
-                      {language === "fr" ? "Nom · Téléphone · Hommes · Femmes" : "Name · Phone · Men · Women"}
-                    </span>
-                  </div>
+              {/* ── Fake votes (incomplete) row ── */}
+              <div className="rounded-xl border border-orange-500/20 overflow-hidden">
+                <div className="flex items-center gap-2 bg-orange-950/40 border-b border-orange-500/15 px-3 py-2">
+                  <svg className="w-4 h-4 text-orange-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
+                  <p className="text-xs text-orange-300 font-semibold flex-1">
+                    {language === "fr"
+                      ? `${cleanupPreview.fakeCount} votes incomplets (< 15 joueurs)`
+                      : `${cleanupPreview.fakeCount} incomplete ballots (< 15 players)`}
+                  </p>
+                  {cleanupPreview.fake.length > 0 && (
+                    <button
+                      onClick={() => setShowFakeList((v) => !v)}
+                      className="shrink-0 text-xs text-orange-400 underline hover:text-orange-200 transition-colors"
+                    >
+                      {showFakeList
+                        ? (language === "fr" ? "Masquer" : "Hide")
+                        : (language === "fr" ? "Voir" : "View")}
+                    </button>
+                  )}
+                </div>
+                {showFakeList && cleanupPreview.fake.length > 0 && (
                   <div className="max-h-56 overflow-y-auto divide-y divide-white/5">
                     {cleanupPreview.fake.map((v) => (
                       <div key={v.id} className="flex items-center gap-3 px-3 py-2 text-xs hover:bg-white/[0.03]">
@@ -1930,29 +1968,123 @@ export default function AllStarVotesPage() {
                       </div>
                     ))}
                   </div>
+                )}
+                {cleanupPreview.fakeCount === 0 && (
+                  <p className="text-xs text-slate-500 px-3 py-2">{language === "fr" ? "Aucun vote incomplet." : "None found."}</p>
+                )}
+              </div>
+
+              {/* ── Clone votes (identical burst) row ── */}
+              <div className="rounded-xl border border-red-500/25 overflow-hidden">
+                <div className="flex items-center gap-2 bg-red-950/40 border-b border-red-500/15 px-3 py-2">
+                  <svg className="w-4 h-4 text-red-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>
+                  <p className="text-xs text-red-300 font-semibold flex-1">
+                    {language === "fr"
+                      ? `${cleanupPreview.cloneCount} votes clonés en ${cleanupPreview.cloneGroups.length} groupe${cleanupPreview.cloneGroups.length !== 1 ? "s" : ""}`
+                      : `${cleanupPreview.cloneCount} clone votes in ${cleanupPreview.cloneGroups.length} group${cleanupPreview.cloneGroups.length !== 1 ? "s" : ""}`}
+                  </p>
+                  {cleanupPreview.cloneGroups.length > 0 && (
+                    <button
+                      onClick={() => setShowCloneList((v) => !v)}
+                      className="shrink-0 text-xs text-red-400 underline hover:text-red-200 transition-colors"
+                    >
+                      {showCloneList
+                        ? (language === "fr" ? "Masquer" : "Hide")
+                        : (language === "fr" ? "Voir" : "View")}
+                    </button>
+                  )}
+                </div>
+
+                {showCloneList && cleanupPreview.cloneGroups.length > 0 && (
+                  <div className="max-h-72 overflow-y-auto divide-y divide-white/5">
+                    {cleanupPreview.cloneGroups.map((g, gi) => (
+                      <div key={gi} className="px-3 py-3 space-y-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-black text-red-400">
+                            {language === "fr" ? `Groupe ${gi + 1}` : `Group ${gi + 1}`}
+                          </span>
+                          <span className="text-xs bg-red-500/15 border border-red-500/25 text-red-300 font-bold px-2 py-0.5 rounded-full">
+                            {g.count} {language === "fr" ? "votes identiques" : "identical votes"}
+                          </span>
+                          <span className="text-xs text-slate-500">
+                            {language === "fr" ? "en" : "in"} {Math.round(g.windowMs / 1000)}s
+                          </span>
+                        </div>
+                        {/* Sample phones */}
+                        <div className="flex flex-wrap gap-1">
+                          {g.sampleVotes.map((sv) => (
+                            <span key={sv.id} className="text-[10px] font-mono px-1.5 py-0.5 bg-slate-800 text-slate-400 rounded border border-white/5">
+                              {sv.phone}
+                            </span>
+                          ))}
+                          {g.count > g.sampleVotes.length && (
+                            <span className="text-[10px] text-slate-600 px-1.5 py-0.5">+{g.count - g.sampleVotes.length} {language === "fr" ? "autres" : "more"}</span>
+                          )}
+                        </div>
+                        {/* Sample players they all voted for */}
+                        {g.sampleMen.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            <span className="text-[10px] text-blue-400 font-semibold shrink-0">♂</span>
+                            {g.sampleMen.map((pid) => (
+                              <span key={pid} className="text-[10px] px-1.5 py-0.5 bg-blue-500/10 text-blue-300 rounded border border-blue-500/15">
+                                {playerMapState[pid]?.name ?? pid}
+                              </span>
+                            ))}
+                            {g.sampleMen.length < 15 && <span className="text-[10px] text-slate-600">…</span>}
+                          </div>
+                        )}
+                        {g.sampleWomen.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            <span className="text-[10px] text-purple-400 font-semibold shrink-0">♀</span>
+                            {g.sampleWomen.map((pid) => (
+                              <span key={pid} className="text-[10px] px-1.5 py-0.5 bg-purple-500/10 text-purple-300 rounded border border-purple-500/15">
+                                {playerMapState[pid]?.name ?? pid}
+                              </span>
+                            ))}
+                            {g.sampleWomen.length < 15 && <span className="text-[10px] text-slate-600">…</span>}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {cleanupPreview.cloneCount === 0 && (
+                  <p className="text-xs text-slate-500 px-3 py-2">{language === "fr" ? "Aucun vote cloné détecté." : "No clone votes detected."}</p>
+                )}
+              </div>
+
+              {/* ── Summary + action buttons ── */}
+              {(cleanupPreview.fakeCount + cleanupPreview.cloneCount === 0) ? (
+                <p className="text-center text-xs text-emerald-400 py-2">
+                  {language === "fr" ? "Aucun vote suspect détecté. La base est propre." : "No suspicious votes found. Database is clean."}
+                </p>
+              ) : (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { setCleanupPreview(null); setShowFakeList(false); setShowCloneList(false); }}
+                    className="flex-1 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 font-semibold text-xs rounded-xl transition-all"
+                  >
+                    {language === "fr" ? "Annuler" : "Cancel"}
+                  </button>
+                  <button
+                    onClick={deleteFakeVotes}
+                    disabled={cleanupRunning}
+                    className="flex-1 py-2 bg-red-700/30 hover:bg-red-700/50 border border-red-500/40 text-red-300 font-bold text-xs rounded-xl transition-all disabled:opacity-40"
+                  >
+                    {cleanupRunning ? (
+                      <span className="flex items-center justify-center gap-1.5">
+                        <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                        {language === "fr" ? "Suppression…" : "Deleting…"}
+                      </span>
+                    ) : (
+                      language === "fr"
+                        ? `Supprimer ${cleanupPreview.fakeCount + cleanupPreview.cloneCount} votes`
+                        : `Delete ${cleanupPreview.fakeCount + cleanupPreview.cloneCount} votes`
+                    )}
+                  </button>
                 </div>
               )}
-
-              <div className="flex gap-2">
-                <button
-                  onClick={() => { setCleanupPreview(null); setShowFakeList(false); }}
-                  className="flex-1 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 font-semibold text-xs rounded-xl transition-all"
-                >
-                  {language === "fr" ? "Annuler" : "Cancel"}
-                </button>
-                <button
-                  onClick={deleteFakeVotes}
-                  disabled={cleanupRunning}
-                  className="flex-1 py-2 bg-orange-600/30 hover:bg-orange-600/50 border border-orange-500/40 text-orange-300 font-bold text-xs rounded-xl transition-all disabled:opacity-40"
-                >
-                  {cleanupRunning ? (
-                    <span className="flex items-center justify-center gap-1.5">
-                      <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                      {language === "fr" ? "Suppression…" : "Deleting…"}
-                    </span>
-                  ) : (language === "fr" ? `Confirmer (supprimer ${cleanupPreview.fakeCount})` : `Confirm (delete ${cleanupPreview.fakeCount})`)}
-                </button>
-              </div>
             </div>
           )}
 

@@ -390,7 +390,21 @@ export default function VotePage() {
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        setModalError(data.error || (language === "fr" ? "Erreur, réessayez." : "Something went wrong. Please try again."));
+        // For bot-blocked errors the response carries a human-readable `message`
+        // Real users on the site will only ever hit session-expiry, never the bot gates
+        const friendlyErrors: Record<string, string> = {
+          TOKEN_MISSING:   language === "fr" ? "Session expirée. Rechargez la page." : "Session expired. Please refresh.",
+          TOKEN_INVALID:   language === "fr" ? "Session invalide. Rechargez la page." : "Invalid session. Please refresh.",
+          TOKEN_TOO_YOUNG: language === "fr" ? "Soumission trop rapide. Attendez un instant." : "Submitted too fast. Wait a moment.",
+          TOKEN_REPLAY:    language === "fr" ? "Cette session a déjà été utilisée. Rechargez la page." : "Session already used. Please refresh.",
+          RATE_LIMITED:    language === "fr" ? "Trop de tentatives. Attendez 30 secondes." : "Too many attempts. Wait 30 seconds.",
+          PLAYER_COUNT:    language === "fr" ? "Sélectionnez exactement 15H + 15F." : "Select exactly 15M + 15W players.",
+        };
+        setModalError(
+          friendlyErrors[data.error] ||
+          data.error ||
+          (language === "fr" ? "Erreur, réessayez." : "Something went wrong. Please try again.")
+        );
         return;
       }
 

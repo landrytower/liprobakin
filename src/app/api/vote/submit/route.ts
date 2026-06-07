@@ -8,6 +8,23 @@ export const runtime = "nodejs";
 const MAX_PLAYERS = 15;
 const RATE_LIMIT_MS = 30_000;
 
+const BOT_MESSAGE =
+  "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
+  "🚫  VOTE BLOQUÉ / VOTE BLOCKED\n" +
+  "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" +
+  "Le vote automatisé n'est pas autorisé.\n" +
+  "Automated voting is not permitted.\n\n" +
+  "Pour voter officiellement, rendez-vous sur :\n" +
+  "To cast your official vote, visit:\n\n" +
+  "  👉  https://liprobakin.com/vote\n\n" +
+  "Ouvrez la page dans votre navigateur, choisissez\n" +
+  "vos 15 joueurs hommes et 15 joueuses, puis\n" +
+  "soumettez le formulaire normalement.\n\n" +
+  "Open the page in your browser, pick your 15 men\n" +
+  "and 15 women players, then submit the form.\n\n" +
+  "Votre IP a été enregistrée. / Your IP has been logged.\n" +
+  "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
+
 function logSuspect(
   ip: string,
   req: NextRequest,
@@ -61,7 +78,7 @@ export async function POST(req: NextRequest) {
         womenPlayers: safeWomen,
       });
       return NextResponse.json(
-        { error: "Session token missing. Please refresh the page and try again." },
+        { error: "TOKEN_MISSING", message: BOT_MESSAGE },
         { status: 400 }
       );
     }
@@ -76,7 +93,7 @@ export async function POST(req: NextRequest) {
         womenPlayers: safeWomen,
       });
       return NextResponse.json(
-        { error: "Invalid session token. Please refresh the page." },
+        { error: "TOKEN_INVALID", message: BOT_MESSAGE },
         { status: 400 }
       );
     }
@@ -93,7 +110,7 @@ export async function POST(req: NextRequest) {
         womenPlayers: safeWomen,
       });
       return NextResponse.json(
-        { error: "Please take more time to review your selections before submitting." },
+        { error: "TOKEN_TOO_YOUNG", message: BOT_MESSAGE },
         { status: 400 }
       );
     }
@@ -130,7 +147,7 @@ export async function POST(req: NextRequest) {
         womenPlayers: safeWomen,
       });
       return NextResponse.json(
-        { error: `Must select exactly ${MAX_PLAYERS} men and ${MAX_PLAYERS} women` },
+        { error: "PLAYER_COUNT", message: BOT_MESSAGE },
         { status: 400 }
       );
     }
@@ -161,7 +178,7 @@ export async function POST(req: NextRequest) {
           womenPlayers: safeWomen,
         });
         return NextResponse.json(
-          { error: "Too many requests. Please wait a moment before trying again." },
+          { error: "RATE_LIMITED", message: BOT_MESSAGE },
           { status: 429 }
         );
       }
@@ -176,7 +193,7 @@ export async function POST(req: NextRequest) {
         womenPlayers: safeWomen,
       });
       return NextResponse.json(
-        { error: "This session has already been used. Please refresh the page to vote again." },
+        { error: "TOKEN_REPLAY", message: BOT_MESSAGE },
         { status: 400 }
       );
     }

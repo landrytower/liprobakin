@@ -1906,7 +1906,15 @@ export default function Home() {
   }>(() => {
     try {
       const cached = typeof window !== "undefined" && localStorage.getItem("allStarLeaders");
-      if (cached) return JSON.parse(cached);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        // Discard old cache that only held 10 entries — fetch fresh
+        if ((parsed.men?.length ?? 0) <= 10 && (parsed.women?.length ?? 0) <= 10) {
+          localStorage.removeItem("allStarLeaders");
+          return { men: [], women: [] };
+        }
+        return parsed;
+      }
     } catch {}
     return { men: [], women: [] };
   });
@@ -3132,8 +3140,8 @@ export default function Home() {
         if (snap.exists()) {
           const data = snap.data();
           const leaders = {
-            men:   (data.men   || []).slice(0, 10),
-            women: (data.women || []).slice(0, 10),
+            men:   (data.men   || []) as typeof allStarLeaders.men,
+            women: (data.women || []) as typeof allStarLeaders.women,
           };
           setAllStarLeaders(leaders);
           try { localStorage.setItem("allStarLeaders", JSON.stringify(leaders)); } catch {}

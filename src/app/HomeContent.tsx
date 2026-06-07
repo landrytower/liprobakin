@@ -6522,28 +6522,20 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Leaders Grid */}
+            {/* Top 10 — photo cards */}
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
-              {allStarLeaders[allStarLeadersGender].map((leader, idx) => (
+              {allStarLeaders[allStarLeadersGender].slice(0, 10).map((leader, idx) => (
                 <div
                   key={leader.id}
                   className="relative rounded-xl sm:rounded-2xl border border-white/10 hover:border-orange-500/30 transition-all group overflow-hidden bg-slate-900 bg-cover bg-center bg-no-repeat"
                   style={leader.headshot ? { backgroundImage: `url(${leader.headshot})` } : undefined}
                 >
-                  {/* Dark overlay so text stays readable over the photo */}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-black/20" />
-
-                  {/* All content sits on top of the overlay */}
                   <div className="relative p-3 sm:p-4">
-                    {/* Rank Badge */}
                     <div className="absolute top-1.5 sm:top-2 right-1.5 sm:right-2 flex items-center justify-center w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-orange-500/20 border border-orange-500/30">
                       <span className="text-[10px] sm:text-xs font-bold text-orange-300">#{idx + 1}</span>
                     </div>
-
-                    {/* Spacer — push info to the bottom */}
                     <div className="h-16 sm:h-20" />
-
-                    {/* Player Info */}
                     <div className="text-center space-y-0.5 sm:space-y-1">
                       <h3 className="text-xs sm:text-sm font-bold text-white truncate px-1">{leader.name}</h3>
                       <p className="text-[10px] sm:text-xs text-slate-300 truncate px-1">{leader.teamName}</p>
@@ -6555,8 +6547,6 @@ export default function Home() {
                       </div>
                     </div>
                   </div>
-
-                  {/* Fallback when no photo */}
                   {!leader.headshot && (
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                       <span className="text-4xl opacity-20">🏀</span>
@@ -6565,6 +6555,38 @@ export default function Home() {
                 </div>
               ))}
             </div>
+
+            {/* Positions 11–35 — compact list */}
+            {allStarLeaders[allStarLeadersGender].length > 10 && (
+              <div className="rounded-xl border border-white/8 overflow-hidden divide-y divide-white/5">
+                {allStarLeaders[allStarLeadersGender].slice(10).map((leader, idx) => {
+                  const rank = idx + 11;
+                  const topVotes = allStarLeaders[allStarLeadersGender][0]?.votes ?? 1;
+                  const pct = Math.round((leader.votes / topVotes) * 100);
+                  return (
+                    <div key={leader.id} className="flex items-center gap-3 px-3 sm:px-4 py-2 bg-slate-900/60 hover:bg-slate-800/60 transition-colors">
+                      <span className="text-slate-600 font-mono text-xs w-6 text-right shrink-0">{rank}</span>
+                      {leader.headshot ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={leader.headshot} alt="" loading="lazy" decoding="async" className="w-7 h-7 rounded-full object-cover object-top shrink-0 bg-slate-800" />
+                      ) : (
+                        <span className="w-7 h-7 rounded-full bg-slate-800 border border-white/10 flex items-center justify-center text-[10px] font-black text-slate-500 shrink-0">
+                          {leader.name.charAt(0).toUpperCase()}
+                        </span>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs sm:text-sm font-semibold text-slate-200 truncate">{leader.name}</p>
+                        <p className="text-[10px] text-slate-500 truncate">{leader.teamName}</p>
+                      </div>
+                      <div className="w-16 sm:w-24 h-1 bg-slate-800 rounded-full overflow-hidden shrink-0">
+                        <div className="h-full bg-gradient-to-r from-orange-500 to-amber-400 rounded-full" style={{ width: `${pct}%` }} />
+                      </div>
+                      <span className="text-xs font-black text-slate-400 w-8 text-right shrink-0 tabular-nums">{leader.votes}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             {/* View All Button */}
             <div className="text-center pt-2">

@@ -173,7 +173,7 @@ export default function VotePage() {
   const [hasVoted, setHasVoted] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
   const [switchMsg, setSwitchMsg] = useState("");
-  type SnapLeader = { id: string; name: string; teamName: string; votes: number };
+  type SnapLeader = { id: string; name: string; teamName: string; votes: number; headshot?: string | null };
   const [leadersSnap, setLeadersSnap] = useState<{ men: SnapLeader[]; women: SnapLeader[] } | null>(null);
   // null = not yet loaded (suppress tag to avoid a flash of "all non-eligible")
   const [eligibleIds, setEligibleIds] = useState<Set<string> | null>(null);
@@ -443,11 +443,11 @@ export default function VotePage() {
 
   const snapKey = gender === "men" ? "men" : "women";
   const freshLeaders = !loading && players.length > 0
-    ? players.map((p) => ({ ...p, voteCount: playerVotes[p.id] || 0 })).filter((p) => p.voteCount > 0).sort((a, b) => b.voteCount - a.voteCount).slice(0, 10)
+    ? players.map((p) => ({ ...p, voteCount: playerVotes[p.id] || 0 })).filter((p) => p.voteCount > 0).sort((a, b) => b.voteCount - a.voteCount).slice(0, 35)
     : null;
   const snapLeaders = (leadersSnap?.[snapKey] ?? []).map((s) => ({
     id: s.id, name: s.name, teamName: s.teamName,
-    teamId: "", headshot: undefined as string | undefined, position: undefined as string | undefined,
+    teamId: "", headshot: s.headshot ?? undefined, position: undefined as string | undefined,
     voteCount: s.votes,
   }));
   // Use fresh (from allStarVoteResults) only when it actually has results;
@@ -875,7 +875,7 @@ export default function VotePage() {
                     {restLeaders.map((player, idx) => {
                       const pct = leaderTopVotes > 0 ? Math.round((player.voteCount / leaderTopVotes) * 100) : 0;
                       return (
-                        <div key={player.id} className="flex items-center gap-3 bg-slate-800/40 border border-white/5 rounded-xl px-4 py-2.5 animate-mini-row-in" style={{ animationDelay: `${320 + idx * 45}ms`, opacity: Math.max(0.35, 0.82 - idx * 0.08) }}>
+                        <div key={player.id} className="flex items-center gap-3 bg-slate-800/40 border border-white/5 rounded-xl px-4 py-2.5 animate-mini-row-in" style={{ animationDelay: `${Math.min(320 + idx * 45, 1200)}ms` }}>
                           <span className="text-slate-500 font-mono text-xs w-5 text-center shrink-0">{idx + 4}</span>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-semibold text-slate-200 truncate">{player.name}</p>

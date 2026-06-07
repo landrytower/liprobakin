@@ -455,8 +455,8 @@ export default function AllStarVotesPage() {
     // Write a denormalised leaders snapshot so the vote page can display instantly
     try {
       await setDoc(doc(firebaseDB, "allStarLeaders", "snapshot"), {
-        men:   computedMen.slice(0, 15).map(({ id, name, teamName, votes, headshot }) => ({ id, name, teamName, votes, headshot: headshot ?? null })),
-        women: computedWomen.slice(0, 15).map(({ id, name, teamName, votes, headshot }) => ({ id, name, teamName, votes, headshot: headshot ?? null })),
+        men:   computedMen.slice(0, 35).map(({ id, name, teamName, votes, headshot }) => ({ id, name, teamName, votes, headshot: headshot ?? null })),
+        women: computedWomen.slice(0, 35).map(({ id, name, teamName, votes, headshot }) => ({ id, name, teamName, votes, headshot: headshot ?? null })),
         lastUpdated: new Date(),
       });
     } catch { /* non-critical */ }
@@ -1783,11 +1783,29 @@ export default function AllStarVotesPage() {
                           {rank}
                         </span>
                       </td>
-                      {/* Name */}
+                      {/* Name + headshot */}
                       <td className="px-3 py-3.5">
-                        <span className={`font-semibold ${isTop3 ? "text-white" : "text-slate-300"}`}>
-                          {entry.name}
-                        </span>
+                        <div className="flex items-center gap-2.5">
+                          {entry.headshot ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={entry.headshot}
+                              alt=""
+                              loading="lazy"
+                              decoding="async"
+                              width={32}
+                              height={32}
+                              className="w-8 h-8 rounded-full object-cover object-top shrink-0 bg-slate-700"
+                            />
+                          ) : (
+                            <span className="w-8 h-8 rounded-full bg-slate-700 border border-white/10 flex items-center justify-center text-xs font-black text-slate-400 shrink-0 select-none">
+                              {entry.name.charAt(0).toUpperCase()}
+                            </span>
+                          )}
+                          <span className={`font-semibold ${isTop3 ? "text-white" : "text-slate-300"}`}>
+                            {entry.name}
+                          </span>
+                        </div>
                       </td>
                       {/* Team */}
                       <td className="px-3 py-3.5 text-slate-500 text-xs hidden sm:table-cell">

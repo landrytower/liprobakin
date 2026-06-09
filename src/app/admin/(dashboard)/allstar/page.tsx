@@ -307,6 +307,28 @@ export default function AllStarVotesPage() {
   const [showFakeList, setShowFakeList] = useState(false);
   const [showCloneList, setShowCloneList] = useState(false);
 
+  // ── Player investigation ──
+  type InvestigationResult = {
+    players: { id: string; name: string; teamName: string }[];
+    totalVotes: number;
+    firstVote: string | null;
+    lastVote: string | null;
+    maxBurstPerMinute: number;
+    maxBurstWindow: { from: string; to: string; seconds: number } | null;
+    phoneSequentialPct: number;
+    roles: Record<string, number>;
+    cloneRatio: number;
+    topCloneCount: number;
+    votesByHour: Record<string, number>;
+    suspectAttempts: number;
+    suspectDetails: { ip: string; reason: string; name: string; phone: string; detectedAt: number }[];
+    recentVotes: { phone: string; name: string; role: string; submittedAt: string | null }[];
+  };
+  const [investQuery, setInvestQuery] = useState("");
+  const [investLoading, setInvestLoading] = useState(false);
+  const [investResult, setInvestResult] = useState<InvestigationResult | null>(null);
+  const [investError, setInvestError] = useState("");
+
   // ── Eligibility ──
   type EligTeam = { id: string; name: string; gender: "men" | "women" };
   type EligPlayer = { id: string; name: string };
@@ -888,6 +910,28 @@ export default function AllStarVotesPage() {
   const newSuspectCount = suspectAttempts.filter(
     (a) => a.detectedAt && a.detectedAt > suspectLastSeen
   ).length;
+
+  const runInvestigation = async () => {
+    if (!investQuery.trim()) return;
+    setInvestLoading(true);
+    setInvestError("");
+    setInvestResult(null);
+    try {
+      const { firebaseAuth } = await import("@/lib/firebase");
+      const token = await firebaseAuth.currentUser?.getIdToken(false);
+      if (!token) throw new Error("Not authenticated");
+      const res = await fetch(`/api/admin/investigate-player?name=${encodeURIComponent(investQuery.trim())}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Investigation failed");
+      setInvestResult(data as InvestigationResult);
+    } catch (err) {
+      setInvestError(err instanceof Error ? err.message : "Failed");
+    } finally {
+      setInvestLoading(false);
+    }
+  };
 
   const markSuspectsAsSeen = () => {
     const now = new Date();
@@ -1846,6 +1890,194 @@ export default function AllStarVotesPage() {
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+      </div>
+
+      {/* ── Player Investigation ── */}
+      <div className="rounded-2xl border border-indigo-500/20 bg-indigo-950/20 p-5 space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-indigo-500/15 border border-indigo-500/25 flex items-center justify-center text-xl shrink-0">🔍</div>
+          <div>
+            <p className="text-sm font-bold text-indigo-300 uppercase tracking-wide">
+              {language === "fr" ? "Enquête sur un joueur" : "Player Investigation"}
+            </p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {language === "fr"
+                ? "Détecte les votes suspects pour un joueur spécifique"
+                : "Detect suspicious vote patterns for any player"}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={investQuery}
+            onChange={(e) => setInvestQuery(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && runInvestigation()}
+            placeholder={language === "fr" ? "Nom du joueur (ex: David Mubenga)" : "Player name (e.g. David Mubenga)"}
+            className="flex-1 px-4 py-2.5 bg-slate-900 border border-white/10 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
+          />
+          <button
+            onClick={runInvestigation}
+            disabled={investLoading || !investQuery.trim()}
+            className="px-5 py-2.5 bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/40 text-indigo-300 font-bold text-sm rounded-xl transition-all disabled:opacity-40"
+          >
+            {investLoading ? (
+              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+            ) : (language === "fr" ? "Analyser" : "Analyze")}
+          </button>
+        </div>
+
+        {investError && (
+          <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{investError}</p>
+        )}
+
+        {investResult && (
+          <div className="space-y-4">
+            {/* Player match */}
+            <div className="flex flex-wrap gap-2">
+              {investResult.players.map((p) => (
+                <span key={p.id} className="px-3 py-1 bg-indigo-500/15 border border-indigo-500/25 rounded-full text-xs text-indigo-300 font-semibold">
+                  {p.name} · {p.teamName}
+                </span>
+              ))}
+            </div>
+
+            {/* Verdict banner */}
+            {(() => {
+              const score =
+                (investResult.maxBurstPerMinute >= 10 ? 3 : investResult.maxBurstPerMinute >= 5 ? 2 : investResult.maxBurstPerMinute >= 3 ? 1 : 0) +
+                (investResult.phoneSequentialPct >= 60 ? 3 : investResult.phoneSequentialPct >= 30 ? 2 : investResult.phoneSequentialPct >= 15 ? 1 : 0) +
+                (investResult.cloneRatio >= 60 ? 3 : investResult.cloneRatio >= 30 ? 2 : investResult.cloneRatio >= 15 ? 1 : 0) +
+                (investResult.suspectAttempts >= 10 ? 2 : investResult.suspectAttempts >= 3 ? 1 : 0) +
+                ((investResult.roles["fan"] ?? 0) / Math.max(investResult.totalVotes, 1) >= 0.95 ? 1 : 0);
+              const verdict =
+                score >= 7 ? { label: language === "fr" ? "TRICHE CONFIRMÉE" : "CONFIRMED CHEATING",   color: "bg-red-500/20 border-red-500/40 text-red-300",    icon: "🚨" } :
+                score >= 4 ? { label: language === "fr" ? "TRÈS SUSPECT"     : "HIGHLY SUSPICIOUS",    color: "bg-orange-500/20 border-orange-500/40 text-orange-300", icon: "⚠️" } :
+                score >= 2 ? { label: language === "fr" ? "SUSPECT"          : "SUSPICIOUS",           color: "bg-yellow-500/20 border-yellow-500/40 text-yellow-300", icon: "🔶" } :
+                             { label: language === "fr" ? "SEMBLE LÉGITIME"  : "APPEARS LEGITIMATE",   color: "bg-emerald-500/20 border-emerald-500/40 text-emerald-300", icon: "✅" };
+              return (
+                <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${verdict.color}`}>
+                  <span className="text-2xl shrink-0">{verdict.icon}</span>
+                  <div>
+                    <p className="text-sm font-black tracking-wider">{verdict.label}</p>
+                    <p className="text-xs opacity-75 mt-0.5">
+                      {language === "fr" ? `Score de suspicion : ${score}/12` : `Suspicion score: ${score}/12`}
+                    </p>
+                  </div>
+                  <span className="ml-auto text-2xl font-black opacity-60">{investResult.totalVotes}</span>
+                  <span className="text-xs opacity-60">{language === "fr" ? "votes" : "votes"}</span>
+                </div>
+              );
+            })()}
+
+            {/* Stats grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {[
+                {
+                  label: language === "fr" ? "Rafale max / min" : "Max burst / min",
+                  value: String(investResult.maxBurstPerMinute),
+                  sub: investResult.maxBurstWindow
+                    ? `${investResult.maxBurstWindow.seconds}s window`
+                    : "—",
+                  bad: investResult.maxBurstPerMinute >= 5,
+                },
+                {
+                  label: language === "fr" ? "N° séquentiels" : "Sequential phones",
+                  value: `${investResult.phoneSequentialPct}%`,
+                  sub: language === "fr" ? "de votes consécutifs" : "of votes in a row",
+                  bad: investResult.phoneSequentialPct >= 30,
+                },
+                {
+                  label: language === "fr" ? "Votes clonés" : "Clone votes",
+                  value: `${investResult.cloneRatio}%`,
+                  sub: `${investResult.topCloneCount} ${language === "fr" ? "identiques" : "identical"}`,
+                  bad: investResult.cloneRatio >= 30,
+                },
+                {
+                  label: language === "fr" ? "Tentatives bloquées" : "Blocked attempts",
+                  value: String(investResult.suspectAttempts),
+                  sub: language === "fr" ? "dans le journal" : "in suspect log",
+                  bad: investResult.suspectAttempts >= 5,
+                },
+              ].map((stat) => (
+                <div key={stat.label} className={`rounded-xl border p-3 ${stat.bad ? "bg-red-500/10 border-red-500/25" : "bg-slate-800/50 border-white/5"}`}>
+                  <p className="text-[10px] text-slate-500 uppercase tracking-wider">{stat.label}</p>
+                  <p className={`text-xl font-black mt-0.5 ${stat.bad ? "text-red-400" : "text-white"}`}>{stat.value}</p>
+                  <p className="text-[10px] text-slate-600 mt-0.5">{stat.sub}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Votes by hour */}
+            {Object.keys(investResult.votesByHour).length > 0 && (
+              <div className="rounded-xl border border-white/5 bg-slate-800/30 p-3 space-y-2">
+                <p className="text-[10px] uppercase tracking-widest font-semibold text-slate-500">
+                  {language === "fr" ? "Votes par heure" : "Votes by hour"}
+                </p>
+                <div className="space-y-1">
+                  {Object.entries(investResult.votesByHour).sort(([a], [b]) => a.localeCompare(b)).map(([hour, count]) => {
+                    const maxHour = Math.max(...Object.values(investResult.votesByHour));
+                    const pct = Math.round((count / maxHour) * 100);
+                    return (
+                      <div key={hour} className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono text-slate-500 w-14 shrink-0">{hour.slice(5, 16)}</span>
+                        <div className="flex-1 h-3 bg-slate-700/50 rounded-full overflow-hidden">
+                          <div className={`h-full rounded-full ${count >= 20 ? "bg-red-500" : count >= 10 ? "bg-orange-500" : "bg-indigo-500"}`} style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className={`text-xs font-black w-8 text-right tabular-nums ${count >= 20 ? "text-red-400" : count >= 10 ? "text-orange-400" : "text-slate-400"}`}>{count}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Recent votes sample */}
+            <div className="rounded-xl border border-white/5 overflow-hidden">
+              <div className="px-3 py-2 bg-slate-800/60 border-b border-white/5">
+                <p className="text-[10px] uppercase tracking-widest font-semibold text-slate-500">
+                  {language === "fr" ? "30 derniers votes pour ce joueur" : "Last 30 votes for this player"}
+                </p>
+              </div>
+              <div className="max-h-56 overflow-y-auto divide-y divide-white/5">
+                {investResult.recentVotes.slice().reverse().map((v, i) => (
+                  <div key={i} className="flex items-center gap-3 px-3 py-1.5 text-xs hover:bg-white/[0.02]">
+                    <span className="font-mono text-slate-400 shrink-0">{v.phone}</span>
+                    <span className="text-slate-300 truncate flex-1">{v.name}</span>
+                    <span className="text-slate-600 shrink-0">{v.role}</span>
+                    <span className="text-slate-600 shrink-0 whitespace-nowrap">
+                      {v.submittedAt ? new Date(v.submittedAt).toLocaleString(language === "fr" ? "fr-FR" : "en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "—"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Suspect log entries */}
+            {investResult.suspectDetails.length > 0 && (
+              <div className="rounded-xl border border-red-500/20 overflow-hidden">
+                <div className="px-3 py-2 bg-red-950/40 border-b border-red-500/15">
+                  <p className="text-[10px] uppercase tracking-widest font-semibold text-red-400">
+                    {language === "fr" ? "Tentatives bloquées liées" : "Related blocked attempts"}
+                  </p>
+                </div>
+                <div className="max-h-40 overflow-y-auto divide-y divide-white/5">
+                  {investResult.suspectDetails.map((s, i) => (
+                    <div key={i} className="flex items-center gap-3 px-3 py-1.5 text-xs">
+                      <span className="font-mono text-red-300 shrink-0">{s.ip}</span>
+                      <span className="text-orange-400 font-bold shrink-0">{s.reason}</span>
+                      <span className="text-slate-400 truncate flex-1">{s.name} {s.phone}</span>
+                      <span className="text-slate-600 shrink-0 whitespace-nowrap">
+                        {s.detectedAt ? new Date(s.detectedAt).toLocaleString(language === "fr" ? "fr-FR" : "en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

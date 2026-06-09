@@ -89,6 +89,8 @@ export async function GET(req: NextRequest) {
     const fake: Array<{ id: string; men: number; women: number; phone: string; name: string }> = [];
     const allDocs: VoteDoc[] = [];
 
+    const dupPlayers: Array<{ id: string; menDups: number; womenDups: number; phone: string; name: string }> = [];
+
     for (const d of votesSnap.docs) {
       const data = d.data();
       const men   = (data.menPlayers   || []) as string[];
@@ -101,8 +103,17 @@ export async function GET(req: NextRequest) {
 
       if (men.length !== 15 || women.length !== 15) {
         fake.push({ id: d.id, men: men.length, women: women.length, phone, name });
+      } else if (new Set(men).size !== 15 || new Set(women).size !== 15) {
+        // Correct count but duplicate player IDs — bot exploit
+        dupPlayers.push({
+          id: d.id,
+          menDups:   15 - new Set(men).size,
+          womenDups: 15 - new Set(women).size,
+          phone,
+          name,
+        });
       } else {
-        // Only valid-structure votes can be clones
+        // Only structurally valid votes can be clones
         allDocs.push({ id: d.id, phone, name, men, women, ts });
       }
     }
@@ -110,10 +121,12 @@ export async function GET(req: NextRequest) {
     const { cloneIds, groups } = detectClones(allDocs);
 
     return NextResponse.json({
-      fakeCount:   fake.length,
-      cloneCount:  cloneIds.size,
-      total:       votesSnap.size,
+      fakeCount:      fake.length,
+      dupPlayerCount: dupPlayers.length,
+      cloneCount:     cloneIds.size,
+      total:          votesSnap.size,
       fake,
+      dupPlayers,
       cloneGroups: groups,
     });
   } catch (err) {
@@ -134,8 +147,9 @@ export async function POST(req: NextRequest) {
     const db = getAdminFirestore();
     const votesSnap = await db.collection("allStarVotes").get();
 
-    // ── Step 1: identify fake (wrong count) ─────────────────────────────────
-    const fakeIds = new Set<string>();
+    // ── Step 1: identify fake (wrong count OR duplicate player IDs) ────────
+    const fakeIds      = new Set<string>();
+    const dupPlayerIds = new Set<string>();
     const validDocs: VoteDoc[] = [];
 
     for (const d of votesSnap.docs) {
@@ -148,6 +162,8 @@ export async function POST(req: NextRequest) {
 
       if (men.length !== 15 || women.length !== 15) {
         fakeIds.add(d.id);
+      } else if (new Set(men).size !== 15 || new Set(women).size !== 15) {
+        dupPlayerIds.add(d.id);
       } else {
         validDocs.push({
           id:    d.id,
@@ -164,7 +180,7 @@ export async function POST(req: NextRequest) {
     const { cloneIds } = detectClones(validDocs);
 
     // ── Step 3: union of all bad IDs ─────────────────────────────────────────
-    const toDelete = new Set([...fakeIds, ...cloneIds]);
+    const toDelete = new Set([...fakeIds, ...dupPlayerIds, ...cloneIds]);
 
     // ── Step 4: batch-delete ─────────────────────────────────────────────────
     const toDeleteArr = [...toDelete];
@@ -194,9 +210,10 @@ export async function POST(req: NextRequest) {
     ]);
 
     return NextResponse.json({
-      deleted:      toDelete.size,
-      deletedFake:  fakeIds.size,
-      deletedClone: cloneIds.size,
+      deleted:          toDelete.size,
+      deletedFake:      fakeIds.size,
+      deletedDupPlayer: dupPlayerIds.size,
+      deletedClone:     cloneIds.size,
       remaining,
     });
   } catch (err) {

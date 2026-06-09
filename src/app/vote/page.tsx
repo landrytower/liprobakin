@@ -398,7 +398,8 @@ export default function VotePage() {
           TOKEN_TOO_YOUNG: language === "fr" ? "Soumission trop rapide. Attendez un instant." : "Submitted too fast. Wait a moment.",
           TOKEN_REPLAY:    language === "fr" ? "Cette session a déjà été utilisée. Rechargez la page." : "Session already used. Please refresh.",
           RATE_LIMITED:    language === "fr" ? "Trop de tentatives. Attendez 30 secondes." : "Too many attempts. Wait 30 seconds.",
-          PLAYER_COUNT:    language === "fr" ? "Sélectionnez exactement 15H + 15F." : "Select exactly 15M + 15W players.",
+          PLAYER_COUNT:       language === "fr" ? "Sélectionnez exactement 15H + 15F." : "Select exactly 15M + 15W players.",
+          DUPLICATE_PLAYERS: language === "fr" ? "Chaque joueur ne peut être sélectionné qu'une fois." : "Each player can only be selected once.",
         };
         setModalError(
           friendlyErrors[data.error] ||

@@ -297,14 +297,17 @@ export default function AllStarVotesPage() {
   const [cleanupRunning, setCleanupRunning] = useState(false);
   const [cleanupPreview, setCleanupPreview] = useState<{
     fakeCount: number;
+    dupPlayerCount: number;
     cloneCount: number;
     total: number;
     fake: FakeVoteEntry[];
+    dupPlayers: Array<{ id: string; menDups: number; womenDups: number; phone: string; name: string }>;
     cloneGroups: CloneGroup[];
   } | null>(null);
-  const [cleanupResult, setCleanupResult] = useState<{ deleted: number; deletedFake: number; deletedClone: number; remaining: number } | null>(null);
+  const [cleanupResult, setCleanupResult] = useState<{ deleted: number; deletedFake: number; deletedDupPlayer: number; deletedClone: number; remaining: number } | null>(null);
   const [cleanupError, setCleanupError] = useState("");
   const [showFakeList, setShowFakeList] = useState(false);
+  const [showDupList, setShowDupList] = useState(false);
   const [showCloneList, setShowCloneList] = useState(false);
 
   // ── Player investigation ──
@@ -775,9 +778,10 @@ export default function AllStarVotesPage() {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error(await res.text());
-      const data = await res.json() as { fakeCount: number; cloneCount: number; total: number; fake: FakeVoteEntry[]; cloneGroups: CloneGroup[] };
-      setCleanupPreview(data);
+      const data = await res.json() as { fakeCount: number; dupPlayerCount: number; cloneCount: number; total: number; fake: FakeVoteEntry[]; dupPlayers: Array<{ id: string; menDups: number; womenDups: number; phone: string; name: string }>; cloneGroups: CloneGroup[] };
+      setCleanupPreview({ ...data, dupPlayerCount: data.dupPlayerCount ?? 0, dupPlayers: data.dupPlayers ?? [] });
       setShowFakeList(false);
+      setShowDupList(false);
       setShowCloneList(false);
     } catch (err) {
       setCleanupError(err instanceof Error ? err.message : "Scan failed");
@@ -798,8 +802,8 @@ export default function AllStarVotesPage() {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error(await res.text());
-      const data = await res.json() as { deleted: number; deletedFake: number; deletedClone: number; remaining: number };
-      setCleanupResult(data);
+      const data = await res.json() as { deleted: number; deletedFake: number; deletedDupPlayer: number; deletedClone: number; remaining: number };
+      setCleanupResult({ ...data, deletedDupPlayer: data.deletedDupPlayer ?? 0 });
       setCleanupPreview(null);
       load(true); // Refresh vote counts
     } catch (err) {
@@ -899,9 +903,10 @@ export default function AllStarVotesPage() {
   ];
 
   const SUSPECT_LABELS: Record<string, { fr: string; en: string; color: string }> = {
-    TOKEN_MISSING:   { fr: "Token manquant — bot direct",         en: "No token — direct bot",            color: "text-red-400" },
-    TOKEN_INVALID:   { fr: "Signature falsifiée — tentative hack", en: "Forged token — signature mismatch", color: "text-red-400" },
-    TOKEN_TOO_YOUNG: { fr: "Soumis trop vite — automation",       en: "Submitted too fast — automation",   color: "text-orange-400" },
+    TOKEN_MISSING:      { fr: "Token manquant — bot direct",             en: "No token — direct bot",              color: "text-red-400" },
+    TOKEN_INVALID:      { fr: "Signature falsifiée — tentative hack",    en: "Forged token — signature mismatch",  color: "text-red-400" },
+    TOKEN_TOO_YOUNG:    { fr: "Soumis trop vite — automation",           en: "Submitted too fast — automation",    color: "text-orange-400" },
+    DUPLICATE_PLAYERS:  { fr: "Joueur dupliqué ×15 — exploit bot",       en: "Same player ×15 — bot exploit",      color: "text-red-500" },
     TOKEN_REPLAY:    { fr: "Token rejoué — attaque replay",       en: "Token replayed — replay attack",    color: "text-red-400" },
     PLAYER_COUNT:    { fr: "Nombre de joueurs modifié",           en: "Player count tampered",             color: "text-orange-400" },
     RATE_LIMITED:    { fr: "Soumissions répétées — IP flooding",  en: "Repeated submissions — IP flooding", color: "text-yellow-400" },
@@ -2173,8 +2178,8 @@ export default function AllStarVotesPage() {
                 <svg className="w-4 h-4 text-emerald-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
                 <p className="text-xs text-emerald-300 font-semibold">
                   {language === "fr"
-                    ? `${cleanupResult.deleted} votes supprimés (${cleanupResult.deletedFake} incomplets + ${cleanupResult.deletedClone} clonés) — ${cleanupResult.remaining} votes valides conservés.`
-                    : `${cleanupResult.deleted} votes deleted (${cleanupResult.deletedFake} incomplete + ${cleanupResult.deletedClone} clones) — ${cleanupResult.remaining} real votes kept.`}
+                    ? `${cleanupResult.deleted} votes supprimés (${cleanupResult.deletedFake} incomplets + ${cleanupResult.deletedDupPlayer} joueur×15 + ${cleanupResult.deletedClone} clonés) — ${cleanupResult.remaining} votes valides conservés.`
+                    : `${cleanupResult.deleted} votes deleted (${cleanupResult.deletedFake} incomplete + ${cleanupResult.deletedDupPlayer} player×15 + ${cleanupResult.deletedClone} clones) — ${cleanupResult.remaining} real votes kept.`}
                 </p>
               </div>
             </div>
@@ -2221,6 +2226,51 @@ export default function AllStarVotesPage() {
                 )}
                 {cleanupPreview.fakeCount === 0 && (
                   <p className="text-xs text-slate-500 px-3 py-2">{language === "fr" ? "Aucun vote incomplet." : "None found."}</p>
+                )}
+              </div>
+
+              {/* ── Duplicate-player votes (same player ×15) row ── */}
+              <div className="rounded-xl border border-red-500/35 overflow-hidden">
+                <div className="flex items-center gap-2 bg-red-950/50 border-b border-red-500/20 px-3 py-2">
+                  <svg className="w-4 h-4 text-red-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
+                  <p className="text-xs text-red-400 font-semibold flex-1">
+                    {language === "fr"
+                      ? `${cleanupPreview.dupPlayerCount} votes avec joueur dupliqué ×15 (exploit bot)`
+                      : `${cleanupPreview.dupPlayerCount} ballots with player ×15 (bot exploit)`}
+                  </p>
+                  {cleanupPreview.dupPlayers.length > 0 && (
+                    <button
+                      onClick={() => setShowDupList((v) => !v)}
+                      className="shrink-0 text-xs text-red-400 underline hover:text-red-200 transition-colors"
+                    >
+                      {showDupList
+                        ? (language === "fr" ? "Masquer" : "Hide")
+                        : (language === "fr" ? "Voir" : "View")}
+                    </button>
+                  )}
+                </div>
+                {showDupList && cleanupPreview.dupPlayers.length > 0 && (
+                  <div className="max-h-48 overflow-y-auto divide-y divide-white/5">
+                    {cleanupPreview.dupPlayers.map((v) => (
+                      <div key={v.id} className="flex items-center gap-2 px-3 py-1.5 text-xs">
+                        <span className="flex-1 text-slate-300 truncate">{v.name}</span>
+                        <span className="text-slate-500 shrink-0">{v.phone}</span>
+                        {v.menDups > 0 && (
+                          <span className="shrink-0 px-1.5 py-0.5 rounded font-bold tabular-nums bg-red-500/15 text-red-400">
+                            ♂ {v.menDups} dup
+                          </span>
+                        )}
+                        {v.womenDups > 0 && (
+                          <span className="shrink-0 px-1.5 py-0.5 rounded font-bold tabular-nums bg-red-500/15 text-red-400">
+                            ♀ {v.womenDups} dup
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {cleanupPreview.dupPlayerCount === 0 && (
+                  <p className="text-xs text-slate-500 px-3 py-2">{language === "fr" ? "Aucun exploit joueur×15 détecté." : "No player×15 exploit found."}</p>
                 )}
               </div>
 
@@ -2305,7 +2355,7 @@ export default function AllStarVotesPage() {
               </div>
 
               {/* ── Summary + action buttons ── */}
-              {(cleanupPreview.fakeCount + cleanupPreview.cloneCount === 0) ? (
+              {(cleanupPreview.fakeCount + cleanupPreview.dupPlayerCount + cleanupPreview.cloneCount === 0) ? (
                 <p className="text-center text-xs text-emerald-400 py-2">
                   {language === "fr" ? "Aucun vote suspect détecté. La base est propre." : "No suspicious votes found. Database is clean."}
                 </p>
@@ -2329,8 +2379,8 @@ export default function AllStarVotesPage() {
                       </span>
                     ) : (
                       language === "fr"
-                        ? `Supprimer ${cleanupPreview.fakeCount + cleanupPreview.cloneCount} votes`
-                        : `Delete ${cleanupPreview.fakeCount + cleanupPreview.cloneCount} votes`
+                        ? `Supprimer ${cleanupPreview.fakeCount + cleanupPreview.dupPlayerCount + cleanupPreview.cloneCount} votes`
+                        : `Delete ${cleanupPreview.fakeCount + cleanupPreview.dupPlayerCount + cleanupPreview.cloneCount} votes`
                     )}
                   </button>
                 </div>

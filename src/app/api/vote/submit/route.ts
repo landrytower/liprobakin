@@ -156,6 +156,33 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid player selection" }, { status: 400 });
     }
 
+    // ── Duplicate player check (each player may only appear once per ballot) ─
+    const uniqueMen   = new Set(menPlayers as string[]);
+    const uniqueWomen = new Set(womenPlayers as string[]);
+    if (uniqueMen.size !== MAX_PLAYERS || uniqueWomen.size !== MAX_PLAYERS) {
+      logSuspect(ip, req, "DUPLICATE_PLAYERS", {
+        phone: docId || null,
+        name: safeName,
+        menDuplicates:   MAX_PLAYERS - uniqueMen.size,
+        womenDuplicates: MAX_PLAYERS - uniqueWomen.size,
+        menPlayers:  safeMen,
+        womenPlayers: safeWomen,
+      });
+      return NextResponse.json(
+        { error: "DUPLICATE_PLAYERS", message: BOT_MESSAGE },
+        { status: 400 }
+      );
+    }
+
+    // ── A player cannot appear in both men and women lists ───────────────────
+    const crossover = (menPlayers as string[]).filter((id) => uniqueWomen.has(id));
+    if (crossover.length > 0) {
+      return NextResponse.json(
+        { error: "DUPLICATE_PLAYERS", message: BOT_MESSAGE },
+        { status: 400 }
+      );
+    }
+
     const db = getAdminFirestore();
 
     // ── Parallel checks: rate limit + token already used ────────────────────

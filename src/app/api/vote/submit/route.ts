@@ -185,13 +185,15 @@ export async function POST(req: NextRequest) {
 
     const db = getAdminFirestore();
 
-    // ── Parallel checks: rate limit + token already used ────────────────────
-    const rateLimitRef = db.collection("allStarRateLimits").doc(ip);
-    const usedTokenRef = db.collection("allStarUsedTokens").doc(tokenPayload.jti);
+    // ── Parallel checks: rate limit + token already used + phone cache ───────
+    const rateLimitRef  = db.collection("allStarRateLimits").doc(ip);
+    const usedTokenRef  = db.collection("allStarUsedTokens").doc(tokenPayload.jti);
+    const phoneCacheRef = db.collection("allStarPhoneCache").doc("recent");
 
-    const [rateLimitSnap, usedTokenSnap] = await Promise.all([
+    const [rateLimitSnap, usedTokenSnap, phoneCacheSnap] = await Promise.all([
       rateLimitRef.get(),
       usedTokenRef.get(),
+      phoneCacheRef.get(),
     ]);
 
     if (rateLimitSnap.exists) {
@@ -223,6 +225,38 @@ export async function POST(req: NextRequest) {
         { error: "TOKEN_REPLAY", message: BOT_MESSAGE },
         { status: 400 }
       );
+    }
+
+    // ── Sequential phone detection ───────────────────────────────────────────
+    // Bots generate sequential phone numbers (+X, +X+1, +X+2 …). Real users
+    // from different households never have phone numbers 1–3 apart.
+    const PHONE_SEQ_WINDOW_MS = 10 * 60_000; // look back 10 minutes
+    const PHONE_SEQ_MAX_DIFF  = 3;           // diff ≤3 = sequential bot run
+    const nowMs = Date.now();
+    {
+      type PhoneEntry = { phone: string; ts: number };
+      const cached: PhoneEntry[] = phoneCacheSnap.exists
+        ? (phoneCacheSnap.data()?.phones as PhoneEntry[] ?? [])
+        : [];
+      const currentNum = parseInt(docId, 10);
+      if (!isNaN(currentNum)) {
+        for (const entry of cached) {
+          if (entry.ts < nowMs - PHONE_SEQ_WINDOW_MS) continue;
+          const diff = Math.abs(parseInt(entry.phone, 10) - currentNum);
+          if (diff > 0 && diff <= PHONE_SEQ_MAX_DIFF) {
+            logSuspect(ip, req, "SEQUENTIAL_PHONE", {
+              phone: docId,
+              name: safeName,
+              nearbyPhone: entry.phone,
+              diff,
+            });
+            return NextResponse.json(
+              { error: "SEQUENTIAL_PHONE", message: BOT_MESSAGE },
+              { status: 400 }
+            );
+          }
+        }
+      }
     }
 
     // ── Duplicate vote check ─────────────────────────────────────────────────
@@ -268,6 +302,20 @@ export async function POST(req: NextRequest) {
       submittedAt:  FieldValue.serverTimestamp(),
       lastModified: FieldValue.serverTimestamp(),
     });
+
+    // ── Update phone cache for sequential detection (fire-and-forget) ────────
+    {
+      type PhoneEntry = { phone: string; ts: number };
+      const existing: PhoneEntry[] = phoneCacheSnap.exists
+        ? (phoneCacheSnap.data()?.phones as PhoneEntry[] ?? [])
+        : [];
+      const cutoff = nowMs - PHONE_SEQ_WINDOW_MS;
+      const updated = [
+        ...existing.filter(e => e.ts >= cutoff),
+        { phone: docId, ts: nowMs },
+      ].slice(-300); // cap at 300 entries
+      void phoneCacheRef.set({ phones: updated });
+    }
 
     await Promise.all([
       usedTokenRef.set({ usedAt: FieldValue.serverTimestamp(), phone: docId }),

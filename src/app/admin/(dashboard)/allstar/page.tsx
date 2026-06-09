@@ -325,12 +325,16 @@ export default function AllStarVotesPage() {
     votesByHour: Record<string, number>;
     suspectAttempts: number;
     suspectDetails: { ip: string; reason: string; name: string; phone: string; detectedAt: number }[];
-    recentVotes: { phone: string; name: string; role: string; submittedAt: string | null }[];
+    dupVoteCount: number;
+    dupVoteIds: string[];
+    recentVotes: { phone: string; name: string; role: string; submittedAt: string | null; hasDupPlayer: boolean }[];
   };
   const [investQuery, setInvestQuery] = useState("");
   const [investLoading, setInvestLoading] = useState(false);
   const [investResult, setInvestResult] = useState<InvestigationResult | null>(null);
   const [investError, setInvestError] = useState("");
+  const [investDeleting, setInvestDeleting] = useState(false);
+  const [investDeleteResult, setInvestDeleteResult] = useState<{ deleted: number; remaining: number } | null>(null);
 
   // ── Eligibility ──
   type EligTeam = { id: string; name: string; gender: "men" | "women" };
@@ -907,6 +911,7 @@ export default function AllStarVotesPage() {
     TOKEN_INVALID:      { fr: "Signature falsifiée — tentative hack",    en: "Forged token — signature mismatch",  color: "text-red-400" },
     TOKEN_TOO_YOUNG:    { fr: "Soumis trop vite — automation",           en: "Submitted too fast — automation",    color: "text-orange-400" },
     DUPLICATE_PLAYERS:  { fr: "Joueur dupliqué ×15 — exploit bot",       en: "Same player ×15 — bot exploit",      color: "text-red-500" },
+    SEQUENTIAL_PHONE:   { fr: "N° de téléphone séquentiel — bot",        en: "Sequential phone number — bot",      color: "text-red-500" },
     TOKEN_REPLAY:    { fr: "Token rejoué — attaque replay",       en: "Token replayed — replay attack",    color: "text-red-400" },
     PLAYER_COUNT:    { fr: "Nombre de joueurs modifié",           en: "Player count tampered",             color: "text-orange-400" },
     RATE_LIMITED:    { fr: "Soumissions répétées — IP flooding",  en: "Repeated submissions — IP flooding", color: "text-yellow-400" },
@@ -921,6 +926,7 @@ export default function AllStarVotesPage() {
     setInvestLoading(true);
     setInvestError("");
     setInvestResult(null);
+    setInvestDeleteResult(null);
     try {
       const { firebaseAuth } = await import("@/lib/firebase");
       const token = await firebaseAuth.currentUser?.getIdToken(false);
@@ -935,6 +941,34 @@ export default function AllStarVotesPage() {
       setInvestError(err instanceof Error ? err.message : "Failed");
     } finally {
       setInvestLoading(false);
+    }
+  };
+
+  const deleteDupPlayerVotes = async () => {
+    if (!investQuery.trim() || !investResult) return;
+    setInvestDeleting(true);
+    try {
+      const { firebaseAuth } = await import("@/lib/firebase");
+      const token = await firebaseAuth.currentUser?.getIdToken(false);
+      if (!token) throw new Error("Not authenticated");
+      const res = await fetch("/api/admin/investigate-player", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ name: investQuery.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Delete failed");
+      setInvestDeleteResult(data as { deleted: number; remaining: number });
+      // Refresh investigation to reflect new counts
+      const res2 = await fetch(`/api/admin/investigate-player?name=${encodeURIComponent(investQuery.trim())}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res2.ok) setInvestResult(await res2.json() as InvestigationResult);
+      load(true);
+    } catch (err) {
+      setInvestError(err instanceof Error ? err.message : "Delete failed");
+    } finally {
+      setInvestDeleting(false);
     }
   };
 
@@ -1978,6 +2012,57 @@ export default function AllStarVotesPage() {
               );
             })()}
 
+            {/* ── Dup-player delete action card ── */}
+            {(investResult.dupVoteCount > 0 || investDeleteResult) && (
+              <div className="rounded-xl border border-red-500/40 bg-red-950/40 p-4 space-y-3">
+                <div className="flex items-start gap-3">
+                  <span className="text-xl shrink-0">🚫</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-red-300">
+                      {language === "fr"
+                        ? `${investResult.dupVoteCount} votes frauduleux — joueur sélectionné ×15`
+                        : `${investResult.dupVoteCount} fraudulent ballots — player selected ×15`}
+                    </p>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      {language === "fr"
+                        ? "Ces bulletins ont le même joueur répété pour remplir les 15 slots. Ce sont des faux votes de bot."
+                        : "These ballots have the same player repeated to fill all 15 slots. Pure bot fraud."}
+                    </p>
+                  </div>
+                </div>
+
+                {investDeleteResult && (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
+                    <svg className="w-4 h-4 text-emerald-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                    <p className="text-xs text-emerald-300 font-semibold">
+                      {language === "fr"
+                        ? `${investDeleteResult.deleted} votes supprimés — ${investDeleteResult.remaining} votes réels conservés.`
+                        : `${investDeleteResult.deleted} votes deleted — ${investDeleteResult.remaining} real votes kept.`}
+                    </p>
+                  </div>
+                )}
+
+                {investResult.dupVoteCount > 0 && !investDeleteResult && (
+                  <button
+                    onClick={deleteDupPlayerVotes}
+                    disabled={investDeleting}
+                    className="w-full py-2.5 bg-red-600/25 hover:bg-red-600/40 border border-red-500/40 text-red-300 font-bold text-sm rounded-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {investDeleting ? (
+                      <>
+                        <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
+                        {language === "fr" ? "Suppression…" : "Deleting…"}
+                      </>
+                    ) : (
+                      language === "fr"
+                        ? `Supprimer ${investResult.dupVoteCount} votes frauduleux`
+                        : `Delete ${investResult.dupVoteCount} fraudulent votes`
+                    )}
+                  </button>
+                )}
+              </div>
+            )}
+
             {/* Stats grid */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {[
@@ -2049,8 +2134,11 @@ export default function AllStarVotesPage() {
               </div>
               <div className="max-h-56 overflow-y-auto divide-y divide-white/5">
                 {investResult.recentVotes.slice().reverse().map((v, i) => (
-                  <div key={i} className="flex items-center gap-3 px-3 py-1.5 text-xs hover:bg-white/[0.02]">
+                  <div key={i} className={`flex items-center gap-3 px-3 py-1.5 text-xs hover:bg-white/[0.02] ${v.hasDupPlayer ? "bg-red-950/40" : ""}`}>
                     <span className="font-mono text-slate-400 shrink-0">{v.phone}</span>
+                    {v.hasDupPlayer && (
+                      <span className="shrink-0 px-1 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-400">×15</span>
+                    )}
                     <span className="text-slate-300 truncate flex-1">{v.name}</span>
                     <span className="text-slate-600 shrink-0">{v.role}</span>
                     <span className="text-slate-600 shrink-0 whitespace-nowrap">

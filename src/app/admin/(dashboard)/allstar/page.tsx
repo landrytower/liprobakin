@@ -293,6 +293,9 @@ export default function AllStarVotesPage() {
     sampleMen: string[];
     sampleWomen: string[];
   };
+  const [recoverRunning, setRecoverRunning] = useState(false);
+  const [recoverResult, setRecoverResult] = useState<{ recovered: number; totalAfter: number; restoredSample: { phone: string; name: string }[]; message?: string } | null>(null);
+  const [recoverError, setRecoverError] = useState("");
   const [cleanupScanning, setCleanupScanning] = useState(false);
   const [cleanupRunning, setCleanupRunning] = useState(false);
   const [cleanupPreview, setCleanupPreview] = useState<{
@@ -767,6 +770,30 @@ export default function AllStarVotesPage() {
       setResetError(language === "fr" ? "Erreur lors de la réinitialisation." : "Reset failed. Please try again.");
     } finally {
       setResetRunning(false);
+    }
+  };
+
+  const recoverVotes = async (minutesAgo = 45) => {
+    setRecoverRunning(true);
+    setRecoverError("");
+    setRecoverResult(null);
+    try {
+      const { firebaseAuth } = await import("@/lib/firebase");
+      const token = await firebaseAuth.currentUser?.getIdToken(false);
+      if (!token) throw new Error("Not authenticated");
+      const res = await fetch("/api/admin/recover-votes", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ minutesAgo }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Recovery failed");
+      setRecoverResult(data);
+      load(true);
+    } catch (err) {
+      setRecoverError(err instanceof Error ? err.message : "Recovery failed");
+    } finally {
+      setRecoverRunning(false);
     }
   };
 
@@ -2238,6 +2265,80 @@ export default function AllStarVotesPage() {
               ) : (language === "fr" ? "Réinitialiser la bannière" : "Reset Banner")}
             </button>
           </div>
+        </div>
+
+        {/* ── Emergency vote recovery ── */}
+        <div className="bg-blue-950/40 border border-blue-500/30 rounded-2xl p-5 space-y-3">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl shrink-0">🔄</span>
+            <div>
+              <p className="text-sm font-bold text-blue-300">
+                {language === "fr" ? "Récupérer des votes supprimés par erreur" : "Recover Accidentally Deleted Votes"}
+              </p>
+              <p className="text-xs text-slate-400 mt-1">
+                {language === "fr"
+                  ? "Restaure les votes légitimes supprimés lors d'un nettoyage. Fonctionne uniquement dans l'heure qui suit la suppression (rétention Firestore)."
+                  : "Restores legitimate votes deleted during a cleanup. Only works within 1 hour of deletion (Firestore version retention)."}
+              </p>
+            </div>
+          </div>
+
+          {recoverError && (
+            <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{recoverError}</p>
+          )}
+
+          {recoverResult && (
+            <div className="space-y-2">
+              <div className="flex items-start gap-2 px-3 py-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+                <svg className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                <div>
+                  <p className="text-xs text-emerald-300 font-semibold">
+                    {recoverResult.message
+                      ? recoverResult.message
+                      : (language === "fr"
+                          ? `${recoverResult.recovered} votes restaurés — ${recoverResult.totalAfter} votes valides au total.`
+                          : `${recoverResult.recovered} votes restored — ${recoverResult.totalAfter} valid votes total.`)}
+                  </p>
+                  {recoverResult.restoredSample?.length > 0 && (
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      {recoverResult.restoredSample.map((v) => v.name || v.phone).join(", ")}
+                      {recoverResult.recovered > 10 ? ` +${recoverResult.recovered - 10} ${language === "fr" ? "autres" : "more"}` : ""}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {!recoverResult && (
+            <div className="flex gap-2">
+              {[15, 30, 45].map((mins) => (
+                <button
+                  key={mins}
+                  onClick={() => recoverVotes(mins)}
+                  disabled={recoverRunning}
+                  className="flex-1 py-2 bg-blue-600/20 hover:bg-blue-600/35 border border-blue-500/30 text-blue-300 font-bold text-xs rounded-xl transition-all disabled:opacity-40"
+                >
+                  {recoverRunning ? (
+                    <span className="flex items-center justify-center gap-1.5">
+                      <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
+                      …
+                    </span>
+                  ) : (
+                    language === "fr" ? `${mins} min avant` : `${mins} min ago`
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+          {recoverResult && (
+            <button
+              onClick={() => { setRecoverResult(null); setRecoverError(""); }}
+              className="w-full py-2 text-xs text-slate-500 hover:text-slate-300 transition-colors"
+            >
+              {language === "fr" ? "Réessayer avec une autre fenêtre" : "Try a different time window"}
+            </button>
+          )}
         </div>
 
         {/* ── Clean up fake votes ── */}

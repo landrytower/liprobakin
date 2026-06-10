@@ -77,17 +77,19 @@ export async function POST(req: NextRequest) {
     const cred = (app.options as any).credential;
     const { access_token } = await cred.getAccessToken() as { access_token: string };
 
-    const projectId = process.env.FIREBASE_PROJECT_ID?.trim() ?? "ppop-35930";
-    const baseUrl   = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents`;
+    const projectId  = process.env.FIREBASE_PROJECT_ID?.trim() ?? "ppop-35930";
+    const resourceBase = `projects/${projectId}/databases/(default)/documents`;
+    const apiBase      = `https://firestore.googleapis.com/v1/${resourceBase}`;
 
     // Batch fetches of missing docs (100 at a time via batchGet)
     const toRestore: Array<{ id: string; data: DocumentData }> = [];
 
     for (let i = 0; i < missingPhones.length; i += 100) {
       const batch = missingPhones.slice(i, i + 100);
-      const docNames = batch.map((p) => `${baseUrl}/allStarVotes/${p}`);
+      // batchGet expects resource paths, NOT full URLs
+      const docNames = batch.map((p) => `${resourceBase}/allStarVotes/${p}`);
 
-      const res = await fetch(`${baseUrl}:batchGet`, {
+      const res = await fetch(`${apiBase}:batchGet`, {
         method: "POST",
         headers: { Authorization: `Bearer ${access_token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ documents: docNames, readTime }),

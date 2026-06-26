@@ -1,9 +1,16 @@
 "use client";
 
 import { useEffect } from "react";
-import HomeContent, { type CachedNewsArticle } from "./HomeContent";
+import HomeContent, { type CachedNewsArticle, type CommitteeMember } from "./HomeContent";
 
-export default function HomeClient({ initialNews }: { initialNews?: CachedNewsArticle[] }) {
+interface HomeClientProps {
+  initialNews?: CachedNewsArticle[];
+  initialCommittee?: CommitteeMember[];
+  initialCommission?: CommitteeMember[];
+  initialReferees?: CommitteeMember[];
+}
+
+export default function HomeClient({ initialNews, initialCommittee, initialCommission, initialReferees }: HomeClientProps) {
   useEffect(() => {
     const shell = document.getElementById("home-loading-shell");
     if (shell) {
@@ -11,5 +18,12 @@ export default function HomeClient({ initialNews }: { initialNews?: CachedNewsAr
     }
   }, []);
 
-  return <HomeContent initialNews={initialNews} />;
+  return (
+    <HomeContent
+      initialNews={initialNews}
+      initialCommittee={initialCommittee}
+      initialCommission={initialCommission}
+      initialReferees={initialReferees}
+    />
+  );
 }

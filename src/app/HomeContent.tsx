@@ -439,6 +439,8 @@ const HOME_STATS_CACHE_KEY = "febaco:home:stats:v1";
 
 export type CachedNewsArticle = Omit<NewsArticle, "createdAt"> & { createdAt: string | null };
 
+export type CommitteeMember = { id: string; name: string; role: string; photo: string };
+
 type HomeBootstrapSnapshot = {
   menTeams: Franchise[];
   womenTeams: Franchise[];
@@ -1792,7 +1794,17 @@ const FanFavoriteTeamCard = ({ teamId, teamName }: { teamId?: string; teamName?:
   );
 };
 
-export default function Home({ initialNews }: { initialNews?: CachedNewsArticle[] } = {}) {
+export default function Home({
+  initialNews,
+  initialCommittee,
+  initialCommission,
+  initialReferees,
+}: {
+  initialNews?: CachedNewsArticle[];
+  initialCommittee?: CommitteeMember[];
+  initialCommission?: CommitteeMember[];
+  initialReferees?: CommitteeMember[];
+} = {}) {
   const { user, userProfile, isAdmin, signOut: handleSignOut } = useAuth();
   const { language, setLanguage } = useLanguage();
 
@@ -1853,9 +1865,9 @@ export default function Home({ initialNews }: { initialNews?: CachedNewsArticle[
   const [dynamicPartners, setDynamicPartners] = useState<any[]>([]);
   const [visiblePartners, setVisiblePartners] = useState<number[]>([0, 1, 2, 3]);
   const [partnerAnimating, setPartnerAnimating] = useState<number | null>(null);
-  const [dynamicCommittee, setDynamicCommittee] = useState<any[]>(leagueCommittee);
-  const [dynamicCommission, setDynamicCommission] = useState<any[]>([]);
-  const [dynamicReferees, setDynamicReferees] = useState<any[]>([]);
+  const [dynamicCommittee, setDynamicCommittee] = useState<any[]>(initialCommittee ?? leagueCommittee);
+  const [dynamicCommission, setDynamicCommission] = useState<any[]>(initialCommission ?? []);
+  const [dynamicReferees, setDynamicReferees] = useState<any[]>(initialReferees ?? []);
   const [showRefs, setShowRefs] = useState(false);
   const [playerCardExpanded, setPlayerCardExpanded] = useState(true);
   const [playerData, setPlayerData] = useState<RosterPlayer | null>(null);
@@ -2393,9 +2405,9 @@ export default function Home({ initialNews }: { initialNews?: CachedNewsArticle[
         setFeaturedArticleId(cached.featuredArticleId ?? hydratedNews[0]?.id ?? null);
       }
       if (cached.partners.length > 0) setDynamicPartners(cached.partners);
-      if (cached.committee.length > 0) setDynamicCommittee(cached.committee);
-      if (cached.commission.length > 0) setDynamicCommission(cached.commission);
-      if (cached.referees.length > 0) setDynamicReferees(cached.referees);
+      if (!initialCommittee && cached.committee.length > 0) setDynamicCommittee(cached.committee);
+      if (!initialCommission && cached.commission.length > 0) setDynamicCommission(cached.commission);
+      if (!initialReferees && cached.referees.length > 0) setDynamicReferees(cached.referees);
     }
 
     // Load stats cache (leagueTopPlayers) after hydration to avoid SSR mismatch.
@@ -3416,17 +3428,22 @@ export default function Home({ initialNews }: { initialNews?: CachedNewsArticle[
 
   useEffect(() => {
     const cached = readHomeBootstrapCache();
-    if (cached && cached.committee.length > 0) {
+    if (!initialCommittee && cached && cached.committee.length > 0) {
       setDynamicCommittee(cached.committee);
     }
-    if (cached && cached.commission.length > 0) {
+    if (!initialCommission && cached && cached.commission.length > 0) {
       setDynamicCommission(cached.commission);
     }
+    // Referees don't skip cache — role label is language-dependent, cache stays fresh
     if (cached && cached.referees.length > 0) {
       setDynamicReferees(cached.referees);
     }
 
-    if (cached && cached.committee.length > 0 && cached.commission.length > 0 && cached.referees.length > 0) {
+    const committeeReady = !!initialCommittee || (!!cached && cached.committee.length > 0);
+    const commissionReady = !!initialCommission || (!!cached && cached.commission.length > 0);
+    const refereesReady = !!cached && cached.referees.length > 0;
+
+    if (committeeReady && commissionReady && refereesReady) {
       return;
     }
 
@@ -3525,9 +3542,9 @@ export default function Home({ initialNews }: { initialNews?: CachedNewsArticle[
       }
     };
     
-    fetchCommittee();
-    fetchCommission();
-    fetchReferees();
+    if (!committeeReady) fetchCommittee();
+    if (!commissionReady) fetchCommission();
+    if (!refereesReady) fetchReferees();
   }, [language]);
 
   useEffect(() => {

@@ -1932,7 +1932,7 @@ export default function Home({
     } catch {}
     return { men: [], women: [] };
   });
-  const [allStarEnabled, setAllStarEnabled] = useState(true);
+  const [allStarEnabled, setAllStarEnabled] = useState<boolean | null>(null);
 
   // Contact form state
   const [contactForm, setContactForm] = useState({ firstName: "", lastName: "", email: "", phone: "", message: "" });
@@ -6519,7 +6519,7 @@ export default function Home({
         </section>
 
         {/* All-Star Vote Leaders */}
-        {allStarEnabled && (allStarLeaders.men.length > 0 || allStarLeaders.women.length > 0) && (
+        {allStarEnabled === true && (allStarLeaders.men.length > 0 || allStarLeaders.women.length > 0) && (
           <section className="space-y-4 md:space-y-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <h2 className="text-xl sm:text-2xl md:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-amber-300">

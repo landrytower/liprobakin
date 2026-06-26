@@ -38,7 +38,7 @@ export default function AllStarVoteBanner() {
 
   const [isOpen, setIsOpen] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
-  const [allStarEnabled, setAllStarEnabled] = useState(true);
+  const [allStarEnabled, setAllStarEnabled] = useState<boolean | null>(null);
   const [checkingSettings, setCheckingSettings] = useState(true);
   const [bannerImageUrl, setBannerImageUrl] = useState<string | null>(null);
 

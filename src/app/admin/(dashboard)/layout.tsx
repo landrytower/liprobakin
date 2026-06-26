@@ -34,13 +34,12 @@ type NavItem = {
   href: string;
   icon: string;
   requiredPermission?: string;
-  masterOnly?: boolean;
 };
 
 const navItems: NavItem[] = [
-  { key: "pulse", label: { en: "League Pulse", fr: "Pouls Ligue" }, href: "/admin/pulse", icon: "⚡" },
-  { key: "allstar", label: { en: "All-Star Votes", fr: "Votes All-Star" }, href: "/admin/allstar", icon: "⭐" },
-  { key: "documents", label: { en: "Documents", fr: "Documents" }, href: "/admin/documents", icon: "🗂️" },
+  { key: "pulse", label: { en: "League Pulse", fr: "Pouls Ligue" }, href: "/admin/pulse", icon: "⚡", requiredPermission: "canViewPulse" },
+  { key: "allstar", label: { en: "All-Star Votes", fr: "Votes All-Star" }, href: "/admin/allstar", icon: "⭐", requiredPermission: "canViewAllStar" },
+  { key: "documents", label: { en: "Documents", fr: "Documents" }, href: "/admin/documents", icon: "🗂️", requiredPermission: "canManageDocuments" },
   { key: "stories", label: { en: "Stories", fr: "Histoires" }, href: "/admin/stories", icon: "📰", requiredPermission: "canManageNews" },
   { key: "teams", label: { en: "Teams", fr: "Équipes" }, href: "/admin/teams", icon: "🏀", requiredPermission: "canManageTeams" },
   { key: "accounts", label: { en: "Accounts", fr: "Accounts" }, href: "/admin/accounts", icon: "👥", requiredPermission: "canManageUsers" },
@@ -49,8 +48,8 @@ const navItems: NavItem[] = [
   { key: "stats", label: { en: "Statistics", fr: "Statistiques" }, href: "/admin/stats", icon: "📈", requiredPermission: "canManageGames" },
   { key: "league", label: { en: "League Settings", fr: "Paramètres Ligue" }, href: "/admin/league", icon: "⚙️", requiredPermission: "canManageLeague" },
   { key: "admins", label: { en: "Administrators", fr: "Administrateurs" }, href: "/admin/admins", icon: "👤", requiredPermission: "canManageAdmins" },
-  { key: "activity", label: { en: "Activity Log", fr: "Journal d'activité" }, href: "/admin/activity", icon: "📋", masterOnly: true },
-  { key: "errors", label: { en: "Error Monitor", fr: "Surveillance Erreurs" }, href: "/admin/errors", icon: "⚠️", masterOnly: true },
+  { key: "activity", label: { en: "Activity Log", fr: "Journal d'activité" }, href: "/admin/activity", icon: "📋", requiredPermission: "canViewActivity" },
+  { key: "errors", label: { en: "Error Monitor", fr: "Surveillance Erreurs" }, href: "/admin/errors", icon: "⚠️", requiredPermission: "canViewErrors" },
 ];
 
 const translations = {
@@ -488,7 +487,7 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
 
   const getPermissions = (user: AdminUser | null): Record<string, boolean> => {
     if (!user) return {};
-    
+
     // If user has explicit permissions object, use it directly
     if (user.permissions) {
       const perms: Record<string, boolean> = {};
@@ -497,9 +496,12 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
           perms[key] = true;
         }
       });
-      
+
       // Master role always gets all permissions
       if (user.roles?.includes("master")) {
+        perms.canViewPulse = true;
+        perms.canViewAllStar = true;
+        perms.canManageDocuments = true;
         perms.canManageNews = true;
         perms.canManageTeams = true;
         perms.canManageGames = true;
@@ -513,26 +515,50 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
         perms.canManagePlayers = true;
         perms.canManageVenues = true;
         perms.canManageEubakin = true;
+        perms.canViewTraffic = true;
+        perms.canViewActivity = true;
+        perms.canViewErrors = true;
       }
-      
+
       return perms;
     }
-    
+
     // Fallback: derive permissions from roles (legacy support)
     const perms: Record<string, boolean> = {};
     user.roles?.forEach((role) => {
-      if (role === "master" || role === "league_manager") {
+      if (role === "master") {
+        perms.canViewPulse = true;
+        perms.canViewAllStar = true;
+        perms.canManageDocuments = true;
         perms.canManageNews = true;
         perms.canManageTeams = true;
         perms.canManageGames = true;
         perms.canManageUsers = true;
-        perms.canManageAdmins = role === "master";
+        perms.canManageAdmins = true;
         perms.canManageLeague = true;
         perms.canManageReferees = true;
         perms.canManageCommittee = true;
         perms.canManagePartners = true;
         perms.canManageSales = true;
         perms.canManageEubakin = true;
+        perms.canViewTraffic = true;
+        perms.canViewActivity = true;
+        perms.canViewErrors = true;
+      } else if (role === "league_manager") {
+        perms.canViewPulse = true;
+        perms.canViewAllStar = true;
+        perms.canManageDocuments = true;
+        perms.canManageNews = true;
+        perms.canManageTeams = true;
+        perms.canManageGames = true;
+        perms.canManageUsers = true;
+        perms.canManageLeague = true;
+        perms.canManageReferees = true;
+        perms.canManageCommittee = true;
+        perms.canManagePartners = true;
+        perms.canManageSales = true;
+        perms.canManageEubakin = true;
+        perms.canViewTraffic = true;
       } else if (role === "news_editor") {
         perms.canManageNews = true;
       } else if (role === "team_manager") {
@@ -564,10 +590,6 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
   }
 
   const filteredNavItems = navItems.filter((item) => {
-    // Master only items
-    if (item.masterOnly) {
-      return currentAdminUser?.roles?.includes('master');
-    }
     if (item.key === "league") {
       return permissions.canManageLeague || permissions.canManageEubakin;
     }

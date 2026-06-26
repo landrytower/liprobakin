@@ -437,7 +437,7 @@ const HOME_BOOTSTRAP_CACHE_KEY = "febaco:home:bootstrap:v1";
 const HOME_BOOTSTRAP_CACHE_TTL_MS = 1000 * 60 * 10;
 const HOME_STATS_CACHE_KEY = "febaco:home:stats:v1";
 
-type CachedNewsArticle = Omit<NewsArticle, "createdAt"> & { createdAt: string | null };
+export type CachedNewsArticle = Omit<NewsArticle, "createdAt"> & { createdAt: string | null };
 
 type HomeBootstrapSnapshot = {
   menTeams: Franchise[];
@@ -1792,7 +1792,7 @@ const FanFavoriteTeamCard = ({ teamId, teamName }: { teamId?: string; teamName?:
   );
 };
 
-export default function Home() {
+export default function Home({ initialNews }: { initialNews?: CachedNewsArticle[] } = {}) {
   const { user, userProfile, isAdmin, signOut: handleSignOut } = useAuth();
   const { language, setLanguage } = useLanguage();
 
@@ -1809,7 +1809,9 @@ export default function Home() {
   const [womenTeams, setWomenTeams] = useState<Franchise[]>(ssrWomenFranchises);
   const [leagueTopPlayers, setLeagueTopPlayers] = useState<any[]>([]);
   const [leagueLeadersExpanded, setLeagueLeadersExpanded] = useState(false);
-  const [newsArticles, setNewsArticles] = useState<NewsArticle[]>([]);
+  const [newsArticles, setNewsArticles] = useState<NewsArticle[]>(
+    () => (initialNews ?? []).map(fromCachedNewsArticle)
+  );
   const [featuredArticleId, setFeaturedArticleId] = useState<string | null>(null);
   const [expandedArticleId, setExpandedArticleId] = useState<string | null>(null);
 
@@ -2384,7 +2386,8 @@ export default function Home() {
     if (cached) {
       if (cached.menTeams.length > 0) setMenTeams(cached.menTeams);
       if (cached.womenTeams.length > 0) setWomenTeams(cached.womenTeams);
-      if (cached.newsArticles.length > 0) {
+      // Skip news from cache if server already provided fresh initialNews
+      if (!initialNews && cached.newsArticles.length > 0) {
         const hydratedNews = cached.newsArticles.map(fromCachedNewsArticle);
         setNewsArticles(hydratedNews);
         setFeaturedArticleId(cached.featuredArticleId ?? hydratedNews[0]?.id ?? null);

@@ -21,12 +21,7 @@ type AdminUserData = {
   isFirstLogin?: boolean;
   isActive?: boolean;
   lastLogin?: { seconds: number } | null;
-  permissions?: {
-    canManageNews?: boolean; canManageTeams?: boolean; canManageGames?: boolean;
-    canManageReferees?: boolean; canManageVenues?: boolean; canManagePartners?: boolean; canManageEubakin?: boolean;
-    canManageGameMedia?: boolean;
-    canManageAdmins?: boolean;
-  };
+  permissions?: Partial<import("@/types/admin").AdminPermissions>;
 };
 
 type InviteStep = "info" | "roles" | "review";
@@ -231,32 +226,35 @@ type PermissionConfig = {
 };
 
 const PERMISSION_CONFIG: PermissionConfig[] = [
+  { key: "canViewPulse", icon: "⚡", label: { en: "League Pulse", fr: "Pouls Ligue" }, gradient: "from-orange-500 to-amber-500" },
+  { key: "canViewAllStar", icon: "⭐", label: { en: "All-Star Votes", fr: "Votes All-Star" }, gradient: "from-yellow-500 to-amber-400" },
+  { key: "canManageDocuments", icon: "🗂️", label: { en: "Documents", fr: "Documents" }, gradient: "from-slate-500 to-slate-400" },
   { key: "canManageNews", icon: "📰", label: { en: "Stories", fr: "Histoires" }, gradient: "from-blue-500 to-cyan-500" },
   { key: "canManageTeams", icon: "🏀", label: { en: "Teams", fr: "Équipes" }, gradient: "from-rose-500 to-pink-500" },
-  { 
-    key: "canManageUsers", 
-    icon: "👥", 
-    label: { en: "Users", fr: "Utilisateurs" }, 
+  {
+    key: "canManageUsers",
+    icon: "👥",
+    label: { en: "Users", fr: "Utilisateurs" },
     gradient: "from-purple-500 to-indigo-500",
     subPermissions: [
       { key: "canManageAccounts", icon: "👥", label: { en: "Accounts", fr: "Comptes" } },
       { key: "canManageVerifications", icon: "✓", label: { en: "Verifications", fr: "Vérifications" } },
     ]
   },
-  { 
-    key: "canManageGames", 
-    icon: "🗓️", 
-    label: { en: "Games", fr: "Jeux" }, 
+  {
+    key: "canManageGames",
+    icon: "🗓️",
+    label: { en: "Games", fr: "Jeux" },
     gradient: "from-emerald-500 to-teal-500",
     subPermissions: [
       { key: "canManageMatches", icon: "🏟️", label: { en: "Matches", fr: "Matchs" } },
       { key: "canManageStatistics", icon: "📊", label: { en: "Statistics", fr: "Statistiques" } },
     ]
   },
-  { 
-    key: "canManageLeague", 
-    icon: "⚙️", 
-    label: { en: "League Settings", fr: "Paramètres League" }, 
+  {
+    key: "canManageLeague",
+    icon: "⚙️",
+    label: { en: "League Settings", fr: "Paramètres League" },
     gradient: "from-orange-500 to-amber-500",
     subPermissions: [
       { key: "canManageReferees", icon: "👨‍⚖️", label: { en: "Referees", fr: "Arbitres" } },
@@ -269,8 +267,10 @@ const PERMISSION_CONFIG: PermissionConfig[] = [
       { key: "canManageSales", icon: "💰", label: { en: "Sales", fr: "Sales" } },
     ]
   },
-  { key: "canManageAdmins", icon: "👥", label: { en: "Administrators", fr: "Administrateurs" }, gradient: "from-amber-500 to-orange-500" },
+  { key: "canManageAdmins", icon: "👤", label: { en: "Administrators", fr: "Administrateurs" }, gradient: "from-amber-500 to-orange-500" },
   { key: "canViewTraffic", icon: "📊", label: { en: "Traffic Analytics", fr: "Analytique du trafic" }, gradient: "from-violet-500 to-purple-500" },
+  { key: "canViewActivity", icon: "📋", label: { en: "Activity Log", fr: "Journal d'activité" }, gradient: "from-slate-600 to-slate-500" },
+  { key: "canViewErrors", icon: "⚠️", label: { en: "Error Monitor", fr: "Surveillance Erreurs" }, gradient: "from-red-500 to-rose-500" },
 ];
 
 // ─── Component ───────────────────────────────────────────────────────────────

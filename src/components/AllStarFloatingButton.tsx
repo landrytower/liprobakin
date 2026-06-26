@@ -7,13 +7,13 @@ import { getAllStarSettings } from "@/lib/allstar-settings";
 
 export default function AllStarFloatingButton() {
   const pathname = usePathname();
-  const [allStarEnabled, setAllStarEnabled] = useState(true);
+  const [allStarEnabled, setAllStarEnabled] = useState<boolean | null>(null);
 
   useEffect(() => {
     getAllStarSettings().then((s) => setAllStarEnabled(s.enabled));
   }, []);
 
-  if (pathname.startsWith("/admin") || pathname.startsWith("/vote") || !allStarEnabled) return null;
+  if (pathname.startsWith("/admin") || pathname.startsWith("/vote") || allStarEnabled !== true) return null;
 
   return (
     <Link

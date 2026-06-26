@@ -24,13 +24,21 @@ const STARS = [
 export default function AllStarThemeProvider() {
   useEffect(() => {
     getAllStarSettings().then((settings) => {
-      if (settings.allStarTheme) {
+      const themeActive = settings.enabled && settings.allStarTheme;
+      if (themeActive) {
         document.documentElement.setAttribute("data-theme", "allstar");
-        try { localStorage.setItem("allstar_theme", "true"); } catch {}
       } else {
         document.documentElement.removeAttribute("data-theme");
-        try { localStorage.removeItem("allstar_theme"); } catch {}
       }
+      // Cache full settings so the inline script can avoid the flash on next load
+      try {
+        localStorage.setItem("allstar_settings_v2", JSON.stringify({
+          enabled: settings.enabled,
+          allStarTheme: settings.allStarTheme,
+        }));
+        // Remove the old key to avoid stale data
+        localStorage.removeItem("allstar_theme");
+      } catch {}
     });
   }, []);
 

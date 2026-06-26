@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect } from "react";
-import HomeContent from "./HomeContent";
+import HomeContent, { type CachedNewsArticle } from "./HomeContent";
 
-export default function HomeClient() {
+export default function HomeClient({ initialNews }: { initialNews?: CachedNewsArticle[] }) {
   useEffect(() => {
     const shell = document.getElementById("home-loading-shell");
     if (shell) {
@@ -11,5 +11,5 @@ export default function HomeClient() {
     }
   }, []);
 
-  return <HomeContent />;
+  return <HomeContent initialNews={initialNews} />;
 }
